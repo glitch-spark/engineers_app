@@ -1,0 +1,40 @@
+{
+  "name": "engineer-app",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "migrate-roles": "node scripts/migrate-roles.js"
+  },
+  "dependencies": {
+    "@netlify/plugin-nextjs": "^5.12.1",
+    "bcryptjs": "^2.4.3",
+    "lucide-react": "^0.446.0",
+    "mongodb": "^6.3.0",
+    "mongoose": "^8.4.1",
+    "next": "14.2.5",
+    "next-auth": "4.24.7",
+    "quill": "^2.0.3",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-quill": "^2.0.0",
+    "recharts": "^2.12.7",
+    "swr": "^2.2.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.2",
+    "@types/node": "^20.14.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.3"
+  }
+}

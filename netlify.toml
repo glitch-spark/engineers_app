@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[context.production.environment]
+  NEXTAUTH_URL = "https://engineerssite.netlify.app/"
+  MONGODB_URI="mongodb+srv://engineers:engineers123%21%40%23@engineersdb.masu76i.mongodb.net/EngineerDB?retryWrites=true&w=majority&appName=EngineersDB"
+
