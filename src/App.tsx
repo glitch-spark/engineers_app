@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Accounts from './pages/Accounts';
 import Transactions from './pages/Transactions';
+import CardLink from './pages/CardLink';
 
 function Protected({ children }: { children: React.ReactNode }) {
   return (
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/profile" element={<Protected><Profile /></Protected>} />
       <Route path="/accounts" element={<Protected><Accounts /></Protected>} />
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
+      <Route path="/cardlink" element={<Protected><CardLink /></Protected>} />
     </Routes>
   );
 }
