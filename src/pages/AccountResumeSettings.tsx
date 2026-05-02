@@ -254,9 +254,14 @@ function StructuredPreviewWrapper({
     pageFormat,
     cachedAiHtml,
   });
+  // Force a full remount whenever anything affecting @page geometry changes —
+  // paged.js caches resolved page dimensions per Previewer instance, so an
+  // in-place re-render isn't enough.
+  const m = structured.page.margin;
+  const remountKey = `${pageFormat}-${m.top}-${m.right}-${m.bottom}-${m.left}`;
   return (
     <ResumePreview
-      key={pageFormat}
+      key={remountKey}
       html={html}
       pageFormat={pageFormat}
       onRefreshFromAi={onRefreshFromAi}

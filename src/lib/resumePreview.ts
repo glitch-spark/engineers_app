@@ -26,14 +26,14 @@ export const MOCK_CANDIDATE = {
   customLinks: [] as Array<{ label: string; url: string }>,
 };
 
-/** Named CSS @page sizes paged.js recognizes natively. Using the keyword
- *  form (e.g. `size: A4`) is more reliable than explicit dimensions —
- *  paged.js short-circuits and uses well-known geometry without re-parsing. */
-const PAGE_SIZE_KEYWORD: Record<PageFormat, string> = {
-  A3: 'A3',
-  A4: 'A4',
-  A5: 'A5',
-  Letter: 'letter',
+/** Explicit page dimensions. paged.js's named-keyword path (e.g. `size: A4`)
+ *  is hit-or-miss across formats — explicit "WIDTH HEIGHT" works consistently
+ *  and matches what Playwright's `format` keyword resolves to. */
+const PAGE_DIMENSIONS: Record<PageFormat, { width: string; height: string }> = {
+  A3: { width: '297mm', height: '420mm' },
+  A4: { width: '210mm', height: '297mm' },
+  A5: { width: '148mm', height: '210mm' },
+  Letter: { width: '8.5in', height: '11in' },
 };
 
 function typoCss(t: Typography & { align?: Align }): string {
@@ -243,12 +243,12 @@ export function buildPreviewHtml(opts: {
   pageFormat: PageFormat;
   cachedAiHtml?: string;
 }): string {
-  const sizeKw = PAGE_SIZE_KEYWORD[opts.pageFormat];
+  const dim = PAGE_DIMENSIONS[opts.pageFormat];
   const margin = opts.cfg.page.margin;
 
   const pageCss = `
     @page {
-      size: ${sizeKw};
+      size: ${dim.width} ${dim.height};
       margin: ${margin.top}pt ${margin.right}pt ${margin.bottom}pt ${margin.left}pt;
     }
     html, body { margin: 0; padding: 0; background: white; }
