@@ -125,6 +125,9 @@ export const updateUser = (id: string, body: Record<string, unknown>) =>
 
 export const deleteUser = (id: string) => del<{ ok: boolean }>(`/users/${id}`);
 
+export const approveUser = (id: string) =>
+  postJSON<Record<string, unknown>>(`/users/${id}/approve`, {});
+
 // ---------- accounts ----------
 
 export const listAccounts = (params?: {

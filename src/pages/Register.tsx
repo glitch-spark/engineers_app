@@ -31,8 +31,15 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await api.register({ username, email, password });
-      navigate('/login?message=Registration successful! Please sign in.');
+      const res = (await api.register({ username, email, password })) as {
+        ok?: boolean;
+        pendingApproval?: boolean;
+      };
+      if (res?.pendingApproval) {
+        navigate('/login?message=Registration submitted. An admin must approve your account before you can sign in.');
+      } else {
+        navigate('/login?message=Registration successful! Please sign in.');
+      }
     } catch (err) {
       notify.error(err, 'Failed to register. Please try again.');
     } finally {

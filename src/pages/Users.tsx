@@ -2,7 +2,7 @@ import useSWR from 'swr';
 import { useState, useEffect } from 'react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
-import { Pencil, Trash2, Search, Plus, Users, UserCheck, Calendar, Shield } from 'lucide-react';
+import { Pencil, Trash2, Search, Plus, Users, UserCheck, UserX, Calendar, Shield, Check } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { notify } from '../lib/notify';
@@ -17,6 +17,7 @@ interface User {
   image?: string;
   createdAt?: string;
   updatedAt?: string;
+  isActive?: boolean;
 }
 
 export default function UsersPage() {
@@ -109,6 +110,17 @@ export default function UsersPage() {
       await mutate();
     } catch (e) {
       notify.error(e, 'Failed to delete user');
+    }
+  };
+
+  const approve = async (user: User) => {
+    if (!confirm(`Approve ${user.name || user.email}? They will be able to log in.`)) return;
+    try {
+      await api.approveUser(user._id);
+      notify.success(`${user.name || user.email} approved`);
+      await mutate();
+    } catch (e) {
+      notify.error(e, 'Failed to approve user');
     }
   };
 
@@ -323,10 +335,17 @@ export default function UsersPage() {
                   </td>
 
                   <td className="px-4 py-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <UserCheck size={12} className="mr-1" />
-                      Active
-                    </span>
+                    {user.isActive === false ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        <UserX size={12} className="mr-1" />
+                        Pending approval
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <UserCheck size={12} className="mr-1" />
+                        Active
+                      </span>
+                    )}
                   </td>
 
                   <td className="px-4 py-4 text-gray-500 text-sm">
@@ -335,6 +354,15 @@ export default function UsersPage() {
 
                   <td className="px-4 py-4">
                     <div className="flex gap-2">
+                      {user.isActive === false && (
+                        <button
+                          className="btn btn-sm bg-green-600 text-white hover:bg-green-700"
+                          onClick={() => approve(user)}
+                          title="Approve user — allow login"
+                        >
+                          <Check size={14} />
+                        </button>
+                      )}
                       <button className="btn btn-sm" onClick={() => openEdit(user)} title="Edit User">
                         <Pencil size={14} />
                       </button>
