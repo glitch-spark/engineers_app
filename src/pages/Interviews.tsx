@@ -419,7 +419,7 @@ export default function InterviewsPage() {
   };
 
   const accountOptions = useMemo(() => [
-    { value: '', label: 'All profiles' },
+    { value: '', label: 'All' },
     ...accounts.map((a) => ({ value: a._id, label: a.name ? `${a.name} (${a.email})` : a.email || a._id })),
   ], [accounts]);
 
@@ -429,17 +429,17 @@ export default function InterviewsPage() {
   [ownAccounts]);
 
   const creatorOptions = useMemo(() => [
-    { value: '', label: 'All creators' },
+    { value: '', label: 'All' },
     ...users.map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
   ], [users]);
 
   const stageOptions = useMemo(() => [
-    { value: '', label: 'All stages' },
+    { value: '', label: 'All' },
     ...STAGES,
   ], []);
 
   const statusOptions = useMemo(() => [
-    { value: '', label: 'All statuses' },
+    { value: '', label: 'All' },
     ...STATUSES,
   ], []);
 

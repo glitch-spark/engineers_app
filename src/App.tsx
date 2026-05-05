@@ -18,6 +18,8 @@ import Interviews from './pages/Interviews';
 import InterviewDetail from './pages/InterviewDetail';
 import InterviewReview from './pages/InterviewReview';
 import Resume from './pages/Resume';
+import Generated from './pages/Generated';
+import ResumeStyles from './pages/ResumeStyles';
 import AccountResumeSettings from './pages/AccountResumeSettings';
 import AccountEdit from './pages/AccountEdit';
 import Preferences from './pages/Preferences';
@@ -53,6 +55,8 @@ export default function App() {
       <Route path="/interviews/:id" element={<Protected><InterviewDetail /></Protected>} />
       <Route path="/interviews/:id/review" element={<Protected><InterviewReview /></Protected>} />
       <Route path="/resume" element={<Protected><Resume /></Protected>} />
+      <Route path="/resume/generated" element={<Protected><Generated /></Protected>} />
+      <Route path="/resume/styles" element={<Protected><ResumeStyles /></Protected>} />
       <Route path="/preferences" element={<Protected><Preferences /></Protected>} />
       <Route path="/users" element={<Protected><Users /></Protected>} />
       <Route path="/profile" element={<Protected><Profile /></Protected>} />

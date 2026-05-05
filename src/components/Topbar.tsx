@@ -36,12 +36,6 @@ export default function Topbar() {
                 className="transition-transform duration-200 group-hover:scale-105"
               />
             </div>
-            <div className="hidden md:block">
-              <div className="h-6 w-px bg-gray-200"></div>
-            </div>
-            <div className="hidden md:block">
-              <span className="text-sm font-medium text-gray-500">Financial Management</span>
-            </div>
           </Link>
         </div>
 

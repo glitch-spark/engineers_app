@@ -10,17 +10,17 @@
 import type { Align, ContactItem, PageFormat, StyleConfig, Typography } from './resumeStyles';
 
 export const MOCK_CANDIDATE = {
-  name: 'Steven Xu',
-  email: 'steven.xu.office@gmail.com',
-  phone: '(409) 205-3095',
-  address: 'Pearland, Texas',
+  name: 'Sample Candidate',
+  email: 'candidate@example.com',
+  phone: '(555) 123-4567',
+  address: 'San Francisco, CA',
   experienceLines: [
-    'Snorkel AI | Senior Software Engineer | Aug 2020 – Dec 2025',
-    'Airtable | Software Engineer | Aug 2016 - Jul 2020',
+    'Acme Corp | Senior Software Engineer | Aug 2020 – Present',
+    'Beta Labs | Software Engineer | Jul 2016 – Jul 2020',
   ],
-  education: 'Southern Methodist University, Bachelor of Computer Science, 2013 - 2016',
-  github: 'https://github.com/steven-xu',
-  linkedin: 'https://linkedin.com/in/steven-xu',
+  education: 'State University, Bachelor of Computer Science, 2012 - 2016',
+  github: '',
+  linkedin: '',
   website: '',
   twitter: '',
   customLinks: [] as Array<{ label: string; url: string }>,
@@ -59,7 +59,7 @@ function parseExperienceLines(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
-type AccountForPreview = {
+export type AccountForPreview = {
   name?: string;
   email?: string;
   phone?: string;
@@ -71,7 +71,41 @@ type AccountForPreview = {
   website?: string;
   twitter?: string;
   customLinks?: Array<{ label: string; url: string }>;
+  contactLabels?: Record<string, string>;
 };
+
+/** Returns the display value for a contact type — uses custom label override
+ *  if set, otherwise the underlying URL/identity value. Returns empty string
+ *  when there's nothing to show. */
+export function contactDisplay(type: string, account: AccountForPreview): string {
+  const override = account.contactLabels?.[type];
+  if (override) return override;
+  switch (type) {
+    case 'email': return account.email || '';
+    case 'phone': return account.phone || '';
+    case 'address': return account.address || '';
+    case 'github': return account.github || '';
+    case 'linkedin': return account.linkedin || '';
+    case 'website': return account.website || '';
+    case 'twitter': return account.twitter || '';
+    default: return '';
+  }
+}
+
+/** Returns the underlying URL for a contact type. Address and labels-only
+ *  entries return empty (no link). */
+export function contactUrl(type: string, account: AccountForPreview): string {
+  switch (type) {
+    case 'email': return account.email ? `mailto:${account.email}` : '';
+    case 'phone': return account.phone ? `tel:${account.phone.replace(/\s+/g, '')}` : '';
+    case 'address': return '';
+    case 'github': return account.github || '';
+    case 'linkedin': return account.linkedin || '';
+    case 'website': return account.website || '';
+    case 'twitter': return account.twitter || '';
+    default: return '';
+  }
+}
 
 type ResumeData = {
   name: string;
@@ -100,35 +134,16 @@ function renderContactItem(
   account: AccountForPreview,
 ): { rendered: string; href: string | null } | null {
   if (!item.enabled) return null;
-
-  switch (item.type) {
-    case 'email': {
-      const v = account.email || MOCK_CANDIDATE.email;
-      return v ? { rendered: escape(v), href: `mailto:${v}` } : null;
-    }
-    case 'phone': {
-      const v = account.phone || MOCK_CANDIDATE.phone;
-      return v ? { rendered: escape(v), href: `tel:${v.replace(/\s+/g, '')}` } : null;
-    }
-    case 'address': {
-      const v = account.address || MOCK_CANDIDATE.address;
-      return v ? { rendered: escape(v), href: null } : null;
-    }
-    case 'github':
-    case 'linkedin':
-    case 'website':
-    case 'twitter': {
-      const v = (account[item.type] as string | undefined) || '';
-      if (!v) return null;
-      return { rendered: escape(v), href: v };
-    }
-    case 'custom': {
-      const url = item.customUrl || '';
-      const label = item.customLabel || url;
-      if (!url) return null;
-      return { rendered: escape(label), href: url };
-    }
+  if (item.type === 'custom') {
+    const url = item.customUrl || '';
+    const label = item.customLabel || url;
+    if (!url && !label) return null;
+    return { rendered: escape(label), href: url || null };
   }
+  const display = contactDisplay(item.type, account);
+  if (!display) return null;
+  const href = contactUrl(item.type, account) || null;
+  return { rendered: escape(display), href };
 }
 
 function renderContactLine(

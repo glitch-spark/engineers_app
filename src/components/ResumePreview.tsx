@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { PageFormat } from '../lib/resumeStyles';
 
 const MM_TO_PX = 96 / 25.4;
@@ -29,14 +29,10 @@ function clearPagedjsInsertedStyles() {
 export default function ResumePreview({
   html,
   pageFormat,
-  onRefreshFromAi,
-  refreshing,
   hint,
 }: {
   html: string;
   pageFormat: PageFormat;
-  onRefreshFromAi?: () => void;
-  refreshing?: boolean;
   hint?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -128,17 +124,6 @@ export default function ResumePreview({
             <span>Paginated preview ({Math.round(scale * 100)}%)</span>
           )}
         </div>
-        {onRefreshFromAi && (
-          <button
-            onClick={onRefreshFromAi}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-100 disabled:opacity-50"
-            title="Run a one-off generation against this account to seed the preview content"
-          >
-            {refreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-            Refresh from AI
-          </button>
-        )}
       </div>
       {hint && <p className="text-xs text-gray-400 mb-2">{hint}</p>}
       <div ref={scrollRef} className="flex-1 overflow-auto bg-gray-100 border border-gray-200 rounded-md p-4">

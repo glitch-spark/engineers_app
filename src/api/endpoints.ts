@@ -449,34 +449,103 @@ export function listResumeHistory(accountId?: string) {
   );
 }
 
-export async function generateResume(body: {
+// ---------- async resume jobs ----------
+
+export type ResumeJobStatus = 'queued' | 'in_progress' | 'completed' | 'failed';
+export type ResumeJobStep =
+  | 'queued'
+  | 'generating_resume'
+  | 'rendering_pdf'
+  | 'uploading'
+  | 'generating_answers'
+  | 'done';
+
+export interface ResumeJob {
+  _id: string;
+  userId: string;
+  accountId: string;
+  profileName: string;
+  companyName: string;
+  jobUrl?: string | null;
+  status: ResumeJobStatus;
+  step: ResumeJobStep;
+  pdfFilename?: string | null;
+  s3Url?: string | null;
+  errorMessage?: string | null;
+  executionMs?: number | null;
+  hasPdf?: boolean;
+  screeningQuestions: string[];
+  screeningPairs: ScreeningPair[];
+  createdAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}
+
+export function enqueueResumeJob(body: {
   accountId: string;
   company: string;
   jobDescription: string;
-}): Promise<{ blob: Blob; s3Url: string | null }> {
+  jobUrl?: string;
+  questions?: string[];
+  guidelines?: string;
+  guidelinesMode?: 'markdown' | 'plaintext';
+}) {
+  return postJSON<{ jobId: string; status: ResumeJobStatus }>('/resume/generate', body);
+}
+
+export function listResumeJobs(params?: {
+  accountId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  return apiFetch<{ jobs: ResumeJob[]; pagination: Pagination }>(
+    `/resume/jobs${qs(params)}`
+  );
+}
+
+export function deleteResumeJob(id: string) {
+  return del<{ ok: boolean }>(`/resume/jobs/${id}`);
+}
+
+/** Trigger a browser download for a completed job's PDF.
+ *  Backend returns either {url, filename} (S3 presigned) or raw PDF bytes
+ *  (legacy inline). For S3 path we use anchor click — bypasses CORS and
+ *  lets S3 serve the file directly to the browser. */
+export async function downloadResumeJob(job: ResumeJob): Promise<void> {
   const token = getToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}/resume/generate`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-
+  const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download`, { headers });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     try {
       const data = await res.json();
       message = data.error || data.detail || message;
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
     throw new Error(message);
   }
 
-  return {
-    blob: await res.blob(),
-    s3Url: res.headers.get('X-Resume-URL'),
-  };
+  const ct = res.headers.get('Content-Type') || '';
+  if (ct.includes('application/json')) {
+    const data = (await res.json()) as { url: string; filename?: string };
+    const a = document.createElement('a');
+    a.href = data.url;
+    if (data.filename) a.download = data.filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+
+  // Legacy: inline bytes
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (job.pdfFilename || `resume_${job.companyName}.pdf`).split('/').pop()!;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

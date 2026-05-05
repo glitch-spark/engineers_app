@@ -61,7 +61,7 @@ export default function RegisterPage() {
             />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create your account</h1>
-          <p className="text-gray-600">Join Engineer Financial Management today</p>
+          <p className="text-gray-600">Join Cooker App today</p>
         </div>
 
         <div className="bg-white rounded-3xl shadow-strong p-8 border border-gray-100">

@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
 import TypographyRow, { type TypographyRowValue } from './TypographyRow';
 import type { ContactItem, ContactItemType, SectionKey, StyleConfig, Typography } from '../lib/resumeStyles';
 import { TEMPLATES, type TemplateKey } from '../lib/resumeStyleTemplates';
+import { contactDisplay, contactUrl, type AccountForPreview } from '../lib/resumePreview';
 
 const CONTACT_TYPE_LABELS: Record<ContactItemType, string> = {
   email: 'Email',
@@ -24,9 +25,11 @@ const SECTION_LABELS: Record<SectionKey, string> = {
 export default function StructuredStyleForm({
   value,
   onChange,
+  account,
 }: {
   value: StyleConfig;
   onChange: (v: StyleConfig) => void;
+  account?: AccountForPreview;
 }) {
   const set = <K extends keyof StyleConfig>(k: K, v: StyleConfig[K]) => onChange({ ...value, [k]: v });
 
@@ -142,6 +145,7 @@ export default function StructuredStyleForm({
           />
           <ContactItemsEditor
             items={value.basicInfo.contact.items}
+            account={account}
             onChange={(items) =>
               setBasicInfo('contact', { ...value.basicInfo.contact, items })
             }
@@ -298,9 +302,11 @@ function stripAlign(v: TypographyRowValue): Typography {
 function ContactItemsEditor({
   items,
   onChange,
+  account,
 }: {
   items: ContactItem[];
   onChange: (items: ContactItem[]) => void;
+  account?: AccountForPreview;
 }) {
   const update = (i: number, patch: Partial<ContactItem>) => {
     const next = items.slice();
@@ -324,6 +330,19 @@ function ContactItemsEditor({
     onChange([...items, { type: 'custom', enabled: true, customLabel: '', customUrl: '' }]);
   };
 
+  // Hide built-in contact rows that have no underlying value on the profile —
+  // user can add a value in Profile edit and it'll appear here automatically.
+  // Custom rows always show (they're authored here).
+  const visible = items
+    .map((item, idx) => ({ item, idx }))
+    .filter(({ item }) => {
+      if (item.type === 'custom') return true;
+      if (!account) return true;
+      return Boolean(contactDisplay(item.type, account));
+    });
+
+  const hiddenCount = items.length - visible.length;
+
   return (
     <div className="border border-gray-200 rounded-md p-2 space-y-1.5">
       <div className="flex items-center justify-between">
@@ -337,12 +356,19 @@ function ContactItemsEditor({
         </button>
       </div>
       <p className="text-[11px] text-gray-400">
-        Toggle which items appear in the contact line; reorder with the arrows. Values for
-        github / linkedin / website / twitter are pulled from the Account fields. URLs render as
-        clickable links in the preview and PDF.
+        Toggle which items appear in the contact line; reorder with arrows. Values come from the
+        Profile's Contact items. Empty types are hidden — fill them on the Profile to make them
+        appear.
       </p>
       <ul className="divide-y divide-gray-100">
-        {items.map((item, i) => (
+        {visible.map(({ item, idx: i }) => {
+          const display = item.type === 'custom'
+            ? (item.customLabel || item.customUrl || '')
+            : (account ? contactDisplay(item.type, account) : '');
+          const url = item.type === 'custom'
+            ? (item.customUrl || '')
+            : (account ? contactUrl(item.type, account) : '');
+          return (
           <li key={`${item.type}-${i}`} className="flex items-center gap-1 py-1.5 text-xs">
             <input
               type="checkbox"
@@ -369,10 +395,11 @@ function ContactItemsEditor({
                 />
               </>
             ) : (
-              <span className="flex-1 text-[11px] text-gray-400 italic">
-                {item.type === 'email' || item.type === 'phone' || item.type === 'address'
-                  ? `from account.${item.type}`
-                  : `from account.${item.type} URL`}
+              <span className="flex-1 text-[11px] text-gray-700 truncate" title={url || display}>
+                {display}
+                {url && url !== display && (
+                  <span className="text-gray-400 ml-2">→ {url}</span>
+                )}
               </span>
             )}
             <button
@@ -404,8 +431,14 @@ function ContactItemsEditor({
               </button>
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
+      {hiddenCount > 0 && (
+        <p className="text-[11px] text-gray-400 italic">
+          {hiddenCount} item{hiddenCount === 1 ? '' : 's'} hidden — fill them on the Profile to enable here.
+        </p>
+      )}
     </div>
   );
 }

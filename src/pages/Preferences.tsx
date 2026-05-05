@@ -7,12 +7,12 @@ import Select from '../components/Select';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
+import ResumeTabs from '../components/ResumeTabs';
 
 type GuidelinesMode = 'markdown' | 'plaintext';
 
 export default function PreferencesPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
 
   const { data: accountsData, isLoading: accountsLoading } = useSWR(
     'preferences-accounts-lookup',
@@ -21,9 +21,8 @@ export default function PreferencesPage() {
 
   const accounts = useMemo(() => {
     const all = accountsData?.accounts ?? [];
-    if (isAdmin) return all;
     return all.filter((a) => a.createdBy && user?.id && a.createdBy === user.id);
-  }, [accountsData, isAdmin, user?.id]);
+  }, [accountsData, user?.id]);
 
   const [accountId, setAccountId] = useState('');
 
@@ -45,6 +44,7 @@ export default function PreferencesPage() {
           will land here as the app grows.
         </p>
       </header>
+      <ResumeTabs />
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
         {accountsLoading ? (

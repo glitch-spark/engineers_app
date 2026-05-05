@@ -110,17 +110,20 @@ export default {
         sans: ['Inter', 'ui-sans-serif', 'system-ui'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular'],
       },
+      // Pixel-based scale: body 14, labels 13, helper 12, sub-headings 16,
+      // page H1 stays larger via xl/2xl tiers. Pages mostly use text-sm/xs/lg
+      // already, so existing markup picks up the new sizing automatically.
       fontSize: {
-        'xs': ['0.75rem', { lineHeight: '1rem' }],
-        'sm': ['0.875rem', { lineHeight: '1.25rem' }],
-        'base': ['1rem', { lineHeight: '1.5rem' }],
-        'lg': ['1.125rem', { lineHeight: '1.75rem' }],
-        'xl': ['1.25rem', { lineHeight: '1.75rem' }],
-        '2xl': ['1.5rem', { lineHeight: '2rem' }],
-        '3xl': ['1.875rem', { lineHeight: '2.25rem' }],
-        '4xl': ['2.25rem', { lineHeight: '2.5rem' }],
-        '5xl': ['3rem', { lineHeight: '1' }],
-        '6xl': ['3.75rem', { lineHeight: '1' }],
+        'xs': ['12px', { lineHeight: '1.4' }],   // helper text
+        'sm': ['13px', { lineHeight: '1.5' }],   // labels
+        'base': ['14px', { lineHeight: '1.55' }], // body default
+        'lg': ['16px', { lineHeight: '1.4' }],   // h2/h3 sub-headings
+        'xl': ['18px', { lineHeight: '1.35' }],
+        '2xl': ['22px', { lineHeight: '1.3' }],  // page H1
+        '3xl': ['26px', { lineHeight: '1.25' }],
+        '4xl': ['30px', { lineHeight: '1.2' }],
+        '5xl': ['36px', { lineHeight: '1.15' }],
+        '6xl': ['44px', { lineHeight: '1.1' }],
       },
       spacing: {
         '18': '4.5rem',
