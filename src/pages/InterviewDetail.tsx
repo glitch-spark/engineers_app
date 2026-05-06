@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import useSWR from 'swr';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Sparkles, Trash2 } from 'lucide-react';
@@ -28,28 +29,28 @@ const STATUSES: Record<string, string> = {
 
 const stageBadgeClass = (s?: string | null) => {
   switch (s) {
-    case 'intro': return 'bg-gray-100 text-gray-700';
-    case 'tech': return 'bg-blue-100 text-blue-800';
-    case 'panel': return 'bg-purple-100 text-purple-800';
-    case 'live_coding': return 'bg-indigo-100 text-indigo-800';
-    case 'system_design': return 'bg-cyan-100 text-cyan-800';
-    case 'cultural': return 'bg-pink-100 text-pink-800';
-    case 'final': return 'bg-amber-100 text-amber-800';
-    case 'ai_interview': return 'bg-emerald-100 text-emerald-800';
-    default: return 'bg-gray-100 text-gray-700';
+    case 'intro': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'tech': return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'panel': return 'bg-purple-100 text-purple-800 border-purple-200';
+    case 'live_coding': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+    case 'system_design': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
+    case 'cultural': return 'bg-pink-100 text-pink-800 border-pink-200';
+    case 'final': return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'ai_interview': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    default: return 'bg-gray-100 text-gray-700 border-gray-200';
   }
 };
 
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
-    case 'scheduled': return 'bg-blue-100 text-blue-800';
-    case 'completed': return 'bg-gray-100 text-gray-700';
-    case 'passed': return 'bg-green-100 text-green-800';
-    case 'failed': return 'bg-red-100 text-red-800';
-    case 'no_show': return 'bg-orange-100 text-orange-800';
-    case 'rescheduled': return 'bg-yellow-100 text-yellow-800';
-    case 'canceled': return 'bg-gray-200 text-gray-700';
-    default: return 'bg-gray-50 text-gray-500';
+    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'passed': return 'bg-green-100 text-green-800 border-green-200';
+    case 'failed': return 'bg-red-100 text-red-800 border-red-200';
+    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
+    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'canceled': return 'bg-gray-200 text-gray-700 border-gray-300';
+    default: return 'bg-gray-50 text-gray-500 border-gray-200';
   }
 };
 
@@ -88,26 +89,38 @@ type Interview = {
   companyName?: string | null;
   interviewerName?: string | null;
   appliedPosition?: string | null;
-  mainTechStack?: string | null;
   transcript?: string;
   note?: string;
   ownerName?: string | null;
   ownerEmail?: string | null;
 };
 
-function formatRange(start?: string, end?: string | null) {
-  if (!start) return '—';
-  const s = new Date(start);
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function tzAbbrev(d: Date): string {
+  const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(d);
+  return parts.find((p) => p.type === 'timeZoneName')?.value || '';
+}
+
+function fmt24(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** "May 2, 15:00 - 15:30, EST" */
+function formatRange(startIso?: string, endIso?: string | null): string {
+  if (!startIso) return '—';
+  const s = new Date(startIso);
   if (isNaN(s.getTime())) return '—';
-  const sStr = s.toLocaleString();
-  if (!end) return sStr;
-  const e = new Date(end);
-  if (isNaN(e.getTime())) return sStr;
-  const sameDay = s.toDateString() === e.toDateString();
-  const eStr = sameDay
-    ? e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : e.toLocaleString();
-  return `${sStr} – ${eStr}`;
+  const datePart = `${MONTH_NAMES[s.getMonth()]} ${s.getDate()}`;
+  const tz = tzAbbrev(s);
+  if (!endIso) return `${datePart}, ${fmt24(s)}, ${tz}`;
+  const e = new Date(endIso);
+  if (isNaN(e.getTime())) return `${datePart}, ${fmt24(s)}, ${tz}`;
+  if (s.toDateString() !== e.toDateString()) {
+    const dateE = `${MONTH_NAMES[e.getMonth()]} ${e.getDate()}`;
+    return `${datePart}, ${fmt24(s)} – ${dateE}, ${fmt24(e)}, ${tz}`;
+  }
+  return `${datePart}, ${fmt24(s)} - ${fmt24(e)}, ${tz}`;
 }
 
 export default function InterviewDetailPage() {
@@ -180,10 +193,11 @@ export default function InterviewDetailPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold">
-              {iv.companyName || iv.appliedPosition || 'Interview'}
+              {(iv.stage ? STAGES[iv.stage] || iv.stage : 'Interview')}
+              {iv.companyName ? ` with ${iv.companyName}` : ''}
             </h1>
             <div className="text-sm text-gray-500">
-              {iv.appliedPosition && iv.companyName ? `${iv.appliedPosition} · ` : ''}
+              {iv.appliedPosition ? `${iv.appliedPosition} · ` : ''}
               {formatRange(iv.scheduledAt, iv.endsAt)}
               {iv.interviewerName ? ` · w/ ${iv.interviewerName}` : ''}
             </div>
@@ -221,7 +235,7 @@ export default function InterviewDetailPage() {
           <div className="text-gray-500 text-xs">Stage</div>
           <div>
             {iv.stage ? (
-              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${stageBadgeClass(iv.stage)}`}>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
                 {STAGES[iv.stage] || iv.stage}
               </span>
             ) : <span className="text-gray-400">—</span>}
@@ -231,7 +245,7 @@ export default function InterviewDetailPage() {
           <div className="text-gray-500 text-xs">Status</div>
           <div>
             {iv.status ? (
-              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass(iv.status)}`}>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
                 {STATUSES[iv.status] || iv.status}
               </span>
             ) : <span className="text-gray-400">—</span>}
@@ -248,10 +262,6 @@ export default function InterviewDetailPage() {
         <div>
           <div className="text-gray-500 text-xs">Applied Position</div>
           <div className="font-medium">{iv.appliedPosition || '—'}</div>
-        </div>
-        <div>
-          <div className="text-gray-500 text-xs">Main Tech Stack</div>
-          <div className="font-medium">{iv.mainTechStack || '—'}</div>
         </div>
         <div>
           <div className="text-gray-500 text-xs">Profile</div>
@@ -283,7 +293,98 @@ export default function InterviewDetailPage() {
             dangerouslySetInnerHTML={{ __html: iv.note || '<p class="text-gray-400 italic">—</p>' }}
           />
         </div>
+        <ExtractedQuestions interviewId={id} hasTranscript={!!(iv.transcript || '').trim()} />
       </div>
     </div>
   );
+}
+
+function ExtractedQuestions({ interviewId, hasTranscript }: { interviewId: string; hasTranscript: boolean }) {
+  const { data, mutate, isLoading } = useSWR(
+    ['interview-questions', interviewId],
+    () => api.listInterviewQuestions(interviewId),
+    { refreshInterval: 8000 },
+  );
+  const [reextracting, setReextracting] = useState(false);
+
+  async function reextract() {
+    setReextracting(true);
+    try {
+      await api.reextractInterview(interviewId);
+      notify.success('Re-extraction queued');
+      setTimeout(() => mutate(), 1500);
+    } catch (err) {
+      notify.error(err, 'Could not re-extract');
+    } finally {
+      setReextracting(false);
+    }
+  }
+
+  const questions = data?.questions ?? [];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs text-gray-500 uppercase tracking-wide">Extracted questions</div>
+        {hasTranscript && (
+          <button
+            type="button"
+            onClick={reextract}
+            disabled={reextracting}
+            className="text-xs text-primary hover:underline disabled:opacity-50"
+          >
+            {reextracting ? 'Queuing…' : 'Re-extract'}
+          </button>
+        )}
+      </div>
+      {!hasTranscript ? (
+        <div className="text-xs text-gray-400 italic">Upload a transcript to enable extraction.</div>
+      ) : isLoading && questions.length === 0 ? (
+        <div className="text-xs text-gray-400">Loading…</div>
+      ) : questions.length === 0 ? (
+        <div className="text-xs text-gray-400 italic">
+          No extracted questions yet. Extraction runs automatically when a transcript is saved (~30-60s).
+          Use Re-extract if it didn't trigger.
+        </div>
+      ) : (
+        <ol className="space-y-2">
+          {questions.map((q, i) => (
+            <li key={q._id} className="border border-gray-200 rounded-md p-3 bg-white">
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <p className="text-sm font-medium text-gray-900 flex-1">
+                  <span className="text-gray-400 mr-2">{i + 1}.</span>
+                  {q.question}
+                </p>
+                {q.score != null && (
+                  <span className={`text-xs font-semibold ${scoreTextColor(q.score)}`}>
+                    {q.score}/10
+                  </span>
+                )}
+              </div>
+              {q.candidateAnswer && (
+                <p className="text-sm text-gray-700 whitespace-pre-wrap mb-1.5">{q.candidateAnswer}</p>
+              )}
+              {q.scoreRationale && (
+                <p className="text-xs text-gray-500 mb-1">
+                  <strong>Why:</strong> {q.scoreRationale}
+                </p>
+              )}
+              {q.improvementTip && (
+                <p className="text-xs text-blue-700">
+                  <strong>Tip:</strong> {q.improvementTip}
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function scoreTextColor(n: number): string {
+  if (n >= 8) return 'text-green-700';
+  if (n >= 6) return 'text-blue-700';
+  if (n >= 4) return 'text-amber-700';
+  return 'text-red-700';
 }

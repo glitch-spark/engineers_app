@@ -255,9 +255,9 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="card p-0 overflow-hidden">
+      <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left">
+          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 font-medium text-gray-900">User</th>
               <th className="px-4 py-3 font-medium text-gray-900">Contact</th>
@@ -327,7 +327,7 @@ export default function UsersPage() {
 
                   <td className="px-4 py-4">
                     <div className="flex items-center">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
                         {getRoleIcon(user.role)}
                         <span className="ml-1 capitalize">{user.role}</span>
                       </span>
@@ -336,13 +336,13 @@ export default function UsersPage() {
 
                   <td className="px-4 py-4">
                     {user.isActive === false ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                        <UserX size={12} className="mr-1" />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-100 text-amber-800 border-amber-200">
+                        <UserX size={12} />
                         Pending approval
                       </span>
                     ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        <UserCheck size={12} className="mr-1" />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-green-100 text-green-800 border-green-200">
+                        <UserCheck size={12} />
                         Active
                       </span>
                     )}

@@ -179,7 +179,7 @@ export default function GeneratedResumesPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
         {isLoading && jobs.length === 0 ? (
           <p className="p-6 text-sm text-gray-500 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading...

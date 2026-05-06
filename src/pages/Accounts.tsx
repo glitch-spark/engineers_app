@@ -149,9 +149,9 @@ export default function AccountsPage() {
         </div>
       )}
 
-      <div className="card p-0 overflow-hidden">
+      <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-100 text-left">
+          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
             <tr>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Email</th>

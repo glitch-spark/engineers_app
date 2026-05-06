@@ -275,6 +275,66 @@ export const updateInterview = (id: string, body: Record<string, unknown>) =>
 
 export const deleteInterview = (id: string) => del<{ ok: boolean }>(`/interviews/${id}`);
 
+// ---------- interview analyze ----------
+
+export interface InterviewAnalyzeStage {
+  stage: string;
+  stageLabel: string;
+  interviewCount: number;
+  overallScore: number;
+  topQuestions: { question: string; frequency: number; exampleScore: number }[];
+  strengths: string[];
+  weaknesses: string[];
+  tips: string[];
+}
+
+export interface InterviewAnalyzeWeakSpot {
+  topic: string;
+  stage: string;
+  explanation: string;
+  tip: string;
+}
+
+export interface InterviewAnalyzeResult {
+  stages: InterviewAnalyzeStage[];
+  weakSpots: InterviewAnalyzeWeakSpot[];
+  overallTips: string[];
+}
+
+export interface InterviewQuestion {
+  _id: string;
+  interviewId: string;
+  userId: string;
+  accountId?: string | null;
+  stage?: string | null;
+  companyName?: string | null;
+  question: string;
+  candidateAnswer: string;
+  score?: number | null;
+  scoreRationale?: string | null;
+  improvementTip?: string | null;
+  createdAt?: string;
+}
+
+export const listInterviewQuestions = (id: string) =>
+  apiFetch<{ questions: InterviewQuestion[] }>(`/interviews/${id}/questions`);
+
+export const reextractInterview = (id: string) =>
+  postJSON<{ ok: boolean; message: string }>(`/interviews/${id}/extract`, {});
+
+export function analyzeInterviews(body: {
+  accountId?: string;
+  stages?: string[];
+  fromDate?: string;
+  toDate?: string;
+}) {
+  return postJSON<{
+    interviewCount: number;
+    transcriptCount: number;
+    result: InterviewAnalyzeResult;
+  }>('/interviews/analyze', body);
+}
+
 // ---------- skills (admin CRUD; list available to any auth user) ----------
 
 export interface Skill {

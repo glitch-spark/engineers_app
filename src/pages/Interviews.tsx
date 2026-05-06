@@ -1,11 +1,10 @@
 import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import ReactQuill from 'react-quill-new';
-import 'react-quill-new/dist/quill.snow.css';
-import { Pencil, Trash2, Eye, Filter, Plus, LayoutGrid, Table as TableIcon, ArrowUpDown } from 'lucide-react';
+import { Pencil, Trash2, Eye, Filter, Plus } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
+import InterviewTabs from '../components/InterviewTabs';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -45,16 +44,6 @@ const editorStyles = `
   .prose-readonly pre, .prose-readonly code { white-space: pre-wrap; word-break: break-all; }
 `;
 
-const QUILL_MODULES = {
-  toolbar: [
-    [{ header: [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    ['link'],
-    ['clean'],
-  ],
-};
-
 const STAGES = [
   { value: 'intro', label: 'Intro' },
   { value: 'tech', label: 'Tech' },
@@ -78,14 +67,14 @@ const STATUSES = [
 
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
-    case 'scheduled': return 'bg-blue-100 text-blue-800';
-    case 'completed': return 'bg-gray-100 text-gray-700';
-    case 'passed': return 'bg-green-100 text-green-800';
-    case 'failed': return 'bg-red-100 text-red-800';
-    case 'no_show': return 'bg-orange-100 text-orange-800';
-    case 'rescheduled': return 'bg-yellow-100 text-yellow-800';
-    case 'canceled': return 'bg-gray-200 text-gray-700';
-    default: return 'bg-gray-50 text-gray-500';
+    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'passed': return 'bg-green-100 text-green-800 border-green-200';
+    case 'failed': return 'bg-red-100 text-red-800 border-red-200';
+    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
+    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'canceled': return 'bg-gray-200 text-gray-700 border-gray-300';
+    default: return 'bg-gray-50 text-gray-500 border-gray-200';
   }
 };
 
@@ -106,7 +95,6 @@ type Interview = {
   companyName?: string | null;
   interviewerName?: string | null;
   appliedPosition?: string | null;
-  mainTechStack?: string | null;
   transcript?: string;
   note?: string;
   ownerName?: string | null;
@@ -149,39 +137,52 @@ function splitDateTime(iso: string): { date: string; time: string } {
   return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${mi}` };
 }
 
-function formatScheduled(iso: string): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString();
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function tzAbbrev(d: Date): string {
+  // "GMT-04:00" or named like "EDT" via toLocaleDateString long timezone name.
+  const parts = new Intl.DateTimeFormat(undefined, {
+    timeZoneName: 'short',
+  }).formatToParts(d);
+  const tz = parts.find((p) => p.type === 'timeZoneName')?.value || '';
+  return tz;
 }
 
-function formatTimeRange(startIso: string, endIso?: string | null): string {
-  if (!startIso) return '—';
-  const start = new Date(startIso);
-  if (isNaN(start.getTime())) return '—';
-  const startStr = start.toLocaleString();
-  if (!endIso) return startStr;
-  const end = new Date(endIso);
-  if (isNaN(end.getTime())) return startStr;
-  const sameDay = start.toDateString() === end.toDateString();
-  const endStr = sameDay
-    ? end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : end.toLocaleString();
-  return `${startStr} – ${endStr}`;
+function fmt24(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
+
+/** "May 2, 15:00 - 15:30, EST" */
+function formatPretty(startIso: string, endIso?: string | null): string {
+  if (!startIso) return '—';
+  const s = new Date(startIso);
+  if (isNaN(s.getTime())) return '—';
+  const datePart = `${MONTH_NAMES[s.getMonth()]} ${s.getDate()}`;
+  const tz = tzAbbrev(s);
+  if (!endIso) return `${datePart}, ${fmt24(s)}, ${tz}`;
+  const e = new Date(endIso);
+  if (isNaN(e.getTime())) return `${datePart}, ${fmt24(s)}, ${tz}`;
+  if (s.toDateString() !== e.toDateString()) {
+    const dateE = `${MONTH_NAMES[e.getMonth()]} ${e.getDate()}`;
+    return `${datePart}, ${fmt24(s)} – ${dateE}, ${fmt24(e)}, ${tz}`;
+  }
+  return `${datePart}, ${fmt24(s)} - ${fmt24(e)}, ${tz}`;
+}
+
+const formatScheduled = (iso: string) => formatPretty(iso);
+const formatTimeRange = (startIso: string, endIso?: string | null) => formatPretty(startIso, endIso);
 
 const stageBadgeClass = (stage: string) => {
   switch (stage) {
-    case 'intro': return 'bg-gray-100 text-gray-700';
-    case 'tech': return 'bg-blue-100 text-blue-800';
-    case 'panel': return 'bg-purple-100 text-purple-800';
-    case 'live_coding': return 'bg-indigo-100 text-indigo-800';
-    case 'system_design': return 'bg-cyan-100 text-cyan-800';
-    case 'cultural': return 'bg-pink-100 text-pink-800';
-    case 'final': return 'bg-amber-100 text-amber-800';
-    case 'ai_interview': return 'bg-emerald-100 text-emerald-800';
-    default: return 'bg-gray-100 text-gray-700';
+    case 'intro': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'tech': return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'panel': return 'bg-purple-100 text-purple-800 border-purple-200';
+    case 'live_coding': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+    case 'system_design': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
+    case 'cultural': return 'bg-pink-100 text-pink-800 border-pink-200';
+    case 'final': return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'ai_interview': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    default: return 'bg-gray-100 text-gray-700 border-gray-200';
   }
 };
 
@@ -206,9 +207,8 @@ export default function InterviewsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [sort, setSort] = useState<'desc' | 'asc'>('desc');
-
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const sort: 'desc' = 'desc';
+  const viewMode: 'table' = 'table';
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -270,7 +270,6 @@ export default function InterviewsPage() {
       companyName: '',
       interviewerName: '',
       appliedPosition: '',
-      mainTechStack: '',
       transcript: '',
       note: '',
     };
@@ -296,7 +295,6 @@ export default function InterviewsPage() {
         companyName: active.companyName || '',
         interviewerName: active.interviewerName || '',
         appliedPosition: active.appliedPosition || '',
-        mainTechStack: active.mainTechStack || '',
         transcript: active.transcript || '',
         note: active.note || '',
       });
@@ -311,7 +309,29 @@ export default function InterviewsPage() {
   };
 
   const openCreate = () => { setActive(null); setMode('create'); };
-  const openUpdate = (iv: Interview) => { setActive(iv); setMode('update'); };
+  const openUpdate = (iv: Interview) => {
+    // Pre-fill form synchronously so the modal renders with values on first paint
+    // — useEffect-based pre-fill races with modal mount and sometimes blanks fields.
+    const start = splitDateTime(iv.scheduledAt);
+    const end = splitDateTime(iv.endsAt || '');
+    const accId = typeof iv.accountId === 'string' ? iv.accountId : iv.accountId?._id ?? '';
+    setForm({
+      accountId: accId,
+      date: start.date,
+      startTime: start.time,
+      endTime: end.time || start.time,
+      stage: iv.stage || '',
+      status: iv.status || '',
+      companyName: iv.companyName || '',
+      interviewerName: iv.interviewerName || '',
+      appliedPosition: iv.appliedPosition || '',
+      transcript: iv.transcript || '',
+      note: iv.note || '',
+    });
+    setActive(iv);
+    setMode('update');
+    setError('');
+  };
   const openDelete = (iv: Interview) => { setActive(iv); setMode('delete'); };
 
   // Honor `?edit=:id` so the detail page can hand off to the edit modal.
@@ -369,7 +389,6 @@ export default function InterviewsPage() {
         companyName: form.companyName,
         interviewerName: form.interviewerName,
         appliedPosition: form.appliedPosition,
-        mainTechStack: form.mainTechStack,
         transcript: form.transcript,
         note: form.note,
       };
@@ -467,14 +486,14 @@ export default function InterviewsPage() {
         <td className="px-3 py-2">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</td>
         <td className="px-3 py-2">
           {iv.stage ? (
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${stageBadgeClass(iv.stage)}`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
               {stageLabel(iv.stage)}
             </span>
           ) : <span className="text-gray-400">—</span>}
         </td>
         <td className="px-3 py-2">
           {iv.status ? (
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass(iv.status)}`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
               {statusLabel(iv.status)}
             </span>
           ) : <span className="text-gray-400">—</span>}
@@ -518,12 +537,12 @@ export default function InterviewsPage() {
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             {iv.stage && (
-              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${stageBadgeClass(iv.stage)}`}>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
                 {stageLabel(iv.stage)}
               </span>
             )}
             {iv.status && (
-              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass(iv.status)}`}>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
                 {statusLabel(iv.status)}
               </span>
             )}
@@ -533,7 +552,7 @@ export default function InterviewsPage() {
         {(iv.companyName || iv.interviewerName || iv.appliedPosition) && (
           <div className="text-sm">
             <div className="font-medium">{iv.companyName || '—'}</div>
-            {iv.appliedPosition && <div className="text-gray-600 text-xs">{iv.appliedPosition}{iv.mainTechStack ? ` · ${iv.mainTechStack}` : ''}</div>}
+            {iv.appliedPosition && <div className="text-gray-600 text-xs">{iv.appliedPosition}</div>}
             {iv.interviewerName && <div className="text-gray-500 text-xs">w/ {iv.interviewerName}</div>}
           </div>
         )}
@@ -565,69 +584,45 @@ export default function InterviewsPage() {
         </button>
       </div>
 
+      <InterviewTabs />
+
       <div className="space-y-4">
       {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap">
+      <div className="flex items-end gap-2 flex-wrap text-xs">
         {isAdmin && (
-          <div className="min-w-[180px]">
-            <label className="block text-xs mb-1 text-gray-600">Creator</label>
+          <div className="w-40">
+            <label className="block mb-1 text-gray-600">Creator</label>
             <Select value={creatorId} onChange={setCreatorId} options={creatorOptions} />
           </div>
         )}
-        <div className="min-w-[180px]">
-          <label className="block text-xs mb-1 text-gray-600">Profile</label>
+        <div className="w-44">
+          <label className="block mb-1 text-gray-600">Profile</label>
           <Select value={accountId} onChange={setAccountId} options={accountOptions} />
         </div>
-        <div className="min-w-[160px]">
-          <label className="block text-xs mb-1 text-gray-600">Stage</label>
+        <div className="w-36">
+          <label className="block mb-1 text-gray-600">Stage</label>
           <Select value={stage} onChange={setStage} options={stageOptions} />
         </div>
-        <div className="min-w-[160px]">
-          <label className="block text-xs mb-1 text-gray-600">Status</label>
+        <div className="w-36">
+          <label className="block mb-1 text-gray-600">Status</label>
           <Select value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
         </div>
-        <div>
-          <label className="block text-xs mb-1 text-gray-600">From</label>
-          <input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <div className="w-36">
+          <label className="block mb-1 text-gray-600">From</label>
+          <input className="input w-full" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
-        <div>
-          <label className="block text-xs mb-1 text-gray-600">To</label>
-          <input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <div className="w-36">
+          <label className="block mb-1 text-gray-600">To</label>
+          <input className="input w-full" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         <button
           type="button"
-          className="btn"
+          className="btn px-3 py-2 text-xs"
           onClick={() => { setCurrentPage(1); mutate(); }}
           title="Apply filters"
         >
-          <Filter size={16} className="mr-1" /> Apply
+          <Filter size={14} className="mr-1" /> Apply
         </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setSort(sort === 'desc' ? 'asc' : 'desc')}
-          title={`Sort by time: ${sort === 'desc' ? 'latest first' : 'oldest first'}`}
-        >
-          <ArrowUpDown size={16} className="mr-1" /> {sort === 'desc' ? 'Latest' : 'Oldest'} first
-        </button>
-        <div className="inline-flex rounded-md border border-gray-200 overflow-hidden">
-          <button
-            type="button"
-            className={`px-3 py-2 text-sm ${viewMode === 'table' ? 'bg-gray-100 text-primary' : 'bg-white text-gray-600'}`}
-            onClick={() => setViewMode('table')}
-            title="Table view"
-          >
-            <TableIcon size={16} />
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-2 text-sm border-l border-gray-200 ${viewMode === 'card' ? 'bg-gray-100 text-primary' : 'bg-white text-gray-600'}`}
-            onClick={() => setViewMode('card')}
-            title="Card view"
-          >
-            <LayoutGrid size={16} />
-          </button>
-        </div>
       </div>
 
       {/* Total + page-size */}
@@ -653,21 +648,21 @@ export default function InterviewsPage() {
 
       {/* List */}
       {viewMode === 'table' ? (
-        <div className="card p-0 overflow-hidden">
+        <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-100 text-left">
+            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
               <tr>
-                <th className="px-3 py-2">Creator</th>
-                <th className="px-3 py-2">Date / Time</th>
-                <th className="px-3 py-2">Stage</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Company</th>
-                <th className="px-3 py-2">Interviewer</th>
-                <th className="px-3 py-2">Profile</th>
-                <th className="px-3 py-2 whitespace-nowrap">Actions</th>
+                <th className="px-3 py-2 font-medium">Creator</th>
+                <th className="px-3 py-2 font-medium">Date / Time</th>
+                <th className="px-3 py-2 font-medium">Stage</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Company</th>
+                <th className="px-3 py-2 font-medium">Interviewer</th>
+                <th className="px-3 py-2 font-medium">Profile</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
@@ -775,7 +770,7 @@ export default function InterviewsPage() {
                   <div className="text-gray-500 text-xs">Stage</div>
                   <div>
                     {form.stage ? (
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${stageBadgeClass(form.stage)}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(form.stage)}`}>
                         {stageLabel(form.stage)}
                       </span>
                     ) : <span className="text-gray-400">—</span>}
@@ -785,7 +780,7 @@ export default function InterviewsPage() {
                   <div className="text-gray-500 text-xs">Status</div>
                   <div>
                     {form.status ? (
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass(form.status)}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(form.status)}`}>
                         {statusLabel(form.status)}
                       </span>
                     ) : <span className="text-gray-400">—</span>}
@@ -802,10 +797,6 @@ export default function InterviewsPage() {
                 <div>
                   <div className="text-gray-500 text-xs">Applied Position</div>
                   <div className="font-medium">{form.appliedPosition || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500 text-xs">Main Tech Stack</div>
-                  <div className="font-medium">{form.mainTechStack || '—'}</div>
                 </div>
                 <div>
                   <div className="text-gray-500 text-xs">Date</div>
@@ -891,27 +882,6 @@ export default function InterviewsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Interview Stage</label>
-                  <Select
-                    value={form.stage}
-                    onChange={(v) => setForm({ ...form, stage: v })}
-                    options={stageFormOptions}
-                    placeholder="Select a stage"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Status</label>
-                  <Select
-                    value={form.status}
-                    onChange={(v) => setForm({ ...form, status: v })}
-                    options={statusFormOptions}
-                    placeholder="Select a status"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
                   <label className="block text-sm font-medium mb-1">Company Name</label>
                   <input
                     className="input"
@@ -933,37 +903,46 @@ export default function InterviewsPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium mb-1">Applied Position</label>
+                <input
+                  className="input"
+                  type="text"
+                  value={form.appliedPosition}
+                  onChange={(e) => setForm({ ...form, appliedPosition: e.target.value })}
+                  placeholder="e.g. Backend, Frontend, AI, Mobile…"
+                  list="applied-position-suggestions"
+                />
+                <datalist id="applied-position-suggestions">
+                  <option value="Backend" />
+                  <option value="Frontend" />
+                  <option value="Fullstack" />
+                  <option value="AI / ML" />
+                  <option value="Mobile" />
+                  <option value="DevOps" />
+                  <option value="Data" />
+                  <option value="QA" />
+                  <option value="Other" />
+                </datalist>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Applied Position</label>
-                  <input
-                    className="input"
-                    type="text"
-                    value={form.appliedPosition}
-                    onChange={(e) => setForm({ ...form, appliedPosition: e.target.value })}
-                    placeholder="e.g. Backend, Frontend, AI, Mobile…"
-                    list="applied-position-suggestions"
+                  <label className="block text-sm font-medium mb-1">Interview Stage</label>
+                  <Select
+                    value={form.stage}
+                    onChange={(v) => setForm({ ...form, stage: v })}
+                    options={stageFormOptions}
+                    placeholder="Select a stage"
                   />
-                  <datalist id="applied-position-suggestions">
-                    <option value="Backend" />
-                    <option value="Frontend" />
-                    <option value="Fullstack" />
-                    <option value="AI / ML" />
-                    <option value="Mobile" />
-                    <option value="DevOps" />
-                    <option value="Data" />
-                    <option value="QA" />
-                    <option value="Other" />
-                  </datalist>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Main Tech Stack</label>
-                  <input
-                    className="input"
-                    type="text"
-                    value={form.mainTechStack}
-                    onChange={(e) => setForm({ ...form, mainTechStack: e.target.value })}
-                    placeholder="e.g. Python, FastAPI, PostgreSQL"
+                  <label className="block text-sm font-medium mb-1">Status</label>
+                  <Select
+                    value={form.status}
+                    onChange={(v) => setForm({ ...form, status: v })}
+                    options={statusFormOptions}
+                    placeholder="Select a status"
                   />
                 </div>
               </div>
@@ -972,10 +951,10 @@ export default function InterviewsPage() {
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium">Interview Transcript</label>
                   <label className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
-                    Upload .txt / .md / .doc / .docx
+                    {form.transcript ? 'Replace file' : 'Upload .txt / .md / .doc / .pdf'}
                     <input
                       type="file"
-                      accept=".txt,.md,.markdown,.doc,.docx,text/plain,text/markdown,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      accept=".txt,.md,.markdown,.doc,.docx,.pdf,text/plain,text/markdown,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
@@ -985,23 +964,13 @@ export default function InterviewsPage() {
                         const reader = new FileReader();
                         reader.onload = () => {
                           const raw = String(reader.result || '');
-                          // Convert plain text/markdown to simple HTML paragraphs so the
-                          // rich-text editor renders it readably.
-                          const escaped = raw
-                            .replace(/&/g, '&amp;')
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;');
-                          const html = escaped
-                            .split(/\n{2,}/)
-                            .map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`)
-                            .join('');
-                          setForm((prev) => ({ ...prev, transcript: html }));
+                          setForm((prev) => ({ ...prev, transcript: raw }));
                           if (!isPlain) {
                             notify.error(
-                              `${ext.toUpperCase()} files may not parse cleanly. Save as .txt or .md if the result looks garbled.`
+                              `${ext.toUpperCase()} files may not parse cleanly as plain text. Save as .txt or .md if the result looks garbled.`
                             );
                           } else {
-                            notify.success('Transcript loaded');
+                            notify.success(`Transcript loaded: ${file.name}`);
                           }
                         };
                         reader.onerror = () => notify.error('Could not read the file');
@@ -1011,28 +980,35 @@ export default function InterviewsPage() {
                     />
                   </label>
                 </div>
-                <div className="border border-gray-300 rounded-md">
-                  <ReactQuill
-                    theme="snow"
-                    value={form.transcript}
-                    onChange={(value) => setForm({ ...form, transcript: value })}
-                    modules={QUILL_MODULES}
-                    placeholder="Paste, write, or upload the transcript…"
-                  />
-                </div>
+                {form.transcript ? (
+                  <div className="border border-gray-300 rounded-md p-3 max-h-60 overflow-auto bg-gray-50">
+                    <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-gray-300 rounded-md p-4 text-center text-xs text-gray-400">
+                    No transcript yet. Upload a file above.
+                  </div>
+                )}
+                {form.transcript && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, transcript: '' }))}
+                    className="text-xs text-red-600 hover:underline mt-1"
+                  >
+                    Clear transcript
+                  </button>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Note</label>
-                <div className="border border-gray-300 rounded-md">
-                  <ReactQuill
-                    theme="snow"
-                    value={form.note}
-                    onChange={(value) => setForm({ ...form, note: value })}
-                    modules={QUILL_MODULES}
-                    placeholder="Internal notes…"
-                  />
-                </div>
+                <textarea
+                  className="input w-full"
+                  rows={5}
+                  value={form.note}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  placeholder="Internal notes…"
+                />
               </div>
 
               <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
