@@ -2,11 +2,43 @@ import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { Link, useParams } from 'react-router-dom';
 import { marked } from 'marked';
-import { ArrowLeft, RefreshCw, Send, Sparkles } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
+
+const storageKey = (id: string) => `interview_review_${id}`;
+
+type Persisted = { brief: string; chat: ChatMsg[]; includeRubric: boolean };
+
+function loadPersisted(id: string): Persisted | null {
+  try {
+    const raw = localStorage.getItem(storageKey(id));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Persisted;
+    if (typeof parsed?.brief !== 'string' || !Array.isArray(parsed.chat)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function savePersisted(id: string, value: Persisted) {
+  try {
+    localStorage.setItem(storageKey(id), JSON.stringify(value));
+  } catch {
+    /* quota / disabled — ignore */
+  }
+}
+
+function clearPersisted(id: string) {
+  try {
+    localStorage.removeItem(storageKey(id));
+  } catch {
+    /* ignore */
+  }
+}
 
 const reviewStyles = `
   .review-md { font-size: 14px; line-height: 1.6; }
@@ -35,16 +67,65 @@ export default function InterviewReviewPage() {
     () => api.getInterview(id!),
   );
 
-  const [brief, setBrief] = useState<string>('');
+  const initial = id ? loadPersisted(id) : null;
+  const [brief, setBrief] = useState<string>(initial?.brief ?? '');
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefError, setBriefError] = useState<string>('');
-  const [includeRubric, setIncludeRubric] = useState(true);
+  const [includeRubric, setIncludeRubric] = useState(initial?.includeRubric ?? true);
 
-  const [chat, setChat] = useState<ChatMsg[]>([]);
+  const [chat, setChat] = useState<ChatMsg[]>(initial?.chat ?? []);
   const [input, setInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Persist locally so navigating away doesn't drop the conversation.
+  useEffect(() => {
+    if (!id) return;
+    if (!brief && chat.length === 0) return;
+    savePersisted(id, { brief, chat, includeRubric });
+  }, [id, brief, chat, includeRubric]);
+
+  // Hydrate follow-up history from DB on first mount (replaces local cache if
+  // server has a record). Initial brief is skipped server-side, so it remains
+  // local-only — re-run the brief if the user lands without one.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.interviewChatHistory(id, 100);
+        if (cancelled) return;
+        const logs = res.logs ?? [];
+        if (logs.length === 0) return;
+        const turns: ChatMsg[] = [];
+        for (const log of logs) {
+          turns.push({ role: 'user', content: log.question });
+          if (log.answer) turns.push({ role: 'assistant', content: log.answer });
+        }
+        setChat((prev) => {
+          // Merge: keep the initial assistant brief if it exists, then append
+          // server turns (skip duplicates by content match).
+          const head = prev[0]?.role === 'assistant' ? [prev[0]] : [];
+          const seen = new Set(head.map((m) => `${m.role}:${m.content}`));
+          const merged = [...head];
+          for (const t of turns) {
+            const key = `${t.role}:${t.content}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(t);
+          }
+          return merged;
+        });
+      } catch {
+        /* non-fatal — local state still works */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   const runBrief = async () => {
     if (!id) return;
@@ -63,11 +144,29 @@ export default function InterviewReviewPage() {
   };
 
   useEffect(() => {
-    if (id && !brief && !briefLoading) {
+    if (id && !brief && !briefLoading && (initial?.brief ?? '') === '') {
       runBrief();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const clearHistory = async () => {
+    if (!id) return;
+    if (!window.confirm('Clear this AI Review and all follow-ups? This cannot be undone.')) return;
+    setClearing(true);
+    try {
+      await api.clearInterviewChatHistory(id);
+    } catch (err) {
+      notify.error(err, 'Failed to clear history');
+    } finally {
+      clearPersisted(id);
+      setBrief('');
+      setBriefError('');
+      setChat([]);
+      setInput('');
+      setClearing(false);
+    }
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -147,6 +246,15 @@ export default function InterviewReviewPage() {
             {brief ? 'Regenerate' : 'Generate'}
           </button>
           <button type="button" className="btn" onClick={copyBrief} disabled={!brief}>Copy</button>
+          <button
+            type="button"
+            className="btn"
+            onClick={clearHistory}
+            disabled={clearing || briefLoading || chatLoading || (!brief && chat.length === 0)}
+            title="Clear review and follow-up history"
+          >
+            <Trash2 size={16} className="mr-1" /> Clear
+          </button>
         </div>
       </div>
 

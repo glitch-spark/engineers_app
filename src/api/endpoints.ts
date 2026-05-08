@@ -267,6 +267,25 @@ export const interviewChat = (
 ) =>
   postJSON<AiInterviewChatResponse>(`/ai-review/interview/${interviewId}/chat`, body);
 
+export interface InterviewChatLog {
+  _id: string;
+  interviewId: string;
+  userId: string;
+  question: string;
+  answer: string;
+  model?: string;
+  rubric?: boolean;
+  createdAt: string;
+}
+
+export const interviewChatHistory = (interviewId: string, limit = 100) =>
+  apiFetch<{ logs: InterviewChatLog[] }>(
+    `/ai-review/interview/${interviewId}/chat/history?limit=${limit}`,
+  );
+
+export const clearInterviewChatHistory = (interviewId: string) =>
+  del<{ deleted: number }>(`/ai-review/interview/${interviewId}/chat/history`);
+
 export const createInterview = (body: Record<string, unknown>) =>
   postJSON<Record<string, unknown>>('/interviews', body);
 
@@ -277,15 +296,29 @@ export const deleteInterview = (id: string) => del<{ ok: boolean }>(`/interviews
 
 // ---------- interview analyze ----------
 
+export interface CommunicationStyle {
+  pacing?: string;
+  structure?: string;
+  verbosity?: string;
+  confidence?: string;
+}
+
+export interface ShineEntry { topic: string; evidence?: string }
+export interface StumbleEntry { topic: string; failureMode?: string; evidence?: string }
+export interface ShineMove { move: string; why?: string }
+
 export interface InterviewAnalyzeStage {
   stage: string;
   stageLabel: string;
   interviewCount: number;
   overallScore: number;
   topQuestions: { question: string; frequency: number; exampleScore: number }[];
-  strengths: string[];
-  weaknesses: string[];
-  tips: string[];
+  askedAlways: string[];
+  youShineOn: ShineEntry[];
+  youStumbleOn: StumbleEntry[];
+  communicationStyle: CommunicationStyle;
+  styleImprovements: string[];
+  drills: string[];
 }
 
 export interface InterviewAnalyzeWeakSpot {
@@ -298,6 +331,13 @@ export interface InterviewAnalyzeWeakSpot {
 export interface InterviewAnalyzeResult {
   stages: InterviewAnalyzeStage[];
   weakSpots: InterviewAnalyzeWeakSpot[];
+  styleProfile: string;
+  signatureStrengths: string[];
+  blindSpots: string[];
+  howToShine: ShineMove[];
+  interviewTactics: string[];
+  redFlags: string[];
+  uncertaintyTopics: string[];
   overallTips: string[];
 }
 
@@ -322,6 +362,22 @@ export const listInterviewQuestions = (id: string) =>
 export const reextractInterview = (id: string) =>
   postJSON<{ ok: boolean; message: string }>(`/interviews/${id}/extract`, {});
 
+export interface AnalyzeChatRequest {
+  accountId?: string;
+  stages?: string[];
+  fromDate?: string;
+  toDate?: string;
+  filterContext: Record<string, unknown>;
+  result: Record<string, unknown>;
+  messages: { role: 'user' | 'assistant'; content: string }[];
+}
+
+export const analyzeChat = (body: AnalyzeChatRequest) =>
+  postJSON<{ reply: string; model: string; promptTokens: number; completionTokens: number }>(
+    '/interviews/analyze/chat',
+    body,
+  );
+
 export function analyzeInterviews(body: {
   accountId?: string;
   stages?: string[];
@@ -331,6 +387,8 @@ export function analyzeInterviews(body: {
   return postJSON<{
     interviewCount: number;
     transcriptCount: number;
+    questionCount?: number;
+    filterContext?: Record<string, unknown>;
     result: InterviewAnalyzeResult;
   }>('/interviews/analyze', body);
 }
