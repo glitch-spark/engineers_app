@@ -8,6 +8,9 @@ interface ProfileData {
   email: string;
   image: string;
   birthday: string;
+  leaderboardOptIn: boolean;
+  leaderboardName: string;
+  leaderboardAnon: boolean;
 }
 
 interface PasswordData {
@@ -23,9 +26,13 @@ export default function ProfilePage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
-  const [formData, setFormData] = useState<ProfileData>({ username: '', email: '', image: '', birthday: '' });
+  const EMPTY_PROFILE: ProfileData = {
+    username: '', email: '', image: '', birthday: '',
+    leaderboardOptIn: false, leaderboardName: '', leaderboardAnon: false,
+  };
+  const [formData, setFormData] = useState<ProfileData>(EMPTY_PROFILE);
   const [passwordData, setPasswordData] = useState<PasswordData>({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  const [originalData, setOriginalData] = useState<ProfileData>({ username: '', email: '', image: '', birthday: '' });
+  const [originalData, setOriginalData] = useState<ProfileData>(EMPTY_PROFILE);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +45,9 @@ export default function ProfilePage() {
           email: data.user.email || user?.email || '',
           image: data.user.image || user?.image || '',
           birthday: data.user.birthday ? new Date(data.user.birthday).toISOString().slice(0, 10) : '',
+          leaderboardOptIn: !!data.user.leaderboardOptIn,
+          leaderboardName: data.user.leaderboardName || '',
+          leaderboardAnon: !!data.user.leaderboardAnon,
         };
         setFormData(userData);
         setOriginalData(userData);
@@ -45,10 +55,10 @@ export default function ProfilePage() {
         if (cancelled) return;
         notify.error(error, 'Failed to load profile');
         const userData: ProfileData = {
+          ...EMPTY_PROFILE,
           username: user?.name || '',
           email: user?.email || '',
           image: user?.image || '',
-          birthday: '',
         };
         setFormData(userData);
         setOriginalData(userData);
@@ -242,6 +252,47 @@ export default function ProfilePage() {
                   className="select focus-ring"
                   disabled={!isEditing}
                 />
+              </div>
+
+              <div className="border-t border-gray-100 pt-5 mt-2">
+                <h3 className="text-sm font-semibold text-gray-800 mb-1">Leaderboard</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Show your performance on the public leaderboard. Off by default.
+                </p>
+                <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.leaderboardOptIn}
+                    onChange={(e) => setFormData((p) => ({ ...p, leaderboardOptIn: e.target.checked }))}
+                    disabled={!isEditing}
+                  />
+                  Opt in to public leaderboard
+                </label>
+                {formData.leaderboardOptIn && (
+                  <>
+                    <div className="form-group mb-2">
+                      <label className="form-label text-xs">Display name (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.leaderboardName}
+                        onChange={(e) => setFormData((p) => ({ ...p, leaderboardName: e.target.value }))}
+                        placeholder={formData.username || 'Your name on the leaderboard'}
+                        disabled={!isEditing || formData.leaderboardAnon}
+                        className="input w-full text-sm"
+                        maxLength={40}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={formData.leaderboardAnon}
+                        onChange={(e) => setFormData((p) => ({ ...p, leaderboardAnon: e.target.checked }))}
+                        disabled={!isEditing}
+                      />
+                      Hide my identity (show as "Anonymous &lt;animal&gt; #NN")
+                    </label>
+                  </>
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-4">

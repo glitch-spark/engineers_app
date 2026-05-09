@@ -30,6 +30,9 @@ export interface ProfileShape {
   email: string;
   image: string;
   birthday: string | null;
+  leaderboardOptIn?: boolean;
+  leaderboardName?: string;
+  leaderboardAnon?: boolean;
 }
 
 export interface TransactionListParams {
@@ -99,6 +102,9 @@ export const updateProfile = (body: {
   email: string;
   image?: string;
   birthday?: string;
+  leaderboardOptIn?: boolean;
+  leaderboardName?: string;
+  leaderboardAnon?: boolean;
 }) => putJSON<{ message: string; user: ProfileShape }>('/profile', body);
 
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
@@ -293,6 +299,71 @@ export const updateInterview = (id: string, body: Record<string, unknown>) =>
   putJSON<Record<string, unknown>>(`/interviews/${id}`, body);
 
 export const deleteInterview = (id: string) => del<{ ok: boolean }>(`/interviews/${id}`);
+
+// ---------- dashboard metrics ----------
+
+export interface DashboardKpiTotals {
+  income: number;
+  bids: number;
+  interviews: number;
+  bidToInterview: number;
+}
+
+export interface DashboardSeriesPoint {
+  bucketStart: string;
+  income: number;
+  bids: number;
+  interviews: number;
+  rate: number;
+}
+
+export interface DashboardMetrics {
+  window: { from: string; to: string };
+  previousWindow: { from: string; to: string };
+  bucket: 'day' | 'week' | 'month';
+  totals: DashboardKpiTotals;
+  previousTotals: DashboardKpiTotals;
+  series: DashboardSeriesPoint[];
+}
+
+export const getDashboardMetrics = (params: {
+  range?: number;
+  bucket?: 'day' | 'week' | 'month';
+  from?: string;
+  to?: string;
+  includeSeries?: boolean;
+}) => apiFetch<DashboardMetrics>(`/metrics/dashboard${qs(params)}`);
+
+// ---------- leaderboard ----------
+
+export type LeaderboardMetric = 'earnings' | 'bids' | 'interviews' | 'conversion';
+
+export interface LeaderboardRow {
+  userId: string;
+  name: string;
+  value: number;
+  secondary: string;
+  rank: number;
+}
+
+export interface LeaderboardResponse {
+  metric: LeaderboardMetric;
+  range: number;
+  rows: LeaderboardRow[];
+  yourRank: {
+    rank: number | null;
+    value: number | null;
+    secondary: string | null;
+    outOf: number;
+    optedIn: boolean;
+  };
+}
+
+export const getLeaderboard = (params: {
+  metric?: LeaderboardMetric;
+  range?: number;
+  limit?: number;
+}) => apiFetch<LeaderboardResponse>(`/metrics/leaderboard${qs(params)}`);
 
 // ---------- interview analyze ----------
 

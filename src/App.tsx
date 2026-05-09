@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Leaderboard from './pages/Leaderboard';
 import Accounts from './pages/Accounts';
 import Transactions from './pages/Transactions';
 import CardLink from './pages/CardLink';
@@ -45,6 +46,7 @@ export default function App() {
       <Route path="/register" element={<Register />} />
 
       <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
       <Route path="/accounts" element={<Protected><Accounts /></Protected>} />
       <Route path="/accounts/new" element={<Protected><AccountEdit /></Protected>} />
       <Route path="/accounts/:id" element={<Protected><AccountEdit /></Protected>} />

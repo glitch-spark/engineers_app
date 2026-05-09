@@ -1,8 +1,13 @@
 import useSWR from 'swr';
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { DollarSign, Hash, BarChart3, CalendarRange, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import TransactionChart from '../components/TransactionChart';
+import DashboardOverview from '../components/dashboard/DashboardOverview';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
+
+type Tab = 'performance' | 'transactions';
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -14,23 +19,65 @@ function getYearOptions() {
   return years;
 }
 
+function dollar(n: number): string {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const currentUserName = user?.name || user?.email;
 
+  const [params, setParams] = useSearchParams();
+  const tab = (params.get('tab') as Tab | null) || 'performance';
+  const setTab = (t: Tab) => {
+    const next = new URLSearchParams(params);
+    next.set('tab', t);
+    setParams(next, { replace: true });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col lg:flex-row lg:items-end gap-4 lg:gap-6">
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-gray-600">Welcome back, {currentUserName}!</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 border-b border-gray-200">
+        <TabBtn active={tab === 'performance'} onClick={() => setTab('performance')}>
+          Performance
+        </TabBtn>
+        <TabBtn active={tab === 'transactions'} onClick={() => setTab('transactions')}>
+          Transactions
+        </TabBtn>
+      </div>
+
+      {tab === 'performance' && (
+        <DashboardOverview
+          metrics={['rate', 'bids', 'interviews']}
+          title="Job-search performance"
+          storageNs="perf"
+        />
+      )}
+
+      {tab === 'transactions' && <TransactionsView isAdmin={isAdmin} />}
+    </div>
+  );
+}
+
+function TransactionsView({ isAdmin }: { isAdmin: boolean }) {
   const [userId, setUserId] = useState<string>('');
   const [year, setYear] = useState<number>(new Date().getFullYear());
 
   const summaryKey = useMemo(
     () => ['summary', year, isAdmin ? userId : ''] as const,
-    [isAdmin, userId, year]
+    [isAdmin, userId, year],
   );
-
-  const { data: summary, error: summaryError } = useSWR(summaryKey, () =>
-    api.transactionSummary({ year, ...(isAdmin && userId ? { userId } : {}) })
+  const { data: summary, error, isLoading } = useSWR(summaryKey, () =>
+    api.transactionSummary({ year, ...(isAdmin && userId ? { userId } : {}) }),
   );
-
   const { data: usersData } = useSWR(isAdmin ? ['users-list'] : null, () => api.listUsers());
   const users = (usersData?.users as Array<{ _id: string; name?: string; email?: string }>) || [];
 
@@ -43,216 +90,176 @@ export default function DashboardPage() {
       monthTotals.set(monthIndex, r.total);
     }
   });
-
   const chartData = Array.from({ length: 12 }, (_, i) => ({
     period: MONTH_LABELS[i],
     total: monthTotals.get(i) ?? 0,
   }));
 
-  const totalAmount = summary?.stats?.totalAmount || chartData.reduce((sum, item) => sum + item.total, 0);
-  const totalCount = summary?.stats?.totalCount || 0;
-  const avgAmount = summary?.stats?.avgAmount || 0;
-  const monthsWithTransactions = chartData.filter(item => item.total > 0).length;
+  const totalAmount = summary?.stats?.totalAmount ?? 0;
+  const totalCount = summary?.stats?.totalCount ?? 0;
+  const avgAmount = summary?.stats?.avgAmount ?? 0;
+  const monthsWithTransactions = chartData.filter((r) => r.total > 0).length;
 
-  const statusBreakdown = summary?.statusBreakdown || {};
-  const pendingCount = statusBreakdown.pending?.count || 0;
-  const approvedCount = statusBreakdown.approved?.count || 0;
-  const rejectedCount = statusBreakdown.rejected?.count || 0;
-
-  const getDisplayUser = () => {
-    if (isAdmin && userId) {
-      const selectedUser = users.find(u => u._id === userId);
-      return selectedUser?.name || selectedUser?.email || 'Selected User';
-    }
-    return currentUserName;
-  };
+  const sb = summary?.statusBreakdown || {};
+  const pendingCount = sb.pending?.count || 0;
+  const approvedCount = sb.approved?.count || 0;
+  const rejectedCount = sb.rejected?.count || 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4 lg:gap-6">
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-gray-600">
-            Welcome back, {currentUserName}! Here's your financial overview for {year}.
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="form-group">
-            <label className="form-label">Year</label>
+    <section className="space-y-3">
+      <header className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Transactions</h2>
+        <div className="flex items-center gap-2">
+          <select
+            value={year}
+            onChange={(e) => setYear(parseInt(e.target.value, 10))}
+            className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white"
+          >
+            {getYearOptions().map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          {isAdmin && (
             <select
-              className="select focus-ring"
-              value={year}
-              onChange={e => setYear(parseInt(e.target.value, 10))}
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white"
             >
-              {getYearOptions().map(y => (
-                <option key={y} value={y}>{y}</option>
+              <option value="">All users</option>
+              {users.map((u) => (
+                <option key={u._id} value={u._id}>{u.name || u.email}</option>
               ))}
             </select>
-          </div>
-
-          {isAdmin && (
-            <div className="form-group">
-              <label className="form-label">User</label>
-              <select
-                className="select focus-ring"
-                value={userId}
-                onChange={e => setUserId(e.target.value)}
-              >
-                <option value="">All users</option>
-                {users.map(u => (
-                  <option key={u._id} value={u._id}>
-                    {u.name || u.email}
-                  </option>
-                ))}
-              </select>
-            </div>
           )}
         </div>
-      </div>
+      </header>
 
-      {summaryError && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-100 rounded-full">
-              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-red-800">Error loading data</h3>
-              <p className="text-sm text-red-700 mt-1">{(summaryError as Error).message}</p>
-            </div>
-          </div>
+      {error ? (
+        <div className="bg-white rounded-md border border-red-100 p-4 text-sm text-red-700">
+          {(error as Error).message}
         </div>
+      ) : isLoading ? (
+        <div className="bg-white rounded-md border border-gray-100 p-4 flex items-center gap-2 text-sm text-gray-500">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading transactions…
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <StatCard
+              label="Total amount"
+              value={dollar(totalAmount)}
+              icon={<DollarSign className="w-4 h-4" />}
+              footer={`for ${year}`}
+              highlight
+            />
+            <StatCard
+              label="Transactions"
+              value={totalCount.toLocaleString()}
+              icon={<Hash className="w-4 h-4" />}
+              footer="approved + pending + rejected"
+            />
+            <StatCard
+              label="Average"
+              value={dollar(avgAmount)}
+              icon={<BarChart3 className="w-4 h-4" />}
+              footer="per transaction"
+            />
+            <StatCard
+              label="Active months"
+              value={`${monthsWithTransactions} / 12`}
+              icon={<CalendarRange className="w-4 h-4" />}
+              footer="months with activity"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <StatCard
+              label="Pending"
+              value={pendingCount.toLocaleString()}
+              icon={<Clock className="w-4 h-4 text-amber-600" />}
+              footer={totalCount ? `${((pendingCount / totalCount) * 100).toFixed(1)}% of total` : '—'}
+              tone="amber"
+            />
+            <StatCard
+              label="Approved"
+              value={approvedCount.toLocaleString()}
+              icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+              footer={totalCount ? `${((approvedCount / totalCount) * 100).toFixed(1)}% of total` : '—'}
+              tone="emerald"
+            />
+            <StatCard
+              label="Rejected"
+              value={rejectedCount.toLocaleString()}
+              icon={<XCircle className="w-4 h-4 text-rose-600" />}
+              footer={totalCount ? `${((rejectedCount / totalCount) * 100).toFixed(1)}% of total` : '—'}
+              tone="rose"
+            />
+          </div>
+
+          <div className="bg-white rounded-md border border-gray-100 shadow-sm p-4">
+            <header className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Monthly</h3>
+              <span className="text-xs text-gray-400">amounts per month, {year}</span>
+            </header>
+            <TransactionChart data={chartData} />
+          </div>
+        </>
       )}
+    </section>
+  );
+}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="card group hover:shadow-medium transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600 mb-1">Total Amount</p>
-              <p className="text-3xl font-bold text-gray-900">${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              <p className="text-xs text-gray-500 mt-1">All transactions this year</p>
-            </div>
-            <div className="p-4 bg-blue-100 rounded-2xl group-hover:bg-blue-200 transition-colors duration-300">
-              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div className="card group hover:shadow-medium transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600 mb-1">Total Transactions</p>
-              <p className="text-3xl font-bold text-gray-900">{totalCount.toLocaleString()}</p>
-              <p className="text-xs text-gray-500 mt-1">Transaction count</p>
-            </div>
-            <div className="p-4 bg-green-100 rounded-2xl group-hover:bg-green-200 transition-colors duration-300">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div className="card group hover:shadow-medium transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600 mb-1">Average Amount</p>
-              <p className="text-3xl font-bold text-gray-900">${avgAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              <p className="text-xs text-gray-500 mt-1">Per transaction</p>
-            </div>
-            <div className="p-4 bg-yellow-100 rounded-2xl group-hover:bg-yellow-200 transition-colors duration-300">
-              <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div className="card group hover:shadow-medium transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600 mb-1">Active Months</p>
-              <p className="text-3xl font-bold text-gray-900">{monthsWithTransactions}</p>
-              <p className="text-xs text-gray-500 mt-1">Out of 12 months</p>
-            </div>
-            <div className="p-4 bg-purple-100 rounded-2xl group-hover:bg-purple-200 transition-colors duration-300">
-              <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-            </div>
-          </div>
-        </div>
+function StatCard({
+  label, value, icon, footer, highlight, tone,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+  footer?: string;
+  highlight?: boolean;
+  tone?: 'amber' | 'emerald' | 'rose';
+}) {
+  const valueClass =
+    tone === 'amber' ? 'text-amber-600'
+    : tone === 'emerald' ? 'text-emerald-600'
+    : tone === 'rose' ? 'text-rose-600'
+    : 'text-gray-900';
+  return (
+    <div
+      className={
+        'rounded-md border p-4 bg-white shadow-sm ' +
+        (highlight ? 'border-blue-200 ring-1 ring-blue-100' : 'border-gray-100')
+      }
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-gray-500">{label}</span>
+        <span className="text-gray-400">{icon}</span>
       </div>
-
-      {totalCount > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="card group hover:shadow-medium transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600 mb-1">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">{pendingCount.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalCount > 0 ? `${((pendingCount / totalCount) * 100).toFixed(1)}%` : '0%'} of total
-                </p>
-              </div>
-              <div className="p-4 bg-yellow-100 rounded-2xl group-hover:bg-yellow-200 transition-colors duration-300">
-                <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="card group hover:shadow-medium transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600 mb-1">Approved</p>
-                <p className="text-2xl font-bold text-green-600">{approvedCount.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalCount > 0 ? `${((approvedCount / totalCount) * 100).toFixed(1)}%` : '0%'} of total
-                </p>
-              </div>
-              <div className="p-4 bg-green-100 rounded-2xl group-hover:bg-green-200 transition-colors duration-300">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="card group hover:shadow-medium transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600 mb-1">Rejected</p>
-                <p className="text-2xl font-bold text-red-600">{rejectedCount.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalCount > 0 ? `${((rejectedCount / totalCount) * 100).toFixed(1)}%` : '0%'} of total
-                </p>
-              </div>
-              <div className="p-4 bg-red-100 rounded-2xl group-hover:bg-red-200 transition-colors duration-300">
-                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="card group hover:shadow-medium transition-all duration-300">
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Transaction Amounts by Month</h3>
-          <p className="text-gray-600">
-            Monthly transaction totals for <span className="font-medium">{getDisplayUser()}</span> in <span className="font-medium">{year}</span>
-          </p>
-        </div>
-        <TransactionChart data={chartData} />
-      </div>
+      <div className={`mt-1 text-2xl font-semibold ${valueClass}`}>{value}</div>
+      {footer && <div className="mt-1.5 text-xs text-gray-400">{footer}</div>}
     </div>
+  );
+}
+
+function TabBtn({
+  active, onClick, children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ' +
+        (active
+          ? 'border-blue-600 text-blue-700'
+          : 'border-transparent text-gray-600 hover:text-gray-900')
+      }
+    >
+      {children}
+    </button>
   );
 }

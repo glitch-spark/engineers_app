@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 
 const STAFF_ALLOWED = [
   '/dashboard',
+  '/leaderboard',
   '/accounts',
   '/transactions',
   '/profile',
