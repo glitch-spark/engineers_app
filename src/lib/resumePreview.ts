@@ -114,18 +114,15 @@ type ResumeData = {
 };
 
 function dataFromAccount(account: AccountForPreview): ResumeData {
-  const hasContent = (account.experience || '').trim() || (account.education || '').trim();
-  if (!hasContent) {
-    return {
-      name: MOCK_CANDIDATE.name,
-      experienceLines: MOCK_CANDIDATE.experienceLines,
-      education: MOCK_CANDIDATE.education,
-    };
-  }
+  // Per-field fallback — use real account data wherever present, fill gaps
+  // with mock so the preview always reflects what's saved instead of
+  // collapsing to all-mock when one field is empty.
+  const expRaw = (account.experience || '').trim();
+  const eduRaw = (account.education || '').trim();
   return {
-    name: account.name || MOCK_CANDIDATE.name,
-    experienceLines: parseExperienceLines(account.experience),
-    education: account.education || MOCK_CANDIDATE.education,
+    name: (account.name || '').trim() || MOCK_CANDIDATE.name,
+    experienceLines: expRaw ? parseExperienceLines(account.experience) : MOCK_CANDIDATE.experienceLines,
+    education: eduRaw || MOCK_CANDIDATE.education,
   };
 }
 

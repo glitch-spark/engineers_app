@@ -85,10 +85,101 @@ export const TEMPLATE_MODERN: StyleConfig = {
   },
 };
 
+const slate = '#1f2937';
+const navy = '#1e3a8a';
+
+// Minimalist — sans serif, no accent color, very clean.
+export const TEMPLATE_MINIMALIST: StyleConfig = {
+  ...TEMPLATE_CLASSIC,
+  basicInfo: {
+    ...TEMPLATE_CLASSIC.basicInfo,
+    name: { fontFamily: 'Inter', fontSize: 18, fontWeight: 'bold', color: black, align: 'left' },
+    title: { fontFamily: 'Inter', fontSize: 11, fontWeight: 'normal', color: slate, align: 'left', text: 'Senior Software Engineer' },
+    contact: { fontFamily: 'Inter', fontSize: 10, fontWeight: 'normal', color: slate, align: 'left', separator: '·', items: DEFAULT_CONTACT_ITEMS },
+  },
+  sectionHeading: { fontFamily: 'Inter', fontSize: 10, fontWeight: 'bold', color: black, align: 'left' },
+  summary: { fontFamily: 'Inter', fontSize: 11, fontWeight: 'normal', color: slate, align: 'justify', boldLabels: false },
+  experience: {
+    companyName: { fontFamily: 'Inter', fontSize: 11, fontWeight: 'bold', color: black },
+    role: { fontFamily: 'Inter', fontSize: 11, fontWeight: 'normal', color: slate },
+    period: { fontFamily: 'Inter', fontSize: 10, fontWeight: 'normal', color: slate, format: 'YYYY/MM - YYYY/MM' },
+    separator: '·',
+    bullet: { fontFamily: 'Inter', fontSize: 11, fontWeight: 'normal', color: slate, align: 'justify', indentPx: 12, boldKeywords: true },
+  },
+  skills: { fontFamily: 'Inter', fontSize: 11, fontWeight: 'normal', color: slate, align: 'justify', boldCategories: true, layout: 'one-per-line' },
+  education: {
+    university: { fontFamily: 'Inter', fontSize: 11, fontWeight: 'bold', color: black },
+    degree: { fontFamily: 'Inter', fontSize: 11, fontWeight: 'normal', color: slate },
+    period: { fontFamily: 'Inter', fontSize: 10, fontWeight: 'normal', color: slate, format: 'YYYY - YYYY' },
+    separator: '·',
+  },
+};
+
+// Executive — serif, larger headings, generous spacing, navy accent.
+export const TEMPLATE_EXECUTIVE: StyleConfig = {
+  ...TEMPLATE_CLASSIC,
+  page: { format: 'A4', margin: { top: 40, right: 40, bottom: 40, left: 40 } },
+  sectionSpacing: { containerMb: 10, headingMb: 5, dividerMb: 7 },
+  basicInfo: {
+    name: { fontFamily: 'Merriweather', fontSize: 22, fontWeight: 'bold', color: navy, align: 'center' },
+    title: { fontFamily: 'Merriweather', fontSize: 12, fontWeight: 'normal', color: slate, align: 'center', text: 'Senior Software Engineer' },
+    contact: { fontFamily: 'PT Sans', fontSize: 10, fontWeight: 'normal', color: slate, align: 'center', separator: '|', items: DEFAULT_CONTACT_ITEMS },
+  },
+  sectionHeading: { fontFamily: 'Merriweather', fontSize: 12, fontWeight: 'bold', color: navy, align: 'left' },
+  summary: { fontFamily: 'PT Sans', fontSize: 11, fontWeight: 'normal', color: slate, align: 'justify', boldLabels: true },
+  experience: {
+    companyName: { fontFamily: 'Merriweather', fontSize: 11, fontWeight: 'bold', color: navy },
+    role: { fontFamily: 'PT Sans', fontSize: 11, fontWeight: 'normal', color: slate },
+    period: { fontFamily: 'PT Sans', fontSize: 10, fontWeight: 'normal', color: slate, format: 'YYYY/MM - YYYY/MM' },
+    separator: '|',
+    bullet: { fontFamily: 'PT Sans', fontSize: 11, fontWeight: 'normal', color: slate, align: 'justify', indentPx: 12, boldKeywords: true },
+  },
+  skills: { fontFamily: 'PT Sans', fontSize: 11, fontWeight: 'normal', color: slate, align: 'justify', boldCategories: true, layout: 'one-per-line' },
+  education: {
+    university: { fontFamily: 'Merriweather', fontSize: 11, fontWeight: 'bold', color: navy },
+    degree: { fontFamily: 'PT Sans', fontSize: 11, fontWeight: 'normal', color: slate },
+    period: { fontFamily: 'PT Sans', fontSize: 10, fontWeight: 'normal', color: slate, format: 'YYYY - YYYY' },
+    separator: '|',
+  },
+};
+
+// Dense ATS — small fonts, tight margins, mono-ish, optimized for keyword
+// stuffing in single-column ATS parsers.
+export const TEMPLATE_DENSE_ATS: StyleConfig = {
+  ...TEMPLATE_CLASSIC,
+  page: { format: 'A4', margin: { top: 22, right: 20, bottom: 20, left: 20 } },
+  sectionSpacing: { containerMb: 4, headingMb: 2, dividerMb: 3 },
+  basicInfo: {
+    ...TEMPLATE_CLASSIC.basicInfo,
+    name: { ...TEMPLATE_CLASSIC.basicInfo.name, fontFamily: 'Arial', fontSize: 16 },
+    title: { ...TEMPLATE_CLASSIC.basicInfo.title, fontFamily: 'Arial', fontSize: 10 },
+    contact: { ...TEMPLATE_CLASSIC.basicInfo.contact, fontFamily: 'Arial', fontSize: 9 },
+  },
+  sectionHeading: { fontFamily: 'Arial', fontSize: 10, fontWeight: 'bold', color: black, align: 'left' },
+  summary: { fontFamily: 'Arial', fontSize: 10, fontWeight: 'normal', color: black, align: 'justify', boldLabels: true },
+  experience: {
+    companyName: { fontFamily: 'Arial', fontSize: 10, fontWeight: 'bold', color: black },
+    role: { fontFamily: 'Arial', fontSize: 10, fontWeight: 'normal', color: black },
+    period: { fontFamily: 'Arial', fontSize: 9, fontWeight: 'normal', color: black, format: 'YYYY/MM - YYYY/MM' },
+    separator: '|',
+    bullet: { fontFamily: 'Arial', fontSize: 10, fontWeight: 'normal', color: black, align: 'justify', indentPx: 8, boldKeywords: true },
+  },
+  skills: { fontFamily: 'Arial', fontSize: 10, fontWeight: 'normal', color: black, align: 'justify', boldCategories: true, layout: 'comma' },
+  education: {
+    university: { fontFamily: 'Arial', fontSize: 10, fontWeight: 'bold', color: black },
+    degree: { fontFamily: 'Arial', fontSize: 10, fontWeight: 'normal', color: black },
+    period: { fontFamily: 'Arial', fontSize: 9, fontWeight: 'normal', color: black, format: 'YYYY - YYYY' },
+    separator: '|',
+  },
+};
+
 export const TEMPLATES = {
-  classic: { label: 'Classic', config: TEMPLATE_CLASSIC },
-  compact: { label: 'Compact', config: TEMPLATE_COMPACT },
-  modern: { label: 'Modern', config: TEMPLATE_MODERN },
+  classic: { label: 'Classic', blurb: 'Centered name, purple accents, serif-friendly. The default.', config: TEMPLATE_CLASSIC },
+  compact: { label: 'Compact', blurb: 'Smaller fonts and tighter spacing. Fits more on one page.', config: TEMPLATE_COMPACT },
+  modern: { label: 'Modern', blurb: 'Helvetica, left-aligned, purple section headings.', config: TEMPLATE_MODERN },
+  minimalist: { label: 'Minimalist', blurb: 'Inter sans, no accent color, slate text. Calm and clean.', config: TEMPLATE_MINIMALIST },
+  executive: { label: 'Executive', blurb: 'Merriweather serif, navy accent, generous margins.', config: TEMPLATE_EXECUTIVE },
+  ats: { label: 'Dense ATS', blurb: 'Arial 10pt, tight margins, inline skills. Built for keyword stuffing.', config: TEMPLATE_DENSE_ATS },
 };
 
 export type TemplateKey = keyof typeof TEMPLATES;

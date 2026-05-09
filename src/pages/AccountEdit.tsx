@@ -18,6 +18,8 @@ type AccShape = {
   website?: string;
   twitter?: string;
   contactLabels?: Record<string, string>;
+  targetPages?: number | null;
+  promptOverrides?: string | null;
 };
 
 const CONTACT_TYPES = ['email', 'phone', 'address', 'github', 'linkedin', 'website', 'twitter'] as const;
@@ -36,6 +38,8 @@ const EMPTY_FORM = {
   website: '',
   twitter: '',
   contactLabels: {} as Record<string, string>,
+  targetPages: '' as '' | '1' | '2',
+  promptOverrides: '',
 };
 
 export default function AccountEditPage() {
@@ -71,6 +75,10 @@ export default function AccountEditPage() {
           website: acc.website || '',
           twitter: acc.twitter || '',
           contactLabels: acc.contactLabels || {},
+          targetPages: (acc.targetPages === 1 || acc.targetPages === 2)
+            ? (String(acc.targetPages) as '1' | '2')
+            : '',
+          promptOverrides: acc.promptOverrides || '',
         });
       } catch (err) {
         notify.error(err, 'Could not load profile');
@@ -95,8 +103,13 @@ export default function AccountEditPage() {
     }
     setSaving(true);
     try {
+      // Coerce targetPages to a number (or null) for the backend.
+      const payload: Record<string, unknown> = {
+        ...form,
+        targetPages: form.targetPages ? Number(form.targetPages) : null,
+      };
       if (isNew) {
-        const created = (await api.createAccount(form)) as AccShape;
+        const created = (await api.createAccount(payload)) as AccShape;
         notify.success(`Profile "${form.name}" created`);
         const newId = created._id || (created as Record<string, unknown>)['_id'];
         if (typeof newId === 'string') {
@@ -105,7 +118,7 @@ export default function AccountEditPage() {
           navigate('/accounts');
         }
       } else {
-        await api.updateAccount(id!, form);
+        await api.updateAccount(id!, payload);
         notify.success(`Profile "${form.name}" updated`);
       }
     } catch (err) {
@@ -240,6 +253,39 @@ export default function AccountEditPage() {
             value={form.experience}
             onChange={(e) => setForm({ ...form, experience: e.target.value })}
             placeholder={'Company | Role | Period (one per line)'}
+          />
+        </Field>
+      </section>
+
+      <section className="bg-white rounded-md border border-gray-100 shadow-sm p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-gray-700">Resume prompt tuning</h2>
+        <p className="text-xs text-gray-500">
+          Knobs that shape the LLM-generated content. Optional — leave blank for defaults.
+        </p>
+        <Field
+          label="Target pages"
+          hint="Soft length cap. 1 page → trims older bullets to fit. 2 pages → uses full bullet count."
+        >
+          <select
+            className="input w-full text-sm"
+            value={form.targetPages}
+            onChange={(e) => setForm({ ...form, targetPages: e.target.value as '' | '1' | '2' })}
+          >
+            <option value="">Auto (no length cap)</option>
+            <option value="1">1 page</option>
+            <option value="2">2 pages</option>
+          </select>
+        </Field>
+        <Field
+          label="Prompt overrides"
+          hint='Free-form rules appended at end of the prompt with highest priority. Examples: "Use exec voice — open every bullet with the business outcome." / "Banlist: leveraged, utilized, spearheaded." / "Render company name + role on two lines."'
+        >
+          <textarea
+            className="input w-full text-sm font-mono"
+            rows={6}
+            value={form.promptOverrides}
+            onChange={(e) => setForm({ ...form, promptOverrides: e.target.value })}
+            placeholder={'e.g.\nUse exec voice — open every bullet with the business outcome.\nBanlist: leveraged, utilized, spearheaded, synergized.'}
           />
         </Field>
       </section>

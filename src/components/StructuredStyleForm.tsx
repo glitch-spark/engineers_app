@@ -1,8 +1,13 @@
-import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import useSWR from 'swr';
+import { ChevronDown, ChevronUp, GripVertical, Plus, X } from 'lucide-react';
 import TypographyRow, { type TypographyRowValue } from './TypographyRow';
 import type { ContactItem, ContactItemType, SectionKey, StyleConfig, Typography } from '../lib/resumeStyles';
 import { TEMPLATES, type TemplateKey } from '../lib/resumeStyleTemplates';
+import { THEMES, applyTheme } from '../lib/resumeStyleThemes';
 import { contactDisplay, contactUrl, type AccountForPreview } from '../lib/resumePreview';
+import * as api from '../api/endpoints';
+import { notify } from '../lib/notify';
 
 const CONTACT_TYPE_LABELS: Record<ContactItemType, string> = {
   email: 'Email',
@@ -22,14 +27,18 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   education: 'Education',
 };
 
+const ALL_SECTIONS: SectionKey[] = ['summary', 'experience', 'skills', 'education'];
+
 export default function StructuredStyleForm({
   value,
   onChange,
   account,
+  accountId,
 }: {
   value: StyleConfig;
   onChange: (v: StyleConfig) => void;
   account?: AccountForPreview;
+  accountId?: string;
 }) {
   const set = <K extends keyof StyleConfig>(k: K, v: StyleConfig[K]) => onChange({ ...value, [k]: v });
 
@@ -45,34 +54,71 @@ export default function StructuredStyleForm({
     onChange({ ...value, education: { ...value.education, [k]: v } });
   }
 
-  function moveSection(idx: number, dir: -1 | 1) {
-    const next = [...value.sectionOrder];
-    const target = idx + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[idx], next[target]] = [next[target], next[idx]];
-    set('sectionOrder', next);
-  }
-
   return (
     <div className="space-y-6 text-sm">
       <Group title="Template">
-        <div className="flex gap-2">
-          {(Object.keys(TEMPLATES) as TemplateKey[]).map((key) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {(Object.keys(TEMPLATES) as TemplateKey[]).map((key) => {
+            const t = TEMPLATES[key];
+            const swatch = t.config.basicInfo?.name?.color || '#000';
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  if (!window.confirm(`Apply "${t.label}" template? This overwrites all current style settings.`)) return;
+                  onChange(t.config);
+                }}
+                className="text-left p-2.5 rounded-md border border-gray-200 hover:border-primary hover:bg-blue-50/30 transition"
+                title={t.blurb}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-full border border-gray-200"
+                    style={{ backgroundColor: swatch }}
+                  />
+                  <span className="text-sm font-medium text-gray-900">{t.label}</span>
+                </div>
+                <div className="text-[11px] text-gray-500 leading-snug line-clamp-2">{t.blurb}</div>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
+          Pick a starter, then tweak fields below.
+        </p>
+      </Group>
+
+      <Group title="Theme">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {THEMES.map((t) => (
             <button
-              key={key}
-              onClick={() => onChange(TEMPLATES[key].config)}
-              className="px-3 py-1.5 text-sm rounded-md border border-gray-200 hover:bg-gray-50"
+              key={t.key}
+              onClick={() => {
+                if (!window.confirm(`Apply "${t.label}" theme? Replaces fonts and colors. Sizes, spacing, and layout are kept.`)) return;
+                onChange(applyTheme(value, t));
+              }}
+              className="text-left p-2.5 rounded-md border border-gray-200 hover:border-primary hover:bg-blue-50/30 transition"
+              title={t.blurb}
             >
-              {TEMPLATES[key].label}
+              <div className="flex items-center gap-2 mb-1">
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-full border border-gray-200"
+                  style={{ backgroundColor: t.swatch }}
+                />
+                <span className="text-sm font-medium text-gray-900">{t.label}</span>
+              </div>
+              <div className="text-[11px] text-gray-500 leading-snug line-clamp-2">{t.blurb}</div>
             </button>
           ))}
         </div>
         <p className="text-xs text-gray-400 mt-2">
-          Apply a starter template, then tweak. Overwrites all current settings.
+          Themes only change fonts and colors. Sizes, spacing, and section order are kept.
         </p>
       </Group>
 
-      <Group title="Page margins (pt)">
+      {accountId && <CopyFromProfile currentAccountId={accountId} onApply={onChange} />}
+
+      <Group title="Page margins (pt)" id="sg-page">
         <div className="grid grid-cols-4 gap-2">
           {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
             <label key={side} className="text-xs text-gray-500">
@@ -92,35 +138,14 @@ export default function StructuredStyleForm({
         </div>
       </Group>
 
-      <Group title="Section order">
-        <ul className="border border-gray-200 rounded-md divide-y divide-gray-100">
-          {value.sectionOrder.map((key, idx) => (
-            <li key={key} className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-gray-700">{SECTION_LABELS[key]}</span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => moveSection(idx, -1)}
-                  disabled={idx === 0}
-                  className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                  title="Move up"
-                >
-                  <ChevronUp size={14} />
-                </button>
-                <button
-                  onClick={() => moveSection(idx, 1)}
-                  disabled={idx === value.sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                  title="Move down"
-                >
-                  <ChevronDown size={14} />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+      <Group title="Sections (visibility + order)" id="sg-sections">
+        <SectionsEditor
+          order={value.sectionOrder}
+          onChange={(next) => set('sectionOrder', next)}
+        />
       </Group>
 
-      <Group title="Basic info">
+      <Group title="Basic info" id="sg-basicinfo">
         <div className="space-y-2">
           <TypographyRow
             label="Name"
@@ -153,7 +178,7 @@ export default function StructuredStyleForm({
         </div>
       </Group>
 
-      <Group title="Section heading">
+      <Group title="Section heading" id="sg-sectionheading">
         <TypographyRow
           label="Heading"
           value={value.sectionHeading}
@@ -161,7 +186,7 @@ export default function StructuredStyleForm({
         />
       </Group>
 
-      <Group title="Summary">
+      <Group title="Summary" id="sg-summary">
         <TypographyRow
           label="Body"
           value={value.summary}
@@ -174,7 +199,7 @@ export default function StructuredStyleForm({
         />
       </Group>
 
-      <Group title="Experience">
+      <Group title="Experience" id="sg-experience">
         <div className="space-y-2">
           <TypographyRow
             label="Company name"
@@ -222,7 +247,7 @@ export default function StructuredStyleForm({
         </div>
       </Group>
 
-      <Group title="Skills">
+      <Group title="Skills" id="sg-skills">
         <TypographyRow
           label="Body"
           value={value.skills}
@@ -246,7 +271,7 @@ export default function StructuredStyleForm({
         </label>
       </Group>
 
-      <Group title="Education">
+      <Group title="Education" id="sg-education">
         <div className="space-y-2">
           <TypographyRow
             label="University"
@@ -274,9 +299,9 @@ export default function StructuredStyleForm({
   );
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
   return (
-    <fieldset className="border border-gray-200 rounded-lg p-3">
+    <fieldset id={id} className="border border-gray-200 rounded-lg p-3 scroll-mt-4">
       <legend className="text-xs font-semibold text-gray-500 px-1 uppercase tracking-wider">{title}</legend>
       <div className="mt-2 space-y-2">{children}</div>
     </fieldset>
@@ -297,6 +322,185 @@ function BoldToggle({ label, value, onChange }: { label: string; value: boolean;
 function stripAlign(v: TypographyRowValue): Typography {
   const { fontFamily, fontSize, fontWeight, color } = v;
   return { fontFamily, fontSize, fontWeight, color };
+}
+
+function SectionsEditor({
+  order,
+  onChange,
+}: {
+  order: SectionKey[];
+  onChange: (next: SectionKey[]) => void;
+}) {
+  const visible = order;
+  const hidden = ALL_SECTIONS.filter((k) => !order.includes(k));
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  function move(from: number, to: number) {
+    if (from === to || from < 0 || to < 0 || from >= visible.length || to >= visible.length) return;
+    const next = visible.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
+  }
+
+  function toggle(key: SectionKey, enabled: boolean) {
+    if (enabled) {
+      // Append to bottom by default
+      if (!order.includes(key)) onChange([...order, key]);
+    } else {
+      onChange(order.filter((k) => k !== key));
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] text-gray-400">
+        Toggle to show/hide each section. Drag the handle to reorder. Hidden sections are dropped from the resume entirely.
+      </p>
+      <ul className="border border-gray-200 rounded-md divide-y divide-gray-100">
+        {visible.map((key, idx) => (
+          <li
+            key={key}
+            draggable
+            onDragStart={(e) => {
+              setDragIdx(idx);
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', String(idx));
+            }}
+            onDragEnter={() => setOverIdx(idx)}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const from = Number(e.dataTransfer.getData('text/plain'));
+              move(from, idx);
+              setDragIdx(null); setOverIdx(null);
+            }}
+            onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+            className={
+              'flex items-center gap-2 px-2 py-1.5 cursor-move ' +
+              (dragIdx === idx ? 'opacity-40 ' : '') +
+              (overIdx === idx && dragIdx !== idx ? 'bg-blue-50/50 ' : '')
+            }
+            title="Drag to reorder"
+          >
+            <GripVertical size={14} className="text-gray-300" />
+            <input
+              type="checkbox"
+              checked
+              onChange={() => toggle(key, false)}
+              title="Hide section"
+            />
+            <span className="flex-1 text-sm text-gray-700">{SECTION_LABELS[key]}</span>
+            <button
+              type="button"
+              onClick={() => move(idx, idx - 1)}
+              disabled={idx === 0}
+              className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+              title="Move up"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => move(idx, idx + 1)}
+              disabled={idx === visible.length - 1}
+              className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+              title="Move down"
+            >
+              <ChevronDown size={14} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hidden.length > 0 && (
+        <div className="border border-dashed border-gray-200 rounded-md p-2">
+          <div className="text-[11px] text-gray-500 mb-1">Hidden — click to add back</div>
+          <div className="flex flex-wrap gap-1.5">
+            {hidden.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => toggle(key, true)}
+                className="text-xs px-2 py-1 rounded-full border border-gray-200 text-gray-600 hover:border-primary hover:bg-blue-50/40"
+              >
+                + {SECTION_LABELS[key]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CopyFromProfile({
+  currentAccountId,
+  onApply,
+}: {
+  currentAccountId: string;
+  onApply: (cfg: StyleConfig) => void;
+}) {
+  const { data } = useSWR(['copy-from-profile-list', currentAccountId], () => api.lookupAccounts());
+  const [picked, setPicked] = useState<string>('');
+  const [busy, setBusy] = useState(false);
+  const others = (data?.accounts ?? []).filter((a) => a._id !== currentAccountId);
+
+  useEffect(() => { setPicked(''); }, [currentAccountId]);
+
+  if (!others.length) return null;
+
+  async function copy() {
+    if (!picked || busy) return;
+    setBusy(true);
+    try {
+      const acc = (await api.getAccount(picked)) as Record<string, unknown>;
+      const cfg = acc.styleConfig as StyleConfig | null | undefined;
+      if (!cfg) {
+        notify.error(null, 'That profile has no saved structured style yet.');
+        return;
+      }
+      const label = (acc.name as string) || 'profile';
+      if (!window.confirm(`Copy structured styles from "${label}"? Overwrites all current settings (notes are kept).`)) return;
+      onApply(cfg);
+      notify.success(`Styles copied from ${label}`);
+      setPicked('');
+    } catch (err) {
+      notify.error(err, 'Copy failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Group title="Copy from another profile">
+      <div className="flex items-center gap-2 text-sm">
+        <select
+          value={picked}
+          onChange={(e) => setPicked(e.target.value)}
+          className="flex-1 border border-gray-200 rounded-md px-2 py-1 text-sm"
+        >
+          <option value="">— Pick a profile —</option>
+          {others.map((a) => (
+            <option key={a._id} value={a._id}>
+              {a.name}{a.label ? ` — ${a.label}` : ''}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={copy}
+          disabled={!picked || busy}
+          className="px-3 py-1.5 text-sm rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+        >
+          {busy ? 'Copying…' : 'Copy'}
+        </button>
+      </div>
+      <p className="text-[11px] text-gray-400 mt-2">
+        Pulls the structured styleConfig from another profile. User notes on the current profile are preserved.
+      </p>
+    </Group>
+  );
 }
 
 function ContactItemsEditor({
