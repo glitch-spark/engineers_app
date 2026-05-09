@@ -1,9 +1,10 @@
 import useSWR from 'swr';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DollarSign, Hash, BarChart3, CalendarRange, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { DollarSign, Hash, BarChart3, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import TransactionChart from '../components/TransactionChart';
 import DashboardOverview from '../components/dashboard/DashboardOverview';
+import MotivationHero from '../components/MotivationHero';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 
@@ -26,7 +27,6 @@ function dollar(n: number): string {
 export default function DashboardPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const currentUserName = user?.name || user?.email;
 
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as Tab | null) || 'performance';
@@ -38,11 +38,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4 lg:gap-6">
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-gray-600">Welcome back, {currentUserName}!</p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-3">Dashboard</h1>
+        <MotivationHero userId={user?.id} />
       </div>
 
       <div className="flex items-center gap-1 border-b border-gray-200">
@@ -98,8 +96,6 @@ function TransactionsView({ isAdmin }: { isAdmin: boolean }) {
   const totalAmount = summary?.stats?.totalAmount ?? 0;
   const totalCount = summary?.stats?.totalCount ?? 0;
   const avgAmount = summary?.stats?.avgAmount ?? 0;
-  const monthsWithTransactions = chartData.filter((r) => r.total > 0).length;
-
   const sb = summary?.statusBreakdown || {};
   const pendingCount = sb.pending?.count || 0;
   const approvedCount = sb.approved?.count || 0;
@@ -144,7 +140,7 @@ function TransactionsView({ isAdmin }: { isAdmin: boolean }) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             <StatCard
               label="Total amount"
               value={dollar(totalAmount)}
@@ -163,12 +159,6 @@ function TransactionsView({ isAdmin }: { isAdmin: boolean }) {
               value={dollar(avgAmount)}
               icon={<BarChart3 className="w-4 h-4" />}
               footer="per transaction"
-            />
-            <StatCard
-              label="Active months"
-              value={`${monthsWithTransactions} / 12`}
-              icon={<CalendarRange className="w-4 h-4" />}
-              footer="months with activity"
             />
           </div>
 
