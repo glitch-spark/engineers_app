@@ -9,9 +9,7 @@ import { notify } from '../lib/notify';
 type Acc = {
   _id: string;
   name: string;
-  email: string;
-  phone?: string;
-  address?: string;
+  title?: string;
   ownerName?: string;
 };
 
@@ -154,9 +152,7 @@ export default function AccountsPage() {
           <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
             <tr>
               <th className="px-3 py-2">Name</th>
-              <th className="px-3 py-2">Email</th>
-              <th className="px-3 py-2">Phone</th>
-              <th className="px-3 py-2">Address</th>
+              <th className="px-3 py-2">Title</th>
               <th className="px-3 py-2">Owner</th>
               <th className="px-3 py-2 w-20">Actions</th>
             </tr>
@@ -164,7 +160,7 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
                   <div className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
                     Loading profiles...
@@ -173,7 +169,7 @@ export default function AccountsPage() {
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
                   {debouncedSearch ? `No profiles found matching "${debouncedSearch}"` : 'No profiles found.'}
                 </td>
               </tr>
@@ -184,9 +180,7 @@ export default function AccountsPage() {
                 onClick={() => navigate(`/accounts/${a._id}`)}
               >
                 <td className="px-3 py-2">{a.name}</td>
-                <td className="px-3 py-2">{a.email}</td>
-                <td className="px-3 py-2">{a.phone}</td>
-                <td className="px-3 py-2">{a.address}</td>
+                <td className="px-3 py-2">{a.title || '—'}</td>
                 <td className="px-3 py-2">{a.ownerName || '—'}</td>
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                   <button className="btn" onClick={() => remove(a)} title="Delete"><Trash2 size={16} /></button>

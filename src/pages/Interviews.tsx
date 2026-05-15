@@ -236,7 +236,7 @@ export default function InterviewsPage() {
   const ownAccounts = (ownAccountsData?.accounts as Array<{
     _id: string;
     name?: string;
-    email?: string;
+    title?: string;
     resumes?: Array<{ id: string; filename: string }>;
   }>) || [];
 
@@ -393,7 +393,7 @@ export default function InterviewsPage() {
         note: form.note,
       };
       const account = ownAccounts.find((a) => a._id === form.accountId);
-      const accountLabel = account?.name || account?.email || 'account';
+      const accountLabel = account?.name || account?.title || 'account';
       const stageText = form.stage ? `${stageLabel(form.stage)} ` : '';
       if (mode === 'update' && active) {
         await api.updateInterview(active._id, body);
@@ -439,12 +439,12 @@ export default function InterviewsPage() {
 
   const accountOptions = useMemo(() => [
     { value: '', label: 'All' },
-    ...accounts.map((a) => ({ value: a._id, label: a.name ? `${a.name} (${a.email})` : a.email || a._id })),
+    ...accounts.map((a) => ({ value: a._id, label: a.name ? `${a.name}${a.title ? ` — ${a.title}` : ''}` : a._id })),
   ], [accounts]);
 
   // Form-only account list — owner-scoped (admin sees all, staff sees own).
   const accountSelectOptions = useMemo(() =>
-    ownAccounts.map((a) => ({ value: a._id, label: a.name ? `${a.name} (${a.email})` : a.email || a._id })),
+    ownAccounts.map((a) => ({ value: a._id, label: a.name ? `${a.name}${a.title ? ` — ${a.title}` : ''}` : a._id })),
   [ownAccounts]);
 
   const creatorOptions = useMemo(() => [
@@ -762,7 +762,7 @@ export default function InterviewsPage() {
                   <div className="font-medium">
                     {(() => {
                       const a = accounts.find((x) => x._id === form.accountId);
-                      return a ? `${a.name || a.email}` : form.accountId || '—';
+                      return a ? `${a.name || a.title || a._id}` : form.accountId || '—';
                     })()}
                   </div>
                 </div>

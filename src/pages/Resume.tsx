@@ -32,7 +32,7 @@ export default function ResumeGeneratorPage() {
     () =>
       accounts.map((a) => ({
         value: a._id,
-        label: `${a.name}${a.label ? ` — ${a.label}` : ''}${a.hasExperience ? '' : ' (needs setup)'}`,
+        label: `${a.name}${a.title ? ` — ${a.title}` : ''}${a.hasExperience ? '' : ' (needs setup)'}`,
       })),
     [accounts]
   );
@@ -78,6 +78,18 @@ export default function ResumeGeneratorPage() {
     if (!company.trim() || !jobDescription.trim()) {
       notify.warn('Company and job description are required');
       return;
+    }
+    // Template-mode gate: refuse to submit until the profile has an HTML
+    // template uploaded. Resume Styles → upload an .html file.
+    try {
+      const acc = (await api.getAccount(accountId)) as Record<string, unknown>;
+      const tmpl = (acc.styleTemplate as string | undefined) || '';
+      if (!tmpl.trim()) {
+        notify.warn('Upload an HTML template on the Resume Styles page before generating.');
+        return;
+      }
+    } catch {
+      /* network failure — let the backend reject if invalid */
     }
     const cleanQuestions = questions.map((q) => q.trim()).filter(Boolean);
     const trimmedCompany = company.trim();

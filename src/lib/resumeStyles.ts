@@ -5,7 +5,7 @@
 export type Align = 'left' | 'center' | 'right' | 'justify';
 export type FontWeight = 'normal' | 'bold';
 export type PageFormat = 'A3' | 'A4' | 'A5' | 'Letter';
-export type StyleMode = 'markdown' | 'structured';
+export type StyleMode = 'markdown' | 'structured' | 'template';
 
 export type Typography = {
   fontFamily: string;
@@ -45,7 +45,7 @@ export type StyleConfig = {
 
   basicInfo: {
     name: Typography & { align: Align };
-    title: Typography & { align: Align; text: string };
+    title: Typography & { align: Align; text: string; autoFromJD?: boolean };
     contact: Typography & { align: Align; separator: string; items: ContactItem[] };
   };
   sectionHeading: Typography & { align: Align };

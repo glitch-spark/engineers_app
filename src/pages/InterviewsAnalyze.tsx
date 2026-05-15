@@ -33,7 +33,7 @@ export default function InterviewsAnalyzePage() {
     const own = all.filter((a) => a.createdBy && user?.id && a.createdBy === user.id);
     return [
       { value: '', label: 'All profiles' },
-      ...own.map((a) => ({ value: a._id, label: `${a.name}${a.label ? ` — ${a.label}` : ''}` })),
+      ...own.map((a) => ({ value: a._id, label: `${a.name}${a.title ? ` — ${a.title}` : ''}` })),
     ];
   }, [accountsData, user?.id]);
 

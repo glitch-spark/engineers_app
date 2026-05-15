@@ -1,53 +1,50 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Loader2, Plus, Save, X } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
+
+type ContactItem = { label: string; display: string; url: string; show: boolean };
 
 type AccShape = {
   _id?: string;
   name?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  label?: string;
+  title?: string;
+  titleAutoFromJD?: boolean;
   education?: string;
   experience?: string;
-  github?: string;
-  linkedin?: string;
-  website?: string;
-  twitter?: string;
-  contactLabels?: Record<string, string>;
-  targetPages?: number | null;
-  promptOverrides?: string | null;
+  projects?: string;
+  contactItems?: ContactItem[];
 };
 
-const CONTACT_TYPES = ['email', 'phone', 'address', 'github', 'linkedin', 'website', 'twitter'] as const;
-type ContactType = typeof CONTACT_TYPES[number];
+const DEFAULT_CONTACT_ITEMS: ContactItem[] = [
+  { label: 'Email', display: '', url: '', show: true },
+  { label: 'Phone', display: '', url: '', show: true },
+  { label: 'Address', display: '', url: '', show: true },
+  { label: 'GitHub', display: '', url: '', show: false },
+  { label: 'LinkedIn', display: '', url: '', show: false },
+  { label: 'Website', display: '', url: '', show: false },
+  { label: 'Twitter / X', display: '', url: '', show: false },
+];
 
 const EMPTY_FORM = {
   name: '',
-  email: '',
-  phone: '',
-  address: '',
-  label: '',
+  title: '',
+  titleAutoFromJD: false,
   education: '',
   experience: '',
-  github: '',
-  linkedin: '',
-  website: '',
-  twitter: '',
-  contactLabels: {} as Record<string, string>,
-  targetPages: '' as '' | '1' | '2',
-  promptOverrides: '',
+  projects: '',
+  contactItems: DEFAULT_CONTACT_ITEMS as ContactItem[],
 };
+
+type FormState = typeof EMPTY_FORM;
 
 export default function AccountEditPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const isNew = !id || id === 'new';
 
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
 
@@ -64,21 +61,14 @@ export default function AccountEditPage() {
         if (cancelled) return;
         setForm({
           name: acc.name || '',
-          email: acc.email || '',
-          phone: acc.phone || '',
-          address: acc.address || '',
-          label: acc.label || '',
+          title: acc.title || '',
+          titleAutoFromJD: !!acc.titleAutoFromJD,
           education: acc.education || '',
           experience: acc.experience || '',
-          github: acc.github || '',
-          linkedin: acc.linkedin || '',
-          website: acc.website || '',
-          twitter: acc.twitter || '',
-          contactLabels: acc.contactLabels || {},
-          targetPages: (acc.targetPages === 1 || acc.targetPages === 2)
-            ? (String(acc.targetPages) as '1' | '2')
-            : '',
-          promptOverrides: acc.promptOverrides || '',
+          projects: acc.projects || '',
+          contactItems: (acc.contactItems && acc.contactItems.length
+            ? acc.contactItems
+            : DEFAULT_CONTACT_ITEMS) as ContactItem[],
         });
       } catch (err) {
         notify.error(err, 'Could not load profile');
@@ -97,17 +87,9 @@ export default function AccountEditPage() {
       notify.error('Name is required');
       return;
     }
-    if (!form.email.trim()) {
-      notify.error('Email is required (Contact items → Email)');
-      return;
-    }
     setSaving(true);
     try {
-      // Coerce targetPages to a number (or null) for the backend.
-      const payload: Record<string, unknown> = {
-        ...form,
-        targetPages: form.targetPages ? Number(form.targetPages) : null,
-      };
+      const payload: Record<string, unknown> = { ...form };
       if (isNew) {
         const created = (await api.createAccount(payload)) as AccShape;
         notify.success(`Profile "${form.name}" created`);
@@ -166,77 +148,44 @@ export default function AccountEditPage() {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
         </Field>
+        <Field label="Title" hint="Rendered under the candidate's name on the resume header.">
+          <input
+            className="input w-full text-sm"
+            placeholder="e.g. Senior Software Engineer"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            disabled={form.titleAutoFromJD}
+          />
+        </Field>
+        <label className="flex items-start gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={form.titleAutoFromJD}
+            onChange={(e) => setForm({ ...form, titleAutoFromJD: e.target.checked })}
+          />
+          <span>
+            Auto-generate from job description. The static title above is used only as a seniority hint when this is on.
+          </span>
+        </label>
       </section>
 
       <section className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Contact items</h2>
-        <p className="text-xs text-gray-500">
-          Display name + URL pairs shown in the resume contact line. Toggle visibility/order in
-          Resume styling. Empty rows are hidden.
-        </p>
-        <ContactPair
-          type="email"
-          label="Email"
-          placeholder={{ display: 'me@example.com', url: 'mailto:me@example.com (optional)' }}
-          form={form}
-          setForm={setForm}
-        />
-        <ContactPair
-          type="phone"
-          label="Phone"
-          placeholder={{ display: '(555) 123-4567', url: 'tel:+15551234567 (optional)' }}
-          form={form}
-          setForm={setForm}
-        />
-        <ContactPair
-          type="address"
-          label="Address"
-          placeholder={{ display: 'San Francisco, CA', url: '(no link)' }}
-          form={form}
-          setForm={setForm}
-          urlOptional
-        />
-        <ContactPair
-          type="github"
-          label="GitHub"
-          placeholder={{ display: 'github.com/foo', url: 'https://github.com/foo' }}
-          form={form}
-          setForm={setForm}
-        />
-        <ContactPair
-          type="linkedin"
-          label="LinkedIn"
-          placeholder={{ display: 'linkedin.com/in/foo', url: 'https://linkedin.com/in/foo' }}
-          form={form}
-          setForm={setForm}
-        />
-        <ContactPair
-          type="website"
-          label="Website"
-          placeholder={{ display: 'foo.dev', url: 'https://foo.dev' }}
-          form={form}
-          setForm={setForm}
-        />
-        <ContactPair
-          type="twitter"
-          label="Twitter / X"
-          placeholder={{ display: '@foo', url: 'https://x.com/foo' }}
-          form={form}
-          setForm={setForm}
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700">Contact items</h2>
+          <p className="text-xs text-gray-500">
+            Each row has display text, an optional URL, and a checkbox to control whether it shows on the resume. Drag arrows to reorder. The order is the contact-line order in the rendered resume.
+          </p>
+        </div>
+        <ContactItemsEditor
+          items={form.contactItems}
+          onChange={(items) => setForm({ ...form, contactItems: items })}
         />
       </section>
 
       <section className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-3">
         <h2 className="text-sm font-semibold text-gray-700">Resume content</h2>
         <p className="text-xs text-gray-500">The structured fields the LLM prompt uses.</p>
-        <Field label="Variant label">
-          <input
-            className="input w-full text-sm"
-            placeholder="e.g. AI focus, Backend variant"
-            value={form.label}
-            onChange={(e) => setForm({ ...form, label: e.target.value })}
-          />
-        </Field>
         <Field label="Education">
           <textarea
             className="input w-full text-sm"
@@ -255,41 +204,123 @@ export default function AccountEditPage() {
             placeholder={'Company | Role | Period (one per line)'}
           />
         </Field>
-      </section>
-
-      <section className="bg-white rounded-md border border-gray-100 shadow-sm p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Resume prompt tuning</h2>
-        <p className="text-xs text-gray-500">
-          Knobs that shape the LLM-generated content. Optional — leave blank for defaults.
-        </p>
         <Field
-          label="Target pages"
-          hint="Soft length cap. 1 page → trims older bullets to fit. 2 pages → uses full bullet count."
-        >
-          <select
-            className="input w-full text-sm"
-            value={form.targetPages}
-            onChange={(e) => setForm({ ...form, targetPages: e.target.value as '' | '1' | '2' })}
-          >
-            <option value="">Auto (no length cap)</option>
-            <option value="1">1 page</option>
-            <option value="2">2 pages</option>
-          </select>
-        </Field>
-        <Field
-          label="Prompt overrides"
-          hint='Free-form rules appended at end of the prompt with highest priority. Examples: "Use exec voice — open every bullet with the business outcome." / "Banlist: leveraged, utilized, spearheaded." / "Render company name + role on two lines."'
+          label="Projects"
+          hint={'Group projects under each company. Format: numbered company name on its own line, then "- Project Name: short description" lines under it. The LLM uses the company headings to attribute projects directly.'}
         >
           <textarea
             className="input w-full text-sm font-mono"
-            rows={6}
-            value={form.promptOverrides}
-            onChange={(e) => setForm({ ...form, promptOverrides: e.target.value })}
-            placeholder={'e.g.\nUse exec voice — open every bullet with the business outcome.\nBanlist: leveraged, utilized, spearheaded, synergized.'}
+            rows={10}
+            value={form.projects}
+            onChange={(e) => setForm({ ...form, projects: e.target.value })}
+            placeholder={'1. Apple\n- Apple Developer Program App: developed apple developer program oauth guard.\n\n2. Google\n- Google Drive Api: dev\'d google drive api key management platform.'}
           />
         </Field>
       </section>
+    </div>
+  );
+}
 
+function ContactItemsEditor({
+  items,
+  onChange,
+}: {
+  items: ContactItem[];
+  onChange: (next: ContactItem[]) => void;
+}) {
+  function update(i: number, patch: Partial<ContactItem>) {
+    const next = items.slice();
+    next[i] = { ...next[i], ...patch };
+    onChange(next);
+  }
+  function move(i: number, dir: -1 | 1) {
+    const target = i + dir;
+    if (target < 0 || target >= items.length) return;
+    const next = items.slice();
+    [next[i], next[target]] = [next[target], next[i]];
+    onChange(next);
+  }
+  function remove(i: number) {
+    onChange(items.filter((_, idx) => idx !== i));
+  }
+  function add() {
+    onChange([...items, { label: '', display: '', url: '', show: true }]);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-12 gap-2 text-[11px] uppercase tracking-wider text-gray-400 px-1">
+        <span className="col-span-1 text-center">Show</span>
+        <span className="col-span-2">Label</span>
+        <span className="col-span-4">Display</span>
+        <span className="col-span-3">URL</span>
+        <span className="col-span-2"></span>
+      </div>
+      {items.map((item, i) => (
+        <div key={i} className="grid grid-cols-12 gap-2 items-center">
+          <div className="col-span-1 flex justify-center">
+            <input
+              type="checkbox"
+              checked={item.show}
+              onChange={(e) => update(i, { show: e.target.checked })}
+            />
+          </div>
+          <input
+            className="col-span-2 input text-sm"
+            placeholder="Email"
+            value={item.label}
+            onChange={(e) => update(i, { label: e.target.value })}
+          />
+          <input
+            className="col-span-4 input text-sm"
+            placeholder="e.g. me@example.com"
+            value={item.display}
+            onChange={(e) => update(i, { display: e.target.value })}
+          />
+          <input
+            type="url"
+            className="col-span-3 input text-sm"
+            placeholder="e.g. mailto:me@example.com"
+            value={item.url}
+            onChange={(e) => update(i, { url: e.target.value })}
+          />
+          <div className="col-span-2 flex items-center justify-end gap-0.5">
+            <button
+              type="button"
+              onClick={() => move(i, -1)}
+              disabled={i === 0}
+              className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+              title="Move up"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => move(i, 1)}
+              disabled={i === items.length - 1}
+              className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+              title="Move down"
+            >
+              <ChevronDown size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="p-1 text-gray-400 hover:text-red-600"
+              title="Remove"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+      >
+        <Plus size={12} /> Add contact item
+      </button>
     </div>
   );
 }
@@ -308,73 +339,6 @@ function Field({
       <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
       {children}
       {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
-    </div>
-  );
-}
-
-type FormState = typeof EMPTY_FORM;
-
-function ContactPair({
-  type,
-  label,
-  placeholder,
-  form,
-  setForm,
-  urlOptional = false,
-}: {
-  type: ContactType;
-  label: string;
-  placeholder: { display: string; url: string };
-  form: FormState;
-  setForm: (f: FormState) => void;
-  urlOptional?: boolean;
-}) {
-  // Address has no URL slot of its own; everything else has a top-level URL field.
-  const urlValue =
-    type === 'email' ? form.email
-    : type === 'phone' ? form.phone
-    : type === 'address' ? form.address
-    : type === 'github' ? form.github
-    : type === 'linkedin' ? form.linkedin
-    : type === 'website' ? form.website
-    : form.twitter;
-
-  const setUrl = (v: string) => {
-    const next: FormState = { ...form };
-    if (type === 'email') next.email = v;
-    else if (type === 'phone') next.phone = v;
-    else if (type === 'address') next.address = v;
-    else if (type === 'github') next.github = v;
-    else if (type === 'linkedin') next.linkedin = v;
-    else if (type === 'website') next.website = v;
-    else next.twitter = v;
-    setForm(next);
-  };
-
-  const labelValue = form.contactLabels?.[type] || '';
-  const setLabel = (v: string) => {
-    const nextLabels = { ...(form.contactLabels || {}) };
-    if (v) nextLabels[type] = v; else delete nextLabels[type];
-    setForm({ ...form, contactLabels: nextLabels });
-  };
-
-  return (
-    <div className="grid grid-cols-12 gap-2 items-center">
-      <span className="col-span-2 text-xs font-medium text-gray-600">{label}</span>
-      <input
-        className="col-span-4 input text-sm"
-        placeholder={`Display: ${placeholder.display}`}
-        value={labelValue}
-        onChange={(e) => setLabel(e.target.value)}
-      />
-      <input
-        type={type === 'address' ? 'text' : 'url'}
-        className="col-span-6 input text-sm"
-        placeholder={`URL: ${placeholder.url}`}
-        value={urlValue}
-        onChange={(e) => setUrl(e.target.value)}
-        disabled={urlOptional && type === 'address'}
-      />
     </div>
   );
 }

@@ -25,7 +25,7 @@ export default function ResumeStylesPage() {
     () =>
       accounts.map((a) => ({
         value: a._id,
-        label: `${a.name}${a.label ? ` — ${a.label}` : ''}`,
+        label: `${a.name}${a.title ? ` — ${a.title}` : ''}`,
       })),
     [accounts]
   );

@@ -265,7 +265,7 @@ export default function InterviewDetailPage() {
         </div>
         <div>
           <div className="text-gray-500 text-xs">Profile</div>
-          <div className="font-medium">{account?.name || account?.email || '—'}</div>
+          <div className="font-medium">{account?.name || '—'}</div>
         </div>
         <div>
           <div className="text-gray-500 text-xs">Creator</div>

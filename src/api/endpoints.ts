@@ -219,9 +219,9 @@ export const deleteWeeklyPlan = (id: string) => del<{ message: string }>(`/weekl
 export interface AccountLookup {
   _id: string;
   name: string;
-  email: string;
-  label?: string | null;
+  title?: string | null;
   hasExperience?: boolean;
+  hasTemplate?: boolean;
   createdBy?: string;
 }
 
