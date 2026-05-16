@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Wand2, CheckCircle2, AlertTriangle, Download } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { PageFormat } from '../lib/resumeStyles';
 import { PAGE_FORMATS } from '../lib/resumeStyles';
@@ -12,7 +12,14 @@ type AccountShape = {
   title?: string;
   styleTemplate?: string;
   styleTemplateName?: string;
+  styleTemplateAnnotated?: string;
   pageFormat?: PageFormat;
+};
+
+type Validation = {
+  missingRequired: string[];
+  missingRecommended: string[];
+  valid: boolean;
 };
 
 export default function ResumeStylingEditor({
@@ -22,7 +29,7 @@ export default function ResumeStylingEditor({
   accountId: string;
   showHeader?: boolean;
 }) {
-  const { data: account, isLoading: loading } = useSWR(
+  const { data: account, isLoading: loading, mutate } = useSWR(
     accountId ? ['styling-account', accountId] : null,
     async () => (await api.getAccount(accountId)) as AccountShape,
   );
@@ -31,12 +38,20 @@ export default function ResumeStylingEditor({
   const [pageFormat, setPageFormat] = useState<PageFormat>('A4');
   const [templateHtml, setTemplateHtml] = useState('');
   const [templateName, setTemplateName] = useState('');
+  const [annotated, setAnnotated] = useState('');
+  const [annotating, setAnnotating] = useState(false);
+  const [validation, setValidation] = useState<Validation | null>(null);
+  // True when the plain template differs from what's saved → annotation stale.
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (!account) return;
     setPageFormat((account.pageFormat as PageFormat) || 'A4');
     setTemplateHtml(account.styleTemplate || '');
     setTemplateName(account.styleTemplateName || '');
+    setAnnotated(account.styleTemplateAnnotated || '');
+    setValidation(null);
+    setDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account?._id]);
 
@@ -44,16 +59,48 @@ export default function ResumeStylingEditor({
     setSaving(true);
     try {
       await api.updateAccount(accountId, {
-        styleMode: 'template',
         styleTemplate: templateHtml,
         styleTemplateName: templateName,
         pageFormat,
       });
       notify.success('Resume settings saved');
+      setDirty(false);
+      mutate();
     } catch (err) {
       notify.error(err, 'Failed to save settings');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function convertToTemplate() {
+    if (!templateHtml.trim()) {
+      notify.error('Upload an HTML template first.');
+      return;
+    }
+    if (dirty) {
+      // Annotation reads the SAVED plain template — persist first.
+      await handleSave();
+    }
+    setAnnotating(true);
+    try {
+      const res = await api.annotateResumeTemplate(accountId);
+      setAnnotated(res.annotated);
+      setValidation({
+        missingRequired: res.missingRequired,
+        missingRecommended: res.missingRecommended,
+        valid: res.valid,
+      });
+      if (res.valid) {
+        notify.success('Template converted — markers added.');
+      } else {
+        notify.warn('Converted, but some required markers are missing. See the panel.');
+      }
+      mutate();
+    } catch (err) {
+      notify.error(err, 'Conversion failed');
+    } finally {
+      setAnnotating(false);
     }
   }
 
@@ -76,7 +123,7 @@ export default function ResumeStylingEditor({
               {account.title && <span className="text-gray-400 font-normal text-base"> · {account.title}</span>}
             </h2>
             <p className="text-xs text-gray-500">
-              Upload an HTML resume template. The LLM fills it with your profile data when generating.
+              Upload an HTML template, convert it to a fillable template, then generate.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -102,21 +149,135 @@ export default function ResumeStylingEditor({
         </header>
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col" style={{ minHeight: '70vh' }}>
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-0 min-h-0">
-          <section className="overflow-auto p-6 border-r border-gray-100">
-            <HtmlTemplatePane
-              html={templateHtml}
-              name={templateName}
-              onChange={(html, name) => { setTemplateHtml(html); setTemplateName(name); }}
-            />
-          </section>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+        <HtmlTemplatePane
+          html={templateHtml}
+          name={templateName}
+          onChange={(html, name) => {
+            setTemplateHtml(html);
+            setTemplateName(name);
+            setDirty(true);
+          }}
+        />
 
-          <section className="overflow-auto p-6 bg-gray-50">
-            <TemplatePreview html={templateHtml} />
-          </section>
+        <ConvertPanel
+          hasTemplate={!!templateHtml.trim()}
+          annotating={annotating}
+          dirty={dirty}
+          annotated={annotated}
+          annotatedName={templateName}
+          validation={validation}
+          onConvert={convertToTemplate}
+        />
+      </div>
+    </div>
+  );
+}
+
+function downloadHtml(html: string, filename: string) {
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function ConvertPanel({
+  hasTemplate, annotating, dirty, annotated, annotatedName, validation, onConvert,
+}: {
+  hasTemplate: boolean;
+  annotating: boolean;
+  dirty: boolean;
+  annotated: string;
+  annotatedName: string;
+  validation: Validation | null;
+  onConvert: () => void;
+}) {
+  const isReady = !!annotated && (validation ? validation.valid : true);
+
+  function download() {
+    const base = (annotatedName || 'template.html').replace(/\.html?$/i, '');
+    downloadHtml(annotated, `${base}.data-source.html`);
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">Convert to fillable template</h3>
+          <p className="text-xs text-gray-500">
+            One-time conversion adds marker attributes so generation can fill the template
+            deterministically. Re-run after changing the template.
+          </p>
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          {annotated && (
+            <button
+              type="button"
+              onClick={download}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50"
+              title="Download the converted template with data-* markers"
+            >
+              <Download size={14} /> Download
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onConvert}
+            disabled={!hasTemplate || annotating}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-black disabled:opacity-40"
+          >
+            {annotating ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+            {annotated ? 'Re-convert' : 'Convert to template'}
+          </button>
         </div>
       </div>
+
+      {dirty && annotated && (
+        <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded p-2">
+          <AlertTriangle size={13} className="mt-px shrink-0" />
+          Template edited since last conversion — re-convert before generating.
+        </div>
+      )}
+
+      {!annotated && hasTemplate && (
+        <div className="text-xs text-gray-500">
+          Not converted yet. Generation is blocked until you convert.
+        </div>
+      )}
+
+      {validation && (
+        <div className="space-y-1">
+          {validation.valid ? (
+            <div className="flex items-center gap-1.5 text-xs text-emerald-700">
+              <CheckCircle2 size={13} /> All required markers present — ready to generate.
+            </div>
+          ) : (
+            <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
+              <AlertTriangle size={13} className="mt-px shrink-0" />
+              <span>
+                Missing required markers: {validation.missingRequired.join(', ')}. Re-convert or fix the
+                template structure.
+              </span>
+            </div>
+          )}
+          {validation.missingRecommended.length > 0 && (
+            <div className="text-[11px] text-gray-400">
+              Optional markers not found: {validation.missingRecommended.join(', ')}.
+            </div>
+          )}
+        </div>
+      )}
+
+      {annotated && !validation && isReady && (
+        <div className="flex items-center gap-1.5 text-xs text-emerald-700">
+          <CheckCircle2 size={13} /> Converted template on file.
+        </div>
+      )}
     </div>
   );
 }
@@ -149,7 +310,7 @@ function HtmlTemplatePane({
       <div>
         <h3 className="text-sm font-semibold text-gray-800">HTML template</h3>
         <p className="text-xs text-gray-500">
-          Upload an <code>.html</code> file. The LLM uses it as the exact layout and replaces placeholder text with your profile data at generation time. Scripts and iframes are stripped on save.
+          Upload an <code>.html</code> file. Scripts and iframes are stripped on save.
         </p>
       </div>
 
@@ -194,33 +355,9 @@ function HtmlTemplatePane({
           </button>
         </div>
       ) : (
-        <div className="text-xs text-gray-400 italic">No template uploaded yet. The Generate Resume action will be blocked until one is uploaded.</div>
+        <div className="text-xs text-gray-400 italic">No template uploaded yet.</div>
       )}
     </div>
   );
 }
 
-function TemplatePreview({ html }: { html: string }) {
-  if (!html) {
-    return (
-      <div className="text-sm text-gray-500 space-y-2">
-        <p className="font-medium text-gray-700">Template preview</p>
-        <p>Upload an HTML file to see it rendered here. The actual resume is generated when you submit a job — the LLM fills the template with your candidate data at that time.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-gray-500">
-        Raw template render (no LLM fill). Generate a resume to see the final output.
-      </p>
-      <iframe
-        title="Template preview"
-        srcDoc={html}
-        sandbox=""
-        className="w-full border border-gray-200 rounded-lg bg-white"
-        style={{ height: '70vh' }}
-      />
-    </div>
-  );
-}

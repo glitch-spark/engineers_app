@@ -3,13 +3,10 @@ import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import { FileDown, Loader2, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import ResumeTabs from '../components/ResumeTabs';
-import MDEditor from '@uiw/react-md-editor';
 import Select from '../components/Select';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
-
-type GuidelinesMode = 'markdown' | 'plaintext';
 
 export default function ResumeGeneratorPage() {
   const { user } = useAuth();
@@ -37,34 +34,24 @@ export default function ResumeGeneratorPage() {
     [accounts]
   );
 
-  const { data: account } = useSWR(
-    accountId ? ['account', accountId] : null,
-    async () => (await api.getAccount(accountId)) as Record<string, unknown>
-  );
-
-  const accountGuidelines = (account?.screeningPrompt as string) || '';
-  const accountMode = (account?.screeningPromptMode as GuidelinesMode) || 'plaintext';
-
   const [company, setCompany] = useState('');
   const [jobUrl, setJobUrl] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [questions, setQuestions] = useState<string[]>(['']);
 
-  const [overrideEnabled, setOverrideEnabled] = useState(false);
-  const [overrideMode, setOverrideMode] = useState<GuidelinesMode>('plaintext');
-  const [overrideText, setOverrideText] = useState('');
-
-  useEffect(() => {
-    setOverrideMode(accountMode);
-    setOverrideText(accountGuidelines);
-  }, [accountId, accountMode, accountGuidelines]);
-
   const [submitting, setSubmitting] = useState(false);
+  // Index of the most recently added question — its row auto-focuses on mount.
+  const [focusIdx, setFocusIdx] = useState(-1);
 
   function setQuestion(i: number, value: string) {
     setQuestions((qs) => qs.map((q, idx) => (idx === i ? value : q)));
   }
-  function addQuestion() { setQuestions((qs) => [...qs, '']); }
+  function addQuestion() {
+    setQuestions((qs) => {
+      setFocusIdx(qs.length);
+      return [...qs, ''];
+    });
+  }
   function removeQuestion(i: number) {
     setQuestions((qs) => (qs.length === 1 ? [''] : qs.filter((_, idx) => idx !== i)));
   }
@@ -79,13 +66,13 @@ export default function ResumeGeneratorPage() {
       notify.warn('Company and job description are required');
       return;
     }
-    // Template-mode gate: refuse to submit until the profile has an HTML
-    // template uploaded. Resume Styles → upload an .html file.
+    // Gate: refuse to submit until the profile has a CONVERTED template.
+    // Resume Styles → upload .html → "Convert to template".
     try {
       const acc = (await api.getAccount(accountId)) as Record<string, unknown>;
-      const tmpl = (acc.styleTemplate as string | undefined) || '';
-      if (!tmpl.trim()) {
-        notify.warn('Upload an HTML template on the Resume Styles page before generating.');
+      const annotated = (acc.styleTemplateAnnotated as string | undefined) || '';
+      if (!annotated.trim()) {
+        notify.warn('Convert your HTML template on the Resume Styles page before generating.');
         return;
       }
     } catch {
@@ -121,9 +108,6 @@ export default function ResumeGeneratorPage() {
         jobDescription,
         jobUrl: jobUrl.trim() || undefined,
         questions: cleanQuestions,
-        ...(overrideEnabled
-          ? { guidelines: overrideText, guidelinesMode: overrideMode }
-          : {}),
       });
       notify.success('Job queued — track status in Generated resumes tab');
       // Clear company + JD + questions so user can immediately queue another.
@@ -139,7 +123,7 @@ export default function ResumeGeneratorPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold text-gray-900">Resume Generator</h1>
         <p className="text-sm text-gray-500 mt-1">
@@ -182,7 +166,7 @@ export default function ResumeGeneratorPage() {
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+            <label className="block text-xs font-medium mb-1 text-gray-600">
               Company<span className="text-red-500 ml-1">*</span>
             </label>
             <input
@@ -190,12 +174,12 @@ export default function ResumeGeneratorPage() {
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               placeholder="Acme Corp"
-              className="input focus-ring w-full"
+              className="input focus-ring w-full text-sm"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+            <label className="block text-xs font-medium mb-1 text-gray-600">
               Job posting URL <span className="text-xs text-gray-400 font-normal">(optional)</span>
             </label>
             <input
@@ -203,13 +187,13 @@ export default function ResumeGeneratorPage() {
               value={jobUrl}
               onChange={(e) => setJobUrl(e.target.value)}
               placeholder="https://acme.com/jobs/123"
-              className="input focus-ring w-full"
+              className="input focus-ring w-full text-sm"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2 text-gray-700">
+          <label className="block text-xs font-medium mb-1 text-gray-600">
             Job description<span className="text-red-500 ml-1">*</span>
           </label>
           <textarea
@@ -217,7 +201,7 @@ export default function ResumeGeneratorPage() {
             onChange={(e) => setJobDescription(e.target.value)}
             placeholder="Paste the full job description here..."
             rows={10}
-            className="input focus-ring w-full font-mono text-sm"
+            className="input focus-ring w-full text-sm"
             required
           />
           <p className="text-xs text-gray-400 mt-1">{jobDescription.length.toLocaleString()} characters</p>
@@ -225,7 +209,7 @@ export default function ResumeGeneratorPage() {
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-xs font-medium text-gray-600">
               Screening questions <span className="text-xs text-gray-400 font-normal">(optional)</span>
             </label>
             <button type="button" onClick={addQuestion} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
@@ -244,51 +228,15 @@ export default function ResumeGeneratorPage() {
                 onChange={(v) => setQuestion(i, v)}
                 onRemove={() => removeQuestion(i)}
                 canRemove={questions.length > 1 || q !== ''}
+                autoFocus={i === focusIdx}
               />
             ))}
           </div>
         </div>
 
-        <details className="border border-gray-200 rounded-lg">
-          <summary
-            className="cursor-pointer px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 select-none"
-            onClick={(e) => {
-              if (!overrideEnabled) {
-                e.preventDefault();
-                setOverrideEnabled(true);
-                (e.currentTarget.parentElement as HTMLDetailsElement).open = true;
-              }
-            }}
-          >
-            Override Q&amp;A guidelines for this generation
-            <span className="text-xs text-gray-400 ml-2">
-              (otherwise uses the profile's saved guidelines from{' '}
-              <Link to="/preferences" className="text-primary underline" onClick={(e) => e.stopPropagation()}>Preferences</Link>)
-            </span>
-          </summary>
-          <div className="p-3 space-y-2 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-xs text-gray-600">
-                <input type="checkbox" checked={overrideEnabled} onChange={(e) => setOverrideEnabled(e.target.checked)} />
-                Use override below instead of saved guidelines
-              </label>
-              <ModeToggle value={overrideMode} onChange={setOverrideMode} />
-            </div>
-            {overrideMode === 'markdown' ? (
-              <div data-color-mode="light">
-                <MDEditor value={overrideText} onChange={(v) => setOverrideText(v ?? '')} height={180} preview="edit" />
-              </div>
-            ) : (
-              <textarea
-                value={overrideText}
-                onChange={(e) => setOverrideText(e.target.value)}
-                rows={5}
-                placeholder="Use the candidate's voice, keep answers under 150 words..."
-                className="input focus-ring w-full text-sm"
-              />
-            )}
-          </div>
-        </details>
+        {/* Per-generation overrides hidden for now — re-enable when needed.
+            State (overrideEnabled / promptBodyOverride) stays inert: defaults
+            mean handleSubmit sends neither `guidelines` nor `promptBody`. */}
 
         <div className="flex justify-end">
           <button
@@ -317,12 +265,14 @@ function QuestionRow({
   onChange,
   onRemove,
   canRemove,
+  autoFocus,
 }: {
   index: number;
   value: string;
   onChange: (v: string) => void;
   onRemove: () => void;
   canRemove: boolean;
+  autoFocus?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -331,6 +281,10 @@ function QuestionRow({
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex items-start gap-2">
@@ -352,23 +306,6 @@ function QuestionRow({
       >
         <Trash2 className="w-4 h-4" />
       </button>
-    </div>
-  );
-}
-
-function ModeToggle({ value, onChange }: { value: GuidelinesMode; onChange: (v: GuidelinesMode) => void }) {
-  return (
-    <div className="inline-flex border border-gray-200 rounded-md overflow-hidden text-xs">
-      {(['plaintext', 'markdown'] as const).map((m) => (
-        <button
-          key={m}
-          type="button"
-          onClick={() => onChange(m)}
-          className={`px-2 py-1 ${value === m ? 'bg-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
-        >
-          {m === 'plaintext' ? 'Plain text' : 'Markdown'}
-        </button>
-      ))}
     </div>
   );
 }

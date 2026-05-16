@@ -33,6 +33,8 @@ export interface ProfileShape {
   leaderboardOptIn?: boolean;
   leaderboardName?: string;
   leaderboardAnon?: boolean;
+  resumePromptBody?: string;
+  screeningPromptBody?: string;
 }
 
 export interface TransactionListParams {
@@ -105,7 +107,25 @@ export const updateProfile = (body: {
   leaderboardOptIn?: boolean;
   leaderboardName?: string;
   leaderboardAnon?: boolean;
+  resumePromptBody?: string;
+  screeningPromptBody?: string;
 }) => putJSON<{ message: string; user: ProfileShape }>('/profile', body);
+
+export const getResumeDefaultPrompt = () =>
+  apiFetch<{ promptBody: string }>('/resume/default-prompt');
+
+export const getResumeDefaultScreeningPrompt = () =>
+  apiFetch<{ promptBody: string }>('/resume/default-screening-prompt');
+
+export interface AnnotateTemplateResult {
+  annotated: string;
+  missingRequired: string[];
+  missingRecommended: string[];
+  valid: boolean;
+}
+
+export const annotateResumeTemplate = (accountId: string) =>
+  postJSON<AnnotateTemplateResult>(`/resume/templates/${accountId}/annotate`, {});
 
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
   putJSON<{ message: string }>('/profile/password', body);
@@ -617,19 +637,8 @@ export function generateScreeningAnswers(body: {
   accountId: string;
   jobDescription?: string;
   questions: string[];
-  guidelines?: string;
-  guidelinesMode?: 'markdown' | 'plaintext';
-  saveGuidelines?: boolean;
-  useGeneratedResumeContext?: boolean;
 }) {
   return postJSON<{ pairs: ScreeningPair[] }>('/resume/screening-answers', body);
-}
-
-export function refreshPreviewHtml(accountId: string, jobDescription?: string) {
-  return postJSON<{ html: string }>('/resume/preview-html', {
-    accountId,
-    ...(jobDescription ? { jobDescription } : {}),
-  });
 }
 
 export function listResumeHistory(accountId?: string) {
@@ -676,14 +685,14 @@ export function enqueueResumeJob(body: {
   jobDescription: string;
   jobUrl?: string;
   questions?: string[];
-  guidelines?: string;
-  guidelinesMode?: 'markdown' | 'plaintext';
+  promptBody?: string;
 }) {
   return postJSON<{ jobId: string; status: ResumeJobStatus }>('/resume/generate', body);
 }
 
 export function listResumeJobs(params?: {
   accountId?: string;
+  company?: string;
   page?: number;
   limit?: number;
 }) {

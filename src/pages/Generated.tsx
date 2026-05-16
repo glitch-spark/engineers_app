@@ -12,6 +12,8 @@ import * as api from '../api/endpoints';
 import type { ResumeJob, ResumeJobStatus, ResumeJobStep, ScreeningPair } from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumeTabs from '../components/ResumeTabs';
+import Select from '../components/Select';
+import { useAuth } from '../auth/useAuth';
 
 const STEP_LABEL: Record<ResumeJobStep, string> = {
   queued: 'Queued',
@@ -39,15 +41,41 @@ const STATUS_LABEL: Record<ResumeJobStatus, string> = {
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export default function GeneratedResumesPage() {
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
 
+  // Filters
+  const [filterAccountId, setFilterAccountId] = useState('');
+  const [companyInput, setCompanyInput] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => { setCompanyFilter(companyInput.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [companyInput]);
+
+  const { data: accountsData } = useSWR('generated-accounts-lookup', () => api.lookupAccounts());
+  const profileOptions = useMemo(() => {
+    const own = (accountsData?.accounts ?? []).filter(
+      (a) => a.createdBy && user?.id && a.createdBy === user.id,
+    );
+    return [
+      { value: '', label: 'All profiles' },
+      ...own.map((a) => ({ value: a._id, label: `${a.name}${a.title ? ` — ${a.title}` : ''}` })),
+    ];
+  }, [accountsData, user?.id]);
+
   const { data, mutate, isLoading } = useSWR(
-    ['resume-jobs-page', page, limit] as const,
-    () => api.listResumeJobs({ page, limit }),
+    ['resume-jobs-page', page, limit, filterAccountId, companyFilter] as const,
+    () => api.listResumeJobs({
+      page,
+      limit,
+      accountId: filterAccountId || undefined,
+      company: companyFilter || undefined,
+    }),
     { refreshInterval: 3000 },
   );
 
@@ -136,7 +164,7 @@ export default function GeneratedResumesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-5">
+    <div className="space-y-5">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Generated resumes</h1>
@@ -163,6 +191,36 @@ export default function GeneratedResumesPage() {
       </header>
       <ResumeTabs />
 
+      {/* Filters */}
+      <div className="flex items-end gap-3 flex-wrap bg-white rounded-2xl border border-gray-100 px-4 py-3 shadow-sm">
+        <div className="w-56">
+          <label className="block text-xs text-gray-500 mb-1">Profile</label>
+          <Select
+            value={filterAccountId}
+            onChange={(v) => { setFilterAccountId(v); setPage(1); }}
+            options={profileOptions}
+          />
+        </div>
+        <div className="w-56">
+          <label className="block text-xs text-gray-500 mb-1">Company</label>
+          <input
+            className="input w-full text-sm"
+            placeholder="Filter by company name"
+            value={companyInput}
+            onChange={(e) => setCompanyInput(e.target.value)}
+          />
+        </div>
+        {(filterAccountId || companyFilter) && (
+          <button
+            type="button"
+            onClick={() => { setFilterAccountId(''); setCompanyInput(''); setCompanyFilter(''); setPage(1); }}
+            className="text-xs text-gray-500 hover:text-primary pb-2"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {/* Bulk actions bar */}
       <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-4 py-3 shadow-sm">
         <span className="text-sm text-gray-600">
@@ -185,7 +243,11 @@ export default function GeneratedResumesPage() {
             <Loader2 className="w-4 h-4 animate-spin" /> Loading...
           </p>
         ) : jobs.length === 0 ? (
-          <p className="p-6 text-sm text-gray-500">No builds yet. Generate one from the Resume Generator.</p>
+          <p className="p-6 text-sm text-gray-500">
+            {filterAccountId || companyFilter
+              ? 'No resumes match the filters.'
+              : 'No builds yet. Generate one from the Resume Generator.'}
+          </p>
         ) : (
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">

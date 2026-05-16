@@ -1,11 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
-import { FileDown, ListChecks, Sliders, Settings } from 'lucide-react';
+import { FileDown, ListChecks, Settings } from 'lucide-react';
 
 const TABS = [
   { to: '/resume', label: 'Generate', icon: FileDown, exact: true },
-  { to: '/resume/generated', label: 'Generated resumes', icon: ListChecks, exact: false },
-  { to: '/resume/styles', label: 'Styles & preview', icon: Sliders, exact: false },
-  { to: '/preferences', label: 'Preferences', icon: Settings, exact: true },
+  { to: '/resume/generated', label: 'Generated Resumes', icon: ListChecks, exact: false },
+  { to: '/preferences', label: 'Prompts', icon: Settings, exact: true },
 ];
 
 export default function ResumeTabs() {
