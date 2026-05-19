@@ -357,6 +357,7 @@ function JobRow({
   onSelect: (checked: boolean) => void;
 }) {
   const [downloading, setDownloading] = useState(false);
+  const [copyingText, setCopyingText] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const created = job.createdAt ? new Date(job.createdAt) : null;
   const elapsed = job.executionMs != null ? `${(job.executionMs / 1000).toFixed(1)}s` : '—';
@@ -371,6 +372,18 @@ function JobRow({
       notify.error(err, 'Download failed');
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function copyPlainText() {
+    setCopyingText(true);
+    try {
+      await api.copyResumeJobPlainText(job);
+      notify.success('Resume text copied');
+    } catch (err) {
+      notify.error(err, 'Copy failed — generate a new build for plain text');
+    } finally {
+      setCopyingText(false);
     }
   }
 
@@ -447,6 +460,17 @@ function JobRow({
               title={job.hasPdf ? 'Download PDF' : 'PDF missing — try anyway'}
             >
               {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={copyPlainText}
+              disabled={copyingText || job.status !== 'completed' || !job.hasPlainText}
+              className={`p-1.5 rounded-md hover:bg-gray-100 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed ${
+                job.status === 'completed' ? '' : 'invisible'
+              }`}
+              title="Copy resume text (logical order — use instead of PDF copy-paste)"
+            >
+              {copyingText ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
             </button>
             <button
               type="button"

@@ -672,6 +672,7 @@ export interface ResumeJob {
   errorMessage?: string | null;
   executionMs?: number | null;
   hasPdf?: boolean;
+  hasPlainText?: boolean;
   screeningQuestions: string[];
   screeningPairs: ScreeningPair[];
   createdAt?: string | null;
@@ -703,6 +704,21 @@ export function listResumeJobs(params?: {
 
 export function deleteResumeJob(id: string) {
   return del<{ ok: boolean }>(`/resume/jobs/${id}`);
+}
+
+/** Copy resume plain text (logical order). Prefer over PDF Ctrl+A. */
+export async function copyResumeJobPlainText(job: ResumeJob): Promise<void> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/plain-text`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error((err as { detail?: string }).detail || 'Plain text not available');
+  }
+  const text = await res.text();
+  await navigator.clipboard.writeText(text);
 }
 
 /** Trigger a browser download for a completed job's PDF.
