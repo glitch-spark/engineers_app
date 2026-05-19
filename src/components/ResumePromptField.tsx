@@ -3,7 +3,7 @@ import { Loader2, FileDown } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 
-const MAX = 8000;
+const MAX = 30000;
 
 /**
  * Editable prompt field for resume or screening prompts. Empty = inherit
