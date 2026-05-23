@@ -56,7 +56,7 @@ export default function LoadingSpinner({
 
 export function SkeletonCard({ className = '' }: { className?: string }) {
   return (
-    <div className={`animate-pulse bg-gray-200 rounded-2xl h-32 ${className}`} />
+    <div className={`animate-pulse bg-gray-200 rounded-[12px] h-32 ${className}`} />
   );
 }
 

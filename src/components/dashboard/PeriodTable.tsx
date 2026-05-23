@@ -59,7 +59,7 @@ export default function PeriodTable({
   if (rows.length === 0) return null;
 
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
       <header className="px-4 py-2.5 border-b border-gray-100">
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Period breakdown</h2>
       </header>

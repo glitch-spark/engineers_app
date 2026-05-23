@@ -58,7 +58,7 @@ export default function MetricsChart({
   const visible = SERIES.filter((s) => active[s.key]);
 
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-4">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
       <header className="flex items-center justify-between flex-wrap gap-2 mb-3">
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Trend</h2>
         <div className="flex items-center gap-1.5">

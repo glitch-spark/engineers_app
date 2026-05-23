@@ -135,7 +135,7 @@ export default function ReviewIdeasPanel() {
       <section>
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Skills</h2>
+            <h2 className="section-title">Skills</h2>
             <p className="text-sm text-gray-500">
               Each skill defines a system prompt and how many interviews it expects.
             </p>
@@ -202,7 +202,7 @@ export default function ReviewIdeasPanel() {
 
       {/* Global prompt */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">Global system prompt</h2>
+        <h2 className="section-title mb-1">Global system prompt</h2>
         <p className="text-sm text-gray-500 mb-3">
           Prepended to every skill prompt and to every custom-prompt run. Use this for
           house-style instructions ("act as a senior interview consultant…").

@@ -1,12 +1,13 @@
 import useSWR from 'swr';
 import { useEffect, useState } from 'react';
 import Modal from '../components/Modal';
-import { Pencil, Trash2, CheckCircle, XCircle, Filter } from 'lucide-react';
+import { Pencil, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { notify } from '../lib/notify';
 import NameWithAvatar from '../components/NameWithAvatar';
+import PageHeader from '../components/PageHeader';
 
 type PayMethod = 'coin' | 'card';
 
@@ -170,11 +171,6 @@ export default function TransactionsPage() {
     setCurrentPage(1);
   };
 
-  const applyFilters = () => {
-    setCurrentPage(1);
-    mutate();
-  };
-
   const transactions = (data?.transactions as Tx[]) || [];
   const pagination = data?.pagination;
 
@@ -185,41 +181,39 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Transactions</h1>
-        <button type="button" className="btn" onClick={openAdd}>
-          Add
-        </button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Transactions"
+        action={<button type="button" className="btn" onClick={openAdd}>Add</button>}
+      />
 
-      <div className="flex items-end gap-3 flex-wrap">
+      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
         {isAdmin && (
           <>
-            <div>
-              <label className="block text-xs mb-1 text-gray-600">From</label>
+            <div className="w-44">
+              <label className="block text-xs text-gray-500 mb-1">From</label>
               <input
-                className="input"
+                className="input w-full text-sm"
                 type="date"
                 value={from}
-                onChange={(e) => setFrom(e.target.value)}
+                onChange={(e) => { setFrom(e.target.value); setCurrentPage(1); }}
               />
             </div>
-            <div>
-              <label className="block text-xs mb-1 text-gray-600">To</label>
+            <div className="w-44">
+              <label className="block text-xs text-gray-500 mb-1">To</label>
               <input
-                className="input"
+                className="input w-full text-sm"
                 type="date"
                 value={to}
-                onChange={(e) => setTo(e.target.value)}
+                onChange={(e) => { setTo(e.target.value); setCurrentPage(1); }}
               />
             </div>
-            <div>
-              <label className="block text-xs mb-1 text-gray-600">User</label>
+            <div className="w-56">
+              <label className="block text-xs text-gray-500 mb-1">User</label>
               <select
-                className="select focus-ring"
+                className="select focus-ring w-full text-sm"
                 value={userId}
-                onChange={(e) => setUserId(e.target.value)}
+                onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}
               >
                 <option value="">All users</option>
                 {users.map((u) => (
@@ -231,21 +225,18 @@ export default function TransactionsPage() {
             </div>
           </>
         )}
-        <div>
-          <label className="block text-xs mb-1 text-gray-600">Pay method</label>
+        <div className="w-44">
+          <label className="block text-xs text-gray-500 mb-1">Pay method</label>
           <select
-            className="select focus-ring"
+            className="select focus-ring w-full text-sm"
             value={payMethodFilter}
-            onChange={(e) => setPayMethodFilter(e.target.value as '' | PayMethod)}
+            onChange={(e) => { setPayMethodFilter(e.target.value as '' | PayMethod); setCurrentPage(1); }}
           >
             <option value="">All methods</option>
             <option value="coin">Coin</option>
             <option value="card">Card</option>
           </select>
         </div>
-        <button type="button" className="btn" onClick={applyFilters}>
-          <Filter size={16} /> Apply
-        </button>
       </div>
 
       {data && (
@@ -272,7 +263,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
             <tr>

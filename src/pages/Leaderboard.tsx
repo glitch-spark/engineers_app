@@ -1,10 +1,11 @@
 import useSWR from 'swr';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Loader2, Trophy } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { LeaderboardMetric } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import NameWithAvatar from '../components/NameWithAvatar';
+import PageHeader from '../components/PageHeader';
 
 const METRICS: { value: LeaderboardMetric; label: string }[] = [
   { value: 'earnings', label: 'Top earners' },
@@ -60,34 +61,29 @@ export default function LeaderboardPage() {
   );
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Trophy className="w-6 h-6 text-amber-500" /> Leaderboard
-          </h1>
-          <p className="text-sm text-gray-500">
-            Public ranking of opted-in users. Sort by earnings, bids, interviews, or conversion.
-          </p>
-        </div>
-        <div className="flex items-center gap-1 bg-white border border-gray-100 rounded-md p-0.5">
-          {RANGES.map((r) => (
-            <button
-              key={r.value}
-              type="button"
-              onClick={() => setRange(r.value)}
-              className={
-                'text-xs px-2 py-1 rounded ' +
-                (range === r.value
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-50')
-              }
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Leaderboard"
+        action={
+          <div className="flex items-center gap-1 bg-white border border-gray-100 rounded-md p-0.5">
+            {RANGES.map((r) => (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => setRange(r.value)}
+                className={
+                  'text-xs px-2 py-1 rounded ' +
+                  (range === r.value
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-50')
+                }
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       <div className="flex items-center gap-1 border-b border-gray-200">
         {METRICS.map((m) => (
@@ -120,7 +116,7 @@ export default function LeaderboardPage() {
           {/* Your rank pill — hidden for admins (admins are excluded from
               leaderboards server-side; the opt-in CTA would be misleading). */}
           {user?.role !== 'admin' && (
-            <div className="bg-white rounded-md border border-gray-100 shadow-sm p-3 flex items-center justify-between flex-wrap gap-2">
+            <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-3 flex items-center justify-between flex-wrap gap-2">
               <div className="text-sm">
                 {data.yourRank.optedIn ? (
                   data.yourRank.rank ? (
@@ -160,7 +156,7 @@ export default function LeaderboardPage() {
               No qualifying users in this window yet.
             </div>
           ) : (
-            <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-600">
                   <tr>

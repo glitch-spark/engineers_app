@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
+import PageHeader from '../components/PageHeader';
 
 interface ProfileData {
   username: string;
@@ -46,7 +47,7 @@ async function readResizedDataURL(file: File, maxDim = 256): Promise<string> {
 }
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -109,6 +110,9 @@ export default function ProfilePage() {
       notify.success('Profile updated successfully');
       setOriginalData(formData);
       setIsEditing(false);
+      // Push the new image/username into the auth context so subscribers
+      // (Topbar avatar, sidebar greetings, etc.) re-render immediately.
+      await refreshUser();
     } catch (error) {
       notify.error(error, 'Failed to update profile');
     } finally {
@@ -159,11 +163,8 @@ export default function ProfilePage() {
 
   if (isLoadingData) {
     return (
-      <div className="max-w-4xl mx-auto space-y-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile Settings</h1>
-          <p className="text-gray-600">Loading your profile information...</p>
-        </div>
+      <div className="space-y-6">
+        <PageHeader title="Profile" />
         <div className="card">
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -174,13 +175,10 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto pb-12">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile Settings</h1>
-        <p className="text-gray-600">Manage your account information and preferences</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Profile" />
 
-      <div className="card mt-4">
+      <div className="card">
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex flex-col items-center lg:items-start space-y-4">
             <div className="relative group">

@@ -1,11 +1,12 @@
 import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Pencil, Trash2, Eye, Filter, Plus } from 'lucide-react';
+import { Pencil, Trash2, Eye, Plus } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
 import NameWithAvatar from '../components/NameWithAvatar';
+import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -581,55 +582,49 @@ export default function InterviewsPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <>
       <style>{editorStyles}</style>
-
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Interviews</h1>
-        <button type="button" className="btn" onClick={openCreate}>
-          <Plus size={16} className="mr-2" /> Create
-        </button>
-      </div>
+      <div className="space-y-6">
+      <PageHeader
+        title="Interviews"
+        action={
+          <button type="button" className="btn" onClick={openCreate}>
+            <Plus size={16} className="mr-2" /> Create
+          </button>
+        }
+      />
 
       <InterviewTabs />
 
-      <div className="space-y-4">
+      <div className="space-y-6">
       {/* Filters */}
-      <div className="flex items-end gap-2 flex-wrap text-xs">
+      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
         {isAdmin && (
-          <div className="w-40">
-            <label className="block mb-1 text-gray-600">Creator</label>
-            <Select value={creatorId} onChange={setCreatorId} options={creatorOptions} />
+          <div className="w-44">
+            <label className="block text-xs text-gray-500 mb-1">Creator</label>
+            <Select value={creatorId} onChange={(v) => { setCreatorId(v); setCurrentPage(1); }} options={creatorOptions} />
           </div>
         )}
         <div className="w-44">
-          <label className="block mb-1 text-gray-600">Profile</label>
-          <Select value={accountId} onChange={setAccountId} options={accountOptions} />
+          <label className="block text-xs text-gray-500 mb-1">Profile</label>
+          <Select value={accountId} onChange={(v) => { setAccountId(v); setCurrentPage(1); }} options={accountOptions} />
         </div>
         <div className="w-36">
-          <label className="block mb-1 text-gray-600">Stage</label>
-          <Select value={stage} onChange={setStage} options={stageOptions} />
+          <label className="block text-xs text-gray-500 mb-1">Stage</label>
+          <Select value={stage} onChange={(v) => { setStage(v); setCurrentPage(1); }} options={stageOptions} />
         </div>
         <div className="w-36">
-          <label className="block mb-1 text-gray-600">Status</label>
-          <Select value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
+          <label className="block text-xs text-gray-500 mb-1">Status</label>
+          <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); setCurrentPage(1); }} options={statusOptions} />
         </div>
-        <div className="w-36">
-          <label className="block mb-1 text-gray-600">From</label>
-          <input className="input w-full" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <div className="w-40">
+          <label className="block text-xs text-gray-500 mb-1">From</label>
+          <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setCurrentPage(1); }} />
         </div>
-        <div className="w-36">
-          <label className="block mb-1 text-gray-600">To</label>
-          <input className="input w-full" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <div className="w-40">
+          <label className="block text-xs text-gray-500 mb-1">To</label>
+          <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); setCurrentPage(1); }} />
         </div>
-        <button
-          type="button"
-          className="btn px-3 py-2 text-xs"
-          onClick={() => { setCurrentPage(1); mutate(); }}
-          title="Apply filters"
-        >
-          <Filter size={14} className="mr-1" /> Apply
-        </button>
       </div>
 
       {/* Total + page-size */}
@@ -655,7 +650,7 @@ export default function InterviewsPage() {
 
       {/* List */}
       {viewMode === 'table' ? (
-        <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
               <tr>
@@ -758,7 +753,7 @@ export default function InterviewsPage() {
           : 'Interview Details'
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-6">
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           {mode === 'read' ? (
@@ -1036,7 +1031,7 @@ export default function InterviewsPage() {
 
       {/* Delete confirm modal */}
       <Modal open={mode === 'delete'} onClose={closeModal} title="Delete Interview">
-        <div className="space-y-4">
+        <div className="space-y-6">
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <p className="text-sm text-gray-700">
             Are you sure you want to delete this interview? This action cannot be undone.
@@ -1061,6 +1056,7 @@ export default function InterviewsPage() {
           </div>
         </div>
       </Modal>
-    </div>
+      </div>
+    </>
   );
 }

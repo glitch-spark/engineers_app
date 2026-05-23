@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../auth/useAuth';
+import { LogoWordmark } from './Logo';
 
 export default function Topbar() {
   const { user, logout } = useAuth();
@@ -26,16 +27,11 @@ export default function Topbar() {
     <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-soft">
       <div className="mx-auto h-full px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/dashboard" className="flex items-center gap-3 group">
-            <div className="relative">
-              <img
-                src="/logo-engineers.svg"
-                alt="Engineers"
-                width={160}
-                height={40}
-                className="transition-transform duration-200 group-hover:scale-105"
-              />
-            </div>
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-3 group transition-transform duration-200 group-hover:scale-105"
+          >
+            <LogoWordmark />
           </Link>
         </div>
 
@@ -80,7 +76,7 @@ export default function Topbar() {
             </button>
 
             {open && (
-              <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-100 bg-white shadow-strong overflow-hidden animate-fade-in-up z-50">
+              <div className="absolute right-0 mt-2 w-64 rounded-[12px] border border-gray-100 bg-white shadow-strong overflow-hidden animate-fade-in-up z-50">
                 <div className="p-4 border-b border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-3">
                     {user?.image ? (

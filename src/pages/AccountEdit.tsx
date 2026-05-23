@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
 import ResumeStylingEditor from '../components/ResumeStylingEditor';
+import PageHeader from '../components/PageHeader';
 
 type AccShape = {
   _id?: string;
@@ -89,15 +90,10 @@ export default function AccountEditPage() {
 
   if (isNew) {
     return (
-      <div className="space-y-5 max-w-xl">
-        <header className="flex items-center gap-3">
-          <Link to="/accounts" className="text-gray-500 hover:text-primary">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <h1 className="text-2xl font-semibold text-gray-900">New profile</h1>
-        </header>
+      <div className="space-y-6 max-w-xl">
+        <PageHeader title="New profile" backTo="/accounts" />
 
-        <section className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
+        <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Profile name <span className="text-red-500">*</span>
@@ -131,13 +127,8 @@ export default function AccountEditPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <header className="flex items-center gap-3">
-        <Link to="/accounts" className="text-gray-500 hover:text-primary">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <h1 className="text-2xl font-semibold text-gray-900">Edit profile</h1>
-      </header>
+    <div className="space-y-6">
+      <PageHeader title="Edit profile" backTo="/accounts" />
 
       <Section title="Profile name" desc="A label to distinguish this profile in dropdowns.">
         <input
@@ -257,9 +248,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-3">
+    <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-3">
       <div>
-        <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
+        <h2 className="card-title">{title}</h2>
         {desc && <p className="text-xs text-gray-500">{desc}</p>}
       </div>
       {children}

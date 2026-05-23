@@ -6,6 +6,7 @@ import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import NameWithAvatar from '../components/NameWithAvatar';
+import PageHeader from '../components/PageHeader';
 
 type Acc = {
   _id: string;
@@ -65,45 +66,46 @@ export default function AccountsPage() {
   const pagination = data?.pagination;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center">
-        <h1 className="text-2xl font-bold">Profiles</h1>
-        <button className="btn ml-auto" onClick={() => navigate('/accounts/new')}>Add</button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Profiles"
+        action={<button className="btn" onClick={() => navigate('/accounts/new')}>Add</button>}
+      />
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <input
-            type="text"
-            placeholder="Search profiles..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+        <div className="flex-1 min-w-64 max-w-md">
+          <label className="block text-xs text-gray-500 mb-1">Search</label>
+          <div className="relative">
+            <svg className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
+            <input
+              type="text"
+              placeholder="Search profiles..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input w-full text-sm pl-9 pr-8"
+            />
+            {searchTerm && (
+              <button
+                onClick={clearSearch}
+                className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
-          {searchTerm && (
-            <button
-              onClick={clearSearch}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center"
-            >
-              <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-2">
-            <label className="block text-xs mb-1 text-gray-600">User</label>
+          <div className="w-56">
+            <label className="block text-xs text-gray-500 mb-1">User</label>
             <select
-              className="select focus-ring"
+              className="select focus-ring w-full text-sm"
               value={userId}
-              onChange={(e) => setUserId(e.target.value)}
+              onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}
             >
               <option value="">All users</option>
               {users.map((u) => (
@@ -115,12 +117,12 @@ export default function AccountsPage() {
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium">Show:</label>
+        <div className="w-28">
+          <label className="block text-xs text-gray-500 mb-1">Show</label>
           <select
             value={pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-            className="select focus-ring text-sm"
+            className="select focus-ring w-full text-sm"
           >
             <option value={5}>5</option>
             <option value={10}>10</option>
@@ -148,7 +150,7 @@ export default function AccountsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
             <tr>

@@ -15,6 +15,10 @@ export interface AuthState {
   ready: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  // Re-fetch /auth/me and update the in-memory user. Call after a profile
+  // edit (avatar upload, username change, etc.) so subscribers like the
+  // Topbar avatar re-render with fresh data without a full reload.
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthState | null>(null);
@@ -65,8 +69,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    if (!getToken()) return;
+    try {
+      const fresh = await api.me();
+      setUser(fresh);
+      setStoredUser(fresh);
+    } catch {
+      // Swallow — surface state mismatch on the next protected nav instead
+      // of breaking the in-progress save flow.
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, ready, login, logout }}>
+    <AuthContext.Provider value={{ user, token, ready, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -222,7 +222,7 @@ export default function InterviewReviewPage() {
             <ArrowLeft size={16} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 className="page-title flex items-center gap-2">
               <Sparkles size={20} /> AI Review
             </h1>
             <div className="text-sm text-gray-500">

@@ -107,23 +107,35 @@ export default {
         'inner': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular'],
+        // Single family across the app — Inter for everything, including
+        // <code>. Aliasing mono to sans kills accidental family switching.
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['Inter', 'system-ui', 'sans-serif'],
       },
-      // Pixel-based scale: body 14, labels 13, helper 12, sub-headings 16,
-      // page H1 stays larger via xl/2xl tiers. Pages mostly use text-sm/xs/lg
-      // already, so existing markup picks up the new sizing automatically.
+      // Role-named tokens come first — use these in components. The raw
+      // numeric aliases (xs/sm/base/lg/xl/2xl/...) stay so existing markup
+      // and Tailwind utility consumers keep compiling; they map to the
+      // same pixel values as their role twins.
       fontSize: {
-        'xs': ['12px', { lineHeight: '1.4' }],   // helper text
-        'sm': ['13px', { lineHeight: '1.5' }],   // labels
-        'base': ['14px', { lineHeight: '1.55' }], // body default
-        'lg': ['16px', { lineHeight: '1.4' }],   // h2/h3 sub-headings
-        'xl': ['18px', { lineHeight: '1.35' }],
-        '2xl': ['22px', { lineHeight: '1.3' }],  // page H1
-        '3xl': ['26px', { lineHeight: '1.25' }],
-        '4xl': ['30px', { lineHeight: '1.2' }],
-        '5xl': ['36px', { lineHeight: '1.15' }],
-        '6xl': ['44px', { lineHeight: '1.1' }],
+        // Role tokens (preferred)
+        'title':      ['22px', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        'heading':    ['16px', { lineHeight: '1.4' }],
+        'subheading': ['13px', { lineHeight: '1.5' }],
+        'body':       ['14px', { lineHeight: '1.55' }],
+        'label':      ['13px', { lineHeight: '1.4' }],
+        'caption':    ['12px', { lineHeight: '1.4' }],
+        'micro':      ['11px', { lineHeight: '1.3' }],
+        // Legacy raw aliases (keep for back-compat — same pixels as roles)
+        'xs':   ['12px', { lineHeight: '1.4' }],
+        'sm':   ['13px', { lineHeight: '1.5' }],
+        'base': ['14px', { lineHeight: '1.55' }],
+        'lg':   ['16px', { lineHeight: '1.4' }],
+        'xl':   ['18px', { lineHeight: '1.35' }],
+        '2xl':  ['22px', { lineHeight: '1.3' }],
+        '3xl':  ['26px', { lineHeight: '1.25' }],
+        '4xl':  ['30px', { lineHeight: '1.2' }],
+        '5xl':  ['36px', { lineHeight: '1.15' }],
+        '6xl':  ['44px', { lineHeight: '1.1' }],
       },
       spacing: {
         '18': '4.5rem',

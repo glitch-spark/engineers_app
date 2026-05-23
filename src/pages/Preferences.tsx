@@ -5,17 +5,12 @@ import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumeTabs from '../components/ResumeTabs';
 import ResumePromptField from '../components/ResumePromptField';
+import PageHeader from '../components/PageHeader';
 
 export default function PreferencesPage() {
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-gray-900">Prompts</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Your global prompts — applied to every profile unless a profile overrides them on its
-          own Prompts tab.
-        </p>
-      </header>
+      <PageHeader title="Prompts" />
       <ResumeTabs />
 
       <GlobalPromptsCard />
@@ -59,9 +54,9 @@ function GlobalPromptsCard() {
 
   return (
     <div className="space-y-5">
-      <section className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-3">
+      <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Resume generating prompt — global</h2>
+          <h2 className="section-title">Resume generating prompt — global</h2>
           <p className="text-xs text-gray-500 mt-1">
             Default content prompt for every profile. A profile can override this on its Prompts tab;
             a single generation can override it on the Resume Generator page.
@@ -75,9 +70,9 @@ function GlobalPromptsCard() {
         />
       </section>
 
-      <section className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-3">
+      <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Screening Q&amp;A answering prompt — global</h2>
+          <h2 className="section-title">Screening Q&amp;A answering prompt — global</h2>
           <p className="text-xs text-gray-500 mt-1">
             Default screening-answer prompt for every profile. A profile can override this on its
             Prompts tab.

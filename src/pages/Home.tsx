@@ -25,7 +25,7 @@ export default function Home() {
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
-        <h1 className="text-2xl font-bold mb-4">Welcome to Engineer Dashboard</h1>
+        <h1 className="page-title mb-4">Welcome to Engineer Dashboard</h1>
         <p className="text-gray-600 mb-6">Please login to continue</p>
         <div className="space-x-4">
           <Link to="/login" className="btn">Login</Link>

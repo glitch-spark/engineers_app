@@ -6,6 +6,7 @@ import { Pencil, Trash2, Search, Plus, Users, UserCheck, UserX, Shield, Check } 
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { notify } from '../lib/notify';
+import PageHeader from '../components/PageHeader';
 
 interface User {
   _id: string;
@@ -159,16 +160,14 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-600 mt-1">Manage system users, roles, and permissions</p>
-        </div>
-        <button type="button" className="btn btn-primary" onClick={openAdd}>
-          <Plus size={16} className="mr-2" />
-          Add User
-        </button>
-      </div>
+      <PageHeader
+        title="Users"
+        action={
+          <button type="button" className="btn" onClick={openAdd}>
+            <Plus size={16} className="mr-2" /> Add User
+          </button>
+        }
+      />
 
       <div className="card">
         <div className="flex items-end gap-4 flex-wrap">
@@ -255,7 +254,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
             <tr>

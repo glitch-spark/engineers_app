@@ -192,7 +192,7 @@ export default function InterviewDetailPage() {
             <ArrowLeft size={16} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">
+            <h1 className="page-title">
               {(iv.stage ? STAGES[iv.stage] || iv.stage : 'Interview')}
               {iv.companyName ? ` with ${iv.companyName}` : ''}
             </h1>

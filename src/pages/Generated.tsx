@@ -12,6 +12,7 @@ import * as api from '../api/endpoints';
 import type { ResumeJob, ResumeJobStatus, ResumeJobStep, ScreeningPair } from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumeTabs from '../components/ResumeTabs';
+import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import { useAuth } from '../auth/useAuth';
 
@@ -164,35 +165,30 @@ export default function GeneratedResumesPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Generated resumes</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            All resume builds — past and in-flight. Select rows to bulk download.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {polling && (
-            <span className="inline-flex items-center gap-1 text-xs text-blue-600">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Live
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => mutate()}
-            className="text-xs text-gray-500 hover:text-primary inline-flex items-center gap-1"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Refresh
-          </button>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Generated resumes"
+        action={
+          <div className="flex items-center gap-3">
+            {polling && (
+              <span className="inline-flex items-center gap-1 text-xs text-blue-600">
+                <Loader2 className="w-3 h-3 animate-spin" /> Live
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => mutate()}
+              className="text-xs text-gray-500 hover:text-primary inline-flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Refresh
+            </button>
+          </div>
+        }
+      />
       <ResumeTabs />
 
       {/* Filters + bulk actions — merged toolbar */}
-      <div className="flex flex-wrap items-end justify-between gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-end justify-between gap-3 bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
         <div className="flex items-end gap-3 flex-wrap">
           <div className="w-56">
             <label className="block text-xs text-gray-500 mb-1">Profile</label>
@@ -237,7 +233,7 @@ export default function GeneratedResumesPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
         {isLoading && jobs.length === 0 ? (
           <p className="p-6 text-sm text-gray-500 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading...

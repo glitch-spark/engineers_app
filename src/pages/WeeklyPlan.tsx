@@ -4,11 +4,12 @@ import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import 'react-quill-new/dist/quill.bubble.css';
 import Modal from '../components/Modal';
-import { Pencil, Trash2, Filter, Calendar, User, Eye } from 'lucide-react';
+import { Pencil, Trash2, Calendar, User, Eye } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { notify } from '../lib/notify';
+import PageHeader from '../components/PageHeader';
 
 const editorStyles = `
   .ql-editor { min-height: 200px; font-size: 14px; line-height: 1.5; }
@@ -262,11 +263,6 @@ export default function WeeklyPlanPage() {
     setCurrentPage(1);
   };
 
-  const applyFilters = () => {
-    setCurrentPage(1);
-    mutate();
-  };
-
   const openPreview = (plan: WeeklyPlan) => {
     setPreviewPlan(plan);
     setPreviewOpen(true);
@@ -285,47 +281,55 @@ export default function WeeklyPlanPage() {
   const weekOptions = Array.from({ length: 52 }, (_, i) => i + 1);
 
   return (
-    <div className="space-y-4">
+    <>
       <style>{editorStyles}</style>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Weekly Plans</h1>
-        <button type="button" className="btn" onClick={openAdd}>
-          <Calendar size={16} className="mr-2" />
-          Add Plan
-        </button>
-      </div>
-
-      <div className="flex items-end gap-3 flex-wrap">
-        <div className="flex items-end gap-3 flex-wrap">
-          <div>
-            <label className="block text-xs mb-1 text-gray-600">Year</label>
-            <select className="select focus-ring" value={year} onChange={(e) => setYear(e.target.value)}>
-              {yearOptions.map(y => (<option key={y} value={y}>{y}</option>))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs mb-1 text-gray-600">Week</label>
-            <select className="select focus-ring" value={weekNumber} onChange={(e) => setWeekNumber(e.target.value)}>
-              <option value="">All weeks</option>
-              {weekOptions.map(w => (<option key={w} value={w}>{formatWeekOptionLabel(Number(year), w)}</option>))}
-            </select>
-          </div>
-          {isAdmin && (
-            <div>
-              <label className="block text-xs mb-1 text-gray-600">User</label>
-              <select className="select focus-ring" value={userId} onChange={(e) => setUserId(e.target.value)}>
-                <option value="">All users</option>
-                {users.map((u) => (
-                  <option key={u._id} value={u._id}>{u.name || u.email}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          <button type="button" className="btn" onClick={applyFilters}>
-            <Filter size={16} className="mr-2" />
-            Apply
+      <div className="space-y-6">
+      <PageHeader
+        title="Weekly Plans"
+        action={
+          <button type="button" className="btn" onClick={openAdd}>
+            <Calendar size={16} className="mr-2" /> Add Plan
           </button>
+        }
+      />
+
+      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+        <div className="w-32">
+          <label className="block text-xs text-gray-500 mb-1">Year</label>
+          <select
+            className="select focus-ring w-full text-sm"
+            value={year}
+            onChange={(e) => { setYear(e.target.value); setCurrentPage(1); }}
+          >
+            {yearOptions.map(y => (<option key={y} value={y}>{y}</option>))}
+          </select>
         </div>
+        <div className="w-56">
+          <label className="block text-xs text-gray-500 mb-1">Week</label>
+          <select
+            className="select focus-ring w-full text-sm"
+            value={weekNumber}
+            onChange={(e) => { setWeekNumber(e.target.value); setCurrentPage(1); }}
+          >
+            <option value="">All weeks</option>
+            {weekOptions.map(w => (<option key={w} value={w}>{formatWeekOptionLabel(Number(year), w)}</option>))}
+          </select>
+        </div>
+        {isAdmin && (
+          <div className="w-56">
+            <label className="block text-xs text-gray-500 mb-1">User</label>
+            <select
+              className="select focus-ring w-full text-sm"
+              value={userId}
+              onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="">All users</option>
+              {users.map((u) => (
+                <option key={u._id} value={u._id}>{u.name || u.email}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {data && (
@@ -351,7 +355,7 @@ export default function WeeklyPlanPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
             <tr>
@@ -498,7 +502,7 @@ export default function WeeklyPlanPage() {
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Weekly Plan' : 'Add Weekly Plan'}>
-        <div className="space-y-4">
+        <div className="space-y-6">
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <div>
@@ -574,7 +578,7 @@ export default function WeeklyPlanPage() {
         title={previewPlan ? `Weekly Plan - Week ${previewPlan.weekNumber}` : 'Preview Plan'}
       >
         {previewPlan && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <label className="font-medium text-gray-600">Week</label>
@@ -646,6 +650,7 @@ export default function WeeklyPlanPage() {
           </div>
         )}
       </Modal>
-    </div>
+      </div>
+    </>
   );
 }

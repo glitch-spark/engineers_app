@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
+import PageHeader from '../components/PageHeader';
 import * as api from '../api/endpoints';
 import type { InterviewAnalyzeResult, InterviewAnalyzeStage, InterviewAnalyzeWeakSpot } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
@@ -72,17 +73,12 @@ export default function InterviewsAnalyzePage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Interviews</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Cross-interview rollup — find patterns, weak spots, and prep tips.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Interviews" />
       <InterviewTabs />
 
       {/* Filters */}
-      <div className="flex items-end gap-2 flex-wrap text-xs bg-white rounded-md border border-gray-100 shadow-sm p-3">
+      <div className="flex items-end gap-2 flex-wrap text-xs bg-white rounded-[12px] border border-gray-100 shadow-sm p-3">
         <div className="w-44">
           <label className="block mb-1 text-gray-600">Profile</label>
           <Select value={accountId} onChange={setAccountId} options={accountOptions} />
@@ -117,20 +113,20 @@ export default function InterviewsAnalyzePage() {
       </div>
 
       {!result && !running && (
-        <div className="bg-white rounded-md border border-gray-100 shadow-sm p-8 text-center text-sm text-gray-500">
+        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-8 text-center text-sm text-gray-500">
           Pick filters → click Analyze to run.
         </div>
       )}
 
       {running && (
-        <div className="bg-white rounded-md border border-gray-100 shadow-sm p-8 text-center text-sm text-gray-500">
+        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-8 text-center text-sm text-gray-500">
           <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
           Analyzing transcripts… 30-60s.
         </div>
       )}
 
       {result && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <StyleProfile result={result} />
           <HowToShine result={result} />
           <StageScoreboard stages={result.stages} />
@@ -161,10 +157,10 @@ export default function InterviewsAnalyzePage() {
 function StageScoreboard({ stages }: { stages: InterviewAnalyzeStage[] }) {
   if (!stages.length) return null;
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center gap-2 mb-3">
         <BarChart3 className="w-4 h-4 text-gray-500" />
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Score per stage</h2>
+        <h2 className="card-title uppercase tracking-wide">Score per stage</h2>
       </header>
       <div className="space-y-2">
         {stages.map((s) => (
@@ -193,12 +189,12 @@ function TopQuestions({ stages }: { stages: InterviewAnalyzeStage[] }) {
   const withQs = stages.filter((s) => s.topQuestions.length > 0);
   if (!withQs.length) return null;
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center gap-2 mb-3">
         <TrendingUp className="w-4 h-4 text-gray-500" />
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Most-asked questions per stage</h2>
+        <h2 className="card-title uppercase tracking-wide">Most-asked questions per stage</h2>
       </header>
-      <div className="space-y-4">
+      <div className="space-y-6">
         {withQs.map((s) => (
           <div key={s.stage}>
             <h3 className="text-xs font-semibold text-gray-700 mb-2">{s.stageLabel}</h3>
@@ -224,10 +220,10 @@ function TopQuestions({ stages }: { stages: InterviewAnalyzeStage[] }) {
 function WeakSpots({ weakSpots }: { weakSpots: InterviewAnalyzeWeakSpot[] }) {
   if (!weakSpots.length) return null;
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center gap-2 mb-3">
         <AlertTriangle className="w-4 h-4 text-amber-600" />
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Weak spots</h2>
+        <h2 className="card-title uppercase tracking-wide">Weak spots</h2>
       </header>
       <ul className="space-y-3">
         {weakSpots.map((w, i) => (
@@ -253,10 +249,10 @@ function PrepTips({ stages, overall }: { stages: InterviewAnalyzeStage[]; overal
   );
   if (!stagesWithDrills.length && !overall.length) return null;
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center gap-2 mb-3">
         <Lightbulb className="w-4 h-4 text-yellow-600" />
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Prep tips</h2>
+        <h2 className="card-title uppercase tracking-wide">Prep tips</h2>
       </header>
       {overall.length > 0 && (
         <div className="mb-4">
@@ -268,7 +264,7 @@ function PrepTips({ stages, overall }: { stages: InterviewAnalyzeStage[]; overal
           </ul>
         </div>
       )}
-      <div className="space-y-4">
+      <div className="space-y-6">
         {stagesWithDrills.map((s) => (
           <div key={s.stage} className="border-t border-gray-100 pt-3 first:border-t-0 first:pt-0">
             <h3 className="text-xs font-semibold text-gray-700 mb-2">{s.stageLabel}</h3>
@@ -299,10 +295,10 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
   const { styleProfile, signatureStrengths, blindSpots } = result;
   if (!styleProfile && !signatureStrengths.length && !blindSpots.length) return null;
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center gap-2 mb-3">
         <Mic className="w-4 h-4 text-indigo-600" />
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Your interview style</h2>
+        <h2 className="card-title uppercase tracking-wide">Your interview style</h2>
       </header>
       {styleProfile && (
         <p className="text-sm text-gray-800 mb-4 leading-relaxed">{styleProfile}</p>
@@ -337,10 +333,10 @@ function HowToShine({ result }: { result: InterviewAnalyzeResult }) {
   const { howToShine, interviewTactics } = result;
   if (!howToShine.length && !interviewTactics.length) return null;
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center gap-2 mb-3">
         <Target className="w-4 h-4 text-blue-600" />
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">How to shine next time</h2>
+        <h2 className="card-title uppercase tracking-wide">How to shine next time</h2>
       </header>
       {howToShine.length > 0 && (
         <div className="mb-3">
@@ -374,12 +370,12 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
   );
   if (!withSignal.length) return null;
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center gap-2 mb-3">
         <MessageCircle className="w-4 h-4 text-gray-500" />
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Per-stage patterns</h2>
+        <h2 className="card-title uppercase tracking-wide">Per-stage patterns</h2>
       </header>
-      <div className="space-y-5">
+      <div className="space-y-6">
         {withSignal.map((s) => (
           <div key={s.stage} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
             <h3 className="text-sm font-semibold text-gray-800 mb-2">{s.stageLabel}</h3>
@@ -456,10 +452,10 @@ function RedFlagsCard({
 }: { redFlags: string[]; uncertaintyTopics: string[] }) {
   if (!redFlags.length && !uncertaintyTopics.length) return null;
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center gap-2 mb-3">
         <Flame className="w-4 h-4 text-rose-600" />
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Watch list</h2>
+        <h2 className="card-title uppercase tracking-wide">Watch list</h2>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {redFlags.length > 0 && (
@@ -571,11 +567,11 @@ function FollowUpChat({
   };
 
   return (
-    <section className="bg-white rounded-md border border-gray-100 shadow-sm p-5">
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
       <header className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Follow up</h2>
+          <h2 className="card-title uppercase tracking-wide">Follow up</h2>
         </div>
         <button
           type="button"

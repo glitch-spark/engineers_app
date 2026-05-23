@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
-import type { PageFormat } from '../lib/resumeStyles';
-import { PAGE_FORMATS } from '../lib/resumeStyles';
 import { notify } from '../lib/notify';
 
 type AccountShape = {
@@ -11,7 +9,6 @@ type AccountShape = {
   name: string;
   styleTemplate?: string;
   styleTemplateName?: string;
-  pageFormat?: PageFormat;
 };
 
 export default function ResumeStylingEditor({
@@ -27,13 +24,11 @@ export default function ResumeStylingEditor({
   );
 
   const [saving, setSaving] = useState(false);
-  const [pageFormat, setPageFormat] = useState<PageFormat>('A4');
   const [templateHtml, setTemplateHtml] = useState('');
   const [templateName, setTemplateName] = useState('');
 
   useEffect(() => {
     if (!account) return;
-    setPageFormat((account.pageFormat as PageFormat) || 'A4');
     setTemplateHtml(account.styleTemplate || '');
     setTemplateName(account.styleTemplateName || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,12 +40,11 @@ export default function ResumeStylingEditor({
       await api.updateAccount(accountId, {
         styleTemplate: templateHtml,
         styleTemplateName: templateName,
-        pageFormat,
       });
-      notify.success('Resume settings saved');
+      notify.success('Template saved');
       mutate();
     } catch (err) {
-      notify.error(err, 'Failed to save settings');
+      notify.error(err, 'Failed to save template');
     } finally {
       setSaving(false);
     }
@@ -68,7 +62,7 @@ export default function ResumeStylingEditor({
   return (
     <div className="flex flex-col">
       {showHeader && (
-        <header className="border border-gray-100 bg-white px-6 py-4 rounded-2xl flex items-center justify-between mb-3 shadow-sm">
+        <header className="border border-gray-100 bg-white px-6 py-4 rounded-[12px] flex items-center justify-between mb-3 shadow-sm">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">{account.name}</h2>
             <p className="text-xs text-gray-500">
@@ -76,30 +70,18 @@ export default function ResumeStylingEditor({
               preserving structure and styles.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs text-gray-500 flex items-center gap-2">
-              Page
-              <select
-                value={pageFormat}
-                onChange={(e) => setPageFormat(e.target.value as PageFormat)}
-                className="text-sm border border-gray-200 rounded-md px-2 py-1"
-              >
-                {PAGE_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </label>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save
-            </button>
-          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Save
+          </button>
         </header>
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-6 space-y-4">
         <HtmlTemplatePane
           html={templateHtml}
           name={templateName}
@@ -111,19 +93,9 @@ export default function ResumeStylingEditor({
 
         {/* Save always rendered here too — when showHeader=false (embedded
             in the profile page), the header Save above is hidden, so the
-            template + page format had no way to persist. */}
+            template had no way to persist. */}
         {!showHeader && (
-          <div className="flex items-center justify-between border-t border-gray-100 pt-3">
-            <label className="text-xs text-gray-500 flex items-center gap-2">
-              Page
-              <select
-                value={pageFormat}
-                onChange={(e) => setPageFormat(e.target.value as PageFormat)}
-                className="text-sm border border-gray-200 rounded-md px-2 py-1"
-              >
-                {PAGE_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </label>
+          <div className="flex justify-end pt-3">
             <button
               onClick={handleSave}
               disabled={saving}
@@ -164,14 +136,6 @@ function HtmlTemplatePane({
 
   return (
     <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold text-gray-800">HTML template</h3>
-        <p className="text-xs text-gray-500">
-          Upload an <code>.html</code> file. Scripts and iframes are stripped on save. Click
-          <span className="font-medium"> Save </span> to persist.
-        </p>
-      </div>
-
       <label
         className="block border-2 border-dashed border-gray-200 rounded-[8px] p-6 text-center cursor-pointer hover:border-primary hover:bg-blue-50/30 transition"
         onDragOver={(e) => { e.preventDefault(); }}

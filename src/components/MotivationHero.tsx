@@ -12,7 +12,7 @@ export default function MotivationHero({ userId }: { userId?: string | null }) {
 
   return (
     <div
-      className="relative bg-white rounded-md border border-gray-100 shadow-sm pl-5 pr-5 py-5 overflow-hidden"
+      className="relative bg-white rounded-[12px] border border-gray-100 shadow-sm pl-5 pr-5 py-5 overflow-hidden"
       style={{ borderLeft: `4px solid ${colors.bar}` }}
     >
       <div className="mb-2">

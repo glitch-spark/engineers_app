@@ -3,6 +3,7 @@ import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import { FileDown, Loader2, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import ResumeTabs from '../components/ResumeTabs';
+import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -183,16 +184,10 @@ export default function ResumeGeneratorPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-gray-900">Resume Generator</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Pick one or more profiles, paste a JD, optionally add screening questions. Each profile
-          generates its own resume in the background.
-        </p>
-      </header>
+      <PageHeader title="Resume Generator" />
       <ResumeTabs />
 
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+      <div className="bg-white rounded-[12px] border border-gray-100 p-4 shadow-sm">
         {accountsLoading ? (
           <p className="text-sm text-gray-500">Loading profiles...</p>
         ) : accounts.length === 0 ? (
@@ -269,7 +264,7 @@ export default function ResumeGeneratorPage() {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5 shadow-sm">
+      <form onSubmit={handleSubmit} className="bg-white rounded-[12px] border border-gray-100 p-6 space-y-5 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium mb-1 text-gray-600">

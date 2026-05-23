@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { BarChart3, TrendingUp, DollarSign, FileText } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
+import PageHeader from '../components/PageHeader';
 
 export default function AccountantsPage() {
   const { ready } = useAuth();
@@ -40,22 +41,24 @@ export default function AccountantsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Accountant Dashboard</h1>
-        <div className="flex items-center space-x-2">
-          <label className="text-sm text-gray-600">Period:</label>
-          <select
-            className="select focus-ring text-sm"
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-          >
-            <option value="week">Week</option>
-            <option value="month">Month</option>
-            <option value="quarter">Quarter</option>
-            <option value="year">Year</option>
-          </select>
-        </div>
-      </div>
+      <PageHeader
+        title="Accountant Dashboard"
+        action={
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Period:</label>
+            <select
+              className="select focus-ring text-sm"
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+            >
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+              <option value="quarter">Quarter</option>
+              <option value="year">Year</option>
+            </select>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4">
@@ -118,7 +121,7 @@ export default function AccountantsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-0 overflow-hidden">
           <div className="p-4 border-b">
-            <h3 className="text-lg font-semibold">Recent Transactions</h3>
+            <h3 className="section-title">Recent Transactions</h3>
           </div>
           <div className="max-h-96 overflow-y-auto">
             {isLoading ? (
@@ -157,7 +160,7 @@ export default function AccountantsPage() {
 
         <div className="card p-0 overflow-hidden">
           <div className="p-4 border-b">
-            <h3 className="text-lg font-semibold">Account Balances</h3>
+            <h3 className="section-title">Account Balances</h3>
           </div>
           <div className="max-h-96 overflow-y-auto">
             {isLoading ? (
@@ -187,7 +190,7 @@ export default function AccountantsPage() {
       </div>
 
       <div className="card p-4">
-        <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+        <h3 className="section-title mb-4">Quick Actions</h3>
         <div className="flex flex-wrap gap-3">
           <button className="btn bg-blue-600 hover:bg-blue-700 text-white">
             <BarChart3 className="w-4 h-4 mr-2" />

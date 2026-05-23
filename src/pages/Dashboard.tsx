@@ -5,6 +5,7 @@ import { DollarSign, Hash, BarChart3, Clock, CheckCircle2, XCircle, Loader2 } fr
 import TransactionChart from '../components/TransactionChart';
 import DashboardOverview from '../components/dashboard/DashboardOverview';
 import MotivationHero from '../components/MotivationHero';
+import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 
@@ -38,10 +39,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-3">Dashboard</h1>
-        <MotivationHero userId={user?.id} />
-      </div>
+      <PageHeader title="Dashboard" />
+      <MotivationHero userId={user?.id} />
 
       <div className="flex items-center gap-1 border-b border-gray-200">
         <TabBtn active={tab === 'performance'} onClick={() => setTab('performance')}>
@@ -104,7 +103,7 @@ function TransactionsView({ isAdmin }: { isAdmin: boolean }) {
   return (
     <section className="space-y-3">
       <header className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Transactions</h2>
+        <h2 className="card-title uppercase tracking-wide">Transactions</h2>
         <div className="flex items-center gap-2">
           <select
             value={year}
@@ -186,9 +185,9 @@ function TransactionsView({ isAdmin }: { isAdmin: boolean }) {
             />
           </div>
 
-          <div className="bg-white rounded-md border border-gray-100 shadow-sm p-4">
+          <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
             <header className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Monthly</h3>
+              <h3 className="card-title uppercase tracking-wide">Monthly</h3>
               <span className="text-xs text-gray-400">amounts per month, {year}</span>
             </header>
             <TransactionChart data={chartData} />
