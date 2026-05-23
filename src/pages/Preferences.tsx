@@ -71,7 +71,7 @@ function GlobalPromptsCard() {
           value={resumePrompt}
           onChange={setResumePrompt}
           label="Global resume content prompt"
-          hint="Empty = use the built-in default."
+          hint="Empty = no global guidance is sent to the LLM."
         />
       </section>
 
@@ -88,7 +88,7 @@ function GlobalPromptsCard() {
           value={screeningPrompt}
           onChange={setScreeningPrompt}
           label="Global screening prompt"
-          hint="Empty = use the built-in default."
+          hint="Empty = no global guidance is sent to the LLM."
         />
       </section>
 

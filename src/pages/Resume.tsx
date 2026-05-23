@@ -23,13 +23,26 @@ export default function ResumeGeneratorPage() {
 
   const [accountId, setAccountId] = useState('');
   const selectedAccount = accounts.find((a) => a._id === accountId);
-  const selectedNeedsSetup = selectedAccount && !selectedAccount.hasExperience;
+  const selectedNeedsSetup = !!selectedAccount && !selectedAccount.hasTemplate;
+
+  // Warn when neither profile- nor user-level resume prompt is set.
+  // Generation still works (system rules + template + JD only), but output
+  // quality usually drops without guidance — flag it so the user knows.
+  const { data: profile } = useSWR('me-profile-for-resume', () => api.getProfile());
+  const { data: selectedAccountFull } = useSWR(
+    accountId ? ['account-prompt-check', accountId] : null,
+    () => api.getAccount(accountId) as Promise<{ resumePromptBody?: string }>,
+  );
+  const promptMissing =
+    !!accountId &&
+    !((selectedAccountFull?.resumePromptBody || '').trim()) &&
+    !((profile?.user.resumePromptBody || '').trim());
 
   const accountOptions = useMemo(
     () =>
       accounts.map((a) => ({
         value: a._id,
-        label: `${a.name}${a.title ? ` — ${a.title}` : ''}${a.hasExperience ? '' : ' (needs setup)'}`,
+        label: `${a.name}${a.hasTemplate ? '' : ' (no template yet)'}`,
       })),
     [accounts]
   );
@@ -59,20 +72,19 @@ export default function ResumeGeneratorPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!accountId || selectedNeedsSetup) {
-      notify.warn('Pick a profile that has experience filled in first');
+      notify.warn('Pick a profile with an uploaded HTML template first');
       return;
     }
     if (!company.trim() || !jobDescription.trim()) {
       notify.warn('Company and job description are required');
       return;
     }
-    // Gate: refuse to submit until the profile has a CONVERTED template.
-    // Resume Styles → upload .html → "Convert to template".
+    // Gate: profile must have an HTML template uploaded.
     try {
       const acc = (await api.getAccount(accountId)) as Record<string, unknown>;
-      const annotated = (acc.styleTemplateAnnotated as string | undefined) || '';
-      if (!annotated.trim()) {
-        notify.warn('Convert your HTML template on the Resume Styles page before generating.');
+      const tpl = (acc.styleTemplate as string | undefined) || '';
+      if (!tpl.trim()) {
+        notify.warn('Upload an HTML template on the Resume Styles tab before generating.');
         return;
       }
     } catch {
@@ -156,8 +168,19 @@ export default function ResumeGeneratorPage() {
           <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
             <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <div>
-              This profile has no <strong>experience</strong> filled in.{' '}
-              <Link to="/accounts" className="font-medium underline">Edit on Profiles</Link> first.
+              This profile has no <strong>HTML template</strong> yet.{' '}
+              <Link to={`/accounts/${selectedAccount?._id}`} className="font-medium underline">Upload one</Link> first.
+            </div>
+          </div>
+        )}
+        {!selectedNeedsSetup && promptMissing && (
+          <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div>
+              No <strong>resume prompt</strong> set for this profile or globally — the LLM will run
+              with structural rules only, which usually hurts output quality. Add one on the{' '}
+              <Link to={`/accounts/${selectedAccount?._id}`} className="font-medium underline">profile</Link>{' '}
+              or the <Link to="/preferences" className="font-medium underline">global Prompts page</Link>.
             </div>
           </div>
         )}

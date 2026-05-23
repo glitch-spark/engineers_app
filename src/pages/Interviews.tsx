@@ -439,12 +439,12 @@ export default function InterviewsPage() {
 
   const accountOptions = useMemo(() => [
     { value: '', label: 'All' },
-    ...accounts.map((a) => ({ value: a._id, label: a.name ? `${a.name}${a.title ? ` — ${a.title}` : ''}` : a._id })),
+    ...accounts.map((a) => ({ value: a._id, label: a.name || a._id })),
   ], [accounts]);
 
   // Form-only account list — owner-scoped (admin sees all, staff sees own).
   const accountSelectOptions = useMemo(() =>
-    ownAccounts.map((a) => ({ value: a._id, label: a.name ? `${a.name}${a.title ? ` — ${a.title}` : ''}` : a._id })),
+    ownAccounts.map((a) => ({ value: a._id, label: a.name || a._id })),
   [ownAccounts]);
 
   const creatorOptions = useMemo(() => [
@@ -762,7 +762,7 @@ export default function InterviewsPage() {
                   <div className="font-medium">
                     {(() => {
                       const a = accounts.find((x) => x._id === form.accountId);
-                      return a ? `${a.name || a.title || a._id}` : form.accountId || '—';
+                      return a ? (a.name || a._id) : form.accountId || '—';
                     })()}
                   </div>
                 </div>

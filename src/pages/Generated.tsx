@@ -64,7 +64,7 @@ export default function GeneratedResumesPage() {
     );
     return [
       { value: '', label: 'All profiles' },
-      ...own.map((a) => ({ value: a._id, label: `${a.name}${a.title ? ` — ${a.title}` : ''}` })),
+      ...own.map((a) => ({ value: a._id, label: a.name })),
     ];
   }, [accountsData, user?.id]);
 

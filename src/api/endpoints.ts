@@ -111,22 +111,6 @@ export const updateProfile = (body: {
   screeningPromptBody?: string;
 }) => putJSON<{ message: string; user: ProfileShape }>('/profile', body);
 
-export const getResumeDefaultPrompt = () =>
-  apiFetch<{ promptBody: string }>('/resume/default-prompt');
-
-export const getResumeDefaultScreeningPrompt = () =>
-  apiFetch<{ promptBody: string }>('/resume/default-screening-prompt');
-
-export interface AnnotateTemplateResult {
-  annotated: string;
-  missingRequired: string[];
-  missingRecommended: string[];
-  valid: boolean;
-}
-
-export const annotateResumeTemplate = (accountId: string) =>
-  postJSON<AnnotateTemplateResult>(`/resume/templates/${accountId}/annotate`, {});
-
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
   putJSON<{ message: string }>('/profile/password', body);
 
@@ -239,8 +223,6 @@ export const deleteWeeklyPlan = (id: string) => del<{ message: string }>(`/weekl
 export interface AccountLookup {
   _id: string;
   name: string;
-  title?: string | null;
-  hasExperience?: boolean;
   hasTemplate?: boolean;
   createdBy?: string;
 }
