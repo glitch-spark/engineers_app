@@ -47,6 +47,7 @@ export interface TransactionListParams {
   fromSearch?: string;
   toSearch?: string;
   userSearch?: string;
+  payMethod?: 'crypto' | 'card' | '';
 }
 
 export interface TransactionSummary {
@@ -179,21 +180,6 @@ export const deleteTransaction = (id: string) => del<{ ok: boolean }>(`/transact
 export const transactionSummary = (params?: { userId?: string; year?: number }) =>
   apiFetch<TransactionSummary>(`/transactions/summary${qs(params)}`);
 
-// ---------- cardlinks ----------
-
-export const listCardlinks = (params?: TransactionListParams) =>
-  apiFetch<{ cardlinks: Record<string, unknown>[]; pagination: Pagination }>(
-    `/cardlinks${qs(params)}`
-  );
-
-export const createCardlink = (body: Record<string, unknown>) =>
-  postJSON<Record<string, unknown>>('/cardlinks', body);
-
-export const updateCardlink = (id: string, body: Record<string, unknown>) =>
-  putJSON<Record<string, unknown>>(`/cardlinks/${id}`, body);
-
-export const deleteCardlink = (id: string) => del<{ ok: boolean }>(`/cardlinks/${id}`);
-
 // ---------- weekly plans ----------
 
 export const listWeeklyPlans = (params?: {
@@ -224,6 +210,7 @@ export interface AccountLookup {
   _id: string;
   name: string;
   hasTemplate?: boolean;
+  hasPrompt?: boolean;
   createdBy?: string;
 }
 

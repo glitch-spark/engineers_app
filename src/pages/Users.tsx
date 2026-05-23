@@ -363,10 +363,10 @@ export default function UsersPage() {
                           <Check size={14} />
                         </button>
                       )}
-                      <button className="btn btn-sm" onClick={() => openEdit(user)} title="Edit User">
+                      <button className="btn-icon" onClick={() => openEdit(user)} title="Edit User">
                         <Pencil size={14} />
                       </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => remove(user._id)} title="Delete User">
+                      <button className="btn-icon hover:text-red-600" onClick={() => remove(user._id)} title="Delete User">
                         <Trash2 size={14} />
                       </button>
                     </div>

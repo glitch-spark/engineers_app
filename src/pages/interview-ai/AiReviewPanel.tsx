@@ -150,7 +150,7 @@ export default function AiReviewPanel({ selectedIds }: Props) {
         <div>
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Skills</h3>
           {skills.length === 0 ? (
-            <div className="text-sm text-gray-500 border border-dashed border-gray-200 rounded-xl p-4">
+            <div className="text-sm text-gray-500 border border-dashed border-gray-200 rounded-[8px] p-4">
               No skills defined yet. {/* admin will see Review Ideas tab */}
             </div>
           ) : (
@@ -166,7 +166,7 @@ export default function AiReviewPanel({ selectedIds }: Props) {
                     onClick={() => selectSkill(s._id)}
                     disabled={disabled}
                     className={
-                      'text-left p-3 rounded-xl border transition ' +
+                      'text-left p-3 rounded-[8px] border transition ' +
                       (active
                         ? 'border-primary bg-blue-50 ring-2 ring-primary/20'
                         : 'border-gray-200 bg-white hover:border-gray-300') +

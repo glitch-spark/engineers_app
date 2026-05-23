@@ -7,6 +7,8 @@ import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { notify } from '../lib/notify';
 
+type PayMethod = 'crypto' | 'card';
+
 type Tx = {
   _id: string;
   userId?: { _id: string; email?: string; name?: string };
@@ -17,6 +19,8 @@ type Tx = {
   status: 'pending' | 'approved' | 'rejected';
   ownerEmail?: string;
   ownerName?: string;
+  payMethod?: PayMethod | null;
+  cardLast4?: string | null;
 };
 
 export default function TransactionsPage() {
@@ -26,18 +30,20 @@ export default function TransactionsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [userId, setUserId] = useState('');
+  const [payMethodFilter, setPayMethodFilter] = useState<'' | PayMethod>('');
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   const { data, mutate, isLoading } = useSWR(
-    ['transactions', from, to, isAdmin ? userId : '', currentPage, pageSize] as const,
+    ['transactions', from, to, isAdmin ? userId : '', payMethodFilter, currentPage, pageSize] as const,
     () => api.listTransactions({
       page: currentPage,
       limit: pageSize,
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
       ...(isAdmin && userId ? { userId } : {}),
+      ...(payMethodFilter ? { payMethod: payMethodFilter } : {}),
     })
   );
 
@@ -49,11 +55,20 @@ export default function TransactionsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    date: string;
+    amount: number;
+    description: string;
+    notes: string;
+    payMethod: '' | PayMethod;
+    cardLast4: string;
+  }>({
     date: '',
     amount: 0,
     description: '',
     notes: '',
+    payMethod: '',
+    cardLast4: '',
   });
 
   useEffect(() => {
@@ -63,6 +78,8 @@ export default function TransactionsPage() {
         amount: editing.amount,
         description: editing.description || '',
         notes: editing.notes || '',
+        payMethod: (editing.payMethod as '' | PayMethod) || '',
+        cardLast4: editing.cardLast4 || '',
       });
     }
   }, [editing]);
@@ -74,6 +91,8 @@ export default function TransactionsPage() {
       amount: 0,
       description: '',
       notes: '',
+      payMethod: '',
+      cardLast4: '',
     });
     setError('');
     setOpen(true);
@@ -88,10 +107,26 @@ export default function TransactionsPage() {
       notify.error('Amount is required');
       return;
     }
+    if (!form.payMethod) {
+      notify.error('Pay method is required');
+      return;
+    }
+    if (form.payMethod === 'card' && !/^\d{4}$/.test(form.cardLast4)) {
+      notify.error('Last 4 digits of the card are required (exactly 4 digits)');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
-      const body = { ...form, ...(editing ? { userId: editing.userId?._id } : {}) };
+      const body: Record<string, unknown> = {
+        date: form.date,
+        amount: form.amount,
+        description: form.description,
+        notes: form.notes,
+        payMethod: form.payMethod,
+        cardLast4: form.payMethod === 'card' ? form.cardLast4 : null,
+        ...(editing ? { userId: editing.userId?._id } : {}),
+      };
       if (editing) {
         await api.updateTransaction(editing._id, body);
         notify.success('Transaction updated');
@@ -142,6 +177,12 @@ export default function TransactionsPage() {
   const transactions = (data?.transactions as Tx[]) || [];
   const pagination = data?.pagination;
 
+  const formatPayMethod = (t: Tx): string => {
+    if (t.payMethod === 'card') return `**** ${t.cardLast4 || '----'}`;
+    if (t.payMethod === 'crypto') return 'Crypto';
+    return '—';
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -151,9 +192,9 @@ export default function TransactionsPage() {
         </button>
       </div>
 
-      {isAdmin && (
-        <div className="flex items-end gap-3 flex-wrap">
-          <div className="flex items-end gap-3 flex-wrap">
+      <div className="flex items-end gap-3 flex-wrap">
+        {isAdmin && (
+          <>
             <div>
               <label className="block text-xs mb-1 text-gray-600">From</label>
               <input
@@ -187,12 +228,24 @@ export default function TransactionsPage() {
                 ))}
               </select>
             </div>
-            <button type="button" className="btn" onClick={applyFilters}>
-              <Filter size={16} /> Apply
-            </button>
-          </div>
+          </>
+        )}
+        <div>
+          <label className="block text-xs mb-1 text-gray-600">Pay method</label>
+          <select
+            className="select focus-ring"
+            value={payMethodFilter}
+            onChange={(e) => setPayMethodFilter(e.target.value as '' | PayMethod)}
+          >
+            <option value="">All methods</option>
+            <option value="crypto">Crypto</option>
+            <option value="card">Card</option>
+          </select>
         </div>
-      )}
+        <button type="button" className="btn" onClick={applyFilters}>
+          <Filter size={16} /> Apply
+        </button>
+      </div>
 
       {data && (
         <div className="flex items-center justify-between">
@@ -225,6 +278,7 @@ export default function TransactionsPage() {
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">Amount</th>
               <th className="px-3 py-2">Description</th>
+              <th className="px-3 py-2">Pay method</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Owner</th>
               <th className="px-3 py-2 w-48">Actions</th>
@@ -233,7 +287,7 @@ export default function TransactionsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   <div className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
                     Loading transactions...
@@ -242,7 +296,7 @@ export default function TransactionsPage() {
               </tr>
             ) : transactions.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-gray-500">No transactions found.</td>
+                <td colSpan={7} className="px-3 py-6 text-center text-gray-500">No transactions found.</td>
               </tr>
             ) : (
               transactions.map((t) => {
@@ -254,13 +308,14 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-3 py-2">${Number(t.amount || 0).toFixed(2)}</td>
                     <td className="px-3 py-2">{t.description || '—'}</td>
+                    <td className="px-3 py-2">{formatPayMethod(t)}</td>
                     <td className="px-3 py-2">{t.status}</td>
                     <td className="px-3 py-2">{t.ownerName || t.userId?.name || '—'}</td>
                     <td className="px-3 py-2">
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex gap-1 flex-wrap">
                         <button
                           type="button"
-                          className="btn"
+                          className="btn-icon"
                           onClick={() => { setEditing(t); setError(''); setOpen(true); }}
                           disabled={!isPending && !isAdmin}
                           title="Edit"
@@ -269,7 +324,7 @@ export default function TransactionsPage() {
                         </button>
                         <button
                           type="button"
-                          className="btn"
+                          className="btn-icon"
                           onClick={() => remove(t)}
                           disabled={!isPending && !isAdmin}
                           title="Delete"
@@ -278,10 +333,10 @@ export default function TransactionsPage() {
                         </button>
                         {isAdmin && isPending && (
                           <>
-                            <button type="button" className="btn" onClick={() => setStatus(t, 'approved')} title="Approve">
+                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'approved')} title="Approve">
                               <CheckCircle size={16} />
                             </button>
-                            <button type="button" className="btn" onClick={() => setStatus(t, 'rejected')} title="Reject">
+                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'rejected')} title="Reject">
                               <XCircle size={16} />
                             </button>
                           </>
@@ -381,12 +436,46 @@ export default function TransactionsPage() {
             value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
           />
+          <div>
+            <label className="block text-xs mb-1 text-gray-600">Pay method <span className="text-red-500">*</span></label>
+            <select
+              className="select focus-ring w-full"
+              value={form.payMethod}
+              onChange={(e) => {
+                const v = e.target.value as '' | PayMethod;
+                setForm({ ...form, payMethod: v, cardLast4: v === 'card' ? form.cardLast4 : '' });
+              }}
+            >
+              <option value="">Select method</option>
+              <option value="crypto">Crypto</option>
+              <option value="card">Card</option>
+            </select>
+          </div>
+          {form.payMethod === 'card' && (
+            <div>
+              <label className="block text-xs mb-1 text-gray-600">Last 4 digits of card <span className="text-red-500">*</span></label>
+              <input
+                className="input"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="1234"
+                value={form.cardLast4}
+                onChange={(e) => setForm({ ...form, cardLast4: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+              />
+            </div>
+          )}
           <div className="flex gap-2 justify-end">
             <button
               type="button"
               className="btn"
               onClick={save}
-              disabled={!form.date || !form.amount || saving}
+              disabled={
+                !form.date ||
+                !form.amount ||
+                !form.payMethod ||
+                (form.payMethod === 'card' && !/^\d{4}$/.test(form.cardLast4)) ||
+                saving
+              }
             >
               {saving
                 ? editing ? 'Saving...' : 'Creating...'

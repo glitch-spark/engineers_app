@@ -486,14 +486,14 @@ export default function InterviewsPage() {
         <td className="px-3 py-2">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</td>
         <td className="px-3 py-2">
           {iv.stage ? (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
               {stageLabel(iv.stage)}
             </span>
           ) : <span className="text-gray-400">—</span>}
         </td>
         <td className="px-3 py-2">
           {iv.status ? (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
               {statusLabel(iv.status)}
             </span>
           ) : <span className="text-gray-400">—</span>}
@@ -502,11 +502,11 @@ export default function InterviewsPage() {
         <td className="px-3 py-2">{iv.interviewerName || <span className="text-gray-400">—</span>}</td>
         <td className="px-3 py-2">{account?.name || account?.email || '—'}</td>
         <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-          <div className="flex gap-2 whitespace-nowrap">
-            <Link to={`/interviews/${iv._id}`} className="btn" title="Open"><Eye size={16} /></Link>
+          <div className="flex gap-1 whitespace-nowrap">
+            <Link to={`/interviews/${iv._id}`} className="btn-icon" title="Open"><Eye size={16} /></Link>
             <button
               type="button"
-              className="btn"
+              className="btn-icon"
               onClick={() => openUpdate(iv)}
               disabled={!editable}
               title={editable ? 'Update' : 'Only the creator or an admin can update'}
@@ -515,7 +515,7 @@ export default function InterviewsPage() {
             </button>
             <button
               type="button"
-              className="btn"
+              className="btn-icon"
               onClick={() => openDelete(iv)}
               disabled={!editable}
               title={editable ? 'Delete' : 'Only the creator or an admin can delete'}
@@ -537,12 +537,12 @@ export default function InterviewsPage() {
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             {iv.stage && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
                 {stageLabel(iv.stage)}
               </span>
             )}
             {iv.status && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
                 {statusLabel(iv.status)}
               </span>
             )}
@@ -564,10 +564,10 @@ export default function InterviewsPage() {
           <div className="text-gray-500">Creator</div>
           <div>{iv.ownerName || creator?.name || iv.ownerEmail || creator?.email || '—'}</div>
         </div>
-        <div className="flex gap-2 pt-2 border-t border-gray-100">
-          <Link to={`/interviews/${iv._id}`} className="btn" title="Open"><Eye size={16} /></Link>
-          <button type="button" className="btn" onClick={() => openUpdate(iv)} disabled={!editable} title="Update"><Pencil size={16} /></button>
-          <button type="button" className="btn" onClick={() => openDelete(iv)} disabled={!editable} title="Delete"><Trash2 size={16} /></button>
+        <div className="flex gap-1 pt-2 border-t border-gray-100">
+          <Link to={`/interviews/${iv._id}`} className="btn-icon" title="Open"><Eye size={16} /></Link>
+          <button type="button" className="btn-icon" onClick={() => openUpdate(iv)} disabled={!editable} title="Update"><Pencil size={16} /></button>
+          <button type="button" className="btn-icon" onClick={() => openDelete(iv)} disabled={!editable} title="Delete"><Trash2 size={16} /></button>
         </div>
       </div>
     );
@@ -770,7 +770,7 @@ export default function InterviewsPage() {
                   <div className="text-gray-500 text-xs">Stage</div>
                   <div>
                     {form.stage ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(form.stage)}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${stageBadgeClass(form.stage)}`}>
                         {stageLabel(form.stage)}
                       </span>
                     ) : <span className="text-gray-400">—</span>}
@@ -780,7 +780,7 @@ export default function InterviewsPage() {
                   <div className="text-gray-500 text-xs">Status</div>
                   <div>
                     {form.status ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(form.status)}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${statusBadgeClass(form.status)}`}>
                         {statusLabel(form.status)}
                       </span>
                     ) : <span className="text-gray-400">—</span>}

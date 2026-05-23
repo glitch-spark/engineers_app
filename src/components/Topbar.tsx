@@ -42,7 +42,7 @@ export default function Topbar() {
         <div className="flex items-center gap-4" ref={ref}>
           <div className="relative">
             <button
-              className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group"
+              className="flex items-center gap-3 p-2 rounded-[8px] hover:bg-gray-100 transition-all duration-200 group"
               onClick={() => setOpen(v => !v)}
               aria-haspopup="menu"
               aria-expanded={open}

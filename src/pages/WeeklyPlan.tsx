@@ -424,19 +424,19 @@ export default function WeeklyPlanPage() {
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" className="btn" onClick={() => openPreview(plan)} title="Preview">
+                    <div className="flex gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" className="btn-icon" onClick={() => openPreview(plan)} title="Preview">
                         <Eye size={16} />
                       </button>
                       <button
                         type="button"
-                        className="btn"
+                        className="btn-icon"
                         onClick={() => { setEditing(plan); setError(''); setOpen(true); }}
                         title="Edit"
                       >
                         <Pencil size={16} />
                       </button>
-                      <button type="button" className="btn" onClick={() => remove(plan)} title="Delete">
+                      <button type="button" className="btn-icon" onClick={() => remove(plan)} title="Delete">
                         <Trash2 size={16} />
                       </button>
                     </div>

@@ -191,50 +191,50 @@ export default function GeneratedResumesPage() {
       </header>
       <ResumeTabs />
 
-      {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap bg-white rounded-2xl border border-gray-100 px-4 py-3 shadow-sm">
-        <div className="w-56">
-          <label className="block text-xs text-gray-500 mb-1">Profile</label>
-          <Select
-            value={filterAccountId}
-            onChange={(v) => { setFilterAccountId(v); setPage(1); }}
-            options={profileOptions}
-          />
+      {/* Filters + bulk actions — merged toolbar */}
+      <div className="flex flex-wrap items-end justify-between gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3 shadow-sm">
+        <div className="flex items-end gap-3 flex-wrap">
+          <div className="w-56">
+            <label className="block text-xs text-gray-500 mb-1">Profile</label>
+            <Select
+              value={filterAccountId}
+              onChange={(v) => { setFilterAccountId(v); setPage(1); }}
+              options={profileOptions}
+            />
+          </div>
+          <div className="w-56">
+            <label className="block text-xs text-gray-500 mb-1">Company</label>
+            <input
+              className="input w-full text-sm"
+              placeholder="Filter by company name"
+              value={companyInput}
+              onChange={(e) => setCompanyInput(e.target.value)}
+            />
+          </div>
+          {(filterAccountId || companyFilter) && (
+            <button
+              type="button"
+              onClick={() => { setFilterAccountId(''); setCompanyInput(''); setCompanyFilter(''); setPage(1); }}
+              className="text-xs text-gray-500 hover:text-primary pb-2"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
-        <div className="w-56">
-          <label className="block text-xs text-gray-500 mb-1">Company</label>
-          <input
-            className="input w-full text-sm"
-            placeholder="Filter by company name"
-            value={companyInput}
-            onChange={(e) => setCompanyInput(e.target.value)}
-          />
-        </div>
-        {(filterAccountId || companyFilter) && (
+        <div className="flex items-center gap-3 pb-1">
+          <span className="text-xs text-gray-500">
+            {someChecked ? `${selected.size} selected` : 'Select rows for bulk actions'}
+          </span>
           <button
             type="button"
-            onClick={() => { setFilterAccountId(''); setCompanyInput(''); setCompanyFilter(''); setPage(1); }}
-            className="text-xs text-gray-500 hover:text-primary pb-2"
+            onClick={downloadSelected}
+            disabled={!someChecked || bulkDownloading}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-[8px] bg-primary text-white text-sm font-medium shadow-sm hover:bg-primary-dark disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Clear filters
+            {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Download {someChecked ? `(${selected.size})` : 'selected'}
           </button>
-        )}
-      </div>
-
-      {/* Bulk actions bar */}
-      <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-4 py-3 shadow-sm">
-        <span className="text-sm text-gray-600">
-          {someChecked ? `${selected.size} selected` : 'Select rows for bulk actions'}
-        </span>
-        <button
-          type="button"
-          onClick={downloadSelected}
-          disabled={!someChecked || bulkDownloading}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-white text-sm font-medium shadow-sm hover:bg-primary-dark disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          Download {someChecked ? `(${selected.size})` : 'selected'}
-        </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-md border border-gray-100 shadow-sm overflow-hidden">

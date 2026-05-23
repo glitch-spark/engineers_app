@@ -183,7 +183,7 @@ export default function AccountsPage() {
                 <td className="px-3 py-2">{a.title || '—'}</td>
                 <td className="px-3 py-2">{a.ownerName || '—'}</td>
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                  <button className="btn" onClick={() => remove(a)} title="Delete"><Trash2 size={16} /></button>
+                  <button className="btn-icon" onClick={() => remove(a)} title="Delete"><Trash2 size={16} /></button>
                 </td>
               </tr>
             ))}

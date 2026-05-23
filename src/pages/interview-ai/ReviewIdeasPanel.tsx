@@ -173,10 +173,10 @@ export default function ReviewIdeasPanel() {
                       <div className="line-clamp-2">{s.systemPrompt || '—'}</div>
                     </td>
                     <td className="px-3 py-2">
-                      <div className="flex gap-2">
+                      <div className="flex gap-1">
                         <button
                           type="button"
-                          className="btn"
+                          className="btn-icon"
                           onClick={() => openUpdate(s)}
                           title="Update"
                         >
@@ -184,7 +184,7 @@ export default function ReviewIdeasPanel() {
                         </button>
                         <button
                           type="button"
-                          className="btn"
+                          className="btn-icon"
                           onClick={() => openDelete(s)}
                           title="Delete"
                         >
