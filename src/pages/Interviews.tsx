@@ -5,6 +5,7 @@ import { Pencil, Trash2, Eye, Filter, Plus } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
+import NameWithAvatar from '../components/NameWithAvatar';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -482,7 +483,10 @@ export default function InterviewsPage() {
         className="border-t hover:bg-gray-50 cursor-pointer"
         onClick={() => navigate(`/interviews/${iv._id}`)}
       >
-        <td className="px-3 py-2">{iv.ownerName || creator?.name || iv.ownerEmail || creator?.email || '—'}</td>
+        <td className="px-3 py-2">{(() => {
+              const display = iv.ownerName || creator?.name || iv.ownerEmail || creator?.email;
+              return display ? <NameWithAvatar name={display} /> : '—';
+            })()}</td>
         <td className="px-3 py-2">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</td>
         <td className="px-3 py-2">
           {iv.stage ? (
@@ -562,7 +566,10 @@ export default function InterviewsPage() {
         </div>
         <div className="text-sm">
           <div className="text-gray-500">Creator</div>
-          <div>{iv.ownerName || creator?.name || iv.ownerEmail || creator?.email || '—'}</div>
+          <div>{(() => {
+              const display = iv.ownerName || creator?.name || iv.ownerEmail || creator?.email;
+              return display ? <NameWithAvatar name={display} /> : '—';
+            })()}</div>
         </div>
         <div className="flex gap-1 pt-2 border-t border-gray-100">
           <Link to={`/interviews/${iv._id}`} className="btn-icon" title="Open"><Eye size={16} /></Link>

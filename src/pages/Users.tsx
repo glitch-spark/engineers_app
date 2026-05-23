@@ -2,7 +2,7 @@ import useSWR from 'swr';
 import { useState, useEffect } from 'react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
-import { Pencil, Trash2, Search, Plus, Users, UserCheck, UserX, Calendar, Shield, Check } from 'lucide-react';
+import { Pencil, Trash2, Search, Plus, Users, UserCheck, UserX, Shield, Check } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { notify } from '../lib/notify';
@@ -260,7 +260,6 @@ export default function UsersPage() {
           <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 font-medium text-gray-900">User</th>
-              <th className="px-4 py-3 font-medium text-gray-900">Contact</th>
               <th className="px-4 py-3 font-medium text-gray-900">Role</th>
               <th className="px-4 py-3 font-medium text-gray-900">Status</th>
               <th className="px-4 py-3 font-medium text-gray-900">Created</th>
@@ -270,7 +269,7 @@ export default function UsersPage() {
           <tbody className="divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                   <div className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
                     Loading users...
@@ -279,7 +278,7 @@ export default function UsersPage() {
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                   {searchTerm || roleFilter || statusFilter ? (
                     <div>
                       <p>No users found matching your search criteria.</p>
@@ -311,17 +310,6 @@ export default function UsersPage() {
                         <div className="font-medium text-gray-900">{user.name || 'Unnamed User'}</div>
                         <div className="text-gray-500 text-xs">{user.email}</div>
                       </div>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-4">
-                    <div className="space-y-1">
-                      {user.birthday && (
-                        <div className="flex items-center text-gray-600">
-                          <Calendar size={14} className="mr-2" />
-                          <span className="text-sm">{new Date(user.birthday).toLocaleDateString()}</span>
-                        </div>
-                      )}
                     </div>
                   </td>
 

@@ -178,13 +178,31 @@ function HtmlTemplatePane({
               {(new Blob([html]).size / 1024).toFixed(1)} KB
             </span>
           </div>
-          <button
-            type="button"
-            onClick={clear}
-            className="text-xs text-red-600 hover:underline"
-          >
-            Remove
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const w = window.open(url, '_blank');
+                // Revoke after the new tab unloads so memory doesn't leak;
+                // if the popup was blocked, revoke immediately.
+                if (w) w.addEventListener('beforeunload', () => URL.revokeObjectURL(url));
+                else URL.revokeObjectURL(url);
+              }}
+              className="text-xs text-primary hover:underline"
+              title="Open the uploaded HTML in a new tab"
+            >
+              Preview
+            </button>
+            <button
+              type="button"
+              onClick={clear}
+              className="text-xs text-red-600 hover:underline"
+            >
+              Remove
+            </button>
+          </div>
         </div>
       ) : (
         <div className="text-xs text-gray-400 italic">No template uploaded yet.</div>

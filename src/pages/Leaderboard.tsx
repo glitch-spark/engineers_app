@@ -4,6 +4,7 @@ import { Loader2, Trophy } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { LeaderboardMetric } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
+import NameWithAvatar from '../components/NameWithAvatar';
 
 const METRICS: { value: LeaderboardMetric; label: string }[] = [
   { value: 'earnings', label: 'Top earners' },
@@ -116,40 +117,43 @@ export default function LeaderboardPage() {
         </div>
       ) : (
         <>
-          {/* Your rank pill */}
-          <div className="bg-white rounded-md border border-gray-100 shadow-sm p-3 flex items-center justify-between flex-wrap gap-2">
-            <div className="text-sm">
-              {data.yourRank.optedIn ? (
-                data.yourRank.rank ? (
-                  <>
-                    <span className="text-gray-500">Your rank: </span>
-                    <span className="font-semibold text-gray-900">
-                      #{data.yourRank.rank}
+          {/* Your rank pill — hidden for admins (admins are excluded from
+              leaderboards server-side; the opt-in CTA would be misleading). */}
+          {user?.role !== 'admin' && (
+            <div className="bg-white rounded-md border border-gray-100 shadow-sm p-3 flex items-center justify-between flex-wrap gap-2">
+              <div className="text-sm">
+                {data.yourRank.optedIn ? (
+                  data.yourRank.rank ? (
+                    <>
+                      <span className="text-gray-500">Your rank: </span>
+                      <span className="font-semibold text-gray-900">
+                        #{data.yourRank.rank}
+                      </span>
+                      <span className="text-gray-500"> / {data.yourRank.outOf}</span>
+                      <span className="ml-3 text-gray-700">
+                        {data.yourRank.value !== null ? formatValue(metric, data.yourRank.value) : '—'}
+                      </span>
+                      {data.yourRank.secondary && (
+                        <span className="ml-2 text-xs text-gray-400">{data.yourRank.secondary}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-500">
+                      You're opted in but don't qualify in this metric/window yet.
                     </span>
-                    <span className="text-gray-500"> / {data.yourRank.outOf}</span>
-                    <span className="ml-3 text-gray-700">
-                      {data.yourRank.value !== null ? formatValue(metric, data.yourRank.value) : '—'}
-                    </span>
-                    {data.yourRank.secondary && (
-                      <span className="ml-2 text-xs text-gray-400">{data.yourRank.secondary}</span>
-                    )}
-                  </>
+                  )
                 ) : (
                   <span className="text-gray-500">
-                    You're opted in but don't qualify in this metric/window yet.
+                    You're not on the leaderboard.{' '}
+                    <Link to="/profile" className="text-blue-600 hover:underline">
+                      Opt in from your profile
+                    </Link>
+                    {' '}to compete.
                   </span>
-                )
-              ) : (
-                <span className="text-gray-500">
-                  You're not on the leaderboard.{' '}
-                  <Link to="/profile" className="text-blue-600 hover:underline">
-                    Opt in from your profile
-                  </Link>
-                  {' '}to compete.
-                </span>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {data.rows.length === 0 ? (
             <div className="bg-white rounded-md border border-gray-100 p-6 text-sm text-gray-500 text-center">
@@ -160,7 +164,7 @@ export default function LeaderboardPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-600">
                   <tr>
-                    <th className="px-4 py-2 text-left w-12">#</th>
+                    <th className="px-4 py-2 text-center w-12">#</th>
                     <th className="px-4 py-2 text-left">Name</th>
                     <th className="px-4 py-2 text-right">Value</th>
                     <th className="px-4 py-2 text-right">Detail</th>
@@ -177,11 +181,11 @@ export default function LeaderboardPage() {
                           'hover:bg-gray-50 ' + (isMe ? 'bg-blue-50/40' : '')
                         }
                       >
-                        <td className="px-4 py-2 text-gray-700">
+                        <td className="px-4 py-2 text-center text-gray-700">
                           {medal ? <span className="text-base">{medal}</span> : r.rank}
                         </td>
                         <td className="px-4 py-2 text-gray-900">
-                          {r.name}
+                          <NameWithAvatar name={r.name} />
                           {isMe && (
                             <span className="ml-2 text-[10px] uppercase tracking-wider text-blue-700 font-semibold">
                               you

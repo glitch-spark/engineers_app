@@ -43,7 +43,13 @@ const NavLink = ({ href, label, isCollapsed, icon, badge }: {
   );
 };
 
-export default function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
+export default function Sidebar({
+  isCollapsed,
+  onToggle,
+}: {
+  isCollapsed: boolean;
+  onToggle?: () => void;
+}) {
   const { user } = useAuth();
   const role = user?.role;
 
@@ -51,6 +57,26 @@ export default function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
     <aside className={`fixed top-16 left-0 bottom-0 border-r border-gray-100 bg-white/80 backdrop-blur-md z-30 overflow-y-auto transition-all duration-300 ${
       isCollapsed ? 'w-20' : 'w-64'
     }`}>
+      {/* Collapse toggle — pinned at the top of the sidebar. */}
+      {onToggle && (
+        <div className={`flex ${isCollapsed ? 'justify-center' : 'justify-end'} px-3 pt-3`}>
+          <button
+            type="button"
+            onClick={onToggle}
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="p-1.5 rounded-[8px] text-gray-500 hover:text-primary hover:bg-gray-100 transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {isCollapsed ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
+              )}
+            </svg>
+          </button>
+        </div>
+      )}
       <nav className="p-4 space-y-2">
         <div className="mb-4">
           <NavLink

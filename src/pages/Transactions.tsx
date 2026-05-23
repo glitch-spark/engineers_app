@@ -6,8 +6,9 @@ import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { notify } from '../lib/notify';
+import NameWithAvatar from '../components/NameWithAvatar';
 
-type PayMethod = 'crypto' | 'card';
+type PayMethod = 'coin' | 'card';
 
 type Tx = {
   _id: string;
@@ -179,7 +180,7 @@ export default function TransactionsPage() {
 
   const formatPayMethod = (t: Tx): string => {
     if (t.payMethod === 'card') return `**** ${t.cardLast4 || '----'}`;
-    if (t.payMethod === 'crypto') return 'Crypto';
+    if (t.payMethod === 'coin') return 'Coin';
     return '—';
   };
 
@@ -238,7 +239,7 @@ export default function TransactionsPage() {
             onChange={(e) => setPayMethodFilter(e.target.value as '' | PayMethod)}
           >
             <option value="">All methods</option>
-            <option value="crypto">Crypto</option>
+            <option value="coin">Coin</option>
             <option value="card">Card</option>
           </select>
         </div>
@@ -310,7 +311,7 @@ export default function TransactionsPage() {
                     <td className="px-3 py-2">{t.description || '—'}</td>
                     <td className="px-3 py-2">{formatPayMethod(t)}</td>
                     <td className="px-3 py-2">{t.status}</td>
-                    <td className="px-3 py-2">{t.ownerName || t.userId?.name || '—'}</td>
+                    <td className="px-3 py-2"><NameWithAvatar name={t.ownerName || t.userId?.name} /></td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1 flex-wrap">
                         <button
@@ -447,7 +448,7 @@ export default function TransactionsPage() {
               }}
             >
               <option value="">Select method</option>
-              <option value="crypto">Crypto</option>
+              <option value="coin">Coin</option>
               <option value="card">Card</option>
             </select>
           </div>

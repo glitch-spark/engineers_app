@@ -47,7 +47,7 @@ export interface TransactionListParams {
   fromSearch?: string;
   toSearch?: string;
   userSearch?: string;
-  payMethod?: 'crypto' | 'card' | '';
+  payMethod?: 'coin' | 'card' | '';
 }
 
 export interface TransactionSummary {

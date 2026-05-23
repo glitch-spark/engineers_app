@@ -16,6 +16,35 @@ interface PasswordData {
   confirmPassword: string;
 }
 
+/**
+ * Read an image file, resize so the longer side <= `maxDim` px, and return
+ * a JPEG data URL (quality 0.85). Keeps the profile image small enough to
+ * sit in the Mongo doc without per-request bloat (~30-60 KB typical).
+ */
+async function readResizedDataURL(file: File, maxDim = 256): Promise<string> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error('Could not decode image'));
+      im.src = objectUrl;
+    });
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas not supported');
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
@@ -185,13 +214,34 @@ export default function ProfilePage() {
             </div>
 
             {isEditing && (
-              <div className="form-group w-full max-w-xs">
-                <label htmlFor="image" className="form-label">Profile Image URL</label>
+              <div className="form-group w-full max-w-xs space-y-2">
+                <label className="form-label">Profile image</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    if (!file.type.startsWith('image/')) {
+                      notify.error('Pick an image file');
+                      return;
+                    }
+                    try {
+                      const dataUrl = await readResizedDataURL(file, 256);
+                      setFormData((prev) => ({ ...prev, image: dataUrl }));
+                    } catch (err) {
+                      notify.error(err, 'Failed to read image');
+                    }
+                  }}
+                  className="block text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-[8px] file:border-0 file:bg-primary file:text-white file:font-medium file:cursor-pointer hover:file:bg-primary-dark"
+                />
+                <div className="text-[11px] text-gray-400">or paste a URL</div>
                 <input
                   id="image"
                   name="image"
                   type="url"
-                  value={formData.image}
+                  value={formData.image.startsWith('data:') ? '' : formData.image}
                   onChange={handleInputChange}
                   className="input focus-ring"
                   placeholder="https://example.com/image.jpg"
