@@ -483,29 +483,29 @@ export default function InterviewsPage() {
         className="border-t hover:bg-gray-50 cursor-pointer"
         onClick={() => navigate(`/interviews/${iv._id}`)}
       >
-        <td className="px-3 py-2">{(() => {
+        <td className="px-3 py-2 align-middle">{(() => {
               const display = iv.ownerName || creator?.name || iv.ownerEmail || creator?.email;
               return display ? <NameWithAvatar name={display} /> : '—';
             })()}</td>
-        <td className="px-3 py-2">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2 align-middle">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</td>
+        <td className="px-3 py-2 align-middle">
           {iv.stage ? (
             <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
               {stageLabel(iv.stage)}
             </span>
           ) : <span className="text-gray-400">—</span>}
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2 align-middle">
           {iv.status ? (
             <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
               {statusLabel(iv.status)}
             </span>
           ) : <span className="text-gray-400">—</span>}
         </td>
-        <td className="px-3 py-2">{iv.companyName || <span className="text-gray-400">—</span>}</td>
-        <td className="px-3 py-2">{iv.interviewerName || <span className="text-gray-400">—</span>}</td>
-        <td className="px-3 py-2">{account?.name || account?.email || '—'}</td>
-        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2 align-middle">{iv.companyName || <span className="text-gray-400">—</span>}</td>
+        <td className="px-3 py-2 align-middle">{iv.interviewerName || <span className="text-gray-400">—</span>}</td>
+        <td className="px-3 py-2 align-middle">{account?.name || account?.email || '—'}</td>
+        <td className="px-3 py-2 align-middle" onClick={(e) => e.stopPropagation()}>
           <div className="flex gap-1 whitespace-nowrap">
             <Link to={`/interviews/${iv._id}`} className="btn-icon" title="Open"><Eye size={16} /></Link>
             <button

@@ -108,6 +108,32 @@ export default function ResumeStylingEditor({
             setTemplateName(name);
           }}
         />
+
+        {/* Save always rendered here too — when showHeader=false (embedded
+            in the profile page), the header Save above is hidden, so the
+            template + page format had no way to persist. */}
+        {!showHeader && (
+          <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+            <label className="text-xs text-gray-500 flex items-center gap-2">
+              Page
+              <select
+                value={pageFormat}
+                onChange={(e) => setPageFormat(e.target.value as PageFormat)}
+                className="text-sm border border-gray-200 rounded-md px-2 py-1"
+              >
+                {PAGE_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </label>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save template
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
