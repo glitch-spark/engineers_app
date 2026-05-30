@@ -13,6 +13,7 @@ type Acc = {
   name: string;
   title?: string;
   ownerName?: string;
+  ownerImage?: string | null;
 };
 
 export default function AccountsPage() {
@@ -182,7 +183,7 @@ export default function AccountsPage() {
                 onClick={() => navigate(`/accounts/${a._id}`)}
               >
                 <td className="px-3 py-2">{a.name}</td>
-                <td className="px-3 py-2"><NameWithAvatar name={a.ownerName} /></td>
+                <td className="px-3 py-2"><NameWithAvatar name={a.ownerName} imageUrl={a.ownerImage} /></td>
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                   <button className="btn-icon" onClick={() => remove(a)} title="Delete"><Trash2 size={16} /></button>
                 </td>

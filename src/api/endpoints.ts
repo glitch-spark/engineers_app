@@ -204,6 +204,43 @@ export const updateWeeklyPlan = (id: string, body: Record<string, unknown>) =>
 
 export const deleteWeeklyPlan = (id: string) => del<{ message: string }>(`/weekly-plans/${id}`);
 
+export interface WeeklyMetricCatalogItem { key: string; label: string }
+
+export const getWeeklyMetricCatalog = () =>
+  apiFetch<{ metrics: WeeklyMetricCatalogItem[] }>('/weekly-plans/metric-catalog');
+
+export interface WeeklyPlanSummary {
+  series: Array<Record<string, unknown>>;
+  totals: Array<{ key: string; label: string; target: number; actual: number }>;
+  planCount: number;
+  reviewedCount: number;
+  completionRate: number;
+}
+
+export const getWeeklyPlanSummary = (params?: { year?: number; weekNumber?: number; userId?: string }) =>
+  apiFetch<WeeklyPlanSummary>(`/weekly-plans/summary${qs(params)}`);
+
+export const runWeeklyProgressReport = (params?: { year?: number; weekNumber?: number; userId?: string }) =>
+  postJSON<{ processed: number; skipped: number; plans: Record<string, unknown>[] }>(
+    `/weekly-plans/progress-report${qs(params)}`,
+    {},
+  );
+
+export interface WeeklyUserRollup {
+  userId: string;
+  name: string;
+  email: string;
+  planCount: number;
+  reviewedCount: number;
+  metrics: Array<{ key: string; label: string; target: number; actual: number }>;
+}
+
+export const getWeeklyUserRollup = (params?: { year?: number; weekNumber?: number; userId?: string }) =>
+  apiFetch<{ users: WeeklyUserRollup[] }>(`/weekly-plans/user-rollup${qs(params)}`);
+
+export const askResumeJobScreening = (jobId: string, questions: string[]) =>
+  postJSON<{ pairs: { question: string; answer: string }[] }>(`/resume/jobs/${jobId}/ask`, { questions });
+
 // ---------- accounts lookup (filter dropdowns) ----------
 
 export interface AccountLookup {
@@ -330,6 +367,7 @@ export type LeaderboardMetric = 'earnings' | 'bids' | 'interviews' | 'conversion
 export interface LeaderboardRow {
   userId: string;
   name: string;
+  image?: string | null;
   value: number;
   secondary: string;
   rank: number;
@@ -643,6 +681,11 @@ export interface ResumeJob {
   hasPdf?: boolean;
   screeningQuestions: string[];
   screeningPairs: ScreeningPair[];
+  jobDescription?: string;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  reasoningTokens?: number | null;
+  matchSnippet?: string;
   createdAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -662,6 +705,7 @@ export function enqueueResumeJob(body: {
 export function listResumeJobs(params?: {
   accountId?: string;
   company?: string;
+  q?: string;
   page?: number;
   limit?: number;
 }) {
@@ -674,16 +718,60 @@ export function deleteResumeJob(id: string) {
   return del<{ ok: boolean }>(`/resume/jobs/${id}`);
 }
 
-/** Trigger a browser download for a completed job's PDF.
- *  Backend returns either {url, filename} (S3 presigned) or raw PDF bytes
- *  (legacy inline). For S3 path we use anchor click — bypasses CORS and
- *  lets S3 serve the file directly to the browser. */
+function _sanitizeFolderPath(path: string): string {
+  // Preserve '/' as a folder separator. Sanitize each segment for FS-unsafe
+  // chars. Drop empty segments. Fallback to 'company' if everything strips out.
+  const segs = (path || '')
+    .split('/')
+    .map((s) => s.replace(/[\\\x00-\x1f<>:"|?*]+/g, '_').trim().replace(/^[. ]+|[. ]+$/g, ''))
+    .filter(Boolean);
+  return segs.length ? segs.join('/') : 'company';
+}
+
+function _filenameFromCD(cd: string | null, fallback: string): string {
+  if (!cd) return fallback;
+  const m = /filename="?([^";]+)"?/i.exec(cd);
+  return m?.[1] || fallback;
+}
+
+function _saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Single-job download.
+ *  - File System Access API (Chromium): writes `<picked-dir>/<company>/Resume.pdf` directly to disk.
+ *  - Fallback (Firefox/Safari): backend returns a ZIP containing `<company>/Resume.pdf`. */
 export async function downloadResumeJob(job: ResumeJob): Promise<void> {
   const token = getToken();
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const baseHeaders: Record<string, string> = {};
+  if (token) baseHeaders.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download`, { headers });
+  // FSA path — only if the browser supports it AND the user grants a dir.
+  const fsa = await import('../lib/downloadDir');
+  if (fsa.isFsaSupported()) {
+    const dir = await fsa.getDownloadDir();
+    if (!dir && fsa.lastPickError() === 'blocked') {
+      throw new Error("Chrome blocked that folder (system files protected). Pick a normal folder — e.g. Documents/Resumes — and try again.");
+    }
+    if (dir) {
+      const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download?format=pdf`, { headers: baseHeaders });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const folder = _sanitizeFolderPath(res.headers.get('X-Folder') || `${job.profileName || 'profile'}/${job.companyName || 'company'}`);
+      const blob = await res.blob();
+      await fsa.writeToFolder(dir, folder, 'Resume.pdf', blob);
+      return;
+    }
+  }
+
+  // Fallback — server-built zip.
+  const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download`, { headers: baseHeaders });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     try {
@@ -692,27 +780,58 @@ export async function downloadResumeJob(job: ResumeJob): Promise<void> {
     } catch { /* ignore */ }
     throw new Error(message);
   }
+  const blob = await res.blob();
+  const filename = _filenameFromCD(res.headers.get('Content-Disposition'), `${job.companyName || 'resume'}.zip`);
+  _saveBlob(blob, filename);
+}
 
-  const ct = res.headers.get('Content-Type') || '';
-  if (ct.includes('application/json')) {
-    const data = (await res.json()) as { url: string; filename?: string };
-    const a = document.createElement('a');
-    a.href = data.url;
-    if (data.filename) a.download = data.filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    return;
+/** Bulk download.
+ *  - FSA: writes each `<picked-dir>/<company>/Resume.pdf` straight to disk
+ *    (no zip). Fetches per-job PDF bytes in parallel (cap 5 concurrent).
+ *  - Fallback: backend builds one ZIP with all folders inside. */
+export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
+  if (!jobIds.length) return;
+  const token = getToken();
+  const baseHeaders: Record<string, string> = {};
+  if (token) baseHeaders.Authorization = `Bearer ${token}`;
+
+  const fsa = await import('../lib/downloadDir');
+  if (fsa.isFsaSupported()) {
+    const dir = await fsa.getDownloadDir();
+    if (!dir && fsa.lastPickError() === 'blocked') {
+      throw new Error("Chrome blocked that folder (system files protected). Pick a normal folder — e.g. Documents/Resumes — and try again.");
+    }
+    if (dir) {
+      // Modest concurrency — large bulks shouldn't stampede the backend.
+      const queue = [...jobIds];
+      const workers = Array.from({ length: Math.min(5, queue.length) }, async () => {
+        while (queue.length) {
+          const id = queue.shift();
+          if (!id) break;
+          const res = await fetch(`${BASE_URL}/resume/jobs/${id}/download?format=pdf`, { headers: baseHeaders });
+          if (!res.ok) continue;
+          const folder = _sanitizeFolderPath(res.headers.get('X-Folder') || 'company');
+          const blob = await res.blob();
+          await fsa.writeToFolder(dir, folder, 'Resume.pdf', blob);
+        }
+      });
+      await Promise.all(workers);
+      return;
+    }
   }
 
-  // Legacy: inline bytes
+  // Fallback — one big zip.
+  const res = await fetch(`${BASE_URL}/resume/jobs/bulk-download`, {
+    method: 'POST',
+    headers: { ...baseHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobIds }),
+  });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try { const data = await res.json(); message = data.error || data.detail || message; } catch { /* ignore */ }
+    throw new Error(message);
+  }
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = (job.pdfFilename || `resume_${job.companyName}.pdf`).split('/').pop()!;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  const filename = _filenameFromCD(res.headers.get('Content-Disposition'), 'resumes.zip');
+  _saveBlob(blob, filename);
 }

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
-import { FileDown, Loader2, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { FileDown, Loader2, AlertTriangle } from 'lucide-react';
 import ResumeTabs from '../components/ResumeTabs';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
@@ -74,23 +74,15 @@ export default function ResumeGeneratorPage() {
   const [company, setCompany] = useState('');
   const [jobUrl, setJobUrl] = useState('');
   const [jobDescription, setJobDescription] = useState('');
-  const [questions, setQuestions] = useState<string[]>(['']);
 
   const [submitting, setSubmitting] = useState(false);
-  const [focusIdx, setFocusIdx] = useState(-1);
-
-  function setQuestion(i: number, value: string) {
-    setQuestions((qs) => qs.map((q, idx) => (idx === i ? value : q)));
-  }
-  function addQuestion() {
-    setQuestions((qs) => {
-      setFocusIdx(qs.length);
-      return [...qs, ''];
-    });
-  }
-  function removeQuestion(i: number) {
-    setQuestions((qs) => (qs.length === 1 ? [''] : qs.filter((_, idx) => idx !== i)));
-  }
+  // Collapsed by default after picking — long list eats vertical space.
+  const [profilesOpen, setProfilesOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('resume-gen-profiles-open') !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('resume-gen-profiles-open', profilesOpen ? '1' : '0'); } catch { /* ignore */ }
+  }, [profilesOpen]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -105,7 +97,6 @@ export default function ResumeGeneratorPage() {
       return;
     }
 
-    const cleanQuestions = questions.map((q) => q.trim()).filter(Boolean);
     const trimmedCompany = company.trim();
     const lcCompany = trimmedCompany.toLowerCase();
 
@@ -144,7 +135,6 @@ export default function ResumeGeneratorPage() {
             company: trimmedCompany,
             jobDescription,
             jobUrl: jobUrl.trim() || undefined,
-            questions: cleanQuestions,
           }),
         ),
       );
@@ -159,12 +149,11 @@ export default function ResumeGeneratorPage() {
         notify.warn(`${ok} queued, ${failed} failed`);
       }
 
-      // Clear company + JD + questions; keep profile selection so the user
-      // can immediately queue another batch.
+      // Clear company + JD; keep profile selection so the user can
+      // immediately queue another batch.
       setCompany('');
       setJobUrl('');
       setJobDescription('');
-      setQuestions(['']);
     } catch (err) {
       notify.error(err, 'Failed to queue jobs');
     } finally {
@@ -198,13 +187,19 @@ export default function ResumeGeneratorPage() {
         ) : (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-gray-700">
+              <button
+                type="button"
+                onClick={() => setProfilesOpen((v) => !v)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-primary"
+                aria-expanded={profilesOpen}
+              >
+                <span className="text-gray-400">{profilesOpen ? '▾' : '▸'}</span>
                 Profiles <span className="text-red-500">*</span>
                 <span className="ml-2 text-gray-400 font-normal">
                   ({accountIds.length} selected)
                 </span>
-              </label>
-              {selectableIds.length > 0 && (
+              </button>
+              {profilesOpen && selectableIds.length > 0 && (
                 <button
                   type="button"
                   onClick={toggleAll}
@@ -214,6 +209,7 @@ export default function ResumeGeneratorPage() {
                 </button>
               )}
             </div>
+            {profilesOpen && (
             <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
               {accounts.map((a) => {
                 const checked = accountIds.includes(a._id);
@@ -250,6 +246,7 @@ export default function ResumeGeneratorPage() {
                 );
               })}
             </ul>
+            )}
           </div>
         )}
         {missingPromptCount > 0 && (
@@ -308,33 +305,6 @@ export default function ResumeGeneratorPage() {
           <p className="text-xs text-gray-400 mt-1">{jobDescription.length.toLocaleString()} characters</p>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium text-gray-600">
-              Screening questions <span className="text-xs text-gray-400 font-normal">(optional, applied to every profile)</span>
-            </label>
-            <button type="button" onClick={addQuestion} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-              <Plus className="w-3 h-3" /> Add question
-            </button>
-          </div>
-          <p className="text-xs text-gray-400 mb-2">
-            If any are added, answers are written against the just-generated resume + JD after each resume completes.
-          </p>
-          <div className="space-y-2">
-            {questions.map((q, i) => (
-              <QuestionRow
-                key={i}
-                index={i}
-                value={q}
-                onChange={(v) => setQuestion(i, v)}
-                onRemove={() => removeQuestion(i)}
-                canRemove={questions.length > 1 || q !== ''}
-                autoFocus={i === focusIdx}
-              />
-            ))}
-          </div>
-        </div>
-
         <div className="flex justify-end">
           <button
             type="submit"
@@ -356,55 +326,3 @@ export default function ResumeGeneratorPage() {
   );
 }
 
-// ---------- form helpers -----------------------------------------------------
-
-function QuestionRow({
-  index,
-  value,
-  onChange,
-  onRemove,
-  canRemove,
-  autoFocus,
-}: {
-  index: number;
-  value: string;
-  onChange: (v: string) => void;
-  onRemove: () => void;
-  canRemove: boolean;
-  autoFocus?: boolean;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
-  useEffect(() => {
-    if (autoFocus) ref.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <div className="flex items-start gap-2">
-      <span className="text-xs text-gray-400 mt-2.5 w-5 text-right">{index + 1}.</span>
-      <textarea
-        ref={ref}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={1}
-        placeholder={`Question ${index + 1}`}
-        className="input focus-ring flex-1 text-sm resize-none overflow-hidden min-h-[40px]"
-      />
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={!canRemove}
-        className="p-2 text-gray-400 hover:text-red-600 disabled:opacity-30 mt-1"
-        title="Remove question"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}

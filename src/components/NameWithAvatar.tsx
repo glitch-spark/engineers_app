@@ -37,20 +37,30 @@ function colorFor(name: string): string {
 
 export default function NameWithAvatar({
   name,
+  imageUrl,
   className = '',
 }: {
   name: string | null | undefined;
+  imageUrl?: string | null;
   className?: string;
 }) {
   const display = (name || '').trim() || '—';
   return (
     <span className={`inline-flex items-center gap-2 min-w-0 ${className}`}>
-      <span
-        className={`w-6 h-6 rounded-full ${colorFor(display)} text-white text-[10px] font-semibold flex items-center justify-center flex-shrink-0`}
-        aria-hidden="true"
-      >
-        {initials(display)}
-      </span>
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt=""
+          className="w-6 h-6 rounded-full object-cover flex-shrink-0"
+        />
+      ) : (
+        <span
+          className={`w-6 h-6 rounded-full ${colorFor(display)} text-white text-[10px] font-semibold flex items-center justify-center flex-shrink-0`}
+          aria-hidden="true"
+        >
+          {initials(display)}
+        </span>
+      )}
       <span className="truncate">{display}</span>
     </span>
   );

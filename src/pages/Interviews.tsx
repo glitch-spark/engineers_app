@@ -97,6 +97,7 @@ type Interview = {
   companyName?: string | null;
   interviewerName?: string | null;
   appliedPosition?: string | null;
+  jobUrl?: string | null;
   transcript?: string;
   note?: string;
   ownerName?: string | null;
@@ -272,6 +273,7 @@ export default function InterviewsPage() {
       companyName: '',
       interviewerName: '',
       appliedPosition: '',
+      jobUrl: '',
       transcript: '',
       note: '',
     };
@@ -297,6 +299,7 @@ export default function InterviewsPage() {
         companyName: active.companyName || '',
         interviewerName: active.interviewerName || '',
         appliedPosition: active.appliedPosition || '',
+        jobUrl: active.jobUrl || '',
         transcript: active.transcript || '',
         note: active.note || '',
       });
@@ -327,6 +330,7 @@ export default function InterviewsPage() {
       companyName: iv.companyName || '',
       interviewerName: iv.interviewerName || '',
       appliedPosition: iv.appliedPosition || '',
+      jobUrl: iv.jobUrl || '',
       transcript: iv.transcript || '',
       note: iv.note || '',
     });
@@ -391,6 +395,7 @@ export default function InterviewsPage() {
         companyName: form.companyName,
         interviewerName: form.interviewerName,
         appliedPosition: form.appliedPosition,
+        jobUrl: form.jobUrl,
         transcript: form.transcript,
         note: form.note,
       };
@@ -486,7 +491,8 @@ export default function InterviewsPage() {
       >
         <td className="px-3 py-2 align-middle">{(() => {
               const display = iv.ownerName || creator?.name || iv.ownerEmail || creator?.email;
-              return display ? <NameWithAvatar name={display} /> : '—';
+              const img = (iv as { ownerImage?: string | null }).ownerImage || (creator as { image?: string } | undefined)?.image;
+              return display ? <NameWithAvatar name={display} imageUrl={img} /> : '—';
             })()}</td>
         <td className="px-3 py-2 align-middle">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</td>
         <td className="px-3 py-2 align-middle">
@@ -503,7 +509,15 @@ export default function InterviewsPage() {
             </span>
           ) : <span className="text-gray-400">—</span>}
         </td>
-        <td className="px-3 py-2 align-middle">{iv.companyName || <span className="text-gray-400">—</span>}</td>
+        <td className="px-3 py-2 align-middle">
+          {iv.jobUrl ? (
+            <a href={iv.jobUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-primary hover:underline">
+              {iv.companyName || iv.jobUrl}
+            </a>
+          ) : (
+            iv.companyName || <span className="text-gray-400">—</span>
+          )}
+        </td>
         <td className="px-3 py-2 align-middle">{iv.interviewerName || <span className="text-gray-400">—</span>}</td>
         <td className="px-3 py-2 align-middle">{account?.name || account?.email || '—'}</td>
         <td className="px-3 py-2 align-middle" onClick={(e) => e.stopPropagation()}>
@@ -569,7 +583,8 @@ export default function InterviewsPage() {
           <div className="text-gray-500">Creator</div>
           <div>{(() => {
               const display = iv.ownerName || creator?.name || iv.ownerEmail || creator?.email;
-              return display ? <NameWithAvatar name={display} /> : '—';
+              const img = (iv as { ownerImage?: string | null }).ownerImage || (creator as { image?: string } | undefined)?.image;
+              return display ? <NameWithAvatar name={display} imageUrl={img} /> : '—';
             })()}</div>
         </div>
         <div className="flex gap-1 pt-2 border-t border-gray-100">
@@ -926,6 +941,17 @@ export default function InterviewsPage() {
                   <option value="QA" />
                   <option value="Other" />
                 </datalist>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
+                <input
+                  className="input"
+                  type="url"
+                  value={form.jobUrl}
+                  onChange={(e) => setForm({ ...form, jobUrl: e.target.value })}
+                  placeholder="https://..."
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

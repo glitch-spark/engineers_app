@@ -181,7 +181,7 @@ export default function LeaderboardPage() {
                           {medal ? <span className="text-base">{medal}</span> : r.rank}
                         </td>
                         <td className="px-4 py-2 text-gray-900">
-                          <NameWithAvatar name={r.name} />
+                          <NameWithAvatar name={r.name} imageUrl={r.image} />
                           {isMe && (
                             <span className="ml-2 text-[10px] uppercase tracking-wider text-blue-700 font-semibold">
                               you

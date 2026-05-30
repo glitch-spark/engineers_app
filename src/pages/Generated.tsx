@@ -7,6 +7,7 @@ import {
   Trash2,
   Copy,
   MessageSquare,
+  X,
 } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { ResumeJob, ResumeJobStatus, ResumeJobStep, ScreeningPair } from '../api/endpoints';
@@ -45,7 +46,7 @@ export default function GeneratedResumesPage() {
   const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [panelJob, setPanelJob] = useState<ResumeJob | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
 
@@ -57,6 +58,12 @@ export default function GeneratedResumesPage() {
     const t = setTimeout(() => { setCompanyFilter(companyInput.trim()); setPage(1); }, 300);
     return () => clearTimeout(t);
   }, [companyInput]);
+  const [qInput, setQInput] = useState('');
+  const [qFilter, setQFilter] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => { setQFilter(qInput.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [qInput]);
 
   const { data: accountsData } = useSWR('generated-accounts-lookup', () => api.lookupAccounts());
   const profileOptions = useMemo(() => {
@@ -70,18 +77,28 @@ export default function GeneratedResumesPage() {
   }, [accountsData, user?.id]);
 
   const { data, mutate, isLoading } = useSWR(
-    ['resume-jobs-page', page, limit, filterAccountId, companyFilter] as const,
+    ['resume-jobs-page', page, limit, filterAccountId, companyFilter, qFilter] as const,
     () => api.listResumeJobs({
       page,
       limit,
       accountId: filterAccountId || undefined,
       company: companyFilter || undefined,
+      q: qFilter || undefined,
     }),
     { refreshInterval: 3000 },
   );
 
   const jobs = data?.jobs ?? [];
   const pagination = data?.pagination;
+
+  // Keep the panel's job in sync with the latest poll so newly-added
+  // screening pairs (from the Ask POST or background polling) refresh
+  // into the open panel.
+  useEffect(() => {
+    if (!panelJob) return;
+    const fresh = jobs.find((j) => j._id === panelJob._id);
+    if (fresh && fresh !== panelJob) setPanelJob(fresh);
+  }, [jobs, panelJob]);
   const polling = jobs.some((j) => j.status === 'queued' || j.status === 'in_progress');
 
   // Auto-download newly-completed jobs (only newly-transitioned).
@@ -146,22 +163,17 @@ export default function GeneratedResumesPage() {
   }, [selectableIds]);
 
   async function downloadSelected() {
-    const targets = jobs.filter((j) => selected.has(j._id));
-    if (targets.length === 0) return;
+    const targetIds = jobs.filter((j) => selected.has(j._id)).map((j) => j._id);
+    if (targetIds.length === 0) return;
     setBulkDownloading(true);
-    let failed = 0;
-    for (const job of targets) {
-      try {
-        await api.downloadResumeJob(job);
-        // Small delay so the browser doesn't drop concurrent anchor clicks.
-        await new Promise((r) => setTimeout(r, 250));
-      } catch (err) {
-        failed++;
-        notify.error(err, `Download failed: ${job.companyName}`);
-      }
+    try {
+      await api.bulkDownloadResumeJobs(targetIds);
+      notify.success(`Downloaded ${targetIds.length} resume${targetIds.length === 1 ? '' : 's'} as zip`);
+    } catch (err) {
+      notify.error(err, 'Bulk download failed');
+    } finally {
+      setBulkDownloading(false);
     }
-    setBulkDownloading(false);
-    if (failed === 0) notify.success(`Downloaded ${targets.length} resume${targets.length === 1 ? '' : 's'}`);
   }
 
   return (
@@ -207,10 +219,24 @@ export default function GeneratedResumesPage() {
               onChange={(e) => setCompanyInput(e.target.value)}
             />
           </div>
-          {(filterAccountId || companyFilter) && (
+          <div className="w-72">
+            <label className="block text-xs text-gray-500 mb-1">Search JD</label>
+            <input
+              className="input w-full text-sm"
+              placeholder="skills, tech, anything (space = AND)"
+              value={qInput}
+              onChange={(e) => setQInput(e.target.value)}
+            />
+          </div>
+          {(filterAccountId || companyFilter || qFilter) && (
             <button
               type="button"
-              onClick={() => { setFilterAccountId(''); setCompanyInput(''); setCompanyFilter(''); setPage(1); }}
+              onClick={() => {
+                setFilterAccountId('');
+                setCompanyInput(''); setCompanyFilter('');
+                setQInput(''); setQFilter('');
+                setPage(1);
+              }}
               className="text-xs text-gray-500 hover:text-primary pb-2"
             >
               Clear filters
@@ -218,6 +244,7 @@ export default function GeneratedResumesPage() {
           )}
         </div>
         <div className="flex items-center gap-3 pb-1">
+          <SaveFolderStatus />
           <span className="text-xs text-gray-500">
             {someChecked ? `${selected.size} selected` : 'Select rows for bulk actions'}
           </span>
@@ -261,6 +288,7 @@ export default function GeneratedResumesPage() {
                 <th className="px-3 py-2 font-medium">Company</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Time</th>
+                <th className="px-3 py-2 font-medium">Tokens</th>
                 <th className="px-3 py-2 font-medium">File</th>
                 <th className="px-3 py-2 font-medium w-32 text-right">Actions</th>
               </tr>
@@ -270,8 +298,7 @@ export default function GeneratedResumesPage() {
                 <JobRow
                   key={job._id}
                   job={job}
-                  expanded={expanded === job._id}
-                  onToggleExpand={() => setExpanded((p) => (p === job._id ? null : job._id))}
+                  onOpen={() => setPanelJob(job)}
                   onChanged={mutate}
                   selected={selected.has(job._id)}
                   selectable={job.status === 'completed' && !!job.hasPdf}
@@ -331,22 +358,28 @@ export default function GeneratedResumesPage() {
           </div>
         </div>
       )}
+
+      {panelJob && (
+        <ScreeningPanel
+          job={panelJob}
+          onClose={() => setPanelJob(null)}
+          onChanged={mutate}
+        />
+      )}
     </div>
   );
 }
 
 function JobRow({
   job,
-  expanded,
-  onToggleExpand,
+  onOpen,
   onChanged,
   selected,
   selectable,
   onSelect,
 }: {
   job: ResumeJob;
-  expanded: boolean;
-  onToggleExpand: () => void;
+  onOpen: () => void;
   onChanged: () => void;
   selected: boolean;
   selectable: boolean;
@@ -386,8 +419,8 @@ function JobRow({
 
   return (
     <>
-      <tr className="hover:bg-gray-50">
-        <td className="px-3 py-2">
+      <tr className="hover:bg-gray-50 cursor-pointer" onClick={onOpen}>
+        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={selected}
@@ -403,13 +436,20 @@ function JobRow({
         <td className="px-3 py-2 text-gray-900 truncate max-w-[160px]" title={job.profileName}>
           {job.profileName}
         </td>
-        <td className="px-3 py-2 text-gray-900 truncate max-w-[160px]" title={job.jobUrl || job.companyName}>
-          {job.jobUrl ? (
-            <a href={job.jobUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-              {job.companyName}
-            </a>
-          ) : (
-            job.companyName
+        <td className="px-3 py-2 text-gray-900 max-w-[280px]" title={job.jobUrl || job.companyName}>
+          <div className="truncate">
+            {job.jobUrl ? (
+              <a href={job.jobUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                {job.companyName}
+              </a>
+            ) : (
+              job.companyName
+            )}
+          </div>
+          {job.matchSnippet && (
+            <div className="text-[11px] text-gray-500 italic mt-0.5 line-clamp-2" title={job.matchSnippet}>
+              {job.matchSnippet}
+            </div>
           )}
         </td>
         <td className="px-3 py-2">
@@ -422,6 +462,15 @@ function JobRow({
           )}
         </td>
         <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{elapsed}</td>
+        <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap tabular-nums" title={
+          (job.inputTokens != null || job.outputTokens != null || job.reasoningTokens != null)
+            ? `input ${job.inputTokens ?? 0} · output ${job.outputTokens ?? 0} · reasoning ${job.reasoningTokens ?? 0}`
+            : 'No usage recorded'
+        }>
+          {job.inputTokens != null || job.outputTokens != null
+            ? `${(job.inputTokens ?? 0).toLocaleString()} / ${(job.outputTokens ?? 0).toLocaleString()}`
+            : '—'}
+        </td>
         <td className="px-3 py-2 text-xs">
           {job.pdfFilename ? (
             <span className="text-gray-700 font-mono break-all" title={job.pdfFilename}>
@@ -431,7 +480,7 @@ function JobRow({
             <span className="text-gray-400">—</span>
           )}
         </td>
-        <td className="px-3 py-2 text-right">
+        <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
           <div className="inline-flex gap-1 justify-end">
             <button
               type="button"
@@ -446,14 +495,16 @@ function JobRow({
             </button>
             <button
               type="button"
-              onClick={onToggleExpand}
-              disabled={!hasAnswers}
-              className={`p-1.5 rounded-md hover:bg-gray-100 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed ${
-                hasAnswers ? '' : 'invisible'
-              } ${expanded ? 'bg-gray-100' : ''}`}
-              title={hasAnswers ? (expanded ? 'Hide answers' : 'Show answers') : 'No answers'}
+              onClick={onOpen}
+              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 relative"
+              title="Open screening Q&A panel"
             >
               <MessageSquare className="w-4 h-4" />
+              {hasAnswers && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center text-[9px] font-semibold text-white bg-primary rounded-full w-3.5 h-3.5">
+                  {job.screeningPairs!.length}
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -467,13 +518,6 @@ function JobRow({
           </div>
         </td>
       </tr>
-      {expanded && hasAnswers && (
-        <tr>
-          <td colSpan={8} className="px-3 py-3 bg-gray-50">
-            <ScreeningPairsBlock pairs={job.screeningPairs} />
-          </td>
-        </tr>
-      )}
     </>
   );
 }
@@ -501,5 +545,130 @@ function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+function ScreeningPanel({
+  job, onClose, onChanged,
+}: {
+  job: ResumeJob;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [text, setText] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [jdOpen, setJdOpen] = useState(false);
+  const pairs = job.screeningPairs || [];
+
+  async function ask() {
+    const questions = text.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (questions.length === 0) {
+      notify.warn('Type at least one question (one per line)');
+      return;
+    }
+    setAsking(true);
+    try {
+      await api.askResumeJobScreening(job._id, questions);
+      setText('');
+      notify.success(`Answered ${questions.length} question${questions.length === 1 ? '' : 's'}`);
+      onChanged();
+    } catch (err) {
+      notify.error(err, 'Failed to get answers');
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+      <aside className="fixed top-0 right-0 bottom-0 w-full sm:w-[480px] bg-white shadow-strong border-l border-gray-100 z-50 flex flex-col">
+        <header className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs text-gray-500">Screening Q&amp;A</div>
+            <div className="font-semibold text-gray-900 truncate">{job.companyName}</div>
+            <div className="text-xs text-gray-500 truncate">{job.profileName}</div>
+          </div>
+          <button type="button" onClick={onClose} className="btn-icon" title="Close"><X className="w-4 h-4" /></button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <section>
+            <button
+              type="button"
+              onClick={() => setJdOpen((v) => !v)}
+              className="text-xs text-gray-500 hover:text-primary inline-flex items-center gap-1"
+            >
+              {jdOpen ? '▾' : '▸'} Job description
+            </button>
+            {jdOpen && (
+              <pre className="mt-2 text-xs text-gray-700 bg-gray-50 border border-gray-100 rounded-[8px] p-3 whitespace-pre-wrap max-h-72 overflow-y-auto">
+                {job.jobDescription || '(no JD stored)'}
+              </pre>
+            )}
+          </section>
+
+          <section>
+            <h3 className="card-title mb-2">Answers ({pairs.length})</h3>
+            {pairs.length > 0 ? (
+              <ScreeningPairsBlock pairs={pairs} />
+            ) : (
+              <p className="text-xs text-gray-400 italic">No questions asked yet. Add one below.</p>
+            )}
+          </section>
+        </div>
+
+        <footer className="p-4 border-t border-gray-100 space-y-2">
+          <label className="block text-xs text-gray-500">Ask a screening question (one per line)</label>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            placeholder="e.g. Why are you a fit for this role?"
+            className="input w-full text-sm"
+          />
+          <div className="flex justify-end">
+            <button type="button" className="btn" onClick={ask} disabled={asking || !text.trim()}>
+              {asking ? <><Loader2 className="w-4 h-4 animate-spin" /> Asking...</> : 'Ask'}
+            </button>
+          </div>
+        </footer>
+      </aside>
+    </>
+  );
+}
+
+function SaveFolderStatus() {
+  const [fsa, setFsa] = useState(false);
+  const [dirName, setDirName] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      const m = await import('../lib/downloadDir');
+      setFsa(m.isFsaSupported());
+      setDirName(m.cachedDirName());
+    })();
+  });
+  if (!fsa) return null;
+  return (
+    <span className="text-[11px] text-gray-500 flex items-center gap-1">
+      {dirName ? (
+        <>
+          Saving to <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">{dirName}/</code>
+          <button
+            type="button"
+            onClick={async () => {
+              const m = await import('../lib/downloadDir');
+              m.resetDownloadDir();
+              setDirName(null);
+            }}
+            className="text-gray-400 hover:text-primary underline"
+          >
+            change
+          </button>
+        </>
+      ) : (
+        <span className="text-gray-400">First download will ask for a folder</span>
+      )}
+    </span>
   );
 }

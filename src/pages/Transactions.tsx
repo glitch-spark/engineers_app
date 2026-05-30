@@ -13,7 +13,7 @@ type PayMethod = 'coin' | 'card';
 
 type Tx = {
   _id: string;
-  userId?: { _id: string; email?: string; name?: string };
+  userId?: { _id: string; email?: string; name?: string; image?: string };
   date: string;
   amount: number;
   description?: string;
@@ -21,6 +21,7 @@ type Tx = {
   status: 'pending' | 'approved' | 'rejected';
   ownerEmail?: string;
   ownerName?: string;
+  ownerImage?: string | null;
   payMethod?: PayMethod | null;
   cardLast4?: string | null;
 };
@@ -302,7 +303,7 @@ export default function TransactionsPage() {
                     <td className="px-3 py-2">{t.description || '—'}</td>
                     <td className="px-3 py-2">{formatPayMethod(t)}</td>
                     <td className="px-3 py-2">{t.status}</td>
-                    <td className="px-3 py-2"><NameWithAvatar name={t.ownerName || t.userId?.name} /></td>
+                    <td className="px-3 py-2"><NameWithAvatar name={t.ownerName || t.userId?.name} imageUrl={t.ownerImage || t.userId?.image} /></td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1 flex-wrap">
                         <button
