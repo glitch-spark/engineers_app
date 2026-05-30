@@ -272,34 +272,15 @@ export default function WeeklyPlanPage() {
         title="Weekly Plans"
         action={
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <button type="button" className="btn-outline" onClick={runReport} disabled={reporting} title="AI-analyze plans in the current filter into progress metrics">
-                <Sparkles size={16} className="mr-2" /> {reporting ? 'Analyzing...' : 'Run Progress Report'}
-              </button>
-            )}
+            <button type="button" className="btn-outline" onClick={runReport} disabled={reporting} title="AI-analyze plans in the current filter into progress metrics">
+              <Sparkles size={16} className="mr-2" /> {reporting ? 'Analyzing...' : 'Run Progress Report'}
+            </button>
             <button type="button" className="btn" onClick={openAdd}>
               <Calendar size={16} className="mr-2" /> Add Plan
             </button>
           </div>
         }
       />
-
-      {/* Stats header — only once a progress report has produced numbers */}
-      {summary && hasMetricData && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {summary.totals.filter((t) => t.target > 0 || t.actual > 0).map((t) => (
-              <div key={t.key} className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
-                <div className="text-xs text-gray-500">{t.label}</div>
-                <div className="text-2xl font-bold text-gray-900 mt-1">
-                  {t.target}<span className="text-sm font-medium text-gray-400"> / {t.actual}</span>
-                </div>
-                <ProgressBar value={pct(t.actual, t.target)} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
@@ -326,6 +307,21 @@ export default function WeeklyPlanPage() {
           </div>
         )}
       </div>
+
+      {/* Stats cards — totals for the current filter (year + optional week) */}
+      {summary && hasMetricData && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {summary.totals.filter((t) => t.target > 0 || t.actual > 0).map((t) => (
+            <div key={t.key} className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
+              <div className="text-xs text-gray-500">{t.label}</div>
+              <div className="text-2xl font-bold text-gray-900 mt-1">
+                {t.target}<span className="text-sm font-medium text-gray-400"> / {t.actual}</span>
+              </div>
+              <ProgressBar value={pct(t.actual, t.target)} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Team progress — admin rollup of planned vs actual per user */}
       {isAdmin && rollup && rollup.users.length > 0 && (

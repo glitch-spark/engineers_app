@@ -6,7 +6,11 @@ import { LogoWordmark } from './Logo';
 export default function Topbar() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+
+  // Reset the failed flag when the avatar URL changes (new upload).
+  useEffect(() => { setImgFailed(false); }, [user?.image]);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -44,13 +48,14 @@ export default function Topbar() {
               aria-expanded={open}
             >
               <div className="relative">
-                {user?.image ? (
+                {user?.image && !imgFailed ? (
                   <img
                     src={user.image}
                     alt="Avatar"
                     width={36}
                     height={36}
-                    className="rounded-full border-2 border-gray-200 group-hover:border-primary transition-colors duration-200"
+                    onError={() => setImgFailed(true)}
+                    className="w-9 h-9 rounded-full object-cover border-2 border-gray-200 group-hover:border-primary transition-colors duration-200"
                   />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white font-semibold text-sm shadow-medium">
@@ -79,13 +84,14 @@ export default function Topbar() {
               <div className="absolute right-0 mt-2 w-64 rounded-[12px] border border-gray-100 bg-white shadow-strong overflow-hidden animate-fade-in-up z-50">
                 <div className="p-4 border-b border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-3">
-                    {user?.image ? (
+                    {user?.image && !imgFailed ? (
                       <img
                         src={user.image}
                         alt="Avatar"
                         width={40}
                         height={40}
-                        className="rounded-full border-2 border-gray-200"
+                        onError={() => setImgFailed(true)}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white font-semibold">
