@@ -351,7 +351,9 @@ export default function WeeklyPlanPage() {
                       return (
                         <td key={c.key} className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                           {target} / {actual}{unitSuffix((m as { unit?: string } | undefined)?.unit)}
-                          <span className={'ml-2 ' + (p >= 100 ? 'text-green-600' : 'text-gray-400')}>{p}%</span>
+                          <span className={'ml-2 ' + (target > 0 && p >= 100 ? 'text-green-600' : 'text-gray-400')}>
+                            {target > 0 ? `${p}%` : '—'}
+                          </span>
                         </td>
                       );
                     })}
@@ -414,8 +416,8 @@ export default function WeeklyPlanPage() {
                           <span className="text-gray-700">{m.label}</span>
                           <span className="text-gray-500 tabular-nums">
                             {m.target} / {m.actual}{unitSuffix(m.unit)}
-                            <span className={'ml-2 ' + (pct(m.actual, m.target) >= 100 ? 'text-green-600' : 'text-gray-400')}>
-                              {pct(m.actual, m.target)}%
+                            <span className={'ml-2 ' + (m.target > 0 && pct(m.actual, m.target) >= 100 ? 'text-green-600' : 'text-gray-400')}>
+                              {m.target > 0 ? `${pct(m.actual, m.target)}%` : '—'}
                             </span>
                           </span>
                         </div>
