@@ -157,6 +157,17 @@ export default function Sidebar({
             }
           />
 
+          <NavLink
+            href="/pipeline"
+            label="Pipeline"
+            isCollapsed={isCollapsed}
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h4v14H4zM10 6h4v10h-4zM16 6h4v6h-4z" />
+              </svg>
+            }
+          />
+
         </div>
 
         {role === 'admin' && (

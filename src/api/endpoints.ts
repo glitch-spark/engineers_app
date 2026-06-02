@@ -441,6 +441,55 @@ export interface DashboardFeed {
 
 export const getDashboardFeed = () => apiFetch<DashboardFeed>('/metrics/dashboard-feed');
 
+// ---------- pipeline ----------
+
+export type KanbanStage =
+  | 'bid_sent' | 'intro' | 'tech' | 'live_coding' | 'system_design'
+  | 'panel' | 'cultural' | 'final' | 'ai_interview' | 'offer'
+  | 'rejected' | 'withdrawn';
+
+export type ApplicationOutcome = 'active' | 'offer' | 'rejected' | 'withdrawn' | 'no_response';
+
+export interface ApplicationDoc {
+  _id: string;
+  userId: { _id?: string; name?: string; email?: string } | string;
+  accountId?: string | null;
+  companyName: string;
+  jobUrl?: string | null;
+  jobDescription?: string | null;
+  bidJobIds: string[];
+  interviewIds: string[];
+  stage: KanbanStage;
+  outcome: ApplicationOutcome;
+  appliedAt?: string | null;
+  lastTouchedAt?: string | null;
+  notes: string;
+  stageHistory: Array<{ stage: string; at: string; by?: string | null; source?: string }>;
+  archivedAt?: string | null;
+  ownerName?: string | null;
+  ownerEmail?: string | null;
+  ownerImage?: string | null;
+}
+
+export const listApplications = (params?: {
+  stage?: string; outcome?: string; userId?: string; profileId?: string;
+  search?: string; includeArchived?: boolean;
+}) => apiFetch<{ applications: ApplicationDoc[] }>(`/applications${qs(params)}`);
+
+export const getApplication = (id: string) => apiFetch<ApplicationDoc>(`/applications/${id}`);
+
+export const patchApplication = (id: string, body: {
+  stage?: string; outcome?: string; notes?: string; archived?: boolean;
+}) => apiFetch<ApplicationDoc>(`/applications/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const deleteApplication = (id: string) => del<{ ok: boolean }>(`/applications/${id}`);
+
+export const migrateApplications = () =>
+  postJSON<{ applications: number; bidsLinked: number; interviewsLinked: number }>('/applications/migrate', {});
+
+export const autoArchiveApplications = (days: number = 30) =>
+  postJSON<{ archived: number }>(`/applications/auto-archive?days=${days}`, {});
+
 export interface LeaderboardResponse {
   metric: LeaderboardMetric;
   range: number;
