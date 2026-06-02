@@ -375,6 +375,72 @@ export interface LeaderboardRow {
   rank: number;
 }
 
+export interface ConsolidatedLeaderboardUser {
+  userId: string;
+  name: string;
+  image?: string | null;
+  bids: number;
+  interviews: number;
+  conversion: number;
+  qualifiesConversion: boolean;
+  bidsTarget: number;
+  interviewsTarget: number;
+  prevBids: number;
+  prevInterviews: number;
+  prevConversion: number;
+  trend: Array<{ label: string; bids: number; interviews: number }>;
+  rank_bids?: number;
+  rank_interviews?: number;
+  rank_conversion?: number;
+}
+
+export interface ConsolidatedLeaderboard {
+  range: string;
+  label: string;
+  period: { from: string; to: string };
+  conversionMinBids: number;
+  champions: {
+    bids: { userId: string; name: string; image?: string | null; value: number } | null;
+    interviews: { userId: string; name: string; image?: string | null; value: number } | null;
+    conversion: { userId: string; name: string; image?: string | null; value: number } | null;
+  };
+  users: ConsolidatedLeaderboardUser[];
+  yourStats: {
+    bids: number; interviews: number; conversion: number;
+    rankBids?: number; rankInterviews?: number; rankConversion?: number;
+    bidsTarget: number; interviewsTarget: number;
+    prevBids: number; prevInterviews: number; prevConversion: number;
+  } | null;
+}
+
+export const getLeaderboardConsolidated = (range: string = 'week', trendWeeks?: number) => {
+  const params = new URLSearchParams({ range });
+  if (trendWeeks) params.set('trendWeeks', String(trendWeeks));
+  return apiFetch<ConsolidatedLeaderboard>(`/metrics/leaderboard/consolidated?${params.toString()}`);
+};
+
+export interface DashboardFeed {
+  recent: Array<{
+    kind: 'bid' | 'interview_done' | 'interview_past';
+    at: string;
+    company?: string | null;
+    profile?: string;
+    jobId?: string;
+    interviewId?: string;
+    stage?: string | null;
+    status?: string | null;
+  }>;
+  upcoming: Array<{
+    interviewId: string;
+    company?: string | null;
+    stage?: string | null;
+    scheduledAt: string | null;
+    endsAt: string | null;
+  }>;
+}
+
+export const getDashboardFeed = () => apiFetch<DashboardFeed>('/metrics/dashboard-feed');
+
 export interface LeaderboardResponse {
   metric: LeaderboardMetric;
   range: number;
