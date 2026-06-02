@@ -22,6 +22,7 @@ function GlobalPromptsCard() {
   const { data, mutate } = useSWR('preferences-profile', () => api.getProfile());
   const [resumePrompt, setResumePrompt] = useState('');
   const [screeningPrompt, setScreeningPrompt] = useState('');
+  const [coverLetterPrompt, setCoverLetterPrompt] = useState('');
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -29,6 +30,7 @@ function GlobalPromptsCard() {
     if (data && !loaded) {
       setResumePrompt(data.user.resumePromptBody || '');
       setScreeningPrompt(data.user.screeningPromptBody || '');
+      setCoverLetterPrompt(data.user.coverLetterPromptBody || '');
       setLoaded(true);
     }
   }, [data, loaded]);
@@ -42,6 +44,7 @@ function GlobalPromptsCard() {
         email: data.user.email,
         resumePromptBody: resumePrompt,
         screeningPromptBody: screeningPrompt,
+        coverLetterPromptBody: coverLetterPrompt,
       });
       notify.success('Global prompts saved');
       mutate();
@@ -84,6 +87,23 @@ function GlobalPromptsCard() {
           onChange={setScreeningPrompt}
           label="Global screening prompt"
           hint="Empty = no global guidance is sent to the LLM."
+        />
+      </section>
+
+      <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-3">
+        <div>
+          <h2 className="section-title">Cover letter prompt — global</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Default cover-letter prompt used when "Also generate a cover letter" is checked at
+            submit time. A profile can override this on its Prompts tab.
+          </p>
+        </div>
+        <ResumePromptField
+          kind="coverLetter"
+          value={coverLetterPrompt}
+          onChange={setCoverLetterPrompt}
+          label="Global cover letter prompt"
+          hint="Empty = no global guidance; cover letter will be generic."
         />
       </section>
 

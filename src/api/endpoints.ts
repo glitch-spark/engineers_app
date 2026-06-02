@@ -35,6 +35,7 @@ export interface ProfileShape {
   leaderboardAnon?: boolean;
   resumePromptBody?: string;
   screeningPromptBody?: string;
+  coverLetterPromptBody?: string;
 }
 
 export interface TransactionListParams {
@@ -110,6 +111,7 @@ export const updateProfile = (body: {
   leaderboardAnon?: boolean;
   resumePromptBody?: string;
   screeningPromptBody?: string;
+  coverLetterPromptBody?: string;
 }) => putJSON<{ message: string; user: ProfileShape }>('/profile', body);
 
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
@@ -686,6 +688,7 @@ export interface ResumeJob {
   outputTokens?: number | null;
   reasoningTokens?: number | null;
   matchSnippet?: string;
+  coverLetterText?: string | null;
   createdAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -698,6 +701,7 @@ export function enqueueResumeJob(body: {
   jobUrl?: string;
   questions?: string[];
   promptBody?: string;
+  generateCoverLetter?: boolean;
 }) {
   return postJSON<{ jobId: string; status: ResumeJobStatus }>('/resume/generate', body);
 }

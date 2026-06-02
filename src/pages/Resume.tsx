@@ -76,6 +76,7 @@ export default function ResumeGeneratorPage() {
   const [jobDescription, setJobDescription] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+  const [generateCoverLetter, setGenerateCoverLetter] = useState(false);
   // Collapsed by default after picking — long list eats vertical space.
   const [profilesOpen, setProfilesOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('resume-gen-profiles-open') !== '0'; } catch { return true; }
@@ -135,6 +136,7 @@ export default function ResumeGeneratorPage() {
             company: trimmedCompany,
             jobDescription,
             jobUrl: jobUrl.trim() || undefined,
+            generateCoverLetter,
           }),
         ),
       );
@@ -305,7 +307,17 @@ export default function ResumeGeneratorPage() {
           <p className="text-xs text-gray-400 mt-1">{jobDescription.length.toLocaleString()} characters</p>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={generateCoverLetter}
+              onChange={(e) => setGenerateCoverLetter(e.target.checked)}
+            />
+            Also generate a cover letter
+            <span className="text-xs text-gray-400"></span>
+          </label>
           <button
             type="submit"
             disabled={submitting || accountIds.length === 0}

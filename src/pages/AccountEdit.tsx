@@ -12,6 +12,7 @@ type AccShape = {
   name?: string;
   resumePromptBody?: string;
   screeningPrompt?: string;
+  coverLetterPrompt?: string;
 };
 
 export default function AccountEditPage() {
@@ -152,6 +153,7 @@ export default function AccountEditPage() {
 function PromptsBlock({ accountId }: { accountId: string }) {
   const [resumePrompt, setResumePrompt] = useState('');
   const [screeningPrompt, setScreeningPrompt] = useState('');
+  const [coverLetterPrompt, setCoverLetterPrompt] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -163,6 +165,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
         if (cancelled) return;
         setResumePrompt(acc.resumePromptBody || '');
         setScreeningPrompt(acc.screeningPrompt || '');
+        setCoverLetterPrompt(acc.coverLetterPrompt || '');
       } catch (err) {
         notify.error(err, 'Could not load prompts');
       } finally {
@@ -178,6 +181,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
       await api.updateAccount(accountId, {
         resumePromptBody: resumePrompt,
         screeningPrompt: screeningPrompt,
+        coverLetterPrompt: coverLetterPrompt,
       });
       notify.success('Prompts saved');
     } catch (err) {
@@ -222,6 +226,20 @@ function PromptsBlock({ accountId }: { accountId: string }) {
           onChange={setScreeningPrompt}
           label="Profile screening prompt"
           hint="Empty = inherit global → built-in default."
+          defaultSource="global"
+        />
+      </Section>
+
+      <Section
+        title="Cover letter prompt"
+        desc="How the cover letter is written when opted-in at submit time. Plain text output. Overrides your global cover-letter prompt. Empty = inherit global."
+      >
+        <ResumePromptField
+          kind="coverLetter"
+          value={coverLetterPrompt}
+          onChange={setCoverLetterPrompt}
+          label="Profile cover letter prompt"
+          hint="Empty = inherit global. If global is also empty, generic letter is produced."
           defaultSource="global"
         />
       </Section>

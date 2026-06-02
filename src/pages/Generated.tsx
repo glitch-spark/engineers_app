@@ -561,9 +561,9 @@ function ScreeningPanel({
   const pairs = job.screeningPairs || [];
 
   async function ask() {
-    const questions = text.split('\n').map((s) => s.trim()).filter(Boolean);
+    const questions = parseNumberedQuestions(text);
     if (questions.length === 0) {
-      notify.warn('Type at least one question (one per line)');
+      notify.warn('Type at least one question. Number them (1. ... 2. ...) for multiple.');
       return;
     }
     setAsking(true);
@@ -608,6 +608,24 @@ function ScreeningPanel({
             )}
           </section>
 
+          {job.coverLetterText && (
+            <section>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="card-title">Cover letter</h3>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(job.coverLetterText || '').then(() => notify.success('Cover letter copied'))}
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary"
+                >
+                  <Copy className="w-3 h-3" /> Copy
+                </button>
+              </div>
+              <pre className="text-sm text-gray-800 bg-gray-50 border border-gray-100 rounded-[8px] p-3 whitespace-pre-wrap max-h-[400px] overflow-y-auto leading-relaxed">
+                {job.coverLetterText}
+              </pre>
+            </section>
+          )}
+
           <section>
             <h3 className="card-title mb-2">Answers ({pairs.length})</h3>
             {pairs.length > 0 ? (
@@ -619,12 +637,12 @@ function ScreeningPanel({
         </div>
 
         <footer className="p-4 border-t border-gray-100 space-y-2">
-          <label className="block text-xs text-gray-500">Ask a screening question (one per line)</label>
+          <label className="block text-xs text-gray-500">Ask screening questions — number them (<code>1.</code>, <code>2.</code>) for multiple. Unnumbered = one question.</label>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={3}
-            placeholder="e.g. Why are you a fit for this role?"
+            placeholder={'e.g.\n1. Why are you a fit for this role?\n2. Tell me about a recent challenging project.\n3. Where do you see yourself in 5 years?'}
             className="input w-full text-sm"
           />
           <div className="flex justify-end">
@@ -671,4 +689,21 @@ function SaveFolderStatus() {
       )}
     </span>
   );
+}
+
+/**
+ * Split a multi-question textarea by numbered prefixes ("1.", "2)", "3:").
+ * Supports multi-line questions: everything between two prefixes is one
+ * question. Unnumbered text becomes a single question.
+ */
+function parseNumberedQuestions(text: string): string[] {
+  const raw = text.trim();
+  if (!raw) return [];
+  // Split on a number-prefix that sits at start of a line.
+  const chunks = raw.split(/(?:^|\n)\s*(?=\d+\s*[.)\]:]\s)/g);
+  const stripped = chunks
+    .map((s) => s.replace(/^\s*\d+\s*[.)\]:]\s*/, '').trim())
+    .filter(Boolean);
+  // No numbered prefixes found → whole input is one question.
+  return stripped.length ? stripped : [raw];
 }

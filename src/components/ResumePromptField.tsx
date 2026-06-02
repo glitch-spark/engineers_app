@@ -27,7 +27,7 @@ export default function ResumePromptField({
   onChange: (v: string) => void;
   label: string;
   hint: string;
-  kind?: 'resume' | 'screening';
+  kind?: 'resume' | 'screening' | 'coverLetter';
   defaultSource?: 'none' | 'global';
 }) {
   const [loadingDefault, setLoadingDefault] = useState(false);
@@ -39,7 +39,9 @@ export default function ResumePromptField({
     setLoadingDefault(true);
     try {
       const { user } = await api.getProfile();
-      const text = (kind === 'screening' ? user.screeningPromptBody : user.resumePromptBody) || '';
+      const text = (kind === 'screening' ? user.screeningPromptBody
+        : kind === 'coverLetter' ? user.coverLetterPromptBody
+        : user.resumePromptBody) || '';
       if (!text.trim()) {
         notify.warn('No global prompt set yet — add one on the Prompts page first.');
         return;
