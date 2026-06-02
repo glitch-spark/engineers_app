@@ -884,7 +884,15 @@ export async function downloadResumeJob(job: ResumeJob): Promise<void> {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const folder = _sanitizeFolderPath(res.headers.get('X-Folder') || `${job.profileName || 'profile'}/${job.companyName || 'company'}`);
       const blob = await res.blob();
-      await fsa.writeToFolder(dir, folder, 'Resume.pdf', blob);
+      try {
+        await fsa.writeToFolder(dir, folder, 'Resume.pdf', blob);
+      } catch (err) {
+        if (!fsa.isStaleHandleError(err)) throw err;
+        fsa.resetDownloadDir();
+        const fresh = await fsa.getDownloadDir();
+        if (!fresh) throw new Error('Pick a folder to save to and try again.');
+        await fsa.writeToFolder(fresh, folder, 'Resume.pdf', blob);
+      }
       return;
     }
   }
@@ -922,6 +930,21 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
     }
     if (dir) {
       // Modest concurrency — large bulks shouldn't stampede the backend.
+      // currentDir is captured in closure + swapped if a stale-handle error
+      // surfaces mid-bulk; one re-prompt covers all workers via shared ref.
+      let currentDir: typeof dir | null = dir;
+      let recoveryPromise: Promise<typeof dir | null> | null = null;
+      const recoverDir = async () => {
+        if (!recoveryPromise) {
+          recoveryPromise = (async () => {
+            fsa.resetDownloadDir();
+            const fresh = await fsa.getDownloadDir();
+            currentDir = fresh;
+            return fresh;
+          })();
+        }
+        return recoveryPromise;
+      };
       const queue = [...jobIds];
       const workers = Array.from({ length: Math.min(5, queue.length) }, async () => {
         while (queue.length) {
@@ -931,7 +954,15 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
           if (!res.ok) continue;
           const folder = _sanitizeFolderPath(res.headers.get('X-Folder') || 'company');
           const blob = await res.blob();
-          await fsa.writeToFolder(dir, folder, 'Resume.pdf', blob);
+          try {
+            if (!currentDir) break;
+            await fsa.writeToFolder(currentDir, folder, 'Resume.pdf', blob);
+          } catch (err) {
+            if (!fsa.isStaleHandleError(err)) throw err;
+            const fresh = await recoverDir();
+            if (!fresh) break;
+            await fsa.writeToFolder(fresh, folder, 'Resume.pdf', blob);
+          }
         }
       });
       await Promise.all(workers);
