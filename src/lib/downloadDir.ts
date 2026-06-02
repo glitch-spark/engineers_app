@@ -13,6 +13,7 @@ type DirHandle = {
   getFileHandle: (name: string, opts?: { create?: boolean }) => Promise<{
     createWritable: () => Promise<{ write: (data: Blob | ArrayBuffer | Uint8Array) => Promise<void>; close: () => Promise<void> }>;
   }>;
+  removeEntry?: (name: string, opts?: { recursive?: boolean }) => Promise<void>;
   name: string;
   queryPermission?: (opts: { mode: 'read' | 'readwrite' }) => Promise<'granted' | 'denied' | 'prompt'>;
   requestPermission?: (opts: { mode: 'read' | 'readwrite' }) => Promise<'granted' | 'denied' | 'prompt'>;
@@ -37,16 +38,36 @@ export function isFsaSupported(): boolean {
 /** Outcome of a picker invocation — lets the caller distinguish user
  *  cancel from a Chrome "blocked system folder" rejection so the UI can
  *  surface the right hint. */
-export type PickError = 'cancelled' | 'blocked' | 'unsupported' | null;
+export type PickError = 'cancelled' | 'blocked' | 'unsupported' | 'dead' | null;
 let lastError: PickError = null;
 export function lastPickError(): PickError { return lastError; }
 
 async function _ensurePermission(handle: DirHandle): Promise<boolean> {
   if (!handle.queryPermission || !handle.requestPermission) return true;
   let p = await handle.queryPermission({ mode: 'readwrite' });
-  if (p === 'granted') return true;
-  p = await handle.requestPermission({ mode: 'readwrite' });
-  return p === 'granted';
+  if (p !== 'granted') {
+    p = await handle.requestPermission({ mode: 'readwrite' });
+    if (p !== 'granted') return false;
+  }
+  return true;
+}
+
+/** Active liveness probe — queryPermission can return 'granted' on a
+ *  handle whose backing folder was moved/deleted/replaced on disk
+ *  ("state had changed since it was read from disk"). The only reliable
+ *  test is to perform an actual op against the filesystem. We create +
+ *  remove a tiny marker subdirectory; any throw means the handle is dead. */
+async function _probeAlive(handle: DirHandle): Promise<boolean> {
+  const probeName = '.engineer-probe';
+  try {
+    const sub = await handle.getDirectoryHandle(probeName, { create: true });
+    if (handle.removeEntry) {
+      await handle.removeEntry(probeName, { recursive: true }).catch(() => { /* ignore */ });
+    }
+    return !!sub;
+  } catch {
+    return false;
+  }
 }
 
 /** Get the cached directory handle, prompting once per session if needed.
@@ -60,8 +81,9 @@ export async function getDownloadDir(): Promise<DirHandle | null> {
   lastError = null;
   if (!isFsaSupported()) { lastError = 'unsupported'; return null; }
   if (cached) {
-    const ok = await _ensurePermission(cached).catch(() => false);
-    if (ok) return cached;
+    const permOk = await _ensurePermission(cached).catch(() => false);
+    const alive = permOk && await _probeAlive(cached);
+    if (alive) return cached;
     cached = null;  // stale — fall through to re-prompt
   }
   try {
@@ -70,6 +92,13 @@ export async function getDownloadDir(): Promise<DirHandle | null> {
       startIn: 'documents',
       id: 'engineer-resume-downloads',
     });
+    // Probe the freshly-picked folder too — user can re-pick a folder
+    // that was deleted but still appears in the OS dialog cache.
+    const alive = await _probeAlive(handle);
+    if (!alive) {
+      lastError = 'dead';
+      return null;
+    }
     cached = handle;
     return handle;
   } catch (err) {

@@ -879,6 +879,9 @@ export async function downloadResumeJob(job: ResumeJob): Promise<void> {
     if (!dir && fsa.lastPickError() === 'blocked') {
       throw new Error("Chrome blocked that folder (system files protected). Pick a normal folder — e.g. Documents/Resumes — and try again.");
     }
+    if (!dir && fsa.lastPickError() === 'dead') {
+      throw new Error("That folder no longer exists on disk. Pick a different folder and try again.");
+    }
     if (dir) {
       const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download?format=pdf`, { headers: baseHeaders });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -927,6 +930,9 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
     const dir = await fsa.getDownloadDir();
     if (!dir && fsa.lastPickError() === 'blocked') {
       throw new Error("Chrome blocked that folder (system files protected). Pick a normal folder — e.g. Documents/Resumes — and try again.");
+    }
+    if (!dir && fsa.lastPickError() === 'dead') {
+      throw new Error("That folder no longer exists on disk. Pick a different folder and try again.");
     }
     if (dir) {
       // Modest concurrency — large bulks shouldn't stampede the backend.
