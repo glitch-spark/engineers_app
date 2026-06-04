@@ -542,6 +542,15 @@ export const listEmailAccounts = () =>
 export const startGmailOAuth = () =>
   postJSON<{ url: string }>('/integrations/email/gmail/oauth-start', {});
 
+export const startOutlookOAuth = () =>
+  postJSON<{ url: string }>('/integrations/email/outlook/oauth-start', {});
+
+export const resetEmailAccountSync = (id: string, fullReSync = false) =>
+  postJSON<{ ok: boolean; syncStatus: string; historyId: string | null }>(
+    `/integrations/email/${id}/reset${fullReSync ? '?fullReSync=true' : ''}`,
+    {},
+  );
+
 export const syncEmailAccount = (id: string) =>
   postJSON<{ ok: boolean; stats: { fetched: number; classified: number; auto_applied: number; needs_review: number } }>(
     `/integrations/email/${id}/sync`,

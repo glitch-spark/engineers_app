@@ -38,7 +38,7 @@ export default function IntegrationsPage() {
   const [params, setParams] = useSearchParams();
   const accountsKey = 'email-accounts';
   const { data, mutate, isLoading } = useSWR(accountsKey, () => api.listEmailAccounts());
-  const [connecting, setConnecting] = useState(false);
+  const [connecting, setConnecting] = useState<'gmail' | 'outlook' | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
   // 1. If this page renders inside the OAuth popup, forward the status to
@@ -78,16 +78,18 @@ export default function IntegrationsPage() {
     return () => window.removeEventListener('message', onMsg);
   }, [mutate]);
 
-  async function onConnect() {
-    setConnecting(true);
+  async function onConnect(provider: 'gmail' | 'outlook') {
+    setConnecting(provider);
     try {
-      const { url } = await api.startGmailOAuth();
-      const w = window.open(url, 'gmail-oauth', 'width=520,height=720');
+      const { url } = provider === 'gmail'
+        ? await api.startGmailOAuth()
+        : await api.startOutlookOAuth();
+      const w = window.open(url, `${provider}-oauth`, 'width=520,height=720');
       if (!w) notify.error('Popup blocked. Allow popups for this site and try again.');
     } catch (e: unknown) {
       notify.error((e as Error)?.message || 'Failed to start OAuth');
     } finally {
-      setConnecting(false);
+      setConnecting(null);
     }
   }
 
@@ -109,6 +111,21 @@ export default function IntegrationsPage() {
     }
   }
 
+  async function onReset(id: string, email: string) {
+    const fullReSync = confirm(
+      `Reset sync state for ${email}?\n\n` +
+      `OK = full re-sync (wipes history cursor, next sync pulls the whole window again)\n` +
+      `Cancel = just unstick the status (keeps cursor, next sync only fetches new mail)`
+    );
+    try {
+      const res = await api.resetEmailAccountSync(id, fullReSync);
+      notify.success(`Reset — status=${res.syncStatus}${fullReSync ? ', cursor cleared' : ''}`);
+      mutate();
+    } catch (e: unknown) {
+      notify.error((e as Error)?.message || 'Reset failed');
+    }
+  }
+
   async function onDisconnect(id: string, email: string) {
     if (!confirm(`Disconnect ${email}? You'll need to re-authorize to sync again.`)) return;
     try {
@@ -127,13 +144,13 @@ export default function IntegrationsPage() {
       <PageHeader title="Integrations" />
 
       <section className="bg-white border border-gray-200 rounded-[8px] p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 min-w-[260px]">
             <div className="p-2 rounded-md bg-red-50">
               <Mail className="w-5 h-5 text-red-500" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Gmail</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Email (Gmail · Outlook)</h2>
               <p className="text-sm text-gray-600 mt-1 max-w-xl">
                 Connect your inbox so application emails — recruiter reach-outs, interview invites, offers,
                 rejections — auto-flow into the Pipeline board. First sync pulls the last 7 days; after that
@@ -141,15 +158,26 @@ export default function IntegrationsPage() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onConnect}
-            disabled={connecting}
-            className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-[6px] bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-            Connect Gmail
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onConnect('gmail')}
+              disabled={connecting !== null}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-[6px] bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {connecting === 'gmail' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              Connect Gmail
+            </button>
+            <button
+              type="button"
+              onClick={() => onConnect('outlook')}
+              disabled={connecting !== null}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-[6px] bg-blue-600 text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {connecting === 'outlook' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              Connect Outlook
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 border-t border-gray-100 pt-4">
@@ -164,6 +192,9 @@ export default function IntegrationsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-gray-900 truncate">{a.email}</span>
+                      <span className={`px-1.5 py-0.5 text-[10px] uppercase tracking-wide rounded ${
+                        a.provider === 'outlook' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                      }`}>{a.provider}</span>
                       <StatusBadge status={a.syncStatus} error={a.lastSyncError} />
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
@@ -189,6 +220,14 @@ export default function IntegrationsPage() {
                         <RefreshCw className="w-3.5 h-3.5" />
                       )}
                       Sync now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onReset(a.id, a.email)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-[6px] border border-gray-200 text-gray-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
+                      title="Unstick a stuck sync, optionally clear the history cursor"
+                    >
+                      Reset
                     </button>
                     <button
                       type="button"
