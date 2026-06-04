@@ -27,7 +27,7 @@ Vite + React 18 + TypeScript single-page app. Talks to the [`engineers_backend`]
 ### Prereqs
 
 - Node 18+ (Vite 5 requires it).
-- Backend running on `http://localhost:8000` (see [`engineers_backend/readme.md`](https://github.com/super-dev-vibe/engineers_backend)). MongoDB Atlas free tier is fine.
+- Backend running on `http://localhost:8080` (see [`engineers_backend/readme.md`](https://github.com/super-dev-vibe/engineers_backend)). MongoDB Atlas free tier is fine.
 
 ### Setup
 
@@ -35,7 +35,7 @@ Vite + React 18 + TypeScript single-page app. Talks to the [`engineers_backend`]
 npm install
 ```
 
-`.env.development` already ships with `VITE_API_BASE_URL=http://localhost:8000`. No copying required for the standard local setup. (If `VITE_API_BASE_URL` is unset in dev mode, [`src/api/client.ts`](src/api/client.ts#L36-L48) falls back to `http://localhost:8000` and prints a console warning.)
+`.env.development` already ships with `VITE_API_BASE_URL=http://localhost:8080`. No copying required for the standard local setup. (If `VITE_API_BASE_URL` is unset in dev mode, [`src/api/client.ts`](src/api/client.ts#L36-L48) falls back to `http://localhost:8080` and prints a console warning.)
 
 ### Run
 
@@ -50,7 +50,7 @@ There is **no test runner configured** — no Jest, Vitest, or Playwright. Don't
 
 ### First-run flow
 
-1. Start backend (`uvicorn app.main:app --reload --port 8000` in `engineers_backend/`).
+1. Start backend (`uvicorn app.main:app --reload --port 8080` in `engineers_backend/`).
 2. `npm run dev` here.
 3. Visit http://localhost:5173/register. The first account becomes `admin`.
 4. Log in, go to `/interviews`. The new sub-tabs appear: **Interviews · Interview Review with AI · Review Ideas** (admin only).

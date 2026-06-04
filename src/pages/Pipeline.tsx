@@ -7,9 +7,9 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Loader2, ExternalLink, Archive, Sparkles, X } from 'lucide-react';
+import { Loader2, ExternalLink, Archive, Sparkles, X, RefreshCw, Inbox, Check } from 'lucide-react';
 import * as api from '../api/endpoints';
-import type { ApplicationDoc, KanbanStage } from '../api/endpoints';
+import type { ApplicationDoc, EmailMessageDoc, KanbanStage } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import PageHeader from '../components/PageHeader';
 import NameWithAvatar from '../components/NameWithAvatar';
@@ -47,10 +47,21 @@ export default function PipelinePage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
+  const [tab, setTab] = useState<'board' | 'inbox'>('board');
   const [search, setSearch] = useState('');
   const [outcome, setOutcome] = useState<string>('active');
   const [adminUserId, setAdminUserId] = useState<string>('');
   const [includeArchived, setIncludeArchived] = useState(false);
+
+  // Needs-review email count drives the Inbox tab badge. Cheap call —
+  // we already pull this list when the tab is opened, but the badge
+  // needs to be present on first render.
+  const { data: reviewData, mutate: mutateReview } = useSWR(
+    ['email-review-count'],
+    () => api.listEmailMessages({ reviewStatus: 'needs_review', limit: 200 }),
+    { revalidateOnFocus: false },
+  );
+  const reviewCount = (reviewData?.messages || []).length;
 
   const { data, isLoading, mutate } = useSWR(
     ['applications', search, outcome, isAdmin ? adminUserId : '', includeArchived] as const,
@@ -131,6 +142,31 @@ export default function PipelinePage() {
         }
       />
 
+      {/* Tab strip */}
+      <div className="border-b border-gray-200 flex items-center gap-1">
+        <TabButton active={tab === 'board'} onClick={() => setTab('board')}>Board</TabButton>
+        <TabButton active={tab === 'inbox'} onClick={() => setTab('inbox')}>
+          <span className="inline-flex items-center gap-2">
+            <Inbox className="w-4 h-4" />
+            Inbox
+            {reviewCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-medium bg-primary text-white rounded-full">
+                {reviewCount}
+              </span>
+            )}
+          </span>
+        </TabButton>
+      </div>
+
+      {tab === 'inbox' && (
+        <InboxTab
+          apps={data?.applications ?? []}
+          onApplied={() => { mutate(); mutateReview(); }}
+        />
+      )}
+
+      {tab === 'board' && (
+      <>
       {/* Filters */}
       <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
         <div className="w-64">
@@ -211,7 +247,201 @@ export default function PipelinePage() {
           onChanged={() => { mutate(); }}
         />
       )}
+      </>
+      )}
     </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+        active ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-800'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function InboxTab({ apps, onApplied }: { apps: ApplicationDoc[]; onApplied: () => void }) {
+  const { data, isLoading, mutate } = useSWR(
+    ['email-review'],
+    () => api.listEmailMessages({ reviewStatus: 'needs_review', limit: 200 }),
+    { revalidateOnFocus: false },
+  );
+  const { data: accountsData, mutate: mutateAccounts } = useSWR(['email-accounts'], () => api.listEmailAccounts());
+  const accounts = (accountsData?.accounts || []).filter((a) => !a.disconnectedAt);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+
+  const messages: EmailMessageDoc[] = data?.messages || [];
+
+  async function onSyncAll() {
+    if (accounts.length === 0) {
+      notify.info('Connect a Gmail account in Integrations first.');
+      return;
+    }
+    for (const a of accounts) {
+      setSyncingId(a.id);
+      try {
+        const { stats } = await api.syncEmailAccount(a.id);
+        notify.success(`${a.email}: ${stats.fetched} fetched, ${stats.auto_applied} auto, ${stats.needs_review} to review`);
+      } catch (err) {
+        notify.error(err, `Sync failed for ${a.email}`);
+      }
+    }
+    setSyncingId(null);
+    mutate();
+    mutateAccounts();
+    onApplied();
+  }
+
+  async function onApply(msg: EmailMessageDoc, applicationId: string, stage?: string) {
+    try {
+      await api.applyEmailMessage(msg.id, { applicationId, stage });
+      notify.success('Applied');
+      mutate();
+      onApplied();
+    } catch (err) {
+      notify.error(err, 'Apply failed');
+    }
+  }
+
+  async function onDismiss(msg: EmailMessageDoc) {
+    try {
+      await api.dismissEmailMessage(msg.id);
+      mutate();
+      onApplied();
+    } catch (err) {
+      notify.error(err, 'Dismiss failed');
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between bg-white border border-gray-100 rounded-[12px] px-4 py-3 shadow-sm">
+        <div className="text-sm text-gray-600">
+          {accounts.length === 0
+            ? <>No Gmail accounts connected. <Link to="/integrations" className="text-primary hover:underline">Connect one →</Link></>
+            : <>{accounts.length} account{accounts.length === 1 ? '' : 's'} connected · {messages.length} email{messages.length === 1 ? '' : 's'} to review</>}
+        </div>
+        <button
+          type="button"
+          onClick={onSyncAll}
+          disabled={!!syncingId || accounts.length === 0}
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-[6px] bg-primary text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {syncingId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          Sync now
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="bg-white rounded-[12px] border border-gray-100 p-6 text-sm text-gray-500 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading inbox…
+        </div>
+      ) : messages.length === 0 ? (
+        <div className="bg-white rounded-[12px] border border-gray-100 p-8 text-center text-sm text-gray-500">
+          Inbox is clear. New emails will appear here for one-click confirmation.
+        </div>
+      ) : (
+        <ul className="bg-white rounded-[12px] border border-gray-100 divide-y divide-gray-100 shadow-sm">
+          {messages.map((m) => (
+            <ReviewRow key={m.id} msg={m} apps={apps} onApply={onApply} onDismiss={onDismiss} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ReviewRow({
+  msg, apps, onApply, onDismiss,
+}: {
+  msg: EmailMessageDoc;
+  apps: ApplicationDoc[];
+  onApply: (msg: EmailMessageDoc, applicationId: string, stage?: string) => void;
+  onDismiss: (msg: EmailMessageDoc) => void;
+}) {
+  // Suggested match: existing applicationId on the row if backend matched it,
+  // otherwise look up by the classifier's companyGuess.
+  const suggestedAppId = useMemo(() => {
+    if (msg.applicationId) return msg.applicationId;
+    const guess = (msg.companyGuess || '').trim().toLowerCase();
+    if (!guess) return '';
+    const match = apps.find((a) => a.companyName.toLowerCase() === guess);
+    return match?._id || '';
+  }, [msg, apps]);
+  const [appId, setAppId] = useState(suggestedAppId);
+
+  return (
+    <li className="p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
+            <LabelChip label={msg.label} confidence={msg.confidence} />
+            {msg.companyGuess && <span className="text-gray-700 font-medium">{msg.companyGuess}</span>}
+            <span>·</span>
+            <span>{new Date(msg.receivedAt).toLocaleString()}</span>
+          </div>
+          <div className="mt-1 text-sm font-medium text-gray-900 truncate">{msg.subject || '(no subject)'}</div>
+          <div className="text-xs text-gray-500 truncate">from {msg.fromName ? `${msg.fromName} <${msg.fromAddress}>` : msg.fromAddress}</div>
+          {msg.snippet && (
+            <div className="mt-1 text-sm text-gray-600 line-clamp-2">{msg.snippet}</div>
+          )}
+        </div>
+        <div className="flex flex-col gap-2 w-72 shrink-0">
+          <select
+            className="select focus-ring text-sm w-full"
+            value={appId}
+            onChange={(e) => setAppId(e.target.value)}
+          >
+            <option value="">Link to application…</option>
+            {apps.map((a) => (
+              <option key={a._id} value={a._id}>{a.companyName} — {a.stage}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => appId && onApply(msg, appId, msg.targetStage || undefined)}
+              disabled={!appId}
+              className="flex-1 inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm rounded-[6px] bg-emerald-600 text-white hover:opacity-90 disabled:opacity-40"
+            >
+              <Check className="w-3.5 h-3.5" /> Apply
+            </button>
+            <button
+              type="button"
+              onClick={() => onDismiss(msg)}
+              className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm rounded-[6px] border border-gray-200 text-gray-700 hover:bg-gray-50"
+            >
+              <X className="w-3.5 h-3.5" /> Dismiss
+            </button>
+          </div>
+          {msg.targetStage && (
+            <div className="text-[11px] text-gray-500 text-right">Will advance to: <strong>{msg.targetStage}</strong></div>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function LabelChip({ label, confidence }: { label?: string | null; confidence: number }) {
+  if (!label) return null;
+  const tone =
+    label === 'offer' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    : label === 'rejection' ? 'bg-rose-50 text-rose-700 border-rose-200'
+    : label === 'noise' || label === 'follow_up' ? 'bg-gray-50 text-gray-600 border-gray-200'
+    : 'bg-blue-50 text-blue-700 border-blue-200';
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-medium ${tone}`}>
+      {label.replace(/_/g, ' ')}
+      <span className="opacity-70 tabular-nums">{Math.round(confidence * 100)}%</span>
+    </span>
   );
 }
 

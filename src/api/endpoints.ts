@@ -490,6 +490,77 @@ export const migrateApplications = () =>
 export const autoArchiveApplications = (days: number = 30) =>
   postJSON<{ archived: number }>(`/applications/auto-archive?days=${days}`, {});
 
+// ---------- email integrations (Gmail) ----------
+
+export type EmailProvider = 'gmail' | 'outlook';
+export type EmailSyncStatus = 'idle' | 'running' | 'error';
+export type EmailReviewStatus =
+  | 'auto_applied' | 'needs_review' | 'dismissed' | 'applied' | 'ignored';
+
+export type EmailLabel =
+  | 'applied' | 'recruiter_reachout' | 'phone_screen' | 'pre_screening'
+  | 'take_home' | 'live_coding' | 'system_design' | 'behavioral'
+  | 'panel' | 'final_round' | 'offer' | 'rejection'
+  | 'schedule_interview' | 'follow_up' | 'noise';
+
+export interface EmailAccountDoc {
+  id: string;
+  provider: EmailProvider;
+  email: string;
+  historyId?: string | null;
+  lastSyncAt?: string | null;
+  lastSyncError?: string | null;
+  syncStatus: EmailSyncStatus;
+  disconnectedAt?: string | null;
+  createdAt: string;
+}
+
+export interface EmailMessageDoc {
+  id: string;
+  accountId: string;
+  messageId: string;
+  threadId: string;
+  fromAddress: string;
+  fromName?: string | null;
+  subject: string;
+  snippet: string;
+  receivedAt: string;
+  label?: EmailLabel | null;
+  confidence: number;
+  companyGuess?: string | null;
+  targetStage?: string | null;
+  applicationId?: string | null;
+  reviewStatus: EmailReviewStatus;
+}
+
+export const listEmailAccounts = () =>
+  apiFetch<{ accounts: EmailAccountDoc[] }>('/integrations/email/accounts');
+
+export const startGmailOAuth = () =>
+  postJSON<{ url: string }>('/integrations/email/gmail/oauth-start', {});
+
+export const syncEmailAccount = (id: string) =>
+  postJSON<{ ok: boolean; stats: { fetched: number; classified: number; auto_applied: number; needs_review: number } }>(
+    `/integrations/email/${id}/sync`,
+    {},
+  );
+
+export const disconnectEmailAccount = (id: string) =>
+  del<void>(`/integrations/email/${id}`);
+
+export const listEmailMessages = (params?: {
+  accountId?: string; applicationId?: string; reviewStatus?: EmailReviewStatus; limit?: number;
+}) => apiFetch<{ messages: EmailMessageDoc[] }>(`/integrations/email/messages${qs(params)}`);
+
+export const applyEmailMessage = (id: string, body: { applicationId?: string; stage?: string }) =>
+  postJSON<{ ok: boolean }>(`/integrations/email/messages/${id}/apply`, body);
+
+export const dismissEmailMessage = (id: string) =>
+  postJSON<{ ok: boolean }>(`/integrations/email/messages/${id}/dismiss`, {});
+
+export const fetchEmailBody = (id: string) =>
+  apiFetch<{ body: string }>(`/integrations/email/messages/${id}/body`);
+
 export interface LeaderboardResponse {
   metric: LeaderboardMetric;
   range: number;

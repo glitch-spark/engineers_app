@@ -39,10 +39,10 @@ function getBaseUrl(): string {
   if (raw) return raw.replace(/\/+$/, '');
   if (env.DEV) {
     console.warn(
-      '[api] VITE_API_BASE_URL is empty in dev mode — defaulting to http://localhost:8000. ' +
+      '[api] VITE_API_BASE_URL is empty in dev mode — defaulting to http://localhost:8080. ' +
         'Set it in engineersapp/.env.development and restart `npm run dev` to silence this.'
     );
-    return 'http://localhost:8000';
+    return 'http://localhost:8080';
   }
   return '';
 }
