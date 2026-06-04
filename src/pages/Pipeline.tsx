@@ -117,13 +117,24 @@ export default function PipelinePage() {
   }
 
   async function runMigrate() {
-    if (!confirm('Backfill pipeline from existing bids + interviews?')) return;
+    if (!confirm('Backfill pipeline from existing interviews only? (Resume-only bids are no longer auto-added — pipeline is email-driven.)')) return;
     try {
       const res = await api.migrateApplications();
-      notify.success(`Pipeline initialized: ${res.applications} apps · ${res.bidsLinked} bids · ${res.interviewsLinked} interviews`);
+      notify.success(`Pipeline initialized: ${res.applications} apps · ${res.interviewsLinked} interviews linked`);
       mutate();
     } catch (err) {
       notify.error(err, 'Migration failed');
+    }
+  }
+
+  async function runWipeBidOnly() {
+    if (!confirm('Delete every Application that has no attached interviews? This removes the resume-only bid_sent backfill. Cannot be undone.')) return;
+    try {
+      const res = await api.wipeBidOnlyApplications();
+      notify.success(`Removed ${res.deleted} bid-only applications`);
+      mutate();
+    } catch (err) {
+      notify.error(err, 'Wipe failed');
     }
   }
 
@@ -134,9 +145,14 @@ export default function PipelinePage() {
         action={
           <div className="flex items-center gap-2">
             {isAdmin && (
-              <button type="button" className="btn-outline" onClick={runMigrate} title="One-off backfill from existing data">
-                <Sparkles size={16} className="mr-2" /> Initialize
-              </button>
+              <>
+                <button type="button" className="btn-outline" onClick={runMigrate} title="One-off backfill from existing interviews">
+                  <Sparkles size={16} className="mr-2" /> Initialize
+                </button>
+                <button type="button" className="btn-outline" onClick={runWipeBidOnly} title="Delete Applications with no interviews">
+                  <Archive size={16} className="mr-2" /> Clear bid-only
+                </button>
+              </>
             )}
           </div>
         }

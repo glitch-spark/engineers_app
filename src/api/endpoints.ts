@@ -490,6 +490,9 @@ export const migrateApplications = () =>
 export const autoArchiveApplications = (days: number = 30) =>
   postJSON<{ archived: number }>(`/applications/auto-archive?days=${days}`, {});
 
+export const wipeBidOnlyApplications = () =>
+  postJSON<{ deleted: number }>('/applications/wipe-bid-only', {});
+
 // ---------- email integrations (Gmail) ----------
 
 export type EmailProvider = 'gmail' | 'outlook';
