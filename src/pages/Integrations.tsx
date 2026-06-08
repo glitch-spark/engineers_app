@@ -99,8 +99,8 @@ export default function IntegrationsPage() {
       const { stats } = await api.syncEmailAccount(id);
       const parts = [
         `${stats.fetched} fetched`,
-        stats.auto_applied ? `${stats.auto_applied} auto-applied` : null,
-        stats.needs_review ? `${stats.needs_review} need review` : null,
+        stats.on_board ? `${stats.on_board} on board` : null,
+        stats.ignored ? `${stats.ignored} ignored` : null,
       ].filter(Boolean);
       notify.success(`Sync complete — ${parts.join(', ')}`);
       mutate();

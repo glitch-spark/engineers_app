@@ -466,6 +466,10 @@ export interface ApplicationDoc {
   notes: string;
   stageHistory: Array<{ stage: string; at: string; by?: string | null; source?: string }>;
   archivedAt?: string | null;
+  // AI-proposed cards (from email) start unconfirmed and render with Yes/No.
+  confirmed: boolean;
+  aiLabel?: string | null;
+  aiConfidence?: number | null;
   ownerName?: string | null;
   ownerEmail?: string | null;
   ownerImage?: string | null;
@@ -484,6 +488,12 @@ export const patchApplication = (id: string, body: {
 
 export const deleteApplication = (id: string) => del<{ ok: boolean }>(`/applications/${id}`);
 
+export const confirmApplication = (id: string) =>
+  postJSON<ApplicationDoc>(`/applications/${id}/confirm`, {});
+
+export const rejectApplication = (id: string) =>
+  postJSON<{ ok: boolean }>(`/applications/${id}/reject`, {});
+
 export const migrateApplications = () =>
   postJSON<{ applications: number; bidsLinked: number; interviewsLinked: number }>('/applications/migrate', {});
 
@@ -498,7 +508,8 @@ export const wipeBidOnlyApplications = () =>
 export type EmailProvider = 'gmail' | 'outlook';
 export type EmailSyncStatus = 'idle' | 'running' | 'error';
 export type EmailReviewStatus =
-  | 'auto_applied' | 'needs_review' | 'dismissed' | 'applied' | 'ignored';
+  | 'on_board' | 'dismissed' | 'ignored'
+  | 'auto_applied' | 'needs_review' | 'applied';
 
 export type EmailLabel =
   | 'applied' | 'recruiter_reachout' | 'phone_screen' | 'pre_screening'
@@ -552,7 +563,7 @@ export const resetEmailAccountSync = (id: string, fullReSync = false) =>
   );
 
 export const syncEmailAccount = (id: string) =>
-  postJSON<{ ok: boolean; stats: { fetched: number; classified: number; auto_applied: number; needs_review: number } }>(
+  postJSON<{ ok: boolean; stats: { fetched: number; classified: number; on_board: number; ignored: number } }>(
     `/integrations/email/${id}/sync`,
     {},
   );
