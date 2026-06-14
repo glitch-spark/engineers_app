@@ -10,6 +10,7 @@ import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
+import { INTERVIEW_STAGES, stageBadgeClass, stageLabel } from '../lib/stageBadge';
 
 const editorStyles = `
   .ql-editor { min-height: 140px; font-size: 14px; line-height: 1.5; }
@@ -46,16 +47,7 @@ const editorStyles = `
   .prose-readonly pre, .prose-readonly code { white-space: pre-wrap; word-break: break-all; }
 `;
 
-const STAGES = [
-  { value: 'intro', label: 'Intro' },
-  { value: 'tech', label: 'Tech' },
-  { value: 'panel', label: 'Panel' },
-  { value: 'live_coding', label: 'Live Coding' },
-  { value: 'system_design', label: 'System Design' },
-  { value: 'cultural', label: 'Cultural' },
-  { value: 'final', label: 'Final' },
-  { value: 'ai_interview', label: 'AI Interview' },
-];
+const STAGES = INTERVIEW_STAGES;
 
 const STATUSES = [
   { value: 'scheduled', label: 'Scheduled' },
@@ -107,8 +99,6 @@ type Interview = {
 };
 
 type ModalMode = 'create' | 'read' | 'update' | 'delete' | null;
-
-const stageLabel = (v: string) => STAGES.find((s) => s.value === v)?.label ?? v;
 
 function pageNumbers(current: number, total: number): (number | '…')[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
@@ -174,20 +164,6 @@ function formatPretty(startIso: string, endIso?: string | null): string {
 
 const formatScheduled = (iso: string) => formatPretty(iso);
 const formatTimeRange = (startIso: string, endIso?: string | null) => formatPretty(startIso, endIso);
-
-const stageBadgeClass = (stage: string) => {
-  switch (stage) {
-    case 'intro': return 'bg-gray-100 text-gray-700 border-gray-200';
-    case 'tech': return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'panel': return 'bg-purple-100 text-purple-800 border-purple-200';
-    case 'live_coding': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-    case 'system_design': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
-    case 'cultural': return 'bg-pink-100 text-pink-800 border-pink-200';
-    case 'final': return 'bg-amber-100 text-amber-800 border-amber-200';
-    case 'ai_interview': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    default: return 'bg-gray-100 text-gray-700 border-gray-200';
-  }
-};
 
 export default function InterviewsPage() {
   const { user } = useAuth();

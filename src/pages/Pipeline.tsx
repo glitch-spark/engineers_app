@@ -14,21 +14,49 @@ import { useAuth } from '../auth/useAuth';
 import PageHeader from '../components/PageHeader';
 import NameWithAvatar from '../components/NameWithAvatar';
 import { notify } from '../lib/notify';
+import { stageBadgeClass, stageLabel } from '../lib/stageBadge';
 
-const STAGES: { key: KanbanStage; label: string; tone: string }[] = [
-  { key: 'bid_sent', label: 'Applied', tone: 'border-gray-300' },
-  { key: 'rejected', label: 'Rejected', tone: 'border-rose-300' },
-  { key: 'ai_interview', label: 'AI interview', tone: 'border-cyan-300' },
-  { key: 'intro', label: 'Intro', tone: 'border-gray-300' },
-  { key: 'tech', label: 'Tech', tone: 'border-blue-300' },
-  { key: 'live_coding', label: 'Live coding', tone: 'border-indigo-300' },
-  { key: 'system_design', label: 'System design', tone: 'border-purple-300' },
-  { key: 'panel', label: 'Panel', tone: 'border-purple-300' },
-  { key: 'cultural', label: 'Cultural', tone: 'border-pink-300' },
-  { key: 'final', label: 'Final', tone: 'border-amber-300' },
-  { key: 'offer', label: 'Offer', tone: 'border-emerald-400' },
-  { key: 'withdrawn', label: 'Withdrawn', tone: 'border-gray-300' },
+const BOARD_COLUMNS = [
+  { key: 'applied', label: 'Applied', tone: 'border-gray-300' },
+  { key: 'in_progress', label: 'In Progress', tone: 'border-blue-300' },
+] as const;
+
+type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
+
+const IN_PROGRESS_STAGES: KanbanStage[] = [
+  'ai_interview', 'intro', 'tech', 'live_coding',
+  'system_design', 'panel', 'cultural', 'final',
 ];
+
+const TERMINAL_STAGES: KanbanStage[] = ['rejected', 'offer', 'withdrawn'];
+
+const TERMINAL_OUTCOMES = new Set(['offer', 'rejected', 'withdrawn']);
+
+function isInProgressStage(stage: string): boolean {
+  return IN_PROGRESS_STAGES.includes(stage as KanbanStage);
+}
+
+function isTerminalApp(app: ApplicationDoc): boolean {
+  return TERMINAL_STAGES.includes(app.stage as KanbanStage)
+    || TERMINAL_OUTCOMES.has(app.outcome);
+}
+
+function sortCards(cards: ApplicationDoc[]): ApplicationDoc[] {
+  return [...cards].sort((a, b) => Number(a.confirmed) - Number(b.confirmed));
+}
+
+function resolveDropColumn(overId: string): BoardColumnKey | undefined {
+  if (overId === 'applied' || overId.startsWith('applied:')) return 'applied';
+  if (overId === 'in_progress' || overId.startsWith('in_progress:')) return 'in_progress';
+  return undefined;
+}
+
+function terminalSectionTitle(outcome: string): string {
+  if (outcome === 'offer') return 'Offer';
+  if (outcome === 'rejected') return 'Rejected';
+  if (outcome === 'withdrawn') return 'Withdrawn';
+  return 'Closed';
+}
 
 function timeAgo(iso?: string | null): string {
   if (!iso) return '—';
@@ -72,21 +100,36 @@ export default function PipelinePage() {
 
   const apps = data?.applications ?? [];
   const pendingCount = useMemo(() => apps.filter((a) => !a.confirmed).length, [apps]);
-  const byStage = useMemo(() => {
-    const buckets: Record<string, ApplicationDoc[]> = {};
-    for (const s of STAGES) buckets[s.key] = [];
+
+  const { applied, inProgress, terminal } = useMemo(() => {
+    const appliedCards: ApplicationDoc[] = [];
+    const inProgressCards: ApplicationDoc[] = [];
+    const terminalCards: ApplicationDoc[] = [];
+
     for (const a of apps) {
-      const k = a.stage as string;
-      if (!buckets[k]) buckets[k] = [];
-      buckets[k].push(a);
+      if (isTerminalApp(a)) {
+        terminalCards.push(a);
+      } else if (a.stage === 'bid_sent') {
+        appliedCards.push(a);
+      } else if (isInProgressStage(a.stage)) {
+        inProgressCards.push(a);
+      } else {
+        // Unknown stage — treat as in progress if not applied/terminal.
+        inProgressCards.push(a);
+      }
     }
-    // Unconfirmed (AI-proposed) cards float to the top of each column so they
-    // draw the eye for confirmation.
-    for (const k of Object.keys(buckets)) {
-      buckets[k].sort((a, b) => Number(a.confirmed) - Number(b.confirmed));
-    }
-    return buckets;
+
+    return {
+      applied: sortCards(appliedCards),
+      inProgress: sortCards(inProgressCards),
+      terminal: sortCards(terminalCards),
+    };
   }, [apps]);
+
+  const boardBuckets: Record<BoardColumnKey, ApplicationDoc[]> = {
+    applied,
+    in_progress: inProgress,
+  };
 
   const [activeApp, setActiveApp] = useState<ApplicationDoc | null>(null);
   const [detailApp, setDetailApp] = useState<ApplicationDoc | null>(null);
@@ -97,18 +140,22 @@ export default function PipelinePage() {
     setActiveApp(null);
     if (!e.over) return;
     const overId = String(e.over.id);
-    const droppedStage: KanbanStage | undefined = STAGES.find((s) => s.key === overId || overId.startsWith(`${s.key}:`))?.key;
-    if (!droppedStage) return;
+    const droppedColumn = resolveDropColumn(overId);
+    if (!droppedColumn) return;
     const dragId = String(e.active.id);
     const app = apps.find((a) => a._id === dragId);
-    if (!app || app.stage === droppedStage) return;
+    if (!app || isTerminalApp(app)) return;
+
     try {
-      const next: { stage: string; outcome?: string } = { stage: droppedStage };
-      if (droppedStage === 'offer') next.outcome = 'offer';
-      else if (droppedStage === 'rejected') next.outcome = 'rejected';
-      else if (droppedStage === 'withdrawn') next.outcome = 'withdrawn';
-      else next.outcome = 'active';
-      await api.patchApplication(app._id, next);
+      if (droppedColumn === 'applied') {
+        if (app.stage === 'bid_sent') return;
+        await api.patchApplication(app._id, { stage: 'bid_sent', outcome: 'active' });
+      } else if (droppedColumn === 'in_progress') {
+        if (isInProgressStage(app.stage)) return;
+        if (app.stage === 'bid_sent') {
+          await api.patchApplication(app._id, { stage: 'intro', outcome: 'active' });
+        }
+      }
       mutate();
     } catch (err) {
       notify.error(err, 'Failed to move card');
@@ -259,31 +306,50 @@ export default function PipelinePage() {
           {isAdmin && ' Admins can also Initialize to backfill from existing interviews.'}
         </div>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={(e) => setActiveApp(apps.find((a) => a._id === String(e.active.id)) ?? null)}
-          onDragEnd={onDragEnd}
-        >
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {STAGES.map((s) => (
-              <Column
-                key={s.key}
-                stage={s.key}
-                label={s.label}
-                tone={s.tone}
-                cards={byStage[s.key] || []}
-                onCardClick={setDetailApp}
-                onConfirm={onConfirm}
-                onReject={onReject}
-                isAdmin={isAdmin}
-              />
-            ))}
-          </div>
-          <DragOverlay>
-            {activeApp ? <Card app={activeApp} isOverlay isAdmin={isAdmin} /> : null}
-          </DragOverlay>
-        </DndContext>
+        <>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={(e) => setActiveApp(apps.find((a) => a._id === String(e.active.id)) ?? null)}
+            onDragEnd={onDragEnd}
+          >
+            <div className="flex gap-4 pb-2">
+              {BOARD_COLUMNS.map((col) => (
+                <Column
+                  key={col.key}
+                  columnKey={col.key}
+                  label={col.label}
+                  tone={col.tone}
+                  cards={boardBuckets[col.key]}
+                  showStageBadge={col.key === 'in_progress'}
+                  onCardClick={setDetailApp}
+                  onConfirm={onConfirm}
+                  onReject={onReject}
+                  isAdmin={isAdmin}
+                />
+              ))}
+            </div>
+            <DragOverlay>
+              {activeApp ? (
+                <Card
+                  app={activeApp}
+                  isOverlay
+                  isAdmin={isAdmin}
+                  showStageBadge={isInProgressStage(activeApp.stage)}
+                />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+
+          {terminal.length > 0 && (
+            <TerminalList
+              title={terminalSectionTitle(outcome)}
+              cards={terminal}
+              onCardClick={setDetailApp}
+              isAdmin={isAdmin}
+            />
+          )}
+        </>
       )}
 
       {detailApp && (
@@ -312,15 +378,24 @@ function LabelChip({ label, confidence }: { label?: string | null; confidence: n
   );
 }
 
+function StageBadge({ stage }: { stage: string }) {
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-[11px] font-medium border ${stageBadgeClass(stage)}`}>
+      {stageLabel(stage)}
+    </span>
+  );
+}
+
 // ---------- Column ----------
 
 function Column({
-  stage, label, tone, cards, onCardClick, onConfirm, onReject, isAdmin,
+  columnKey, label, tone, cards, showStageBadge, onCardClick, onConfirm, onReject, isAdmin,
 }: {
-  stage: KanbanStage;
+  columnKey: BoardColumnKey;
   label: string;
   tone: string;
   cards: ApplicationDoc[];
+  showStageBadge: boolean;
   onCardClick: (a: ApplicationDoc) => void;
   onConfirm: (a: ApplicationDoc) => void;
   onReject: (a: ApplicationDoc) => void;
@@ -328,17 +403,18 @@ function Column({
 }) {
   const ids = useMemo(() => cards.map((c) => c._id), [cards]);
   return (
-    <div className={`w-64 flex-shrink-0 bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
+    <div className={`flex-1 min-w-[320px] bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
       <header className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 uppercase tracking-wide font-medium">
         <span>{label}</span>
         <span className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums">{cards.length}</span>
       </header>
-      <SortableContext id={stage} items={ids} strategy={verticalListSortingStrategy}>
-        <div className="p-2 space-y-2 min-h-[80px]" data-stage={stage} id={stage}>
+      <SortableContext id={columnKey} items={ids} strategy={verticalListSortingStrategy}>
+        <div className="p-2 space-y-2 min-h-[80px]" data-stage={columnKey} id={columnKey}>
           {cards.map((a) => (
             <SortableCardWrap
               key={a._id}
               app={a}
+              showStageBadge={showStageBadge}
               onClick={() => onCardClick(a)}
               onConfirm={onConfirm}
               onReject={onReject}
@@ -352,9 +428,10 @@ function Column({
 }
 
 function SortableCardWrap({
-  app, onClick, onConfirm, onReject, isAdmin,
+  app, showStageBadge, onClick, onConfirm, onReject, isAdmin,
 }: {
   app: ApplicationDoc;
+  showStageBadge: boolean;
   onClick: () => void;
   onConfirm: (a: ApplicationDoc) => void;
   onReject: (a: ApplicationDoc) => void;
@@ -368,31 +445,34 @@ function SortableCardWrap({
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick}>
-      <Card app={app} isAdmin={isAdmin} onConfirm={onConfirm} onReject={onReject} />
+      <Card app={app} showStageBadge={showStageBadge} isAdmin={isAdmin} onConfirm={onConfirm} onReject={onReject} />
     </div>
   );
 }
 
 function Card({
-  app, isOverlay, isAdmin, onConfirm, onReject,
+  app, isOverlay, isAdmin, showStageBadge, onConfirm, onReject,
 }: {
   app: ApplicationDoc;
   isOverlay?: boolean;
   isAdmin?: boolean;
+  showStageBadge?: boolean;
   onConfirm?: (a: ApplicationDoc) => void;
   onReject?: (a: ApplicationDoc) => void;
 }) {
   const bidCount = app.bidJobIds?.length ?? 0;
   const ivCount = app.interviewIds?.length ?? 0;
   const pending = !app.confirmed;
-  // Stop drag/detail when clicking the Yes/No controls.
   const stop = (e: React.SyntheticEvent) => { e.stopPropagation(); };
   return (
     <div className={'rounded-[8px] p-3 text-sm cursor-grab active:cursor-grabbing shadow-sm '
       + (pending ? 'bg-amber-50 border border-dashed border-amber-300 ' : 'bg-white border border-gray-200 ')
       + (isOverlay ? 'ring-2 ring-primary' : (pending ? 'hover:border-amber-400' : 'hover:border-primary'))}>
-      <div className="font-medium text-gray-900 truncate">
-        {app.companyName || 'Untitled'}
+      <div className="flex items-start justify-between gap-2">
+        <div className="font-medium text-gray-900 truncate min-w-0">
+          {app.companyName || 'Untitled'}
+        </div>
+        {showStageBadge && <StageBadge stage={app.stage} />}
       </div>
       {pending && app.aiLabel && (
         <div className="mt-1">
@@ -439,6 +519,50 @@ function Card({
         </div>
       )}
     </div>
+  );
+}
+
+function TerminalList({
+  title, cards, onCardClick, isAdmin,
+}: {
+  title: string;
+  cards: ApplicationDoc[];
+  onCardClick: (a: ApplicationDoc) => void;
+  isAdmin: boolean;
+}) {
+  return (
+    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
+      <header className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+        <h2 className="text-xs font-medium text-gray-600 uppercase tracking-wide">{title}</h2>
+        <span className="text-[10px] tabular-nums text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">
+          {cards.length}
+        </span>
+      </header>
+      <ul className="divide-y divide-gray-100">
+        {cards.map((app) => (
+          <li key={app._id}>
+            <button
+              type="button"
+              onClick={() => onCardClick(app)}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center justify-between gap-3"
+            >
+              <div className="min-w-0">
+                <div className="font-medium text-sm text-gray-900 truncate">{app.companyName || 'Untitled'}</div>
+                {isAdmin && app.ownerName && (
+                  <div className="mt-1 text-[11px]">
+                    <NameWithAvatar name={app.ownerName} imageUrl={app.ownerImage} />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <StageBadge stage={app.stage} />
+                <span className="text-[11px] text-gray-500 whitespace-nowrap">{timeAgo(app.lastTouchedAt)}</span>
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -492,15 +616,15 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
           <div className="min-w-0">
             <div className="text-xs text-gray-500">Application</div>
             <div className="font-semibold text-gray-900 truncate text-lg">{app.companyName}</div>
-            <div className="text-xs text-gray-500">
-              Stage: <span className="font-medium text-gray-700">{app.stage}</span> · Outcome: <span className="font-medium text-gray-700">{app.outcome}</span>
+            <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap mt-1">
+              <span>Stage: <StageBadge stage={app.stage} /></span>
+              <span>Outcome: <span className="font-medium text-gray-700">{app.outcome}</span></span>
             </div>
           </div>
           <button type="button" onClick={onClose} className="btn-icon" title="Close"><X className="w-4 h-4" /></button>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-5">
-          {/* Quick links */}
           {app.jobUrl && (
             <section>
               <a href={app.jobUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline inline-flex items-center gap-1">
@@ -509,7 +633,6 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
             </section>
           )}
 
-          {/* Bids */}
           <section>
             <h3 className="card-title mb-2">Bids ({app.bidJobIds?.length ?? 0})</h3>
             {app.bidJobIds?.length ? (
@@ -523,7 +646,6 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
             ) : <p className="text-xs text-gray-400 italic">No bids linked.</p>}
           </section>
 
-          {/* Interviews */}
           <section>
             <h3 className="card-title mb-2">Interviews ({app.interviewIds?.length ?? 0})</h3>
             {app.interviewIds?.length ? (
@@ -537,7 +659,6 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
             ) : <p className="text-xs text-gray-400 italic">No interviews linked.</p>}
           </section>
 
-          {/* Notes */}
           <section>
             <h3 className="card-title mb-2">Notes</h3>
             <textarea
@@ -554,13 +675,12 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
             </div>
           </section>
 
-          {/* History */}
           <section>
             <h3 className="card-title mb-2">History</h3>
             <ol className="space-y-1 text-xs text-gray-600">
               {app.stageHistory.map((h, i) => (
                 <li key={i}>
-                  <span className="font-medium text-gray-800">{h.stage}</span>
+                  <span className="font-medium text-gray-800">{stageLabel(h.stage)}</span>
                   <span className="text-gray-400"> · {new Date(h.at).toLocaleString()}</span>
                   {h.source && <span className="text-gray-400"> · {h.source}</span>}
                 </li>

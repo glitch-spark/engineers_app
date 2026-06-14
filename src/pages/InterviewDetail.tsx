@@ -5,17 +5,7 @@ import { ArrowLeft, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import { notify } from '../lib/notify';
-
-const STAGES: Record<string, string> = {
-  intro: 'Intro',
-  tech: 'Tech',
-  panel: 'Panel',
-  live_coding: 'Live Coding',
-  system_design: 'System Design',
-  cultural: 'Cultural',
-  final: 'Final',
-  ai_interview: 'AI Interview',
-};
+import { stageBadgeClass, stageLabel } from '../lib/stageBadge';
 
 const STATUSES: Record<string, string> = {
   scheduled: 'Scheduled',
@@ -25,20 +15,6 @@ const STATUSES: Record<string, string> = {
   no_show: 'No Show',
   rescheduled: 'Rescheduled',
   canceled: 'Canceled',
-};
-
-const stageBadgeClass = (s?: string | null) => {
-  switch (s) {
-    case 'intro': return 'bg-gray-100 text-gray-700 border-gray-200';
-    case 'tech': return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'panel': return 'bg-purple-100 text-purple-800 border-purple-200';
-    case 'live_coding': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-    case 'system_design': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
-    case 'cultural': return 'bg-pink-100 text-pink-800 border-pink-200';
-    case 'final': return 'bg-amber-100 text-amber-800 border-amber-200';
-    case 'ai_interview': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    default: return 'bg-gray-100 text-gray-700 border-gray-200';
-  }
 };
 
 const statusBadgeClass = (s?: string | null) => {
@@ -193,7 +169,7 @@ export default function InterviewDetailPage() {
           </Link>
           <div>
             <h1 className="page-title">
-              {(iv.stage ? STAGES[iv.stage] || iv.stage : 'Interview')}
+              {(iv.stage ? stageLabel(iv.stage) : 'Interview')}
               {iv.companyName ? ` with ${iv.companyName}` : ''}
             </h1>
             <div className="text-sm text-gray-500">
@@ -236,7 +212,7 @@ export default function InterviewDetailPage() {
           <div>
             {iv.stage ? (
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
-                {STAGES[iv.stage] || iv.stage}
+                {stageLabel(iv.stage)}
               </span>
             ) : <span className="text-gray-400">—</span>}
           </div>
