@@ -14,7 +14,7 @@ import { useAuth } from '../auth/useAuth';
 import PageHeader from '../components/PageHeader';
 import NameWithAvatar from '../components/NameWithAvatar';
 import { notify } from '../lib/notify';
-import { stageBadgeClass, stageLabel } from '../lib/stageBadge';
+import { getReachedInterviewStages, stageBadgeClass, stageLabel } from '../lib/stageBadge';
 
 const BOARD_COLUMNS = [
   { key: 'applied', label: 'Applied', tone: 'border-gray-300' },
@@ -335,7 +335,7 @@ export default function PipelinePage() {
                   app={activeApp}
                   isOverlay
                   isAdmin={isAdmin}
-                  showStageBadge={isInProgressStage(activeApp.stage)}
+                  showStageBadge={isInProgressStage(activeApp.stage) || getReachedInterviewStages(activeApp).length > 0}
                 />
               ) : null}
             </DragOverlay>
@@ -383,6 +383,40 @@ function StageBadge({ stage }: { stage: string }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-[11px] font-medium border ${stageBadgeClass(stage)}`}>
       {stageLabel(stage)}
     </span>
+  );
+}
+
+function StageBadgeRow({
+  app,
+  highlightCurrent,
+  align = 'start',
+}: {
+  app: ApplicationDoc;
+  highlightCurrent?: boolean;
+  align?: 'start' | 'end';
+}) {
+  const stages = getReachedInterviewStages(app);
+  if (stages.length === 0) {
+    if (isInProgressStage(app.stage)) {
+      return (
+        <div className={`flex flex-wrap gap-1 ${align === 'end' ? 'justify-end' : ''}`}>
+          <StageBadge stage={app.stage} />
+        </div>
+      );
+    }
+    return null;
+  }
+  return (
+    <div className={`flex flex-wrap gap-1 ${align === 'end' ? 'justify-end' : ''}`}>
+      {stages.map((s) => (
+        <span
+          key={s}
+          className={s === app.stage && highlightCurrent ? 'ring-1 ring-primary/40 rounded-[8px]' : undefined}
+        >
+          <StageBadge stage={s} />
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -468,12 +502,14 @@ function Card({
     <div className={'rounded-[8px] p-3 text-sm cursor-grab active:cursor-grabbing shadow-sm '
       + (pending ? 'bg-amber-50 border border-dashed border-amber-300 ' : 'bg-white border border-gray-200 ')
       + (isOverlay ? 'ring-2 ring-primary' : (pending ? 'hover:border-amber-400' : 'hover:border-primary'))}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="font-medium text-gray-900 truncate min-w-0">
-          {app.companyName || 'Untitled'}
-        </div>
-        {showStageBadge && <StageBadge stage={app.stage} />}
+      <div className="font-medium text-gray-900 truncate">
+        {app.companyName || 'Untitled'}
       </div>
+      {showStageBadge && (
+        <div className="mt-1.5">
+          <StageBadgeRow app={app} highlightCurrent />
+        </div>
+      )}
       {pending && app.aiLabel && (
         <div className="mt-1">
           <LabelChip label={app.aiLabel} confidence={app.aiConfidence ?? 0} />
@@ -554,8 +590,9 @@ function TerminalList({
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <StageBadge stage={app.stage} />
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <StageBadgeRow app={app} align="end" />
+                {isTerminalApp(app) && <StageBadge stage={app.stage} />}
                 <span className="text-[11px] text-gray-500 whitespace-nowrap">{timeAgo(app.lastTouchedAt)}</span>
               </div>
             </button>
@@ -616,9 +653,21 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
           <div className="min-w-0">
             <div className="text-xs text-gray-500">Application</div>
             <div className="font-semibold text-gray-900 truncate text-lg">{app.companyName}</div>
-            <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap mt-1">
-              <span>Stage: <StageBadge stage={app.stage} /></span>
-              <span>Outcome: <span className="font-medium text-gray-700">{app.outcome}</span></span>
+            <div className="text-xs text-gray-500 mt-1 space-y-1">
+              {(getReachedInterviewStages(app).length > 0
+                || isInProgressStage(app.stage)
+                || (isTerminalApp(app) && !isInProgressStage(app.stage))) && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span>Stages:</span>
+                  <StageBadgeRow app={app} highlightCurrent />
+                  {isTerminalApp(app) && !isInProgressStage(app.stage) && (
+                    <StageBadge stage={app.stage} />
+                  )}
+                </div>
+              )}
+              <div>
+                Outcome: <span className="font-medium text-gray-700">{app.outcome}</span>
+              </div>
             </div>
           </div>
           <button type="button" onClick={onClose} className="btn-icon" title="Close"><X className="w-4 h-4" /></button>

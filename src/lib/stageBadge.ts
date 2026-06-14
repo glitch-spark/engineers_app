@@ -11,6 +11,39 @@ export const INTERVIEW_STAGES = [
   { value: 'ai_interview', label: 'AI Interview' },
 ] as const;
 
+/** Canonical interview-stage order (mirrors backend STAGE_ORDER, minus bid_sent/terminal). */
+export const INTERVIEW_STAGE_ORDER = [
+  'intro',
+  'tech',
+  'live_coding',
+  'system_design',
+  'panel',
+  'cultural',
+  'ai_interview',
+  'final',
+] as const;
+
+export type InterviewStageValue = (typeof INTERVIEW_STAGE_ORDER)[number];
+
+const INTERVIEW_STAGE_SET = new Set<string>(INTERVIEW_STAGE_ORDER);
+
+export function isInterviewStage(stage: string): stage is InterviewStageValue {
+  return INTERVIEW_STAGE_SET.has(stage);
+}
+
+/** Distinct interview stages reached, from history + current stage, in pipeline order. */
+export function getReachedInterviewStages(app: {
+  stage: string;
+  stageHistory: Array<{ stage: string }>;
+}): string[] {
+  const reached = new Set<string>();
+  for (const h of app.stageHistory) {
+    if (isInterviewStage(h.stage)) reached.add(h.stage);
+  }
+  if (isInterviewStage(app.stage)) reached.add(app.stage);
+  return INTERVIEW_STAGE_ORDER.filter((s) => reached.has(s));
+}
+
 const EXTRA_LABELS: Record<string, string> = {
   bid_sent: 'Applied',
   offer: 'Offer',
