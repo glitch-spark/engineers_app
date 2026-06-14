@@ -78,8 +78,8 @@ function isWeekOver(endDate: string): boolean {
 
 const pct = (actual: number, target: number) => (target > 0 ? Math.round((actual / target) * 100) : 0);
 
-// Fixed core columns for the admin team-progress rollup. Extra custom
-// metrics still show on individual plan cards, just not in this table.
+// Fixed core columns for the team-progress rollup. Extra custom metrics
+// still show on individual plan cards, just not in this table.
 const ROLLUP_COLS = [
   { key: 'bids', label: 'Job applies' },
   { key: 'interviews', label: 'Interviews' },
@@ -98,9 +98,32 @@ type FormState = {
   status: 'planned' | 'reviewed';
 };
 
+function planOwnerId(plan: WeeklyPlan): string | undefined {
+  const uid = plan.userId;
+  if (!uid) return undefined;
+  return typeof uid === 'string' ? uid : uid._id;
+}
+
+/** Pin the logged-in user's row/card first; preserve relative order of the rest. */
+function withCurrentUserFirst<T>(
+  items: readonly T[],
+  currentUserId: string | undefined,
+  userIdOf: (item: T) => string | undefined,
+): T[] {
+  if (!currentUserId || items.length <= 1) return [...items];
+  const first: T[] = [];
+  const rest: T[] = [];
+  for (const item of items) {
+    (userIdOf(item) === currentUserId ? first : rest).push(item);
+  }
+  return [...first, ...rest];
+}
+
 export default function WeeklyPlanPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const canEditPlan = (plan: WeeklyPlan) =>
+    isAdmin || planOwnerId(plan) === user?.id;
 
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [weekNumber, setWeekNumber] = useState(getWeekInfo(new Date()).weekNumber.toString());
@@ -109,27 +132,27 @@ export default function WeeklyPlanPage() {
   const [pageSize, setPageSize] = useState(10);
 
   const { data, mutate, isLoading } = useSWR(
-    ['weekly-plans', year, weekNumber, isAdmin ? userId : '', currentPage, pageSize] as const,
+    ['weekly-plans', year, weekNumber, userId, currentPage, pageSize] as const,
     () => api.listWeeklyPlans({
       page: currentPage,
       limit: pageSize,
       ...(year ? { year: Number(year) } : {}),
       ...(weekNumber ? { weekNumber: Number(weekNumber) } : {}),
-      ...(isAdmin && userId ? { userId } : {}),
+      ...(userId ? { userId } : {}),
     })
   );
 
   const { data: summary, mutate: mutateSummary } = useSWR(
-    ['weekly-summary', year, weekNumber, isAdmin ? userId : ''] as const,
+    ['weekly-summary', year, weekNumber, userId] as const,
     () => api.getWeeklyPlanSummary({
       ...(year ? { year: Number(year) } : {}),
       ...(weekNumber ? { weekNumber: Number(weekNumber) } : {}),
-      ...(isAdmin && userId ? { userId } : {}),
+      ...(userId ? { userId } : {}),
     })
   );
 
   const { data: rollup, mutate: mutateRollup } = useSWR(
-    isAdmin ? ['weekly-rollup', year, weekNumber, userId] as const : null,
+    ['weekly-rollup', year, weekNumber, userId] as const,
     () => api.getWeeklyUserRollup({
       ...(year ? { year: Number(year) } : {}),
       ...(weekNumber ? { weekNumber: Number(weekNumber) } : {}),
@@ -137,7 +160,7 @@ export default function WeeklyPlanPage() {
     }),
   );
 
-  const { data: usersData } = useSWR(isAdmin ? ['users-list'] : null, () => api.listUsers());
+  const { data: usersData } = useSWR(['users-lookup'], () => api.lookupUsers());
   const users = (usersData?.users as Array<{ _id: string; name?: string; email?: string }>) || [];
 
   const [open, setOpen] = useState(false);
@@ -255,6 +278,16 @@ export default function WeeklyPlanPage() {
   const plans = (data?.plans as WeeklyPlan[]) || [];
   const pagination = data?.pagination;
 
+  const sortedRollupUsers = useMemo(
+    () => withCurrentUserFirst(rollup?.users ?? [], user?.id, (u) => u.userId),
+    [rollup?.users, user?.id],
+  );
+
+  const sortedPlans = useMemo(
+    () => withCurrentUserFirst(plans, user?.id, planOwnerId),
+    [plans, user?.id],
+  );
+
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
   const weekOptions = Array.from({ length: 52 }, (_, i) => i + 1);
@@ -297,15 +330,13 @@ export default function WeeklyPlanPage() {
             {weekOptions.map((w) => (<option key={w} value={w}>{formatWeekOptionLabel(Number(year), w)}</option>))}
           </select>
         </div>
-        {isAdmin && (
-          <div className="w-56">
-            <label className="block text-xs text-gray-500 mb-1">User</label>
-            <select className="select focus-ring w-full text-sm" value={userId} onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}>
-              <option value="">All users</option>
-              {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
-            </select>
-          </div>
-        )}
+        <div className="w-56">
+          <label className="block text-xs text-gray-500 mb-1">User</label>
+          <select className="select focus-ring w-full text-sm" value={userId} onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}>
+            <option value="">All users</option>
+            {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
+          </select>
+        </div>
       </div>
 
       {/* Stats cards — totals for the current filter (year + optional week) */}
@@ -323,8 +354,8 @@ export default function WeeklyPlanPage() {
         </div>
       )}
 
-      {/* Team progress — admin rollup of planned vs actual per user */}
-      {isAdmin && rollup && rollup.users.length > 0 && (
+      {/* Team progress — rollup of planned vs actual per user */}
+      {rollup && rollup.users.length > 0 && (
         <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100">
             <h2 className="card-title uppercase tracking-wide">Team progress</h2>
@@ -340,7 +371,7 @@ export default function WeeklyPlanPage() {
                 </tr>
               </thead>
               <tbody>
-                {rollup.users.map((u) => (
+                {sortedRollupUsers.map((u) => (
                   <tr key={u.userId} className="border-t align-middle">
                     <td className="px-3 py-2"><NameWithAvatar name={u.name || u.email} /></td>
                     {ROLLUP_COLS.map((c) => {
@@ -378,7 +409,7 @@ export default function WeeklyPlanPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {plans.map((plan) => {
+          {sortedPlans.map((plan) => {
             const reviewed = plan.status === 'reviewed';
             const needsReview = !reviewed && isWeekOver(plan.endDate);
             return (
@@ -396,16 +427,16 @@ export default function WeeklyPlanPage() {
                         <span className="inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">Planned</span>
                       )}
                     </div>
-                    {isAdmin && (
-                      <div className="mt-1"><NameWithAvatar name={plan.userId?.name || plan.userId?.email} imageUrl={(plan.userId as { image?: string } | undefined)?.image} /></div>
-                    )}
+                    <div className="mt-1"><NameWithAvatar name={plan.userId?.name || plan.userId?.email} imageUrl={(plan.userId as { image?: string } | undefined)?.image} /></div>
                   </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button type="button" className="btn-icon" onClick={() => { setEditing(plan); setError(''); setOpen(true); }} title={needsReview ? 'Add follow-up' : 'Edit'}>
-                      {needsReview ? <ClipboardCheck size={16} /> : <Pencil size={16} />}
-                    </button>
-                    <button type="button" className="btn-icon" onClick={() => remove(plan)} title="Delete"><Trash2 size={16} /></button>
-                  </div>
+                  {canEditPlan(plan) && (
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button type="button" className="btn-icon" onClick={() => { setEditing(plan); setError(''); setOpen(true); }} title={needsReview ? 'Add follow-up' : 'Edit'}>
+                        {needsReview ? <ClipboardCheck size={16} /> : <Pencil size={16} />}
+                      </button>
+                      <button type="button" className="btn-icon" onClick={() => remove(plan)} title="Delete"><Trash2 size={16} /></button>
+                    </div>
+                  )}
                 </div>
 
                 {plan.metrics && plan.metrics.length > 0 ? (
