@@ -5,7 +5,7 @@ import {
   DndContext, DragEndEvent, PointerSensor, useSensor, useSensors,
   closestCorners, DragOverlay,
 } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, rectSortingStrategy, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Loader2, ExternalLink, Archive, Sparkles, X, RefreshCw, Check } from 'lucide-react';
 import * as api from '../api/endpoints';
@@ -17,11 +17,24 @@ import { notify } from '../lib/notify';
 import { getReachedInterviewStages, stageBadgeClass, stageLabel } from '../lib/stageBadge';
 
 const BOARD_COLUMNS = [
-  { key: 'applied', label: 'Applied', tone: 'border-gray-300' },
-  { key: 'in_progress', label: 'In Progress', tone: 'border-blue-300' },
+  {
+    key: 'applied',
+    label: 'Applied',
+    tone: 'border-gray-300',
+    layout: 'list',
+    columnClass: 'w-64 shrink-0',
+  },
+  {
+    key: 'in_progress',
+    label: 'In Progress',
+    tone: 'border-blue-300',
+    layout: 'grid',
+    columnClass: 'flex-1 min-w-0',
+  },
 ] as const;
 
 type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
+type ColumnLayout = (typeof BOARD_COLUMNS)[number]['layout'];
 
 const IN_PROGRESS_STAGES: KanbanStage[] = [
   'ai_interview', 'intro', 'tech', 'live_coding',
@@ -313,13 +326,15 @@ export default function PipelinePage() {
             onDragStart={(e) => setActiveApp(apps.find((a) => a._id === String(e.active.id)) ?? null)}
             onDragEnd={onDragEnd}
           >
-            <div className="flex gap-4 pb-2">
+            <div className="flex gap-4 pb-2 w-full">
               {BOARD_COLUMNS.map((col) => (
                 <Column
                   key={col.key}
                   columnKey={col.key}
                   label={col.label}
                   tone={col.tone}
+                  layout={col.layout}
+                  columnClass={col.columnClass}
                   cards={boardBuckets[col.key]}
                   showStageBadge={col.key === 'in_progress'}
                   onCardClick={setDetailApp}
@@ -331,12 +346,14 @@ export default function PipelinePage() {
             </div>
             <DragOverlay>
               {activeApp ? (
-                <Card
-                  app={activeApp}
-                  isOverlay
-                  isAdmin={isAdmin}
-                  showStageBadge={isInProgressStage(activeApp.stage) || getReachedInterviewStages(activeApp).length > 0}
-                />
+                <div className="w-[220px] max-w-full">
+                  <Card
+                    app={activeApp}
+                    isOverlay
+                    isAdmin={isAdmin}
+                    showStageBadge={isInProgressStage(activeApp.stage) || getReachedInterviewStages(activeApp).length > 0}
+                  />
+                </div>
               ) : null}
             </DragOverlay>
           </DndContext>
@@ -423,11 +440,13 @@ function StageBadgeRow({
 // ---------- Column ----------
 
 function Column({
-  columnKey, label, tone, cards, showStageBadge, onCardClick, onConfirm, onReject, isAdmin,
+  columnKey, label, tone, layout, columnClass, cards, showStageBadge, onCardClick, onConfirm, onReject, isAdmin,
 }: {
   columnKey: BoardColumnKey;
   label: string;
   tone: string;
+  layout: ColumnLayout;
+  columnClass: string;
   cards: ApplicationDoc[];
   showStageBadge: boolean;
   onCardClick: (a: ApplicationDoc) => void;
@@ -436,18 +455,25 @@ function Column({
   isAdmin: boolean;
 }) {
   const ids = useMemo(() => cards.map((c) => c._id), [cards]);
+  const isGrid = layout === 'grid';
+  const sortStrategy = isGrid ? rectSortingStrategy : verticalListSortingStrategy;
+  const cardsClass = isGrid
+    ? 'p-2 min-h-[80px] grid gap-2 grid-cols-[repeat(auto-fill,minmax(220px,1fr))]'
+    : 'p-2 space-y-2 min-h-[80px]';
+
   return (
-    <div className={`flex-1 min-w-[320px] bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
+    <div className={`${columnClass} bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
       <header className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 uppercase tracking-wide font-medium">
         <span>{label}</span>
         <span className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums">{cards.length}</span>
       </header>
-      <SortableContext id={columnKey} items={ids} strategy={verticalListSortingStrategy}>
-        <div className="p-2 space-y-2 min-h-[80px]" data-stage={columnKey} id={columnKey}>
+      <SortableContext id={columnKey} items={ids} strategy={sortStrategy}>
+        <div className={cardsClass} data-stage={columnKey} id={columnKey}>
           {cards.map((a) => (
             <SortableCardWrap
               key={a._id}
               app={a}
+              grid={isGrid}
               showStageBadge={showStageBadge}
               onClick={() => onCardClick(a)}
               onConfirm={onConfirm}
@@ -462,9 +488,10 @@ function Column({
 }
 
 function SortableCardWrap({
-  app, showStageBadge, onClick, onConfirm, onReject, isAdmin,
+  app, grid, showStageBadge, onClick, onConfirm, onReject, isAdmin,
 }: {
   app: ApplicationDoc;
+  grid?: boolean;
   showStageBadge: boolean;
   onClick: () => void;
   onConfirm: (a: ApplicationDoc) => void;
@@ -478,18 +505,26 @@ function SortableCardWrap({
     opacity: isDragging ? 0.4 : 1,
   };
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick}>
-      <Card app={app} showStageBadge={showStageBadge} isAdmin={isAdmin} onConfirm={onConfirm} onReject={onReject} />
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={grid ? 'min-w-0 h-full' : undefined}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+    >
+      <Card app={app} grid={grid} showStageBadge={showStageBadge} isAdmin={isAdmin} onConfirm={onConfirm} onReject={onReject} />
     </div>
   );
 }
 
 function Card({
-  app, isOverlay, isAdmin, showStageBadge, onConfirm, onReject,
+  app, isOverlay, isAdmin, grid, showStageBadge, onConfirm, onReject,
 }: {
   app: ApplicationDoc;
   isOverlay?: boolean;
   isAdmin?: boolean;
+  grid?: boolean;
   showStageBadge?: boolean;
   onConfirm?: (a: ApplicationDoc) => void;
   onReject?: (a: ApplicationDoc) => void;
@@ -500,6 +535,7 @@ function Card({
   const stop = (e: React.SyntheticEvent) => { e.stopPropagation(); };
   return (
     <div className={'rounded-[8px] p-3 text-sm cursor-grab active:cursor-grabbing shadow-sm '
+      + (grid ? 'h-full ' : '')
       + (pending ? 'bg-amber-50 border border-dashed border-amber-300 ' : 'bg-white border border-gray-200 ')
       + (isOverlay ? 'ring-2 ring-primary' : (pending ? 'hover:border-amber-400' : 'hover:border-primary'))}>
       <div className="font-medium text-gray-900 truncate">
