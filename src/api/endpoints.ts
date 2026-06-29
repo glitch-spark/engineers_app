@@ -36,7 +36,6 @@ export interface ProfileShape {
   resumePromptBody?: string;
   screeningPromptBody?: string;
   coverLetterPromptBody?: string;
-  llmProvider?: string;
 }
 
 export interface TransactionListParams {
@@ -113,7 +112,6 @@ export const updateProfile = (body: {
   resumePromptBody?: string;
   screeningPromptBody?: string;
   coverLetterPromptBody?: string;
-  llmProvider?: string;
 }) => putJSON<{ message: string; user: ProfileShape }>('/profile', body);
 
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
@@ -142,55 +140,6 @@ export const deleteUser = (id: string) => del<{ ok: boolean }>(`/users/${id}`);
 
 export const approveUser = (id: string) =>
   postJSON<Record<string, unknown>>(`/users/${id}/approve`, {});
-
-export const lookupUsers = () =>
-  apiFetch<{ users: { _id: string; name?: string; email?: string }[] }>('/users/lookup');
-
-// ---------- LLM admin ----------
-
-export type LlmProviderId = 'openai' | 'nvidia_free';
-
-export interface LlmProviderOption {
-  id: LlmProviderId;
-  label: string;
-  description: string;
-}
-
-export interface LlmSettingsShape {
-  openaiApiKeyMasked: string;
-  nvidiaApiKeyMasked: string;
-  openaiBaseUrl?: string | null;
-  nvidiaBaseUrl: string;
-  openaiResumeModel: string;
-  nvidiaResumeModel: string;
-  nvidiaMaxRpm: number;
-  nvidiaTemperature: number;
-  nvidiaTopP: number;
-  nvidiaMaxTokens: number;
-  freeTierUserIds: string[];
-  freeTierAccountIds: string[];
-}
-
-export const listLlmProviders = () =>
-  apiFetch<{ providers: LlmProviderOption[] }>('/llm/providers');
-
-export const getLlmSettings = () =>
-  apiFetch<{ settings: LlmSettingsShape }>('/admin/llm-settings');
-
-export const updateLlmSettings = (body: Partial<{
-  openaiApiKey: string;
-  nvidiaApiKey: string;
-  openaiBaseUrl: string;
-  nvidiaBaseUrl: string;
-  openaiResumeModel: string;
-  nvidiaResumeModel: string;
-  nvidiaMaxRpm: number;
-  nvidiaTemperature: number;
-  nvidiaTopP: number;
-  nvidiaMaxTokens: number;
-  freeTierUserIds: string[];
-  freeTierAccountIds: string[];
-}>) => putJSON<{ settings: LlmSettingsShape }>('/admin/llm-settings', body);
 
 // ---------- accounts ----------
 
@@ -306,6 +255,11 @@ export interface AccountLookup {
 
 export const lookupAccounts = () =>
   apiFetch<{ accounts: AccountLookup[] }>('/accounts/lookup');
+
+// ---------- users lookup (filter dropdowns; available to all authed users) ----------
+
+export const lookupUsers = () =>
+  apiFetch<{ users: { _id: string; name: string | null; email: string | null }[] }>('/users/lookup');
 
 // ---------- interviews ----------
 
@@ -799,8 +753,6 @@ export interface ResumeJob {
   inputTokens?: number | null;
   outputTokens?: number | null;
   reasoningTokens?: number | null;
-  llmProviderUsed?: string | null;
-  llmFallbackUsed?: boolean;
   matchSnippet?: string;
   coverLetterText?: string | null;
   createdAt?: string | null;

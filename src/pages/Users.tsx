@@ -19,7 +19,6 @@ interface User {
   createdAt?: string;
   updatedAt?: string;
   isActive?: boolean;
-  llmProvider?: string;
 }
 
 export default function UsersPage() {
@@ -41,14 +40,7 @@ export default function UsersPage() {
     role: 'staff',
     phone: '',
     birthday: '',
-    llmProvider: 'openai',
   });
-
-  const { data: providersData } = useSWR('llm-providers', () => api.listLlmProviders());
-  const providerOptions = (providersData?.providers || []).map((p) => ({
-    value: p.id,
-    label: p.label,
-  }));
 
   const [isSearching, setIsSearching] = useState(false);
 
@@ -82,10 +74,9 @@ export default function UsersPage() {
         role: editing.role || 'staff',
         phone: editing.phone || '',
         birthday: editing.birthday ? new Date(editing.birthday).toISOString().slice(0, 10) : '',
-        llmProvider: editing.llmProvider || 'openai',
       });
     } else {
-      setForm({ name: '', email: '', role: 'staff', phone: '', birthday: '', llmProvider: 'openai' });
+      setForm({ name: '', email: '', role: 'staff', phone: '', birthday: '' });
     }
   }, [editing]);
 
@@ -464,23 +455,6 @@ export default function UsersPage() {
               value={form.birthday}
               onChange={(e) => setForm({ ...form, birthday: e.target.value })}
             />
-          </div>
-
-          <div>
-            <Select
-              label="AI Provider"
-              value={form.llmProvider}
-              onChange={(value) => setForm({ ...form, llmProvider: value })}
-              options={providerOptions.length > 0 ? providerOptions : [
-                { value: 'openai', label: 'OpenAI (default)' },
-                { value: 'nvidia_free', label: 'Free AI — DeepSeek v4' },
-              ]}
-            />
-            {form.llmProvider === 'nvidia_free' && (
-              <p className="text-xs text-amber-700 mt-1">
-                Free AI only works when this user is on the admin allowlist (AI Settings).
-              </p>
-            )}
           </div>
 
           <div className="flex gap-3 justify-end pt-4 border-t">

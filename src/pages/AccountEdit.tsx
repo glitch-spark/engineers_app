@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import useSWR from 'swr';
 import { Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
 import ResumeStylingEditor from '../components/ResumeStylingEditor';
 import PageHeader from '../components/PageHeader';
-import Select from '../components/Select';
 
 type AccShape = {
   _id?: string;
@@ -15,7 +13,6 @@ type AccShape = {
   resumePromptBody?: string;
   screeningPrompt?: string;
   coverLetterPrompt?: string;
-  llmProvider?: string | null;
 };
 
 export default function AccountEditPage() {
@@ -157,21 +154,8 @@ function PromptsBlock({ accountId }: { accountId: string }) {
   const [resumePrompt, setResumePrompt] = useState('');
   const [screeningPrompt, setScreeningPrompt] = useState('');
   const [coverLetterPrompt, setCoverLetterPrompt] = useState('');
-  const [llmProvider, setLlmProvider] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const { data: providersData } = useSWR('llm-providers', () => api.listLlmProviders());
-  const providerSelectOptions = [
-    { value: '', label: 'Inherit from user' },
-    ...(providersData?.providers || []).map((p) => ({ value: p.id, label: p.label })),
-  ];
-  if (providerSelectOptions.length === 1) {
-    providerSelectOptions.push(
-      { value: 'openai', label: 'OpenAI (default)' },
-      { value: 'nvidia_free', label: 'Free AI — DeepSeek v4' },
-    );
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -182,7 +166,6 @@ function PromptsBlock({ accountId }: { accountId: string }) {
         setResumePrompt(acc.resumePromptBody || '');
         setScreeningPrompt(acc.screeningPrompt || '');
         setCoverLetterPrompt(acc.coverLetterPrompt || '');
-        setLlmProvider(acc.llmProvider || '');
       } catch (err) {
         notify.error(err, 'Could not load prompts');
       } finally {
@@ -199,7 +182,6 @@ function PromptsBlock({ accountId }: { accountId: string }) {
         resumePromptBody: resumePrompt,
         screeningPrompt: screeningPrompt,
         coverLetterPrompt: coverLetterPrompt,
-        llmProvider,
       });
       notify.success('Prompts saved');
     } catch (err) {
@@ -221,23 +203,6 @@ function PromptsBlock({ accountId }: { accountId: string }) {
 
   return (
     <>
-      <Section
-        title="AI provider"
-        desc="Which LLM powers resume generation for this profile. Inherit uses the user's default unless overridden here."
-      >
-        <Select
-          label="AI Provider"
-          value={llmProvider}
-          onChange={setLlmProvider}
-          options={providerSelectOptions}
-        />
-        {llmProvider === 'nvidia_free' && (
-          <p className="text-xs text-amber-700 mt-1">
-            Free AI only works when this profile or its owner is on the admin allowlist (AI Settings).
-          </p>
-        )}
-      </Section>
-
       <Section
         title="Resume generating prompt"
         desc="Drives which fields the resume LLM rewrites (and how). Overrides your global prompt for this profile only. Empty = inherit global → built-in default."

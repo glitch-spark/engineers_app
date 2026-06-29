@@ -22,7 +22,6 @@ import Resume from './pages/Resume';
 import Generated from './pages/Generated';
 import AccountEdit from './pages/AccountEdit';
 import Preferences from './pages/Preferences';
-import AdminAi from './pages/AdminAi';
 
 function Protected({ children }: { children: React.ReactNode }) {
   return (
@@ -58,7 +57,6 @@ export default function App() {
       <Route path="/resume/generated" element={<Protected><Generated /></Protected>} />
       <Route path="/preferences" element={<Protected><Preferences /></Protected>} />
       <Route path="/users" element={<Protected><Users /></Protected>} />
-      <Route path="/admin/ai" element={<Protected><AdminAi /></Protected>} />
       <Route path="/profile" element={<Protected><Profile /></Protected>} />
       <Route path="/accountants" element={<Protected><Accountants /></Protected>} />
 
