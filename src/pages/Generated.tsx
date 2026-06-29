@@ -460,6 +460,11 @@ function JobRow({
           {inFlight && (
             <div className="text-[11px] text-gray-500 mt-0.5">{STEP_LABEL[job.step]}…</div>
           )}
+          {job.llmFallbackUsed && (
+            <div className="text-[11px] text-amber-700 mt-0.5" title="Free tier was busy or unavailable; OpenAI was used instead">
+              OpenAI fallback
+            </div>
+          )}
         </td>
         <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{elapsed}</td>
         <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap tabular-nums" title={
