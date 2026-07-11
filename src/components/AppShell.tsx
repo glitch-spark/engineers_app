@@ -25,6 +25,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }, [isSidebarCollapsed]);
 
   if (isAuth) return <>{children}</>;
+  const useWideLayout = pathname === '/interviews' || pathname === '/pipeline';
   return (
     <div className="flex flex-col min-h-screen bg-background transition-all duration-300">
       <Topbar />
@@ -35,7 +36,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className={`flex-1 pt-16 transition-all duration-300 ${
         isSidebarCollapsed ? 'pl-20' : 'pl-64'
       }`}>
-        <div className="max-w-7xl mx-auto p-6 pb-12">
+        <div className={
+          useWideLayout
+            ? 'w-[94%] max-w-[1920px] mx-auto px-4 sm:px-6 pt-6 pb-12'
+            : 'max-w-7xl mx-auto p-6 pb-12'
+        }>
           <div className="animate-fade-in-up">
             {children}
           </div>
