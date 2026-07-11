@@ -38,3 +38,5 @@ coverage/
 .next/cache/
 # Local Netlify folder
 .netlify
+# Vite temp config bundles (local only)
+vite.config.ts.timestamp-*

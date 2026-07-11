@@ -258,8 +258,10 @@ export const lookupAccounts = () =>
 
 // ---------- users lookup (filter dropdowns; available to all authed users) ----------
 
-export const lookupUsers = () =>
-  apiFetch<{ users: { _id: string; name: string | null; email: string | null }[] }>('/users/lookup');
+export const lookupUsers = (params?: { excludeRole?: string }) =>
+  apiFetch<{ users: { _id: string; name: string | null; email: string | null }[] }>(
+    `/users/lookup${qs(params)}`
+  );
 
 // ---------- interviews ----------
 

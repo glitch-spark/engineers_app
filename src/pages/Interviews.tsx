@@ -173,13 +173,15 @@ export default function InterviewsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Filters: creator defaults to "me" on first render; cleared via the dropdown.
-  const [creatorId, setCreatorId] = useState<string>(meId);
+  // User filter defaults to the logged-in user once auth hydrates.
+  const [creatorId, setCreatorId] = useState('');
+  const [userFilterReady, setUserFilterReady] = useState(false);
   useEffect(() => {
-    // If user object loads after first render, hydrate the default.
-    if (creatorId === '' && meId) setCreatorId(meId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meId]);
+    if (!userFilterReady && meId) {
+      setCreatorId(meId);
+      setUserFilterReady(true);
+    }
+  }, [meId, userFilterReady]);
 
   const [accountId, setAccountId] = useState('');
   const [stage, setStage] = useState('');
@@ -219,7 +221,7 @@ export default function InterviewsPage() {
     resumes?: Array<{ id: string; filename: string }>;
   }>) || [];
 
-  const { data: usersData } = useSWR(['users-lookup'], () => api.lookupUsers());
+  const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
   const users = (usersData?.users as Array<{ _id: string; name?: string | null; email?: string | null }>) || [];
 
   const interviews = (data?.interviews as Interview[]) || [];
@@ -420,17 +422,22 @@ export default function InterviewsPage() {
     setCurrentPage(1);
   };
 
+  const userAccounts = useMemo(() => {
+    if (!creatorId) return accounts;
+    return accounts.filter((a) => a.createdBy === creatorId);
+  }, [accounts, creatorId]);
+
   const accountOptions = useMemo(() => [
     { value: '', label: 'All' },
-    ...accounts.map((a) => ({ value: a._id, label: a.name || a._id })),
-  ], [accounts]);
+    ...userAccounts.map((a) => ({ value: a._id, label: a.name || a._id })),
+  ], [userAccounts]);
 
   // Form-only account list — owner-scoped (admin sees all, staff sees own).
   const accountSelectOptions = useMemo(() =>
     ownAccounts.map((a) => ({ value: a._id, label: a.name || a._id })),
   [ownAccounts]);
 
-  const creatorOptions = useMemo(() => [
+  const userOptions = useMemo(() => [
     { value: '', label: 'All' },
     ...users.map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
   ], [users]);
@@ -590,12 +597,18 @@ export default function InterviewsPage() {
       <div className="space-y-6">
       {/* Filters */}
       <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
-        {isAdmin && (
-          <div className="w-44">
-            <label className="block text-xs text-gray-500 mb-1">Creator</label>
-            <Select value={creatorId} onChange={(v) => { setCreatorId(v); setCurrentPage(1); }} options={creatorOptions} />
-          </div>
-        )}
+        <div className="w-44">
+          <label className="block text-xs text-gray-500 mb-1">User</label>
+          <Select
+            value={creatorId}
+            onChange={(v) => {
+              setCreatorId(v);
+              setAccountId('');
+              setCurrentPage(1);
+            }}
+            options={userOptions}
+          />
+        </div>
         <div className="w-44">
           <label className="block text-xs text-gray-500 mb-1">Profile</label>
           <Select value={accountId} onChange={(v) => { setAccountId(v); setCurrentPage(1); }} options={accountOptions} />
