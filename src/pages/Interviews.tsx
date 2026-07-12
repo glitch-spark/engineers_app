@@ -1,6 +1,23 @@
 import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCorners,
+  pointerWithin,
+  rectIntersection,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, FileText, X } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -94,6 +111,53 @@ const BOARD_CARD_STYLES: Record<BoardColumnKey, { card: string; hover: string; a
 
 const BOARD_COLUMNS_NARROW = 4;
 const BOARD_WIDE_MIN_PX = 1281;
+
+/** API stage written when a card is dropped on a board column. */
+const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
+  ai_interview: 'ai_interview',
+  intro: 'intro',
+  tech: 'tech',
+  hiring_manager: 'cultural',
+  panel: 'panel',
+  final: 'final',
+};
+
+function columnDroppableId(columnKey: BoardColumnKey): string {
+  return `col:${columnKey}`;
+}
+
+function resolveInterviewDropColumn(
+  overId: string,
+  activeId: string,
+  rows: Interview[],
+): BoardColumnKey | undefined {
+  if (!overId || overId === activeId) return undefined;
+  if (overId.startsWith('col:')) {
+    const key = overId.slice(4);
+    if (BOARD_COLUMNS.some((c) => c.key === key)) return key as BoardColumnKey;
+  }
+  const overIv = rows.find((i) => i._id === overId);
+  if (overIv) return boardColumnForStage(overIv.stage);
+  return undefined;
+}
+
+/** Prefer column droppables so cards land in the pan under the pointer, not on themselves. */
+const interviewBoardCollisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  const columnHit = pointerCollisions.find((c) => String(c.id).startsWith('col:'));
+  if (columnHit) return [columnHit];
+
+  const cardHit = pointerCollisions.find(
+    (c) => !String(c.id).startsWith('col:') && String(c.id) !== String(args.active.id),
+  );
+  if (cardHit) return [cardHit];
+
+  const rectCollisions = rectIntersection(args);
+  const columnRect = rectCollisions.find((c) => String(c.id).startsWith('col:'));
+  if (columnRect) return [columnRect];
+
+  return pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
+};
 
 function boardColumnForStage(stage?: string | null): BoardColumnKey {
   switch (stage) {
@@ -599,6 +663,71 @@ export default function InterviewsPage() {
   const handleBoardPrev = () => setBoardOffset((o) => Math.max(0, o - 1));
   const handleBoardNext = () => setBoardOffset((o) => Math.min(BOARD_COLUMNS.length - BOARD_COLUMNS_NARROW, o + 1));
 
+  const [activeDragInterview, setActiveDragInterview] = useState<Interview | null>(null);
+  const [dropTargetColumn, setDropTargetColumn] = useState<BoardColumnKey | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const onInterviewDragStart = (e: DragStartEvent) => {
+    const iv = interviews.find((i) => i._id === String(e.active.id));
+    setActiveDragInterview(iv ?? null);
+    setDropTargetColumn(null);
+  };
+
+  const onInterviewDragOver = (e: DragOverEvent) => {
+    if (!e.over) {
+      setDropTargetColumn(null);
+      return;
+    }
+    const col = resolveInterviewDropColumn(String(e.over.id), String(e.active.id), interviews);
+    setDropTargetColumn(col ?? null);
+  };
+
+  const onInterviewDragEnd = async (e: DragEndEvent) => {
+    setActiveDragInterview(null);
+    const ivId = String(e.active.id);
+    const iv = interviews.find((i) => i._id === ivId);
+    const targetCol = dropTargetColumn
+      ?? (e.over ? resolveInterviewDropColumn(String(e.over.id), ivId, interviews) : undefined);
+    setDropTargetColumn(null);
+    if (!iv || !targetCol) return;
+    if (!canEdit(iv)) {
+      notify.error('You cannot move this interview');
+      return;
+    }
+    const sourceCol = boardColumnForStage(iv.stage);
+    if (targetCol === sourceCol) return;
+    const newStage = BOARD_COLUMN_TO_STAGE[targetCol];
+    const colLabel = BOARD_COLUMNS.find((c) => c.key === targetCol)?.label ?? stageLabel(newStage);
+
+    const previousData = data;
+    mutate(
+      (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          interviews: (current.interviews as Interview[]).map((item) =>
+            item._id === ivId ? { ...item, stage: newStage } : item,
+          ),
+        };
+      },
+      { revalidate: false },
+    );
+
+    try {
+      const updated = await api.updateInterview(iv._id, { stage: newStage });
+      if (panelInterview?._id === ivId) {
+        setPanelInterview(updated as unknown as Interview);
+        setPanelForm((prev) => ({ ...prev, stage: newStage }));
+      }
+      if (stage && stage !== newStage) setStage('');
+      await mutate();
+      notify.success(`Moved to ${colLabel}`);
+    } catch (err) {
+      mutate(previousData, { revalidate: false });
+      notify.error(err, 'Failed to move interview');
+    }
+  };
+
   const resetFiltersPage = () => setBoardOffset(0);
 
   const userAccounts = useMemo(() => {
@@ -750,23 +879,47 @@ export default function InterviewsPage() {
               </div>
             )}
 
-            <div className="flex gap-4 pb-2 w-full">
-              {visibleColumns.map((col) => (
-                <InterviewBoardColumn
-                  key={col.key}
-                  columnKey={col.key}
-                  label={col.label}
-                  tone={col.tone}
-                  columnClass={col.columnClass}
-                  cards={boardBuckets[col.key]}
-                  selectedId={panelInterview?._id}
-                  onCardClick={openPanel}
-                  onCardDelete={openDelete}
-                  onOpenTranscript={openTranscript}
-                  canDelete={canEdit}
-                />
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={interviewBoardCollisionDetection}
+              onDragStart={onInterviewDragStart}
+              onDragOver={onInterviewDragOver}
+              onDragEnd={onInterviewDragEnd}
+              onDragCancel={() => {
+                setActiveDragInterview(null);
+                setDropTargetColumn(null);
+              }}
+            >
+              <div className="flex gap-4 pb-2 w-full">
+                {visibleColumns.map((col) => (
+                  <InterviewBoardColumn
+                    key={col.key}
+                    columnKey={col.key}
+                    label={col.label}
+                    tone={col.tone}
+                    columnClass={col.columnClass}
+                    cards={boardBuckets[col.key]}
+                    selectedId={panelInterview?._id}
+                    isDropTarget={dropTargetColumn === col.key}
+                    onCardClick={openPanel}
+                    onCardDelete={openDelete}
+                    onOpenTranscript={openTranscript}
+                    canDelete={canEdit}
+                    canDrag={canEdit}
+                  />
+                ))}
+              </div>
+              <DragOverlay>
+                {activeDragInterview ? (
+                  <div className="w-[220px] max-w-full opacity-95">
+                    <InterviewBoardCardPreview
+                      columnKey={boardColumnForStage(activeDragInterview.stage)}
+                      interview={activeDragInterview}
+                    />
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
         </>
       )}
@@ -951,10 +1104,12 @@ function InterviewBoardColumn({
   columnClass,
   cards,
   selectedId,
+  isDropTarget,
   onCardClick,
   onCardDelete,
   onOpenTranscript,
   canDelete,
+  canDrag,
 }: {
   columnKey: BoardColumnKey;
   label: string;
@@ -962,11 +1117,16 @@ function InterviewBoardColumn({
   columnClass: string;
   cards: Interview[];
   selectedId?: string;
+  isDropTarget?: boolean;
   onCardClick: (iv: Interview) => void;
   onCardDelete: (iv: Interview) => void;
   onOpenTranscript: (iv: Interview) => void;
   canDelete: (iv: Interview) => boolean;
+  canDrag: (iv: Interview) => boolean;
 }) {
+  const { setNodeRef, isOver } = useDroppable({ id: columnDroppableId(columnKey) });
+  const highlight = isOver || isDropTarget;
+
   return (
     <div className={`${columnClass} bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
       <header className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 uppercase tracking-wide font-medium">
@@ -975,9 +1135,12 @@ function InterviewBoardColumn({
           {cards.length}
         </span>
       </header>
-      <div className="p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto">
+      <div
+        ref={setNodeRef}
+        className={`p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto transition-colors ${highlight ? 'bg-primary/5 ring-1 ring-inset ring-primary/20 rounded-b-[12px]' : ''}`}
+      >
         {cards.length === 0 ? (
-          <div className="text-xs text-gray-400 text-center py-8">No interviews</div>
+          <div className="text-xs text-gray-400 text-center py-8">Drop here</div>
         ) : (
           cards.map((iv) => (
             <InterviewBoardCard
@@ -989,8 +1152,42 @@ function InterviewBoardColumn({
               onDelete={() => onCardDelete(iv)}
               onOpenTranscript={() => onOpenTranscript(iv)}
               deletable={canDelete(iv)}
+              draggable={canDrag(iv)}
             />
           ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InterviewBoardCardPreview({
+  columnKey,
+  interview,
+}: {
+  columnKey: BoardColumnKey;
+  interview: Interview;
+}) {
+  const account = typeof interview.accountId === 'object' ? interview.accountId : null;
+  const profileName = account?.name || account?.email || 'Untitled profile';
+  const companyName = interview.companyName || 'Untitled';
+  const panStyle = BOARD_CARD_STYLES[columnKey];
+
+  return (
+    <div className={`rounded-[10px] p-3 text-sm shadow-md border relative overflow-hidden ${panStyle.card} ring-2 ring-primary`}>
+      <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
+      <div className="font-medium text-gray-900 truncate pl-1" title={profileName}>{profileName}</div>
+      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>{companyName}</div>
+      <div className="mt-1 text-[11px] text-gray-500 pl-1">
+        {formatTimeRange(interview.scheduledAt, interview.endsAt)}
+      </div>
+      <div className="mt-1.5 pl-1">
+        {interview.status ? (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${boardStatusClass(interview.status)}`}>
+            {boardStatusLabel(interview.status)}
+          </span>
+        ) : (
+          <span className="text-[11px] text-gray-400">No status</span>
         )}
       </div>
     </div>
@@ -1005,6 +1202,7 @@ function InterviewBoardCard({
   onDelete,
   onOpenTranscript,
   deletable,
+  draggable,
 }: {
   columnKey: BoardColumnKey;
   interview: Interview;
@@ -1013,21 +1211,37 @@ function InterviewBoardCard({
   onDelete: () => void;
   onOpenTranscript: () => void;
   deletable: boolean;
+  draggable: boolean;
 }) {
   const account = typeof interview.accountId === 'object' ? interview.accountId : null;
   const profileName = account?.name || account?.email || 'Untitled profile';
   const companyName = interview.companyName || 'Untitled';
   const panStyle = BOARD_CARD_STYLES[columnKey];
 
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
+    id: interview._id,
+    disabled: !draggable,
+  });
+  const { setNodeRef: setDropRef } = useDroppable({ id: interview._id });
+
   const stop = (e: React.SyntheticEvent) => { e.stopPropagation(); };
+
+  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+
+  const setNodeRef = (node: HTMLElement | null) => {
+    setDragRef(node);
+    setDropRef(node);
+  };
 
   return (
     <div
-      role="button"
-      tabIndex={0}
+      ref={setNodeRef}
+      style={style}
+      {...(draggable ? listeners : {})}
+      {...(draggable ? attributes : { role: 'button', tabIndex: 0 })}
       onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
-      className={`rounded-[10px] p-3 text-sm cursor-pointer shadow-sm border relative overflow-hidden transition-all duration-200 ${panStyle.card} ${panStyle.hover} ${isSelected ? 'ring-2 ring-primary/60 border-primary/40' : ''}`}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      className={`rounded-[10px] p-3 text-sm shadow-sm border relative overflow-hidden transition-all duration-200 ${panStyle.card} ${panStyle.hover} ${isSelected ? 'ring-2 ring-primary/60 border-primary/40' : ''} ${isDragging ? 'opacity-40' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
     >
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
       <div className="absolute top-2 right-2 flex items-center gap-0.5">
