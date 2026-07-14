@@ -300,8 +300,10 @@ export const lookupAccounts = () =>
 
 // ---------- users lookup (filter dropdowns; available to all authed users) ----------
 
-export const lookupUsers = () =>
-  apiFetch<{ users: { _id: string; name: string | null; email: string | null }[] }>('/users/lookup');
+export const lookupUsers = (params?: { excludeRole?: string }) =>
+  apiFetch<{ users: { _id: string; name: string | null; email: string | null }[] }>(
+    `/users/lookup${qs(params)}`
+  );
 
 // ---------- interviews ----------
 
@@ -482,6 +484,149 @@ export interface DashboardFeed {
 }
 
 export const getDashboardFeed = () => apiFetch<DashboardFeed>('/metrics/dashboard-feed');
+
+// ---------- pipeline ----------
+
+export type KanbanStage =
+  | 'bid_sent' | 'intro' | 'tech' | 'live_coding' | 'system_design'
+  | 'panel' | 'cultural' | 'final' | 'ai_interview' | 'offer'
+  | 'rejected' | 'withdrawn';
+
+export type ApplicationOutcome = 'active' | 'offer' | 'rejected' | 'withdrawn' | 'no_response';
+
+export interface ApplicationDoc {
+  _id: string;
+  userId: { _id?: string; name?: string; email?: string } | string;
+  accountId?: string | null;
+  companyName: string;
+  jobUrl?: string | null;
+  jobDescription?: string | null;
+  bidJobIds: string[];
+  interviewIds: string[];
+  stage: KanbanStage;
+  outcome: ApplicationOutcome;
+  appliedAt?: string | null;
+  lastTouchedAt?: string | null;
+  notes: string;
+  stageHistory: Array<{ stage: string; at: string; by?: string | null; source?: string }>;
+  archivedAt?: string | null;
+  // AI-proposed cards (from email) start unconfirmed and render with Yes/No.
+  confirmed: boolean;
+  aiLabel?: string | null;
+  aiConfidence?: number | null;
+  ownerName?: string | null;
+  ownerEmail?: string | null;
+  ownerImage?: string | null;
+}
+
+export const listApplications = (params?: {
+  stage?: string; outcome?: string; userId?: string; profileId?: string;
+  search?: string; includeArchived?: boolean;
+}) => apiFetch<{ applications: ApplicationDoc[] }>(`/applications${qs(params)}`);
+
+export const getApplication = (id: string) => apiFetch<ApplicationDoc>(`/applications/${id}`);
+
+export const patchApplication = (id: string, body: {
+  stage?: string; outcome?: string; notes?: string; archived?: boolean;
+}) => apiFetch<ApplicationDoc>(`/applications/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const deleteApplication = (id: string) => del<{ ok: boolean }>(`/applications/${id}`);
+
+export const confirmApplication = (id: string) =>
+  postJSON<ApplicationDoc>(`/applications/${id}/confirm`, {});
+
+export const rejectApplication = (id: string) =>
+  postJSON<{ ok: boolean }>(`/applications/${id}/reject`, {});
+
+export const migrateApplications = () =>
+  postJSON<{ applications: number; bidsLinked: number; interviewsLinked: number }>('/applications/migrate', {});
+
+export const autoArchiveApplications = (days: number = 30) =>
+  postJSON<{ archived: number }>(`/applications/auto-archive?days=${days}`, {});
+
+export const wipeBidOnlyApplications = () =>
+  postJSON<{ deleted: number }>('/applications/wipe-bid-only', {});
+
+// ---------- email integrations (Gmail) ----------
+
+export type EmailProvider = 'gmail' | 'outlook';
+export type EmailSyncStatus = 'idle' | 'running' | 'error';
+export type EmailReviewStatus =
+  | 'on_board' | 'dismissed' | 'ignored'
+  | 'auto_applied' | 'needs_review' | 'applied';
+
+export type EmailLabel =
+  | 'applied' | 'recruiter_reachout' | 'phone_screen' | 'pre_screening'
+  | 'take_home' | 'live_coding' | 'system_design' | 'behavioral'
+  | 'panel' | 'final_round' | 'offer' | 'rejection'
+  | 'schedule_interview' | 'follow_up' | 'noise';
+
+export interface EmailAccountDoc {
+  id: string;
+  provider: EmailProvider;
+  email: string;
+  historyId?: string | null;
+  lastSyncAt?: string | null;
+  lastSyncError?: string | null;
+  syncStatus: EmailSyncStatus;
+  disconnectedAt?: string | null;
+  createdAt: string;
+}
+
+export interface EmailMessageDoc {
+  id: string;
+  accountId: string;
+  messageId: string;
+  threadId: string;
+  fromAddress: string;
+  fromName?: string | null;
+  subject: string;
+  snippet: string;
+  receivedAt: string;
+  label?: EmailLabel | null;
+  confidence: number;
+  companyGuess?: string | null;
+  targetStage?: string | null;
+  applicationId?: string | null;
+  reviewStatus: EmailReviewStatus;
+}
+
+export const listEmailAccounts = () =>
+  apiFetch<{ accounts: EmailAccountDoc[] }>('/integrations/email/accounts');
+
+export const startGmailOAuth = () =>
+  postJSON<{ url: string }>('/integrations/email/gmail/oauth-start', {});
+
+export const startOutlookOAuth = () =>
+  postJSON<{ url: string }>('/integrations/email/outlook/oauth-start', {});
+
+export const resetEmailAccountSync = (id: string, fullReSync = false) =>
+  postJSON<{ ok: boolean; syncStatus: string; historyId: string | null }>(
+    `/integrations/email/${id}/reset${fullReSync ? '?fullReSync=true' : ''}`,
+    {},
+  );
+
+export const syncEmailAccount = (id: string) =>
+  postJSON<{ ok: boolean; stats: { fetched: number; classified: number; on_board: number; ignored: number } }>(
+    `/integrations/email/${id}/sync`,
+    {},
+  );
+
+export const disconnectEmailAccount = (id: string) =>
+  del<void>(`/integrations/email/${id}`);
+
+export const listEmailMessages = (params?: {
+  accountId?: string; applicationId?: string; reviewStatus?: EmailReviewStatus; limit?: number;
+}) => apiFetch<{ messages: EmailMessageDoc[] }>(`/integrations/email/messages${qs(params)}`);
+
+export const applyEmailMessage = (id: string, body: { applicationId?: string; stage?: string }) =>
+  postJSON<{ ok: boolean }>(`/integrations/email/messages/${id}/apply`, body);
+
+export const dismissEmailMessage = (id: string) =>
+  postJSON<{ ok: boolean }>(`/integrations/email/messages/${id}/dismiss`, {});
+
+export const fetchEmailBody = (id: string) =>
+  apiFetch<{ body: string }>(`/integrations/email/messages/${id}/body`);
 
 export interface LeaderboardResponse {
   metric: LeaderboardMetric;

@@ -20,6 +20,7 @@ html, body, :root {
   height: 100%;
   font-family: theme('fontFamily.sans');
   background: theme('colors.background.DEFAULT');
+  color: theme('colors.zinc.900');
   font-feature-settings: 'ss01' on, 'cv11' on;
   -webkit-font-smoothing: antialiased;
 }
@@ -27,6 +28,11 @@ html, body, :root {
 html.dark,
 html.dark body {
   background: #09090b;
+  color: #fafafa;
+}
+
+#root {
+  min-height: 100%;
 }
 input, textarea, select, button { font-family: inherit; }
 input::placeholder, textarea::placeholder { font-family: inherit; color: theme('colors.zinc.400'); }

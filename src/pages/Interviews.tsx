@@ -1,15 +1,32 @@
 import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Pencil, Trash2, Eye, Plus } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCorners,
+  pointerWithin,
+  rectIntersection,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, FileText, X } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
-import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
+import { INTERVIEW_STAGES, stageBadgeClass, stageLabel } from '../lib/stageBadge';
 
 const editorStyles = `
   .ql-editor { min-height: 140px; font-size: 14px; line-height: 1.5; }
@@ -46,16 +63,138 @@ const editorStyles = `
   .prose-readonly pre, .prose-readonly code { white-space: pre-wrap; word-break: break-all; }
 `;
 
-const STAGES = [
-  { value: 'intro', label: 'Intro' },
-  { value: 'tech', label: 'Tech' },
-  { value: 'panel', label: 'Panel' },
-  { value: 'live_coding', label: 'Live Coding' },
-  { value: 'system_design', label: 'System Design' },
-  { value: 'cultural', label: 'Cultural' },
-  { value: 'final', label: 'Final' },
-  { value: 'ai_interview', label: 'AI Interview' },
-];
+const STAGES = INTERVIEW_STAGES;
+
+const BOARD_COLUMNS = [
+  { key: 'ai_interview', label: 'AI Interview', tone: 'border-emerald-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'intro', label: 'Intro', tone: 'border-gray-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'tech', label: 'Tech', tone: 'border-blue-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'hiring_manager', label: 'Hiring Manager', tone: 'border-pink-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'panel', label: 'Panel', tone: 'border-purple-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'final', label: 'Final', tone: 'border-amber-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'rejected', label: 'Rejected', tone: 'border-red-400', columnClass: 'flex-1 min-w-0' },
+] as const;
+
+type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
+
+const BOARD_CARD_STYLES: Record<BoardColumnKey, { card: string; hover: string; accent: string }> = {
+  ai_interview: {
+    card: 'bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 border-emerald-200/90',
+    hover: 'hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-100/80',
+    accent: 'bg-emerald-400',
+  },
+  intro: {
+    card: 'bg-gradient-to-br from-slate-50 via-white to-gray-50 border-slate-200',
+    hover: 'hover:border-slate-400 hover:shadow-md hover:shadow-slate-100/80',
+    accent: 'bg-slate-400',
+  },
+  tech: {
+    card: 'bg-gradient-to-br from-blue-50 via-white to-sky-50/80 border-blue-200/90',
+    hover: 'hover:border-blue-400 hover:shadow-md hover:shadow-blue-100/80',
+    accent: 'bg-blue-400',
+  },
+  hiring_manager: {
+    card: 'bg-gradient-to-br from-pink-50 via-white to-rose-50/80 border-pink-200/90',
+    hover: 'hover:border-pink-400 hover:shadow-md hover:shadow-pink-100/80',
+    accent: 'bg-pink-400',
+  },
+  panel: {
+    card: 'bg-gradient-to-br from-purple-50 via-white to-violet-50/80 border-purple-200/90',
+    hover: 'hover:border-purple-400 hover:shadow-md hover:shadow-purple-100/80',
+    accent: 'bg-purple-400',
+  },
+  final: {
+    card: 'bg-gradient-to-br from-amber-50 via-white to-orange-50/80 border-amber-200/90',
+    hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80',
+    accent: 'bg-amber-400',
+  },
+  rejected: {
+    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90',
+    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80',
+    accent: 'bg-red-500',
+  },
+};
+
+/** Visible pans at ~1440px desktop widths (7 pans are too cramped). */
+const BOARD_VISIBLE_WIDE = 5;
+/** Fewer pans on narrower viewports. */
+const BOARD_VISIBLE_NARROW = 4;
+const BOARD_WIDE_MIN_PX = 1280;
+
+/** API stage written when a card is dropped on a board column. */
+const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
+  ai_interview: 'ai_interview',
+  intro: 'intro',
+  tech: 'tech',
+  hiring_manager: 'cultural',
+  panel: 'panel',
+  final: 'final',
+  rejected: 'rejected',
+};
+
+function columnDroppableId(columnKey: BoardColumnKey): string {
+  return `col:${columnKey}`;
+}
+
+function resolveInterviewDropColumn(
+  overId: string,
+  activeId: string,
+  rows: Interview[],
+): BoardColumnKey | undefined {
+  if (!overId || overId === activeId) return undefined;
+  if (overId.startsWith('col:')) {
+    const key = overId.slice(4);
+    if (BOARD_COLUMNS.some((c) => c.key === key)) return key as BoardColumnKey;
+  }
+  const overIv = rows.find((i) => i._id === overId);
+  if (overIv) return boardColumnForStage(overIv.stage);
+  return undefined;
+}
+
+/** Prefer column droppables so cards land in the pan under the pointer, not on themselves. */
+const interviewBoardCollisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  const columnHit = pointerCollisions.find((c) => String(c.id).startsWith('col:'));
+  if (columnHit) return [columnHit];
+
+  const cardHit = pointerCollisions.find(
+    (c) => !String(c.id).startsWith('col:') && String(c.id) !== String(args.active.id),
+  );
+  if (cardHit) return [cardHit];
+
+  const rectCollisions = rectIntersection(args);
+  const columnRect = rectCollisions.find((c) => String(c.id).startsWith('col:'));
+  if (columnRect) return [columnRect];
+
+  return pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
+};
+
+function boardColumnForStage(stage?: string | null): BoardColumnKey {
+  switch (stage) {
+    case 'ai_interview':
+      return 'ai_interview';
+    case 'tech':
+    case 'tech1':
+    case 'tech2':
+    case 'live_coding':
+    case 'system_design':
+      return 'tech';
+    case 'cultural':
+    case 'hiring_manager':
+      return 'hiring_manager';
+    case 'panel':
+      return 'panel';
+    case 'final':
+    case 'offer':
+      return 'final';
+    case 'rejected':
+      return 'rejected';
+    case 'intro':
+    case 'others':
+    default:
+      return 'intro';
+  }
+}
 
 const STATUSES = [
   { value: 'scheduled', label: 'Scheduled' },
@@ -83,6 +222,22 @@ const statusBadgeClass = (s?: string | null) => {
 const statusLabel = (v?: string | null) =>
   v ? STATUSES.find((s) => s.value === v)?.label ?? v : '—';
 
+function boardStatusLabel(status?: string | null): string {
+  if (status === 'scheduled' || status === 'rescheduled') return 'Scheduled';
+  if (status === 'completed') return 'Completed';
+  return statusLabel(status);
+}
+
+function boardStatusClass(status?: string | null): string {
+  if (status === 'scheduled' || status === 'rescheduled') {
+    return 'bg-blue-100 text-blue-800 border-blue-200';
+  }
+  if (status === 'completed') {
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  }
+  return statusBadgeClass(status);
+}
+
 type AccountRef = { _id: string; name?: string; email?: string };
 type CreatorRef = { _id: string; name?: string; email?: string };
 
@@ -108,18 +263,63 @@ type Interview = {
 
 type ModalMode = 'create' | 'read' | 'update' | 'delete' | null;
 
-const stageLabel = (v: string) => STAGES.find((s) => s.value === v)?.label ?? v;
+type InterviewFormState = {
+  accountId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  stage: string;
+  status: string;
+  companyName: string;
+  interviewerName: string;
+  appliedPosition: string;
+  jobUrl: string;
+  transcript: string;
+  note: string;
+};
 
-function pageNumbers(current: number, total: number): (number | '…')[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const set = new Set<number>([1, 2, total - 1, total, current - 1, current, current + 1]);
-  const sorted = [...set].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
-  const out: (number | '…')[] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push('…');
-    out.push(sorted[i]);
-  }
-  return out;
+function blankInterviewForm(): InterviewFormState {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  const endHour = String((now.getHours() + 1) % 24).padStart(2, '0');
+  return {
+    accountId: '',
+    date: `${yyyy}-${mm}-${dd}`,
+    startTime: `${hh}:${mi}`,
+    endTime: `${endHour}:${mi}`,
+    stage: '',
+    status: '',
+    companyName: '',
+    interviewerName: '',
+    appliedPosition: '',
+    jobUrl: '',
+    transcript: '',
+    note: '',
+  };
+}
+
+function interviewToForm(iv: Interview): InterviewFormState {
+  const start = splitDateTime(iv.scheduledAt);
+  const end = splitDateTime(iv.endsAt || '');
+  const accId = typeof iv.accountId === 'string' ? iv.accountId : iv.accountId?._id ?? '';
+  return {
+    accountId: accId,
+    date: start.date,
+    startTime: start.time,
+    endTime: end.time || start.time,
+    stage: iv.stage || '',
+    status: iv.status || '',
+    companyName: iv.companyName || '',
+    interviewerName: iv.interviewerName || '',
+    appliedPosition: iv.appliedPosition || '',
+    jobUrl: iv.jobUrl || '',
+    transcript: iv.transcript || '',
+    note: iv.note || '',
+  };
 }
 
 function combineDateTime(date: string, time: string): string {
@@ -175,20 +375,6 @@ function formatPretty(startIso: string, endIso?: string | null): string {
 const formatScheduled = (iso: string) => formatPretty(iso);
 const formatTimeRange = (startIso: string, endIso?: string | null) => formatPretty(startIso, endIso);
 
-const stageBadgeClass = (stage: string) => {
-  switch (stage) {
-    case 'intro': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
-    case 'tech': return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'panel': return 'bg-purple-100 text-purple-800 border-purple-200';
-    case 'live_coding': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-    case 'system_design': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
-    case 'cultural': return 'bg-pink-100 text-pink-800 border-pink-200';
-    case 'final': return 'bg-amber-100 text-amber-800 border-amber-200';
-    case 'ai_interview': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    default: return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
-  }
-};
-
 export default function InterviewsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -197,13 +383,15 @@ export default function InterviewsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Filters: creator defaults to "me" on first render; cleared via the dropdown.
-  const [creatorId, setCreatorId] = useState<string>(meId);
+  // User filter defaults to the logged-in user once auth hydrates.
+  const [creatorId, setCreatorId] = useState('');
+  const [userFilterReady, setUserFilterReady] = useState(false);
   useEffect(() => {
-    // If user object loads after first render, hydrate the default.
-    if (creatorId === '' && meId) setCreatorId(meId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meId]);
+    if (!userFilterReady && meId) {
+      setCreatorId(meId);
+      setUserFilterReady(true);
+    }
+  }, [meId, userFilterReady]);
 
   const [accountId, setAccountId] = useState('');
   const [stage, setStage] = useState('');
@@ -211,15 +399,31 @@ export default function InterviewsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const sort: 'desc' = 'desc';
-  const viewMode: 'table' = 'table';
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [boardOffset, setBoardOffset] = useState(0);
+  const [visibleColumnCount, setVisibleColumnCount] = useState(
+    () => (typeof window !== 'undefined' && window.innerWidth >= BOARD_WIDE_MIN_PX
+      ? BOARD_VISIBLE_WIDE
+      : BOARD_VISIBLE_NARROW),
+  );
 
-  const { data, mutate, isLoading } = useSWR(
-    ['interviews', creatorId, accountId, stage, statusFilter, from, to, sort, currentPage, pageSize] as const,
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${BOARD_WIDE_MIN_PX}px)`);
+    const onChange = () => {
+      const next = mq.matches ? BOARD_VISIBLE_WIDE : BOARD_VISIBLE_NARROW;
+      setVisibleColumnCount(next);
+      setBoardOffset((o) => Math.min(o, Math.max(0, BOARD_COLUMNS.length - next)));
+    };
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const boardPageSize = 500;
+
+  const { data, mutate, isLoading, error: loadError } = useSWR(
+    ['interviews', creatorId, accountId, stage, statusFilter, from, to, sort, boardPageSize] as const,
     () => api.listInterviews({
-      page: currentPage,
-      limit: pageSize,
+      page: 1,
+      limit: boardPageSize,
       sort,
       ...(creatorId ? { creatorId } : {}),
       ...(accountId ? { accountId } : {}),
@@ -227,7 +431,8 @@ export default function InterviewsPage() {
       ...(statusFilter ? { status: statusFilter } : {}),
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
-    })
+    }),
+    { revalidateOnFocus: false },
   );
 
   const { data: accountsLookup } = useSWR(['accounts-lookup'], () => api.lookupAccounts());
@@ -243,11 +448,43 @@ export default function InterviewsPage() {
     resumes?: Array<{ id: string; filename: string }>;
   }>) || [];
 
-  const { data: usersData } = useSWR(['users-lookup'], () => api.lookupUsers());
+  const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
   const users = (usersData?.users as Array<{ _id: string; name?: string | null; email?: string | null }>) || [];
 
   const interviews = (data?.interviews as Interview[]) || [];
   const pagination = data?.pagination;
+
+  const boardBuckets = useMemo(() => {
+    const buckets = Object.fromEntries(
+      BOARD_COLUMNS.map((col) => [col.key, [] as Interview[]]),
+    ) as Record<BoardColumnKey, Interview[]>;
+    for (const iv of interviews) {
+      const key = boardColumnForStage(iv.stage);
+      buckets[key].push(iv);
+    }
+    for (const col of BOARD_COLUMNS) {
+      buckets[col.key].sort(
+        (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
+      );
+    }
+    return buckets;
+  }, [interviews]);
+
+  const visibleColumns = BOARD_COLUMNS.slice(boardOffset, boardOffset + visibleColumnCount);
+  const canBoardPrev = boardOffset > 0;
+  const canBoardNext = boardOffset + visibleColumnCount < BOARD_COLUMNS.length;
+
+  useEffect(() => {
+    if (!stage) return;
+    const colKey = boardColumnForStage(stage);
+    const idx = BOARD_COLUMNS.findIndex((c) => c.key === colKey);
+    if (idx < 0) return;
+    setBoardOffset((prev) => {
+      if (idx < prev) return idx;
+      if (idx >= prev + visibleColumnCount) return idx - visibleColumnCount + 1;
+      return prev;
+    });
+  }, [stage, visibleColumnCount]);
 
   // Modal state
   const [mode, setMode] = useState<ModalMode>(null);
@@ -255,54 +492,21 @@ export default function InterviewsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const blankForm = () => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mi = String(now.getMinutes()).padStart(2, '0');
-    const endHour = String((now.getHours() + 1) % 24).padStart(2, '0');
-    return {
-      accountId: '',
-      date: `${yyyy}-${mm}-${dd}`,
-      startTime: `${hh}:${mi}`,
-      endTime: `${endHour}:${mi}`,
-      stage: '',
-      status: '',
-      companyName: '',
-      interviewerName: '',
-      appliedPosition: '',
-      jobUrl: '',
-      transcript: '',
-      note: '',
-    };
-  };
+  const [panelInterview, setPanelInterview] = useState<Interview | null>(null);
+  const [panelForm, setPanelForm] = useState<InterviewFormState>(blankInterviewForm);
+  const [panelSaving, setPanelSaving] = useState(false);
+  const [panelError, setPanelError] = useState('');
 
-  const [form, setForm] = useState(blankForm);
+  const blankForm = blankInterviewForm;
+
+  const [form, setForm] = useState<InterviewFormState>(blankInterviewForm);
 
   useEffect(() => {
     if (mode === 'create') {
       setForm(blankForm());
       setError('');
     } else if ((mode === 'update' || mode === 'read') && active) {
-      const start = splitDateTime(active.scheduledAt);
-      const end = splitDateTime(active.endsAt || '');
-      const accId = typeof active.accountId === 'string' ? active.accountId : active.accountId?._id ?? '';
-      setForm({
-        accountId: accId,
-        date: start.date,
-        startTime: start.time,
-        endTime: end.time || start.time,
-        stage: active.stage || '',
-        status: active.status || '',
-        companyName: active.companyName || '',
-        interviewerName: active.interviewerName || '',
-        appliedPosition: active.appliedPosition || '',
-        jobUrl: active.jobUrl || '',
-        transcript: active.transcript || '',
-        note: active.note || '',
-      });
+      setForm(interviewToForm(active));
       setError('');
     }
   }, [mode, active]);
@@ -313,32 +517,30 @@ export default function InterviewsPage() {
     setError('');
   };
 
-  const openCreate = () => { setActive(null); setMode('create'); };
+  const openPanel = (iv: Interview) => {
+    setPanelInterview(iv);
+    setPanelForm(interviewToForm(iv));
+    setPanelError('');
+  };
+
+  const closePanel = () => {
+    setPanelInterview(null);
+    setPanelError('');
+  };
+
+  const openCreate = () => { closePanel(); setActive(null); setMode('create'); };
   const openUpdate = (iv: Interview) => {
-    // Pre-fill form synchronously so the modal renders with values on first paint
-    // — useEffect-based pre-fill races with modal mount and sometimes blanks fields.
-    const start = splitDateTime(iv.scheduledAt);
-    const end = splitDateTime(iv.endsAt || '');
-    const accId = typeof iv.accountId === 'string' ? iv.accountId : iv.accountId?._id ?? '';
-    setForm({
-      accountId: accId,
-      date: start.date,
-      startTime: start.time,
-      endTime: end.time || start.time,
-      stage: iv.stage || '',
-      status: iv.status || '',
-      companyName: iv.companyName || '',
-      interviewerName: iv.interviewerName || '',
-      appliedPosition: iv.appliedPosition || '',
-      jobUrl: iv.jobUrl || '',
-      transcript: iv.transcript || '',
-      note: iv.note || '',
-    });
+    closePanel();
+    setForm(interviewToForm(iv));
     setActive(iv);
     setMode('update');
     setError('');
   };
   const openDelete = (iv: Interview) => { setActive(iv); setMode('delete'); };
+
+  const openTranscript = (iv: Interview) => {
+    navigate(`/interviews/${iv._id}`);
+  };
 
   // Honor `?edit=:id` so the detail page can hand off to the edit modal.
   const editParam = searchParams.get('edit');
@@ -386,19 +588,7 @@ export default function InterviewsPage() {
     setSaving(true);
     setError('');
     try {
-      const body: Record<string, unknown> = {
-        accountId: form.accountId,
-        scheduledAt: combineDateTime(form.date, form.startTime),
-        endsAt: combineDateTime(form.date, form.endTime),
-        stage: form.stage,
-        status: form.status,
-        companyName: form.companyName,
-        interviewerName: form.interviewerName,
-        appliedPosition: form.appliedPosition,
-        jobUrl: form.jobUrl,
-        transcript: form.transcript,
-        note: form.note,
-      };
+      const body = buildSaveBody(form);
       const account = ownAccounts.find((a) => a._id === form.accountId);
       const accountLabel = account?.name || account?.title || 'account';
       const stageText = form.stage ? `${stageLabel(form.stage)} ` : '';
@@ -424,6 +614,7 @@ export default function InterviewsPage() {
     try {
       await api.deleteInterview(active._id);
       notify.success('Interview deleted');
+      if (panelInterview?._id === active._id) closePanel();
       closeModal();
       mutate();
     } catch (err) {
@@ -433,28 +624,141 @@ export default function InterviewsPage() {
     }
   };
 
+  const buildSaveBody = (f: InterviewFormState): Record<string, unknown> => ({
+    accountId: f.accountId,
+    scheduledAt: combineDateTime(f.date, f.startTime),
+    endsAt: combineDateTime(f.date, f.endTime),
+    stage: f.stage,
+    status: f.status,
+    companyName: f.companyName,
+    interviewerName: f.interviewerName,
+    appliedPosition: f.appliedPosition,
+    jobUrl: f.jobUrl,
+    transcript: f.transcript,
+    note: f.note,
+  });
+
+  const savePanel = async () => {
+    if (!panelInterview) return;
+    if (!panelForm.date || !panelForm.startTime || !panelForm.endTime) {
+      notify.error('Select date and time');
+      return;
+    }
+    if (panelForm.endTime <= panelForm.startTime) {
+      notify.error('End time must be after start time');
+      return;
+    }
+    if (!canEdit(panelInterview)) {
+      notify.error('You cannot edit this interview');
+      return;
+    }
+    setPanelSaving(true);
+    setPanelError('');
+    try {
+      const updated = await api.updateInterview(panelInterview._id, buildSaveBody(panelForm));
+      notify.success('Interview updated');
+      setPanelInterview(updated as unknown as Interview);
+      setPanelForm(interviewToForm(updated as unknown as Interview));
+      mutate();
+    } catch (err) {
+      notify.error(err, 'Failed to save interview');
+    } finally {
+      setPanelSaving(false);
+    }
+  };
+
   const canEdit = (iv: Interview): boolean => {
     if (isAdmin) return true;
     const createdById = typeof iv.createdBy === 'string' ? iv.createdBy : iv.createdBy?._id;
     return createdById === meId;
   };
 
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setCurrentPage(1);
+  const handleBoardPrev = () => setBoardOffset((o) => Math.max(0, o - 1));
+  const handleBoardNext = () => setBoardOffset((o) => Math.min(BOARD_COLUMNS.length - visibleColumnCount, o + 1));
+
+  const [activeDragInterview, setActiveDragInterview] = useState<Interview | null>(null);
+  const [dropTargetColumn, setDropTargetColumn] = useState<BoardColumnKey | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const onInterviewDragStart = (e: DragStartEvent) => {
+    const iv = interviews.find((i) => i._id === String(e.active.id));
+    setActiveDragInterview(iv ?? null);
+    setDropTargetColumn(null);
   };
+
+  const onInterviewDragOver = (e: DragOverEvent) => {
+    if (!e.over) {
+      setDropTargetColumn(null);
+      return;
+    }
+    const col = resolveInterviewDropColumn(String(e.over.id), String(e.active.id), interviews);
+    setDropTargetColumn(col ?? null);
+  };
+
+  const onInterviewDragEnd = async (e: DragEndEvent) => {
+    setActiveDragInterview(null);
+    const ivId = String(e.active.id);
+    const iv = interviews.find((i) => i._id === ivId);
+    const targetCol = dropTargetColumn
+      ?? (e.over ? resolveInterviewDropColumn(String(e.over.id), ivId, interviews) : undefined);
+    setDropTargetColumn(null);
+    if (!iv || !targetCol) return;
+    if (!canEdit(iv)) {
+      notify.error('You cannot move this interview');
+      return;
+    }
+    const sourceCol = boardColumnForStage(iv.stage);
+    if (targetCol === sourceCol) return;
+    const newStage = BOARD_COLUMN_TO_STAGE[targetCol];
+    const colLabel = BOARD_COLUMNS.find((c) => c.key === targetCol)?.label ?? stageLabel(newStage);
+
+    const previousData = data;
+    mutate(
+      (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          interviews: (current.interviews as Interview[]).map((item) =>
+            item._id === ivId ? { ...item, stage: newStage } : item,
+          ),
+        };
+      },
+      { revalidate: false },
+    );
+
+    try {
+      const updated = await api.updateInterview(iv._id, { stage: newStage });
+      if (panelInterview?._id === ivId) {
+        setPanelInterview(updated as unknown as Interview);
+        setPanelForm((prev) => ({ ...prev, stage: newStage }));
+      }
+      if (stage && stage !== newStage) setStage('');
+      await mutate();
+      notify.success(`Moved to ${colLabel}`);
+    } catch (err) {
+      mutate(previousData, { revalidate: false });
+      notify.error(err, 'Failed to move interview');
+    }
+  };
+
+  const resetFiltersPage = () => setBoardOffset(0);
+
+  const userAccounts = useMemo(() => {
+    if (!creatorId) return accounts;
+    return accounts.filter((a) => a.createdBy === creatorId);
+  }, [accounts, creatorId]);
 
   const accountOptions = useMemo(() => [
     { value: '', label: 'All' },
-    ...accounts.map((a) => ({ value: a._id, label: a.name || a._id })),
-  ], [accounts]);
+    ...userAccounts.map((a) => ({ value: a._id, label: a.name || a._id })),
+  ], [userAccounts]);
 
   // Form-only account list — owner-scoped (admin sees all, staff sees own).
   const accountSelectOptions = useMemo(() =>
     ownAccounts.map((a) => ({ value: a._id, label: a.name || a._id })),
   [ownAccounts]);
 
-  const creatorOptions = useMemo(() => [
+  const userOptions = useMemo(() => [
     { value: '', label: 'All' },
     ...users.map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
   ], [users]);
@@ -462,6 +766,7 @@ export default function InterviewsPage() {
   const stageOptions = useMemo(() => [
     { value: '', label: 'All' },
     ...STAGES,
+    { value: 'rejected', label: 'Rejected' },
   ], []);
 
   const statusOptions = useMemo(() => [
@@ -472,129 +777,13 @@ export default function InterviewsPage() {
   const stageFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
     ...STAGES,
+    { value: 'rejected', label: 'Rejected' },
   ], []);
 
   const statusFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
     ...STATUSES,
   ], []);
-
-  const renderRow = (iv: Interview) => {
-    const creator = typeof iv.createdBy === 'object' ? iv.createdBy : null;
-    const account = typeof iv.accountId === 'object' ? iv.accountId : null;
-    const editable = canEdit(iv);
-    return (
-      <tr
-        key={iv._id}
-        className="table-row cursor-pointer"
-        onClick={() => navigate(`/interviews/${iv._id}`)}
-      >
-        <td className="px-3 py-2 align-middle">{(() => {
-              const display = iv.ownerName || creator?.name || iv.ownerEmail || creator?.email;
-              const img = (iv as { ownerImage?: string | null }).ownerImage || (creator as { image?: string } | undefined)?.image;
-              return display ? <NameWithAvatar name={display} imageUrl={img} /> : '—';
-            })()}</td>
-        <td className="px-3 py-2 align-middle">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</td>
-        <td className="px-3 py-2 align-middle">
-          {iv.stage ? (
-            <span className={`badge ${stageBadgeClass(iv.stage)}`}>
-              {stageLabel(iv.stage)}
-            </span>
-          ) : <span className="text-faint">—</span>}
-        </td>
-        <td className="px-3 py-2 align-middle">
-          {iv.status ? (
-            <span className={`badge ${statusBadgeClass(iv.status)}`}>
-              {statusLabel(iv.status)}
-            </span>
-          ) : <span className="text-faint">—</span>}
-        </td>
-        <td className="px-3 py-2 align-middle">
-          {iv.jobUrl ? (
-            <a href={iv.jobUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="link">
-              {iv.companyName || iv.jobUrl}
-            </a>
-          ) : (
-            iv.companyName || <span className="text-faint">—</span>
-          )}
-        </td>
-        <td className="px-3 py-2 align-middle">{iv.interviewerName || <span className="text-faint">—</span>}</td>
-        <td className="px-3 py-2 align-middle">{account?.name || account?.email || '—'}</td>
-        <td className="px-3 py-2 align-middle" onClick={(e) => e.stopPropagation()}>
-          <div className="flex gap-1 whitespace-nowrap">
-            <Link to={`/interviews/${iv._id}`} className="btn-icon" title="Open"><Eye size={16} /></Link>
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => openUpdate(iv)}
-              disabled={!editable}
-              title={editable ? 'Update' : 'Only the creator or an admin can update'}
-            >
-              <Pencil size={16} />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => openDelete(iv)}
-              disabled={!editable}
-              title={editable ? 'Delete' : 'Only the creator or an admin can delete'}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </td>
-      </tr>
-    );
-  };
-
-  const renderCard = (iv: Interview) => {
-    const creator = typeof iv.createdBy === 'object' ? iv.createdBy : null;
-    const account = typeof iv.accountId === 'object' ? iv.accountId : null;
-    const editable = canEdit(iv);
-    return (
-      <div key={iv._id} className="card p-4 space-y-2 hover:shadow-md transition">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            {iv.stage && (
-              <span className={`badge ${stageBadgeClass(iv.stage)}`}>
-                {stageLabel(iv.stage)}
-              </span>
-            )}
-            {iv.status && (
-              <span className={`badge ${statusBadgeClass(iv.status)}`}>
-                {statusLabel(iv.status)}
-              </span>
-            )}
-          </div>
-          <span className="text-xs text-muted">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</span>
-        </div>
-        {(iv.companyName || iv.interviewerName || iv.appliedPosition) && (
-          <div className="text-sm">
-            <div className="font-medium">{iv.companyName || '—'}</div>
-            {iv.appliedPosition && <div className="text-muted text-xs">{iv.appliedPosition}</div>}
-            {iv.interviewerName && <div className="text-muted text-xs">w/ {iv.interviewerName}</div>}
-          </div>
-        )}
-        <div className="text-sm">
-          <div className="text-muted">Profile</div>
-          <div className="font-medium">{account?.name || account?.email || '—'}</div>
-        </div>
-        <div className="text-sm">
-          <div className="text-muted">Creator</div>
-          <div>{(() => {
-              const display = iv.ownerName || creator?.name || iv.ownerEmail || creator?.email;
-              const img = (iv as { ownerImage?: string | null }).ownerImage || (creator as { image?: string } | undefined)?.image;
-              return display ? <NameWithAvatar name={display} imageUrl={img} /> : '—';
-            })()}</div>
-        </div>
-        <div className="flex gap-1 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-          <Link to={`/interviews/${iv._id}`} className="btn-icon" title="Open"><Eye size={16} /></Link>
-          <button type="button" className="btn-icon" onClick={() => openUpdate(iv)} disabled={!editable} title="Update"><Pencil size={16} /></button>
-          <button type="button" className="btn-icon" onClick={() => openDelete(iv)} disabled={!editable} title="Delete"><Trash2 size={16} /></button>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <>
@@ -613,150 +802,166 @@ export default function InterviewsPage() {
 
       <div className="space-y-6">
       {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap toolbar">
-        {isAdmin && (
-          <div className="w-44">
-            <label className="block text-xs text-muted mb-1">Creator</label>
-            <Select value={creatorId} onChange={(v) => { setCreatorId(v); setCurrentPage(1); }} options={creatorOptions} />
-          </div>
-        )}
+      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Profile</label>
-          <Select value={accountId} onChange={(v) => { setAccountId(v); setCurrentPage(1); }} options={accountOptions} />
+          <label className="block text-xs text-gray-500 mb-1">User</label>
+          <Select
+            value={creatorId}
+            onChange={(v) => {
+              setCreatorId(v);
+              setAccountId('');
+              resetFiltersPage();
+            }}
+            options={userOptions}
+          />
+        </div>
+        <div className="w-44">
+          <label className="block text-xs text-gray-500 mb-1">Profile</label>
+          <Select value={accountId} onChange={(v) => { setAccountId(v); resetFiltersPage(); }} options={accountOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-muted mb-1">Stage</label>
-          <Select value={stage} onChange={(v) => { setStage(v); setCurrentPage(1); }} options={stageOptions} />
+          <label className="block text-xs text-gray-500 mb-1">Stage</label>
+          <Select value={stage} onChange={(v) => { setStage(v); resetFiltersPage(); }} options={stageOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-muted mb-1">Status</label>
-          <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); setCurrentPage(1); }} options={statusOptions} />
+          <label className="block text-xs text-gray-500 mb-1">Status</label>
+          <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); resetFiltersPage(); }} options={statusOptions} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-muted mb-1">From</label>
-          <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setCurrentPage(1); }} />
+          <label className="block text-xs text-gray-500 mb-1">From</label>
+          <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetFiltersPage(); }} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-muted mb-1">To</label>
-          <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); setCurrentPage(1); }} />
+          <label className="block text-xs text-gray-500 mb-1">To</label>
+          <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); resetFiltersPage(); }} />
         </div>
       </div>
 
-      {/* Total + page-size */}
+      {/* Total */}
       {data && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted">
-            <span>Showing {pagination?.total ?? 0} interview{pagination?.total !== 1 ? 's' : ''} total</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Show:</label>
-            <select
-              value={pageSize}
-              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="select focus-ring text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
+        <div className="text-sm text-gray-600">
+          <span>Showing {pagination?.total ?? 0} interview{pagination?.total !== 1 ? 's' : ''} total</span>
+          {(pagination?.total ?? 0) > boardPageSize && (
+            <span className="text-amber-700 ml-2">
+              (first {boardPageSize} loaded — narrow filters to see more)
+            </span>
+          )}
         </div>
       )}
 
-      {/* List */}
-      {viewMode === 'table' ? (
-        <div className="table-wrap">
-          <table className="min-w-full text-sm">
-            <thead className="table-head">
-              <tr>
-                <th className="px-3 py-2 font-medium">Creator</th>
-                <th className="px-3 py-2 font-medium">Date / Time</th>
-                <th className="px-3 py-2 font-medium">Stage</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Company</th>
-                <th className="px-3 py-2 font-medium">Interviewer</th>
-                <th className="px-3 py-2 font-medium">Profile</th>
-                <th className="px-3 py-2 font-medium whitespace-nowrap text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="row-divider">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-muted">
-                    <div className="flex items-center justify-center">
-                      <div className="spinner spinner-md mr-3"></div>
-                      Loading interviews...
-                    </div>
-                  </td>
-                </tr>
-              ) : interviews.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-muted">No interviews found.</td></tr>
-              ) : (
-                interviews.map(renderRow)
-              )}
-            </tbody>
-          </table>
+      {/* Board — Pipeline-style kanban */}
+      {isLoading && !data ? (
+        <div className="bg-white rounded-[12px] border border-gray-100 p-6 flex items-center gap-2 text-sm text-gray-500 shadow-sm">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading interviews…
+        </div>
+      ) : loadError ? (
+        <div className="bg-white rounded-[12px] border border-red-100 p-6 text-sm text-red-600 shadow-sm">
+          Failed to load interviews. Try refreshing the page.
         </div>
       ) : (
-        isLoading ? (
-          <div className="flex items-center justify-center py-8 text-muted">
-            <div className="spinner spinner-md mr-3"></div>
-            Loading interviews...
-          </div>
-        ) : interviews.length === 0 ? (
-          <div className="text-center text-muted py-8">No interviews found.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {interviews.map(renderCard)}
-          </div>
-        )
-      )}
+        <>
+          <div className="flex flex-col gap-3 w-full">
+            <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleBoardPrev}
+                  disabled={!canBoardPrev}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Show previous columns"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <p className="text-xs text-gray-500 text-center flex-1">
+                  {visibleColumns.map((c) => c.label).join(' · ')}
+                  <span className="text-gray-400"> · {boardOffset + 1}–{boardOffset + visibleColumns.length} of {BOARD_COLUMNS.length}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={handleBoardNext}
+                  disabled={!canBoardNext}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Show next columns"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
 
-      {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="text-sm text-muted">
-            Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-            {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage(pagination.page - 1)}
-              disabled={!pagination.hasPrev}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+            {interviews.length === 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800">
+                No interviews match the current filters.
+                {creatorId && ' Try setting User to All, or pick a different profile.'}
+              </div>
+            )}
+
+            <DndContext
+              sensors={sensors}
+              collisionDetection={interviewBoardCollisionDetection}
+              onDragStart={onInterviewDragStart}
+              onDragOver={onInterviewDragOver}
+              onDragEnd={onInterviewDragEnd}
+              onDragCancel={() => {
+                setActiveDragInterview(null);
+                setDropTargetColumn(null);
+              }}
             >
-              Previous
-            </button>
-            <div className="flex gap-1">
-              {pageNumbers(pagination.page, pagination.totalPages).map((n, idx) =>
-                n === '…' ? (
-                  <span key={`dots-${idx}`} className="px-2 py-1 text-sm text-muted">…</span>
-                ) : (
-                  <button
-                    key={n}
-                    onClick={() => setCurrentPage(n)}
-                    className={`px-3 py-1 border rounded text-sm ${
-                      n === pagination.page
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                )
-              )}
-            </div>
-            <button
-              onClick={() => setCurrentPage(pagination.page + 1)}
-              disabled={!pagination.hasNext}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              Next
-            </button>
+              <div className="flex gap-4 pb-2 w-full">
+                {visibleColumns.map((col) => (
+                  <InterviewBoardColumn
+                    key={col.key}
+                    columnKey={col.key}
+                    label={col.label}
+                    tone={col.tone}
+                    columnClass={col.columnClass}
+                    cards={boardBuckets[col.key]}
+                    selectedId={panelInterview?._id}
+                    isDropTarget={dropTargetColumn === col.key}
+                    onCardClick={openPanel}
+                    onCardDelete={openDelete}
+                    onOpenTranscript={openTranscript}
+                    canDelete={canEdit}
+                    canDrag={canEdit}
+                  />
+                ))}
+              </div>
+              <DragOverlay>
+                {activeDragInterview ? (
+                  <div className="w-[220px] max-w-full opacity-95">
+                    <InterviewBoardCardPreview
+                      columnKey={boardColumnForStage(activeDragInterview.stage)}
+                      interview={activeDragInterview}
+                    />
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
-        </div>
+        </>
       )}
       </div>
+
+      {panelInterview && (
+        <>
+          <div
+            className="fixed inset-0 top-16 bg-black/25 z-40"
+            onClick={closePanel}
+            aria-hidden
+          />
+          <InterviewSidePanel
+            interview={panelInterview}
+            form={panelForm}
+            setForm={setPanelForm}
+            error={panelError}
+            saving={panelSaving}
+            editable={canEdit(panelInterview)}
+            accountSelectOptions={accountSelectOptions}
+            stageFormOptions={stageFormOptions}
+            statusFormOptions={statusFormOptions}
+            onClose={closePanel}
+            onSave={savePanel}
+            onOpenTranscript={() => openTranscript(panelInterview)}
+          />
+        </>
+      )}
 
       {/* Create / Update / Read modal */}
       <Modal
@@ -848,196 +1053,15 @@ export default function InterviewsPage() {
             </>
           ) : (
             <>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Profile <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  value={form.accountId}
-                  onChange={(v) => setForm({ ...form, accountId: v })}
-                  options={accountSelectOptions}
-                  placeholder="Select a profile"
-                  disabled={mode === 'update' && !!active && !canEdit(active)}
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Start time <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    className="input"
-                    type="time"
-                    value={form.startTime}
-                    onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    End time <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    className="input"
-                    type="time"
-                    value={form.endTime}
-                    onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Company Name</label>
-                  <input
-                    className="input"
-                    type="text"
-                    value={form.companyName}
-                    onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                    placeholder="e.g. Acme Corp"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Interviewer Name</label>
-                  <input
-                    className="input"
-                    type="text"
-                    value={form.interviewerName}
-                    onChange={(e) => setForm({ ...form, interviewerName: e.target.value })}
-                    placeholder="e.g. Jane Smith"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Applied Position</label>
-                <input
-                  className="input"
-                  type="text"
-                  value={form.appliedPosition}
-                  onChange={(e) => setForm({ ...form, appliedPosition: e.target.value })}
-                  placeholder="e.g. Backend, Frontend, AI, Mobile…"
-                  list="applied-position-suggestions"
-                />
-                <datalist id="applied-position-suggestions">
-                  <option value="Backend" />
-                  <option value="Frontend" />
-                  <option value="Fullstack" />
-                  <option value="AI / ML" />
-                  <option value="Mobile" />
-                  <option value="DevOps" />
-                  <option value="Data" />
-                  <option value="QA" />
-                  <option value="Other" />
-                </datalist>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-faint font-normal">(optional)</span></label>
-                <input
-                  className="input"
-                  type="url"
-                  value={form.jobUrl}
-                  onChange={(e) => setForm({ ...form, jobUrl: e.target.value })}
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Interview Stage</label>
-                  <Select
-                    value={form.stage}
-                    onChange={(v) => setForm({ ...form, stage: v })}
-                    options={stageFormOptions}
-                    placeholder="Select a stage"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Status</label>
-                  <Select
-                    value={form.status}
-                    onChange={(v) => setForm({ ...form, status: v })}
-                    options={statusFormOptions}
-                    placeholder="Select a status"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium">Interview Transcript</label>
-                  <label className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
-                    {form.transcript ? 'Replace file' : 'Upload .txt / .md / .doc / .pdf'}
-                    <input
-                      type="file"
-                      accept=".txt,.md,.markdown,.doc,.docx,.pdf,text/plain,text/markdown,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const ext = file.name.toLowerCase().split('.').pop() || '';
-                        const isPlain = ext === 'txt' || ext === 'md' || ext === 'markdown';
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          const raw = String(reader.result || '');
-                          setForm((prev) => ({ ...prev, transcript: raw }));
-                          if (!isPlain) {
-                            notify.error(
-                              `${ext.toUpperCase()} files may not parse cleanly as plain text. Save as .txt or .md if the result looks garbled.`
-                            );
-                          } else {
-                            notify.success(`Transcript loaded: ${file.name}`);
-                          }
-                        };
-                        reader.onerror = () => notify.error('Could not read the file');
-                        reader.readAsText(file);
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
-                </div>
-                {form.transcript ? (
-                  <div className="border border-zinc-300 dark:border-zinc-600 rounded-md p-3 max-h-60 overflow-auto bg-zinc-50 dark:bg-zinc-900/80">
-                    <pre className="whitespace-pre-wrap text-xs font-mono text-body">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
-                  </div>
-                ) : (
-                  <div className="border border-dashed border-zinc-300 dark:border-zinc-600 rounded-md p-4 text-center text-xs text-faint">
-                    No transcript yet. Upload a file above.
-                  </div>
-                )}
-                {form.transcript && (
-                  <button
-                    type="button"
-                    onClick={() => setForm((p) => ({ ...p, transcript: '' }))}
-                    className="text-xs text-red-600 hover:underline mt-1"
-                  >
-                    Clear transcript
-                  </button>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Note</label>
-                <textarea
-                  className="input w-full"
-                  rows={5}
-                  value={form.note}
-                  onChange={(e) => setForm({ ...form, note: e.target.value })}
-                  placeholder="Internal notes…"
-                />
-              </div>
+              <InterviewFormFields
+                form={form}
+                setForm={setForm}
+                accountSelectOptions={accountSelectOptions}
+                stageFormOptions={stageFormOptions}
+                statusFormOptions={statusFormOptions}
+                accountDisabled={mode === 'update' && !!active && !canEdit(active)}
+                datalistId="applied-position-suggestions-modal"
+              />
 
               <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 <button type="button" className="btn" onClick={closeModal} disabled={saving}>Cancel</button>
@@ -1084,5 +1108,420 @@ export default function InterviewsPage() {
       </Modal>
       </div>
     </>
+  );
+}
+
+function InterviewBoardColumn({
+  columnKey,
+  label,
+  tone,
+  columnClass,
+  cards,
+  selectedId,
+  isDropTarget,
+  onCardClick,
+  onCardDelete,
+  onOpenTranscript,
+  canDelete,
+  canDrag,
+}: {
+  columnKey: BoardColumnKey;
+  label: string;
+  tone: string;
+  columnClass: string;
+  cards: Interview[];
+  selectedId?: string;
+  isDropTarget?: boolean;
+  onCardClick: (iv: Interview) => void;
+  onCardDelete: (iv: Interview) => void;
+  onOpenTranscript: (iv: Interview) => void;
+  canDelete: (iv: Interview) => boolean;
+  canDrag: (iv: Interview) => boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: columnDroppableId(columnKey) });
+  const highlight = isOver || isDropTarget;
+
+  return (
+    <div className={`${columnClass} bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
+      <header className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 uppercase tracking-wide font-medium">
+        <span className="truncate">{label}</span>
+        <span className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums ml-2 shrink-0">
+          {cards.length}
+        </span>
+      </header>
+      <div
+        ref={setNodeRef}
+        className={`p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto transition-colors ${highlight ? 'bg-primary/5 ring-1 ring-inset ring-primary/20 rounded-b-[12px]' : ''}`}
+      >
+        {cards.length === 0 ? (
+          <div className="text-xs text-gray-400 text-center py-8">Drop here</div>
+        ) : (
+          cards.map((iv) => (
+            <InterviewBoardCard
+              key={iv._id}
+              columnKey={columnKey}
+              interview={iv}
+              isSelected={selectedId === iv._id}
+              onClick={() => onCardClick(iv)}
+              onDelete={() => onCardDelete(iv)}
+              onOpenTranscript={() => onOpenTranscript(iv)}
+              deletable={canDelete(iv)}
+              draggable={canDrag(iv)}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InterviewBoardCardPreview({
+  columnKey,
+  interview,
+}: {
+  columnKey: BoardColumnKey;
+  interview: Interview;
+}) {
+  const account = typeof interview.accountId === 'object' ? interview.accountId : null;
+  const profileName = account?.name || account?.email || 'Untitled profile';
+  const companyName = interview.companyName || 'Untitled';
+  const panStyle = BOARD_CARD_STYLES[columnKey];
+
+  return (
+    <div className={`rounded-[10px] p-3 text-sm shadow-md border relative overflow-hidden ${panStyle.card} ring-2 ring-primary`}>
+      <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
+      <div className="font-medium text-gray-900 truncate pl-1" title={profileName}>{profileName}</div>
+      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>{companyName}</div>
+      <div className="mt-1 text-[11px] text-gray-500 pl-1">
+        {formatTimeRange(interview.scheduledAt, interview.endsAt)}
+      </div>
+      <div className="mt-1.5 pl-1">
+        {interview.status ? (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${boardStatusClass(interview.status)}`}>
+            {boardStatusLabel(interview.status)}
+          </span>
+        ) : (
+          <span className="text-[11px] text-gray-400">No status</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InterviewBoardCard({
+  columnKey,
+  interview,
+  isSelected,
+  onClick,
+  onDelete,
+  onOpenTranscript,
+  deletable,
+  draggable,
+}: {
+  columnKey: BoardColumnKey;
+  interview: Interview;
+  isSelected?: boolean;
+  onClick: () => void;
+  onDelete: () => void;
+  onOpenTranscript: () => void;
+  deletable: boolean;
+  draggable: boolean;
+}) {
+  const account = typeof interview.accountId === 'object' ? interview.accountId : null;
+  const profileName = account?.name || account?.email || 'Untitled profile';
+  const companyName = interview.companyName || 'Untitled';
+  const panStyle = BOARD_CARD_STYLES[columnKey];
+
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
+    id: interview._id,
+    disabled: !draggable,
+  });
+  const { setNodeRef: setDropRef } = useDroppable({ id: interview._id });
+
+  const stop = (e: React.SyntheticEvent) => { e.stopPropagation(); };
+
+  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+
+  const setNodeRef = (node: HTMLElement | null) => {
+    setDragRef(node);
+    setDropRef(node);
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...(draggable ? listeners : {})}
+      {...(draggable ? attributes : { role: 'button', tabIndex: 0 })}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      className={`rounded-[10px] p-3 text-sm shadow-sm border relative overflow-hidden transition-all duration-200 ${panStyle.card} ${panStyle.hover} ${isSelected ? 'ring-2 ring-primary/60 border-primary/40' : ''} ${isDragging ? 'opacity-40' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+    >
+      <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
+      <div className="absolute top-2 right-2 flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={(e) => { stop(e); onOpenTranscript(); }}
+          onPointerDown={stop}
+          className="p-1 rounded-[6px] text-gray-400 hover:text-primary hover:bg-blue-50"
+          title="Open transcript"
+          aria-label="Open transcript"
+        >
+          <FileText size={14} />
+        </button>
+        {deletable && (
+          <button
+            type="button"
+            onClick={(e) => { stop(e); onDelete(); }}
+            onPointerDown={stop}
+            className="p-1 rounded-[6px] text-gray-400 hover:text-red-600 hover:bg-red-50"
+            title="Delete interview"
+            aria-label="Delete interview"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+      <div className="font-medium text-gray-900 truncate pr-14 pl-1" title={profileName}>
+        {profileName}
+      </div>
+      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>
+        {companyName}
+      </div>
+      <div className="mt-1 text-[11px] text-gray-500 pl-1">
+        {formatTimeRange(interview.scheduledAt, interview.endsAt)}
+      </div>
+      <div className="mt-1.5 pl-1">
+        {interview.status ? (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${boardStatusClass(interview.status)}`}>
+            {boardStatusLabel(interview.status)}
+          </span>
+        ) : (
+          <span className="text-[11px] text-gray-400">No status</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type SelectOption = { value: string; label: string };
+
+function InterviewFormFields({
+  form,
+  setForm,
+  accountSelectOptions,
+  stageFormOptions,
+  statusFormOptions,
+  accountDisabled,
+  datalistId,
+  disabled,
+}: {
+  form: InterviewFormState;
+  setForm: React.Dispatch<React.SetStateAction<InterviewFormState>>;
+  accountSelectOptions: SelectOption[];
+  stageFormOptions: SelectOption[];
+  statusFormOptions: SelectOption[];
+  accountDisabled?: boolean;
+  datalistId: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1">
+          Profile <span className="text-red-500">*</span>
+        </label>
+        <Select
+          value={form.accountId}
+          onChange={(v) => setForm({ ...form, accountId: v })}
+          options={accountSelectOptions}
+          placeholder="Select a profile"
+          disabled={disabled || accountDisabled}
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Date <span className="text-red-500">*</span>
+          </label>
+          <input className="input" type="date" value={form.date} disabled={disabled} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Start time <span className="text-red-500">*</span>
+          </label>
+          <input className="input" type="time" value={form.startTime} disabled={disabled} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            End time <span className="text-red-500">*</span>
+          </label>
+          <input className="input" type="time" value={form.endTime} disabled={disabled} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Company Name</label>
+          <input className="input" type="text" value={form.companyName} disabled={disabled} onChange={(e) => setForm({ ...form, companyName: e.target.value })} placeholder="e.g. Acme Corp" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Interviewer Name</label>
+          <input className="input" type="text" value={form.interviewerName} disabled={disabled} onChange={(e) => setForm({ ...form, interviewerName: e.target.value })} placeholder="e.g. Jane Smith" />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Applied Position</label>
+        <input className="input" type="text" value={form.appliedPosition} disabled={disabled} onChange={(e) => setForm({ ...form, appliedPosition: e.target.value })} placeholder="e.g. Backend, Frontend…" list={datalistId} />
+        <datalist id={datalistId}>
+          <option value="Backend" /><option value="Frontend" /><option value="Fullstack" />
+          <option value="AI / ML" /><option value="Mobile" /><option value="DevOps" />
+          <option value="Data" /><option value="QA" /><option value="Other" />
+        </datalist>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
+        <input className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm({ ...form, jobUrl: e.target.value })} placeholder="https://..." />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Interview Stage</label>
+          <Select value={form.stage} onChange={(v) => setForm({ ...form, stage: v })} options={stageFormOptions} placeholder="Select a stage" disabled={disabled} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Status</label>
+          <Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={statusFormOptions} placeholder="Select a status" disabled={disabled} />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium">Interview Transcript</label>
+          {!disabled && (
+            <label className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
+              {form.transcript ? 'Replace file' : 'Upload file'}
+              <input
+                type="file"
+                accept=".txt,.md,.markdown,.doc,.docx,.pdf,text/plain,text/markdown,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const ext = file.name.toLowerCase().split('.').pop() || '';
+                  const isPlain = ext === 'txt' || ext === 'md' || ext === 'markdown';
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const raw = String(reader.result || '');
+                    setForm((prev) => ({ ...prev, transcript: raw }));
+                    if (!isPlain) notify.error(`${ext.toUpperCase()} may not parse cleanly — prefer .txt or .md`);
+                    else notify.success(`Transcript loaded: ${file.name}`);
+                  };
+                  reader.onerror = () => notify.error('Could not read the file');
+                  reader.readAsText(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          )}
+        </div>
+        {form.transcript ? (
+          <div className="border border-gray-300 rounded-md p-3 max-h-40 overflow-auto bg-gray-50">
+            <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
+          </div>
+        ) : (
+          <div className="border border-dashed border-gray-300 rounded-md p-4 text-center text-xs text-gray-400">
+            No transcript yet.
+          </div>
+        )}
+        {!disabled && form.transcript && (
+          <button type="button" onClick={() => setForm((p) => ({ ...p, transcript: '' }))} className="text-xs text-red-600 hover:underline mt-1">Clear transcript</button>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Note</label>
+        <textarea className="input w-full" rows={4} value={form.note} disabled={disabled} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Internal notes…" />
+      </div>
+    </div>
+  );
+}
+
+function InterviewSidePanel({
+  interview,
+  form,
+  setForm,
+  error,
+  saving,
+  editable,
+  accountSelectOptions,
+  stageFormOptions,
+  statusFormOptions,
+  onClose,
+  onSave,
+  onOpenTranscript,
+}: {
+  interview: Interview;
+  form: InterviewFormState;
+  setForm: React.Dispatch<React.SetStateAction<InterviewFormState>>;
+  error: string;
+  saving: boolean;
+  editable: boolean;
+  accountSelectOptions: SelectOption[];
+  stageFormOptions: SelectOption[];
+  statusFormOptions: SelectOption[];
+  onClose: () => void;
+  onSave: () => void;
+  onOpenTranscript: () => void;
+}) {
+  const account = typeof interview.accountId === 'object' ? interview.accountId : null;
+  const title = interview.companyName || account?.name || 'Interview';
+
+  return (
+    <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white shadow-strong border-l border-gray-100 z-50 flex flex-col">
+      <header className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
+        <div className="min-w-0">
+          <div className="text-xs text-gray-500">Interview details</div>
+          <div className="font-semibold text-gray-900 truncate">{title}</div>
+          {interview.stage && (
+            <span className={`inline-flex mt-1 items-center px-2 py-0.5 rounded-[8px] text-[10px] font-medium border ${stageBadgeClass(interview.stage)}`}>
+              {stageLabel(interview.stage)}
+            </span>
+          )}
+        </div>
+        <button type="button" onClick={onClose} className="btn-icon shrink-0" title="Close panel" aria-label="Close panel">
+          <X size={16} />
+        </button>
+      </header>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+        <InterviewFormFields
+          form={form}
+          setForm={setForm}
+          accountSelectOptions={accountSelectOptions}
+          stageFormOptions={stageFormOptions}
+          statusFormOptions={statusFormOptions}
+          accountDisabled={!editable}
+          datalistId="applied-position-suggestions-panel"
+          disabled={!editable}
+        />
+      </div>
+
+      <footer className="px-4 py-3 border-t border-gray-100 flex flex-wrap gap-2 justify-end shrink-0 bg-gray-50/80">
+        <button type="button" className="btn-outline text-sm" onClick={onOpenTranscript}>
+          <FileText size={14} className="mr-1" /> Transcript
+        </button>
+        <button type="button" className="btn-outline text-sm" onClick={onClose}>Close</button>
+        {editable && (
+          <button type="button" className="btn text-sm" onClick={onSave} disabled={saving || !form.date || !form.startTime || !form.endTime || !form.accountId}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        )}
+      </footer>
+    </aside>
   );
 }

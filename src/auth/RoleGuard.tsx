@@ -9,6 +9,8 @@ const STAFF_ALLOWED = [
   '/transactions',
   '/profile',
   '/weekly-plan',
+  '/pipeline',
+  '/integrations',
   '/interviews',
   '/resume',
   '/preferences',
