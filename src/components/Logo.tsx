@@ -39,12 +39,13 @@ export function LogoIcon({ className = '' }: { className?: string }) {
  * the end. Keep the dot's color in sync with the icon's accent (defaults to
  * primary blue).
  */
-export function LogoWordmark({ className = '' }: { className?: string }) {
+export function LogoWordmark({ className = '', variant = 'light' }: { className?: string; variant?: 'light' | 'dark' }) {
+  const isDark = variant === 'dark';
   return (
     <div className={`inline-flex items-center gap-2 ${className}`}>
-      <LogoIcon className="w-7 h-7 text-primary" />
-      <span className="text-xl font-bold tracking-tight text-gray-900">
-        engineer<span className="text-primary">.</span>
+      <LogoIcon className={`h-7 w-7 ${isDark ? 'text-sky-400' : 'text-accent'}`} />
+      <span className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+        engineer<span className={isDark ? 'text-sky-400' : 'text-accent'}>.</span>
       </span>
     </div>
   );

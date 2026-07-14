@@ -10,6 +10,7 @@ import {
   Legend,
 } from 'recharts';
 import type { DashboardMetrics } from '../../api/endpoints';
+import { useChartTheme } from '../../theme/useChartTheme';
 
 type SeriesKey = 'income' | 'bids' | 'interviews' | 'rate';
 
@@ -34,6 +35,7 @@ export default function MetricsChart({
   data: DashboardMetrics;
   metrics?: SeriesKey[];
 }) {
+  const chart = useChartTheme();
   const SERIES = metrics ? ALL_SERIES.filter((s) => metrics.includes(s.key)) : ALL_SERIES;
   const initialActive = (key: SeriesKey) => (metrics ? metrics.includes(key) : key !== 'rate');
   const [active, setActive] = useState<Record<SeriesKey, boolean>>({
@@ -58,14 +60,14 @@ export default function MetricsChart({
   const visible = SERIES.filter((s) => active[s.key]);
 
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
+    <section className="panel p-4">
       <header className="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Trend</h2>
+        <h2 className="text-sm font-semibold text-body uppercase tracking-wide">Trend</h2>
         <div className="flex items-center gap-1.5">
           {SERIES.map((s) => (
             <label
               key={s.key}
-              className="inline-flex items-center gap-1.5 text-xs text-gray-600 px-2 py-1 rounded border border-gray-200 cursor-pointer hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 text-xs text-muted px-2 py-1 rounded border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               <input
                 type="checkbox"
@@ -80,24 +82,30 @@ export default function MetricsChart({
       </header>
 
       {chartData.length === 0 ? (
-        <div className="text-sm text-gray-400 p-6 text-center">No data in this window.</div>
+        <div className="text-sm text-faint p-6 text-center">No data in this window.</div>
       ) : (
         <div style={{ width: '100%', height: 320 }}>
           <ResponsiveContainer>
             <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: chart.axis }} stroke={chart.axis} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11, fill: chart.axis }} stroke={chart.axis} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: chart.axis }} stroke={chart.axis} />
               <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 6 }}
+                contentStyle={{
+                  fontSize: 12,
+                  borderRadius: 6,
+                  backgroundColor: chart.tooltipBg,
+                  borderColor: chart.tooltipBorder,
+                  color: chart.tooltipText,
+                }}
                 formatter={(v: number, name: string) => {
                   if (name === 'Income ($)') return [`$${v.toLocaleString()}`, name];
                   if (name === 'Conversion %') return [`${v}%`, name];
                   return [v, name];
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 12, color: chart.axis }} />
               {visible.map((s) => (
                 <Line
                   key={s.key}

@@ -75,36 +75,32 @@ export default function DashboardOverview({
   return (
     <section className="space-y-3">
       <header className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{title}</h2>
+        <h2 className="text-sm font-semibold text-body uppercase tracking-wide">{title}</h2>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-white border border-gray-100 rounded-md p-0.5">
+          <div className="segmented">
             {BUCKETS.map((b) => (
               <button
                 key={b.value}
                 type="button"
                 onClick={() => setBucket(b.value)}
                 className={
-                  'text-xs px-2 py-1 rounded ' +
-                  (bucket === b.value
-                    ? 'bg-gray-900 text-white'
-                    : 'text-gray-600 hover:bg-gray-50')
+                  'segmented-btn ' +
+                  (bucket === b.value ? 'segmented-btn-active-neutral' : '')
                 }
               >
                 {b.label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1 bg-white border border-gray-100 rounded-md p-0.5">
+          <div className="segmented">
             {RANGES.map((r) => (
               <button
                 key={r.days}
                 type="button"
                 onClick={() => setRange(r.days)}
                 className={
-                  'text-xs px-2 py-1 rounded ' +
-                  (range === r.days
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-50')
+                  'segmented-btn ' +
+                  (range === r.days ? 'segmented-btn-active' : '')
                 }
               >
                 {r.label}
@@ -115,11 +111,11 @@ export default function DashboardOverview({
       </header>
 
       {error ? (
-        <div className="bg-white rounded-md border border-red-100 p-4 text-sm text-red-700">
+        <div className="alert-error text-sm text-red-700">
           Failed to load metrics.
         </div>
       ) : isLoading || !data ? (
-        <div className="bg-white rounded-md border border-gray-100 p-4 flex items-center gap-2 text-sm text-gray-500">
+        <div className="panel p-4 flex items-center gap-2 text-sm text-muted">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading metrics…
         </div>
       ) : (

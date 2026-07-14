@@ -27,7 +27,7 @@ const STEP_LABEL: Record<ResumeJobStep, string> = {
 };
 
 const STATUS_BADGE: Record<ResumeJobStatus, string> = {
-  queued: 'bg-gray-100 text-gray-700 border-gray-200',
+  queued: 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700',
   in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
   completed: 'bg-green-100 text-green-800 border-green-200',
   failed: 'bg-red-100 text-red-800 border-red-200',
@@ -41,6 +41,58 @@ const STATUS_LABEL: Record<ResumeJobStatus, string> = {
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const EMPTY_JOBS: ResumeJob[] = [];
+
+function setsEqual(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const id of a) if (!b.has(id)) return false;
+  return true;
+}
+
+function shortModelName(model?: string | null): string {
+  if (!model) return '';
+  const slash = model.lastIndexOf('/');
+  return slash >= 0 ? model.slice(slash + 1) : model;
+}
+
+function LlmProviderBadge({
+  provider,
+  model,
+  fallbackUsed,
+}: {
+  provider?: 'free' | 'openai' | null;
+  model?: string | null;
+  fallbackUsed?: boolean | null;
+}) {
+  if (!provider) {
+    return <span className="text-xs text-faint">—</span>;
+  }
+
+  const short = shortModelName(model);
+  const providerLabel =
+    provider === 'free'
+      ? 'Free'
+      : fallbackUsed
+        ? 'OpenAI (fallback)'
+        : 'OpenAI';
+  const badgeClass =
+    provider === 'free'
+      ? 'badge-info'
+      : fallbackUsed
+        ? 'badge-warning'
+        : 'badge-neutral';
+
+  return (
+    <div className="flex flex-col items-start gap-0.5" title={model || providerLabel}>
+      <span className={badgeClass}>{providerLabel}</span>
+      {short && (
+        <span className="max-w-[140px] truncate font-mono text-[11px] text-muted">
+          {short}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function GeneratedResumesPage() {
   const { user } = useAuth();
@@ -88,7 +140,7 @@ export default function GeneratedResumesPage() {
     { refreshInterval: 3000 },
   );
 
-  const jobs = data?.jobs ?? [];
+  const jobs = useMemo(() => data?.jobs ?? EMPTY_JOBS, [data?.jobs]);
   const pagination = data?.pagination;
 
   // Keep the panel's job in sync with the latest poll so newly-added
@@ -158,7 +210,7 @@ export default function GeneratedResumesPage() {
     setSelected((prev) => {
       const next = new Set<string>();
       for (const id of prev) if (selectableIds.includes(id)) next.add(id);
-      return next;
+      return setsEqual(prev, next) ? prev : next;
     });
   }, [selectableIds]);
 
@@ -190,7 +242,7 @@ export default function GeneratedResumesPage() {
             <button
               type="button"
               onClick={() => mutate()}
-              className="text-xs text-gray-500 hover:text-primary inline-flex items-center gap-1"
+              className="link-inline text-xs text-muted hover:text-sky-600 dark:hover:text-sky-400"
             >
               <RefreshCw className="w-3 h-3" /> Refresh
             </button>
@@ -200,10 +252,10 @@ export default function GeneratedResumesPage() {
       <ResumeTabs />
 
       {/* Filters + bulk actions — merged toolbar */}
-      <div className="flex flex-wrap items-end justify-between gap-3 bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-end justify-between gap-3 toolbar">
         <div className="flex items-end gap-3 flex-wrap">
           <div className="w-56">
-            <label className="block text-xs text-gray-500 mb-1">Profile</label>
+            <label className="block text-xs text-muted mb-1">Profile</label>
             <Select
               value={filterAccountId}
               onChange={(v) => { setFilterAccountId(v); setPage(1); }}
@@ -211,7 +263,7 @@ export default function GeneratedResumesPage() {
             />
           </div>
           <div className="w-56">
-            <label className="block text-xs text-gray-500 mb-1">Company</label>
+            <label className="block text-xs text-muted mb-1">Company</label>
             <input
               className="input w-full text-sm"
               placeholder="Filter by company name"
@@ -220,7 +272,7 @@ export default function GeneratedResumesPage() {
             />
           </div>
           <div className="w-72">
-            <label className="block text-xs text-gray-500 mb-1">Search JD</label>
+            <label className="block text-xs text-muted mb-1">Search JD</label>
             <input
               className="input w-full text-sm"
               placeholder="skills, tech, anything (space = AND)"
@@ -237,7 +289,7 @@ export default function GeneratedResumesPage() {
                 setQInput(''); setQFilter('');
                 setPage(1);
               }}
-              className="text-xs text-gray-500 hover:text-primary pb-2"
+              className="link text-xs text-muted"
             >
               Clear filters
             </button>
@@ -245,14 +297,14 @@ export default function GeneratedResumesPage() {
         </div>
         <div className="flex items-center gap-3 pb-1">
           <SaveFolderStatus />
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-muted">
             {someChecked ? `${selected.size} selected` : 'Select rows for bulk actions'}
           </span>
           <button
             type="button"
             onClick={downloadSelected}
             disabled={!someChecked || bulkDownloading}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-[8px] bg-primary text-white text-sm font-medium shadow-sm hover:bg-primary-dark disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn btn-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             Download {someChecked ? `(${selected.size})` : 'selected'}
@@ -260,20 +312,20 @@ export default function GeneratedResumesPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="table-wrap">
         {isLoading && jobs.length === 0 ? (
-          <p className="p-6 text-sm text-gray-500 flex items-center gap-2">
+          <p className="p-6 text-sm text-muted flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading...
           </p>
         ) : jobs.length === 0 ? (
-          <p className="p-6 text-sm text-gray-500">
+          <p className="p-6 text-sm text-muted">
             {filterAccountId || companyFilter
               ? 'No resumes match the filters.'
               : 'No builds yet. Generate one from the Resume Generator.'}
           </p>
         ) : (
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
+            <thead className="table-head">
               <tr>
                 <th className="px-3 py-2 font-medium w-8">
                   <input
@@ -287,13 +339,14 @@ export default function GeneratedResumesPage() {
                 <th className="px-3 py-2 font-medium">Profile</th>
                 <th className="px-3 py-2 font-medium">Company</th>
                 <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">LLM</th>
                 <th className="px-3 py-2 font-medium">Time</th>
                 <th className="px-3 py-2 font-medium">Tokens</th>
                 <th className="px-3 py-2 font-medium">File</th>
                 <th className="px-3 py-2 font-medium w-32 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="row-divider">
               {jobs.map((job) => (
                 <JobRow
                   key={job._id}
@@ -312,7 +365,7 @@ export default function GeneratedResumesPage() {
 
       {pagination && pagination.totalPages > 0 && (
         <div className="flex items-center justify-between text-sm">
-          <div className="text-gray-600">
+          <div className="text-muted">
             {pagination.total > 0 && (
               <>
                 Showing {(pagination.page - 1) * pagination.limit + 1}–
@@ -321,7 +374,7 @@ export default function GeneratedResumesPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <label className="text-xs text-gray-500 flex items-center gap-2">
+            <label className="text-xs text-muted flex items-center gap-2">
               Per page
               <select
                 value={limit}
@@ -329,7 +382,7 @@ export default function GeneratedResumesPage() {
                   setLimit(Number(e.target.value));
                   setPage(1);
                 }}
-                className="border border-gray-200 rounded-md px-2 py-1 text-sm"
+                className="border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1 text-sm"
               >
                 {PAGE_SIZE_OPTIONS.map((n) => (
                   <option key={n} value={n}>{n}</option>
@@ -340,18 +393,18 @@ export default function GeneratedResumesPage() {
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={!pagination.hasPrev}
-              className="px-3 py-1 border border-gray-200 rounded text-sm disabled:opacity-40 hover:bg-gray-50"
+              className="px-3 py-1 border border-zinc-200 dark:border-zinc-700 rounded text-sm disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               Previous
             </button>
-            <span className="text-gray-600">
+            <span className="text-muted">
               Page {pagination.page} / {pagination.totalPages || 1}
             </span>
             <button
               type="button"
               onClick={() => setPage((p) => p + 1)}
               disabled={!pagination.hasNext}
-              className="px-3 py-1 border border-gray-200 rounded text-sm disabled:opacity-40 hover:bg-gray-50"
+              className="px-3 py-1 border border-zinc-200 dark:border-zinc-700 rounded text-sm disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               Next
             </button>
@@ -419,7 +472,7 @@ function JobRow({
 
   return (
     <>
-      <tr className="hover:bg-gray-50 cursor-pointer" onClick={onOpen}>
+      <tr className="table-row cursor-pointer" onClick={onOpen}>
         <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
@@ -430,16 +483,16 @@ function JobRow({
             title={selectable ? 'Select for bulk download' : 'Not selectable until completed'}
           />
         </td>
-        <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
+        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
           {created ? created.toLocaleString() : '—'}
         </td>
-        <td className="px-3 py-2 text-gray-900 truncate max-w-[160px]" title={job.profileName}>
+        <td className="px-3 py-2 text-strong truncate max-w-[160px]" title={job.profileName}>
           {job.profileName}
         </td>
-        <td className="px-3 py-2 text-gray-900 max-w-[280px]" title={job.jobUrl || job.companyName}>
+        <td className="px-3 py-2 text-strong max-w-[280px]" title={job.jobUrl || job.companyName}>
           <div className="truncate">
             {job.jobUrl ? (
-              <a href={job.jobUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+              <a href={job.jobUrl} target="_blank" rel="noreferrer" className="link">
                 {job.companyName}
               </a>
             ) : (
@@ -447,7 +500,7 @@ function JobRow({
             )}
           </div>
           {job.matchSnippet && (
-            <div className="text-[11px] text-gray-500 italic mt-0.5 line-clamp-2" title={job.matchSnippet}>
+            <div className="text-[11px] text-muted italic mt-0.5 line-clamp-2" title={job.matchSnippet}>
               {job.matchSnippet}
             </div>
           )}
@@ -458,11 +511,18 @@ function JobRow({
             {STATUS_LABEL[job.status]}
           </span>
           {inFlight && (
-            <div className="text-[11px] text-gray-500 mt-0.5">{STEP_LABEL[job.step]}…</div>
+            <div className="text-[11px] text-muted mt-0.5">{STEP_LABEL[job.step]}…</div>
           )}
         </td>
-        <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{elapsed}</td>
-        <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap tabular-nums" title={
+        <td className="px-3 py-2">
+          <LlmProviderBadge
+            provider={job.resumeLlmProvider}
+            model={job.resumeLlmModel}
+            fallbackUsed={job.resumeLlmFallbackUsed}
+          />
+        </td>
+        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{elapsed}</td>
+        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap tabular-nums" title={
           (job.inputTokens != null || job.outputTokens != null || job.reasoningTokens != null)
             ? `input ${job.inputTokens ?? 0} · output ${job.outputTokens ?? 0} · reasoning ${job.reasoningTokens ?? 0}`
             : 'No usage recorded'
@@ -473,11 +533,11 @@ function JobRow({
         </td>
         <td className="px-3 py-2 text-xs">
           {job.pdfFilename ? (
-            <span className="text-gray-700 font-mono break-all" title={job.pdfFilename}>
+            <span className="text-body font-mono break-all" title={job.pdfFilename}>
               {job.pdfFilename.split('/').pop()}
             </span>
           ) : (
-            <span className="text-gray-400">—</span>
+            <span className="text-faint">—</span>
           )}
         </td>
         <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
@@ -486,7 +546,7 @@ function JobRow({
               type="button"
               onClick={download}
               disabled={downloading || job.status !== 'completed'}
-              className={`p-1.5 rounded-md hover:bg-gray-100 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed ${
+              className={`p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted disabled:opacity-30 disabled:cursor-not-allowed ${
                 job.status === 'completed' ? '' : 'invisible'
               }`}
               title={job.hasPdf ? 'Download PDF' : 'PDF missing — try anyway'}
@@ -496,7 +556,7 @@ function JobRow({
             <button
               type="button"
               onClick={onOpen}
-              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 relative"
+              className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted relative"
               title="Open screening Q&A panel"
             >
               <MessageSquare className="w-4 h-4" />
@@ -510,7 +570,7 @@ function JobRow({
               type="button"
               onClick={remove}
               disabled={deleting || inFlight}
-              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 disabled:opacity-50"
+              className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted disabled:opacity-50"
               title={inFlight ? 'Cannot delete while running' : 'Delete'}
             >
               <Trash2 className="w-4 h-4" />
@@ -526,22 +586,22 @@ function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
   return (
     <ol className="space-y-3">
       {pairs.map((p, i) => (
-        <li key={i} className="border border-gray-200 rounded-lg p-3 bg-white">
+        <li key={i} className="panel p-3">
           <div className="flex items-start justify-between gap-2 mb-1">
-            <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
-              <span className="text-gray-400 mr-2">{i + 1}.</span>
+            <p className="text-sm font-medium text-strong whitespace-pre-wrap">
+              <span className="text-faint mr-2">{i + 1}.</span>
               {p.question}
             </p>
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(p.answer).then(() => notify.success('Answer copied'))}
-              className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary flex-shrink-0"
+              className="link-inline text-xs text-muted flex-shrink-0"
             >
               <Copy className="w-3 h-3" />
               Copy
             </button>
           </div>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{p.answer}</p>
+          <p className="text-sm text-body whitespace-pre-wrap leading-relaxed">{p.answer}</p>
         </li>
       ))}
     </ol>
@@ -582,12 +642,22 @@ function ScreeningPanel({
   return (
     <>
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-      <aside className="fixed top-0 right-0 bottom-0 w-full sm:w-[480px] bg-white shadow-strong border-l border-gray-100 z-50 flex flex-col">
-        <header className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-2">
+      <aside className="drawer right-0 w-full sm:w-[480px]">
+        <header className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-xs text-gray-500">Screening Q&amp;A</div>
-            <div className="font-semibold text-gray-900 truncate">{job.companyName}</div>
-            <div className="text-xs text-gray-500 truncate">{job.profileName}</div>
+            <div className="text-xs text-muted">Screening Q&amp;A</div>
+            <div className="font-semibold text-strong truncate">{job.companyName}</div>
+            <div className="text-xs text-muted truncate">{job.profileName}</div>
+            {job.screeningLlmProvider && (
+              <div className="mt-1">
+                <span className="text-[11px] text-muted mr-1">Last Q&amp;A:</span>
+                <LlmProviderBadge
+                  provider={job.screeningLlmProvider}
+                  model={job.screeningLlmModel}
+                  fallbackUsed={job.screeningLlmFallbackUsed}
+                />
+              </div>
+            )}
           </div>
           <button type="button" onClick={onClose} className="btn-icon" title="Close"><X className="w-4 h-4" /></button>
         </header>
@@ -597,12 +667,12 @@ function ScreeningPanel({
             <button
               type="button"
               onClick={() => setJdOpen((v) => !v)}
-              className="text-xs text-gray-500 hover:text-primary inline-flex items-center gap-1"
+              className="link-inline text-xs text-muted hover:text-sky-600 dark:hover:text-sky-400"
             >
               {jdOpen ? '▾' : '▸'} Job description
             </button>
             {jdOpen && (
-              <pre className="mt-2 text-xs text-gray-700 bg-gray-50 border border-gray-100 rounded-[8px] p-3 whitespace-pre-wrap max-h-72 overflow-y-auto">
+              <pre className="mt-2 text-xs text-body bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-72 overflow-y-auto">
                 {job.jobDescription || '(no JD stored)'}
               </pre>
             )}
@@ -615,12 +685,12 @@ function ScreeningPanel({
                 <button
                   type="button"
                   onClick={() => navigator.clipboard.writeText(job.coverLetterText || '').then(() => notify.success('Cover letter copied'))}
-                  className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary"
+                  className="link-inline text-xs text-muted"
                 >
                   <Copy className="w-3 h-3" /> Copy
                 </button>
               </div>
-              <pre className="text-sm text-gray-800 bg-gray-50 border border-gray-100 rounded-[8px] p-3 whitespace-pre-wrap max-h-[400px] overflow-y-auto leading-relaxed">
+              <pre className="text-sm text-strong bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-[400px] overflow-y-auto leading-relaxed">
                 {job.coverLetterText}
               </pre>
             </section>
@@ -631,13 +701,13 @@ function ScreeningPanel({
             {pairs.length > 0 ? (
               <ScreeningPairsBlock pairs={pairs} />
             ) : (
-              <p className="text-xs text-gray-400 italic">No questions asked yet. Add one below.</p>
+              <p className="text-xs text-faint italic">No questions asked yet. Add one below.</p>
             )}
           </section>
         </div>
 
-        <footer className="p-4 border-t border-gray-100 space-y-2">
-          <label className="block text-xs text-gray-500">Ask screening questions — number them (<code>1.</code>, <code>2.</code>) for multiple. Unnumbered = one question.</label>
+        <footer className="p-4 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+          <label className="block text-xs text-muted">Ask screening questions — number them (<code>1.</code>, <code>2.</code>) for multiple. Unnumbered = one question.</label>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -665,13 +735,13 @@ function SaveFolderStatus() {
       setFsa(m.isFsaSupported());
       setDirName(m.cachedDirName());
     })();
-  });
+  }, []);
   if (!fsa) return null;
   return (
-    <span className="text-[11px] text-gray-500 flex items-center gap-1">
+    <span className="text-[11px] text-muted flex items-center gap-1">
       {dirName ? (
         <>
-          Saving to <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">{dirName}/</code>
+          Saving to <code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-body">{dirName}/</code>
           <button
             type="button"
             onClick={async () => {
@@ -679,13 +749,13 @@ function SaveFolderStatus() {
               m.resetDownloadDir();
               setDirName(null);
             }}
-            className="text-gray-400 hover:text-primary underline"
+            className="link text-faint underline"
           >
             change
           </button>
         </>
       ) : (
-        <span className="text-gray-400">First download will ask for a folder</span>
+        <span className="text-faint">First download will ask for a folder</span>
       )}
     </span>
   );

@@ -29,7 +29,7 @@ const STATUSES: Record<string, string> = {
 
 const stageBadgeClass = (s?: string | null) => {
   switch (s) {
-    case 'intro': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'intro': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
     case 'tech': return 'bg-blue-100 text-blue-800 border-blue-200';
     case 'panel': return 'bg-purple-100 text-purple-800 border-purple-200';
     case 'live_coding': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
@@ -37,20 +37,20 @@ const stageBadgeClass = (s?: string | null) => {
     case 'cultural': return 'bg-pink-100 text-pink-800 border-pink-200';
     case 'final': return 'bg-amber-100 text-amber-800 border-amber-200';
     case 'ai_interview': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    default: return 'bg-gray-100 text-gray-700 border-gray-200';
+    default: return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
   }
 };
 
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
     case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'completed': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
     case 'passed': return 'bg-green-100 text-green-800 border-green-200';
     case 'failed': return 'bg-red-100 text-red-800 border-red-200';
     case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
     case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'canceled': return 'bg-gray-200 text-gray-700 border-gray-300';
-    default: return 'bg-gray-50 text-gray-500 border-gray-200';
+    case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600';
+    default: return 'bg-zinc-50 dark:bg-zinc-900/80 text-muted border-zinc-200 dark:border-zinc-700';
   }
 };
 
@@ -135,11 +135,11 @@ export default function InterviewDetailPage() {
     () => api.getInterview(id!),
   );
 
-  if (!id) return <div className="p-6 text-gray-500">Missing interview id.</div>;
+  if (!id) return <div className="p-6 text-muted">Missing interview id.</div>;
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-gray-500">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+      <div className="flex items-center justify-center py-12 text-muted">
+        <div className="spinner spinner-md mr-3"></div>
         Loading interview...
       </div>
     );
@@ -158,7 +158,7 @@ export default function InterviewDetailPage() {
     return (
       <div className="p-6 space-y-3">
         <div className="text-red-600 font-medium">{friendly}</div>
-        {detail && <div className="text-sm text-gray-600">{detail}</div>}
+        {detail && <div className="text-sm text-muted">{detail}</div>}
         <Link to="/interviews" className="btn"><ArrowLeft size={16} className="mr-1" /> Back to Interviews</Link>
       </div>
     );
@@ -196,7 +196,7 @@ export default function InterviewDetailPage() {
               {(iv.stage ? STAGES[iv.stage] || iv.stage : 'Interview')}
               {iv.companyName ? ` with ${iv.companyName}` : ''}
             </h1>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-muted">
               {iv.appliedPosition ? `${iv.appliedPosition} · ` : ''}
               {formatRange(iv.scheduledAt, iv.endsAt)}
               {iv.interviewerName ? ` · w/ ${iv.interviewerName}` : ''}
@@ -232,47 +232,47 @@ export default function InterviewDetailPage() {
       {/* Meta */}
       <div className="card p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div>
-          <div className="text-gray-500 text-xs">Stage</div>
+          <div className="text-muted text-xs">Stage</div>
           <div>
             {iv.stage ? (
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
                 {STAGES[iv.stage] || iv.stage}
               </span>
-            ) : <span className="text-gray-400">—</span>}
+            ) : <span className="text-faint">—</span>}
           </div>
         </div>
         <div>
-          <div className="text-gray-500 text-xs">Status</div>
+          <div className="text-muted text-xs">Status</div>
           <div>
             {iv.status ? (
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
                 {STATUSES[iv.status] || iv.status}
               </span>
-            ) : <span className="text-gray-400">—</span>}
+            ) : <span className="text-faint">—</span>}
           </div>
         </div>
         <div>
-          <div className="text-gray-500 text-xs">Company</div>
+          <div className="text-muted text-xs">Company</div>
           <div className="font-medium">{iv.companyName || '—'}</div>
         </div>
         <div>
-          <div className="text-gray-500 text-xs">Interviewer Name</div>
+          <div className="text-muted text-xs">Interviewer Name</div>
           <div className="font-medium">{iv.interviewerName || '—'}</div>
         </div>
         <div>
-          <div className="text-gray-500 text-xs">Applied Position</div>
+          <div className="text-muted text-xs">Applied Position</div>
           <div className="font-medium">{iv.appliedPosition || '—'}</div>
         </div>
         <div>
-          <div className="text-gray-500 text-xs">Profile</div>
+          <div className="text-muted text-xs">Profile</div>
           <div className="font-medium">{account?.name || '—'}</div>
         </div>
         <div>
-          <div className="text-gray-500 text-xs">Creator</div>
+          <div className="text-muted text-xs">Creator</div>
           <div>{iv.ownerName || creator?.name || iv.ownerEmail || creator?.email || '—'}</div>
         </div>
         <div>
-          <div className="text-gray-500 text-xs">When</div>
+          <div className="text-muted text-xs">When</div>
           <div>{formatRange(iv.scheduledAt, iv.endsAt)}</div>
         </div>
       </div>
@@ -280,17 +280,17 @@ export default function InterviewDetailPage() {
       {/* Body sections */}
       <div className="space-y-3">
         <div>
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Interview Transcript</div>
+          <div className="text-xs text-muted uppercase tracking-wide mb-1">Interview Transcript</div>
           <div
             className="prose-block"
-            dangerouslySetInnerHTML={{ __html: iv.transcript || '<p class="text-gray-400 italic">—</p>' }}
+            dangerouslySetInnerHTML={{ __html: iv.transcript || '<p class="text-faint italic">—</p>' }}
           />
         </div>
         <div>
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Note</div>
+          <div className="text-xs text-muted uppercase tracking-wide mb-1">Note</div>
           <div
-            className="prose-block bg-gray-50"
-            dangerouslySetInnerHTML={{ __html: iv.note || '<p class="text-gray-400 italic">—</p>' }}
+            className="prose-block bg-zinc-50 dark:bg-zinc-900/80"
+            dangerouslySetInnerHTML={{ __html: iv.note || '<p class="text-faint italic">—</p>' }}
           />
         </div>
         <ExtractedQuestions interviewId={id} hasTranscript={!!(iv.transcript || '').trim()} />
@@ -325,34 +325,34 @@ function ExtractedQuestions({ interviewId, hasTranscript }: { interviewId: strin
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <div className="text-xs text-gray-500 uppercase tracking-wide">Extracted questions</div>
+        <div className="text-xs text-muted uppercase tracking-wide">Extracted questions</div>
         {hasTranscript && (
           <button
             type="button"
             onClick={reextract}
             disabled={reextracting}
-            className="text-xs text-primary hover:underline disabled:opacity-50"
+            className="link text-xs disabled:opacity-50"
           >
             {reextracting ? 'Queuing…' : 'Re-extract'}
           </button>
         )}
       </div>
       {!hasTranscript ? (
-        <div className="text-xs text-gray-400 italic">Upload a transcript to enable extraction.</div>
+        <div className="text-xs text-faint italic">Upload a transcript to enable extraction.</div>
       ) : isLoading && questions.length === 0 ? (
-        <div className="text-xs text-gray-400">Loading…</div>
+        <div className="text-xs text-faint">Loading…</div>
       ) : questions.length === 0 ? (
-        <div className="text-xs text-gray-400 italic">
+        <div className="text-xs text-faint italic">
           No extracted questions yet. Extraction runs automatically when a transcript is saved (~30-60s).
           Use Re-extract if it didn't trigger.
         </div>
       ) : (
         <ol className="space-y-2">
           {questions.map((q, i) => (
-            <li key={q._id} className="border border-gray-200 rounded-md p-3 bg-white">
+            <li key={q._id} className="panel p-3">
               <div className="flex items-start justify-between gap-2 mb-1">
-                <p className="text-sm font-medium text-gray-900 flex-1">
-                  <span className="text-gray-400 mr-2">{i + 1}.</span>
+                <p className="text-sm font-medium text-strong flex-1">
+                  <span className="text-faint mr-2">{i + 1}.</span>
                   {q.question}
                 </p>
                 {q.score != null && (
@@ -362,10 +362,10 @@ function ExtractedQuestions({ interviewId, hasTranscript }: { interviewId: strin
                 )}
               </div>
               {q.candidateAnswer && (
-                <p className="text-sm text-gray-700 whitespace-pre-wrap mb-1.5">{q.candidateAnswer}</p>
+                <p className="text-sm text-body whitespace-pre-wrap mb-1.5">{q.candidateAnswer}</p>
               )}
               {q.scoreRationale && (
-                <p className="text-xs text-gray-500 mb-1">
+                <p className="text-xs text-muted mb-1">
                   <strong>Why:</strong> {q.scoreRationale}
                 </p>
               )}

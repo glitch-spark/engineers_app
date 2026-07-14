@@ -1,8 +1,8 @@
 import { quoteForToday, THEME_META, type MotivationTheme } from '../lib/motivation';
 
 const THEME_COLORS: Record<MotivationTheme, { bar: string; tag: string; tagBg: string }> = {
-  grind: { bar: '#d97706', tag: 'text-amber-700', tagBg: 'bg-amber-50' },
-  why: { bar: '#047857', tag: 'text-emerald-700', tagBg: 'bg-emerald-50' },
+  grind: { bar: '#d97706', tag: 'text-amber-700 dark:text-amber-300', tagBg: 'bg-amber-50 dark:bg-amber-950/50' },
+  why: { bar: '#047857', tag: 'text-emerald-700 dark:text-emerald-300', tagBg: 'bg-emerald-50 dark:bg-emerald-950/50' },
 };
 
 export default function MotivationHero({ userId }: { userId?: string | null }) {
@@ -12,20 +12,18 @@ export default function MotivationHero({ userId }: { userId?: string | null }) {
 
   return (
     <div
-      className="relative bg-white rounded-[12px] border border-gray-100 shadow-sm pl-5 pr-5 py-5 overflow-hidden"
+      className="relative panel pl-5 pr-5 py-5 overflow-hidden"
       style={{ borderLeft: `4px solid ${colors.bar}` }}
     >
       <div className="mb-2">
-        <span
-          className={`text-[10px] font-semibold uppercase tracking-[0.12em] px-2 py-0.5 rounded ${colors.tag} ${colors.tagBg}`}
-        >
+        <span className={`badge ${colors.tag} ${colors.tagBg} uppercase tracking-[0.12em]`}>
           <span aria-hidden className="mr-1">{meta.icon}</span>
           {meta.label}
         </span>
       </div>
 
       <p
-        className="text-gray-900 leading-snug"
+        className="text-strong leading-snug"
         style={{
           fontFamily: 'Source Serif 4, Source Serif Pro, Merriweather, Georgia, serif',
           fontSize: 16,

@@ -11,16 +11,14 @@
  * tables, etc.). NOT for Account/Profile rows — those stay plain.
  */
 const PALETTE = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-amber-500',
-  'bg-rose-500',
-  'bg-violet-500',
-  'bg-teal-500',
-  'bg-orange-500',
-  'bg-indigo-500',
-  'bg-pink-500',
-  'bg-cyan-500',
+  'bg-zinc-700',
+  'bg-zinc-600',
+  'bg-sky-700',
+  'bg-sky-600',
+  'bg-emerald-700',
+  'bg-emerald-600',
+  'bg-indigo-700',
+  'bg-indigo-600',
 ];
 
 function initials(name: string): string {

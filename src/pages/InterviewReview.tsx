@@ -205,7 +205,7 @@ export default function InterviewReviewPage() {
     'What are the strongest and weakest moments in the transcript?',
   ];
 
-  if (!id) return <div className="p-6 text-gray-500">Missing interview id.</div>;
+  if (!id) return <div className="p-6 text-muted">Missing interview id.</div>;
 
   const iv = interviewData as Record<string, unknown> | undefined;
   const headerTitle = (iv?.companyName as string) || (iv?.appliedPosition as string) || 'Interview';
@@ -225,7 +225,7 @@ export default function InterviewReviewPage() {
             <h1 className="page-title flex items-center gap-2">
               <Sparkles size={20} /> AI Review
             </h1>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-muted">
               {headerTitle}
               {stage ? ` · ${stage}` : ''}
               {interviewer ? ` · w/ ${interviewer}` : ''}
@@ -233,7 +233,7 @@ export default function InterviewReviewPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-600 inline-flex items-center gap-2 cursor-pointer">
+          <label className="text-xs text-muted inline-flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={includeRubric}
@@ -260,10 +260,10 @@ export default function InterviewReviewPage() {
 
       {/* Brief review panel */}
       <div className="card p-5">
-        <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Brief Review</div>
+        <div className="text-xs text-muted uppercase tracking-wide mb-2">Brief Review</div>
         {briefLoading && !brief ? (
-          <div className="flex items-center text-gray-500 py-4">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+          <div className="flex items-center text-muted py-4">
+            <div className="spinner spinner-md mr-3"></div>
             Reading transcript and generating review…
           </div>
         ) : briefError ? (
@@ -271,28 +271,28 @@ export default function InterviewReviewPage() {
         ) : brief ? (
           <MdBlock text={brief} />
         ) : (
-          <div className="text-gray-400 text-sm italic">No review yet.</div>
+          <div className="text-faint text-sm italic">No review yet.</div>
         )}
       </div>
 
       {/* Chat */}
       <div className="card p-0 overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <div className="text-sm font-medium">Follow-ups</div>
-          <div className="text-xs text-gray-500">{chat.length} message{chat.length !== 1 ? 's' : ''}</div>
+          <div className="text-xs text-muted">{chat.length} message{chat.length !== 1 ? 's' : ''}</div>
         </div>
 
         <div className="px-5 py-4 max-h-[480px] overflow-y-auto space-y-4">
           {chat.length === 0 && !chatLoading && (
-            <div className="text-sm text-gray-500">Ask a follow-up question about this interview.</div>
+            <div className="text-sm text-muted">Ask a follow-up question about this interview.</div>
           )}
           {chat.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
                   m.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-50 border border-gray-200 text-gray-800'
+                    ? 'segmented-btn-active'
+                    : 'bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 text-strong'
                 }`}
               >
                 {m.role === 'assistant' ? <MdBlock text={m.content} /> : m.content}
@@ -301,7 +301,7 @@ export default function InterviewReviewPage() {
           ))}
           {chatLoading && (
             <div className="flex justify-start">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-500">
+              <div className="bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm text-muted">
                 <span className="inline-flex gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse"></span>
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" style={{ animationDelay: '120ms' }}></span>
@@ -320,7 +320,7 @@ export default function InterviewReviewPage() {
               <button
                 key={q}
                 type="button"
-                className="text-xs border border-gray-200 rounded-full px-3 py-1 text-gray-700 hover:bg-gray-50"
+                className="text-xs border border-zinc-200 dark:border-zinc-700 rounded-full px-3 py-1 text-body hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
                 onClick={() => setInput(q)}
               >
                 {q}
@@ -330,7 +330,7 @@ export default function InterviewReviewPage() {
         )}
 
         {/* Composer */}
-        <div className="border-t border-gray-100 p-3 flex items-end gap-2">
+        <div className="border-t border-zinc-200 dark:border-zinc-800 p-3 flex items-end gap-2">
           <textarea
             className="input flex-1 resize-none"
             rows={2}

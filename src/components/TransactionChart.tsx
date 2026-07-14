@@ -1,4 +1,5 @@
 import { BarChart, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Bar } from 'recharts';
+import { useChartTheme } from '../theme/useChartTheme';
 
 interface ChartData {
   period: string;
@@ -10,6 +11,7 @@ interface TransactionChartProps {
 }
 
 export default function TransactionChart({ data }: TransactionChartProps) {
+  const chart = useChartTheme();
   const maxValue = Math.max(...data.map(item => item.total), 0);
   const yAxisDomain = maxValue > 0 ? [0, maxValue * 1.1] : [0, 100];
 
@@ -33,31 +35,33 @@ export default function TransactionChart({ data }: TransactionChartProps) {
                 <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.7} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
             <XAxis
               dataKey="period"
-              stroke="#2563eb"
+              stroke={chart.axis}
               fontSize={14}
               tickLine={false}
               axisLine={false}
+              tick={{ fill: chart.axis }}
             />
             <YAxis
-              stroke="#2563eb"
+              stroke={chart.axis}
               fontSize={14}
               tickLine={false}
               axisLine={false}
               domain={yAxisDomain}
               tickFormatter={formatYAxis}
+              tick={{ fill: chart.axis }}
             />
             <Tooltip
               contentStyle={{
-                background: 'linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%)',
-                border: '1px solid #a5b4fc',
-                borderRadius: '10px',
-                boxShadow: '0 6px 12px -2px rgba(59, 130, 246, 0.15)'
+                backgroundColor: chart.tooltipBg,
+                borderColor: chart.tooltipBorder,
+                color: chart.tooltipText,
+                borderRadius: 10,
               }}
               formatter={formatTooltip}
-              labelStyle={{ fontWeight: 'bold', color: '#2563eb' }}
+              labelStyle={{ fontWeight: 'bold', color: chart.tooltipText }}
             />
             <Bar
               dataKey="total"
@@ -79,28 +83,16 @@ export default function TransactionChart({ data }: TransactionChartProps) {
           </div>
           <div className="card text-center">
             <p className="card-header">Active Months</p>
-            <p className="text-2xl font-bold text-green-600">{activeMonths}</p>
+            <p className="text-2xl font-bold text-primary">{activeMonths}</p>
           </div>
           <div className="card text-center">
-            <p className="card-header">Average/Month</p>
-            <p className="text-2xl font-bold text-yellow-600">${averagePerMonth.toFixed(2)}</p>
+            <p className="card-header">Average / Month</p>
+            <p className="text-2xl font-bold text-primary">${averagePerMonth.toFixed(2)}</p>
           </div>
           <div className="card text-center">
             <p className="card-header">Highest Month</p>
-            <p className="text-2xl font-bold text-purple-600">${highestMonth.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-primary">${highestMonth.toFixed(2)}</p>
           </div>
-        </div>
-      )}
-
-      {!hasData && (
-        <div className="card text-center py-12 text-gray-500">
-          <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Transaction Data</h3>
-          <p className="text-gray-600">
-            No transactions found for the selected period. Try selecting a different year or check if transactions exist.
-          </p>
         </div>
       )}
     </div>

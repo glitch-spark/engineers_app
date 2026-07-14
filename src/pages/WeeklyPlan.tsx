@@ -283,15 +283,15 @@ export default function WeeklyPlanPage() {
       />
 
       {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+      <div className="flex items-end gap-3 flex-wrap toolbar">
         <div className="w-32">
-          <label className="block text-xs text-gray-500 mb-1">Year</label>
+          <label className="block text-xs text-muted mb-1">Year</label>
           <select className="select focus-ring w-full text-sm" value={year} onChange={(e) => { setYear(e.target.value); setCurrentPage(1); }}>
             {yearOptions.map((y) => (<option key={y} value={y}>{y}</option>))}
           </select>
         </div>
         <div className="w-56">
-          <label className="block text-xs text-gray-500 mb-1">Week</label>
+          <label className="block text-xs text-muted mb-1">Week</label>
           <select className="select focus-ring w-full text-sm" value={weekNumber} onChange={(e) => { setWeekNumber(e.target.value); setCurrentPage(1); }}>
             <option value="">All weeks</option>
             {weekOptions.map((w) => (<option key={w} value={w}>{formatWeekOptionLabel(Number(year), w)}</option>))}
@@ -299,7 +299,7 @@ export default function WeeklyPlanPage() {
         </div>
         {isAdmin && (
           <div className="w-56">
-            <label className="block text-xs text-gray-500 mb-1">User</label>
+            <label className="block text-xs text-muted mb-1">User</label>
             <select className="select focus-ring w-full text-sm" value={userId} onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}>
               <option value="">All users</option>
               {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
@@ -312,10 +312,10 @@ export default function WeeklyPlanPage() {
       {summary && hasMetricData && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {summary.totals.filter((t) => t.target > 0 || t.actual > 0).map((t) => (
-            <div key={t.key} className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
-              <div className="text-xs text-gray-500">{t.label}</div>
-              <div className="text-2xl font-bold text-gray-900 mt-1">
-                {t.target}<span className="text-sm font-medium text-gray-400"> / {t.actual}</span>
+            <div key={t.key} className="panel p-4">
+              <div className="text-xs text-muted">{t.label}</div>
+              <div className="text-2xl font-bold text-strong mt-1">
+                {t.target}<span className="text-sm font-medium text-faint"> / {t.actual}</span>
               </div>
               <ProgressBar value={pct(t.actual, t.target)} />
             </div>
@@ -325,14 +325,14 @@ export default function WeeklyPlanPage() {
 
       {/* Team progress — admin rollup of planned vs actual per user */}
       {isAdmin && rollup && rollup.users.length > 0 && (
-        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
+        <div className="table-wrap">
+          <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
             <h2 className="card-title uppercase tracking-wide">Team progress</h2>
             <p className="hint">Planned vs actual per user for the current filter. Run Progress Report to refresh.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
+              <thead className="table-head">
                 <tr>
                   <th className="px-3 py-2">User</th>
                   {ROLLUP_COLS.map((c) => <th key={c.key} className="px-3 py-2 text-right">{c.label}</th>)}
@@ -341,7 +341,7 @@ export default function WeeklyPlanPage() {
               </thead>
               <tbody>
                 {rollup.users.map((u) => (
-                  <tr key={u.userId} className="border-t align-middle">
+                  <tr key={u.userId} className="table-row align-middle">
                     <td className="px-3 py-2"><NameWithAvatar name={u.name || u.email} /></td>
                     {ROLLUP_COLS.map((c) => {
                       const m = u.metrics.find((x) => x.key === c.key);
@@ -351,13 +351,13 @@ export default function WeeklyPlanPage() {
                       return (
                         <td key={c.key} className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                           {target} / {actual}{unitSuffix((m as { unit?: string } | undefined)?.unit)}
-                          <span className={'ml-2 ' + (target > 0 && p >= 100 ? 'text-green-600' : 'text-gray-400')}>
+                          <span className={'ml-2 ' + (target > 0 && p >= 100 ? 'text-green-600' : 'text-faint')}>
                             {target > 0 ? `${p}%` : '—'}
                           </span>
                         </td>
                       );
                     })}
-                    <td className="px-3 py-2 text-right text-gray-500 tabular-nums">{u.reviewedCount}/{u.planCount}</td>
+                    <td className="px-3 py-2 text-right text-muted tabular-nums">{u.reviewedCount}/{u.planCount}</td>
                   </tr>
                 ))}
               </tbody>
@@ -368,12 +368,12 @@ export default function WeeklyPlanPage() {
 
       {/* List */}
       {isLoading ? (
-        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-8 text-center text-sm text-gray-500">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2" />
+        <div className="panel p-8 text-center text-sm text-muted">
+          <div className="spinner spinner-md mx-auto mb-2" />
           Loading weekly plans...
         </div>
       ) : plans.length === 0 ? (
-        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-8 text-center text-sm text-gray-500">
+        <div className="panel p-8 text-center text-sm text-muted">
           No weekly plans found.
         </div>
       ) : (
@@ -382,18 +382,18 @@ export default function WeeklyPlanPage() {
             const reviewed = plan.status === 'reviewed';
             const needsReview = !reviewed && isWeekOver(plan.endDate);
             return (
-              <div key={plan._id} className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
+              <div key={plan._id} className="panel p-4">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-gray-900">Week {plan.weekNumber}, {plan.year}</span>
-                      <span className="text-xs text-gray-400">{formatDateRange(plan.startDate, plan.endDate)}</span>
+                      <span className="font-semibold text-strong">Week {plan.weekNumber}, {plan.year}</span>
+                      <span className="text-xs text-faint">{formatDateRange(plan.startDate, plan.endDate)}</span>
                       {reviewed ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium bg-green-100 text-green-800 border border-green-200">Reviewed</span>
+                        <span className="badge-success">Reviewed</span>
                       ) : needsReview ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">Needs follow-up</span>
+                        <span className="badge-warning">Needs follow-up</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">Planned</span>
+                        <span className="badge-neutral">Planned</span>
                       )}
                     </div>
                     {isAdmin && (
@@ -413,10 +413,10 @@ export default function WeeklyPlanPage() {
                     {plan.metrics.map((m) => (
                       <div key={m.key} className="text-sm">
                         <div className="flex items-center justify-between">
-                          <span className="text-gray-700">{m.label}</span>
-                          <span className="text-gray-500 tabular-nums">
+                          <span className="text-body">{m.label}</span>
+                          <span className="text-muted tabular-nums">
                             {m.target} / {m.actual}{unitSuffix(m.unit)}
-                            <span className={'ml-2 ' + (m.target > 0 && pct(m.actual, m.target) >= 100 ? 'text-green-600' : 'text-gray-400')}>
+                            <span className={'ml-2 ' + (m.target > 0 && pct(m.actual, m.target) >= 100 ? 'text-green-600' : 'text-faint')}>
                               {m.target > 0 ? `${pct(m.actual, m.target)}%` : '—'}
                             </span>
                           </span>
@@ -426,21 +426,21 @@ export default function WeeklyPlanPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-gray-400 italic">No metrics on this plan.</div>
+                  <div className="text-xs text-faint italic">No metrics on this plan.</div>
                 )}
 
                 {(plan.content || plan.result) && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     {plan.content && (
                       <div>
-                        <div className="text-xs font-medium text-gray-500 mb-1">Plan</div>
-                        <p className="text-gray-700 whitespace-pre-wrap">{plan.content}</p>
+                        <div className="text-xs font-medium text-muted mb-1">Plan</div>
+                        <p className="text-body whitespace-pre-wrap">{plan.content}</p>
                       </div>
                     )}
                     {plan.result && (
                       <div>
-                        <div className="text-xs font-medium text-gray-500 mb-1">Follow-up</div>
-                        <p className="text-gray-700 whitespace-pre-wrap">{plan.result}</p>
+                        <div className="text-xs font-medium text-muted mb-1">Follow-up</div>
+                        <p className="text-body whitespace-pre-wrap">{plan.result}</p>
                       </div>
                     )}
                   </div>
@@ -453,15 +453,15 @@ export default function WeeklyPlanPage() {
 
       {pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted">
             Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setCurrentPage(pagination.page - 1)} disabled={!pagination.hasPrev}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-gray-50">Previous</button>
+              className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">Previous</button>
             <button onClick={() => setCurrentPage(pagination.page + 1)} disabled={!pagination.hasNext}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-gray-50">Next</button>
+              className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">Next</button>
             <select value={pageSize} onChange={(e) => handlePageSizeChange(Number(e.target.value))} className="select focus-ring text-sm">
               <option value={10}>10</option>
               <option value={20}>20</option>
@@ -477,23 +477,23 @@ export default function WeeklyPlanPage() {
 
           {!editing && (
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Pick any date in the week</label>
+              <label className="block text-xs text-muted mb-1">Pick any date in the week</label>
               <input className="input w-full text-sm" type="date" value={form.selectedDate} onChange={(e) => handleDateChange(e.target.value)} />
               <p className="hint mt-1">{formatWeekOptionLabel(form.year, form.weekNumber)}</p>
             </div>
           )}
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Plan (start of week)</label>
+            <label className="block text-xs text-muted mb-1">Plan (start of week)</label>
             <textarea className="input w-full text-sm" rows={5} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
             <p className="hint mt-1">Write freely — include target numbers (applies, interviews, outreach). Admin reports trace them automatically.</p>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Follow-up (end of week)</label>
+            <label className="block text-xs text-muted mb-1">Follow-up (end of week)</label>
             <textarea className="input w-full text-sm" rows={5} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-body">
             <input type="checkbox" checked={form.status === 'reviewed'} onChange={(e) => setForm({ ...form, status: e.target.checked ? 'reviewed' : 'planned' })} />
             Mark week as reviewed
           </label>
@@ -513,7 +513,7 @@ function ProgressBar({ value }: { value: number }) {
   const clamped = Math.max(0, Math.min(100, value));
   const color = value >= 100 ? 'bg-green-500' : value >= 60 ? 'bg-blue-500' : 'bg-amber-500';
   return (
-    <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div className="mt-1 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
       <div className={`h-full ${color}`} style={{ width: `${clamped}%` }} />
     </div>
   );

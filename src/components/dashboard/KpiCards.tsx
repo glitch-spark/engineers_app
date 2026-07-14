@@ -94,18 +94,18 @@ function Card({
   return (
     <div
       className={
-        'rounded-md border p-4 bg-white shadow-sm ' +
-        (highlight ? 'border-blue-200 ring-1 ring-blue-100' : 'border-gray-100')
+        'panel p-4 ' +
+        (highlight ? 'border-sky-200 ring-1 ring-sky-100 dark:border-sky-900 dark:ring-sky-950' : '')
       }
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-500">{label}</span>
-        <span className="text-gray-400">{icon}</span>
+        <span className="text-xs text-muted">{label}</span>
+        <span className="text-faint">{icon}</span>
       </div>
-      <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
+      <div className="mt-1 text-2xl font-semibold text-strong">{value}</div>
       <div className="mt-1.5 flex items-center justify-between text-xs">
         <DeltaPill delta={delta} />
-        {footer && <span className="text-gray-400">{footer}</span>}
+        {footer && <span className="text-faint">{footer}</span>}
       </div>
     </div>
   );
@@ -114,7 +114,7 @@ function Card({
 function DeltaPill({ delta }: { delta: DeltaShape }) {
   if (delta === null) {
     return (
-      <span className="inline-flex items-center gap-1 text-gray-400">
+      <span className="inline-flex items-center gap-1 text-faint">
         <Minus size={12} /> n/a
       </span>
     );
@@ -122,10 +122,10 @@ function DeltaPill({ delta }: { delta: DeltaShape }) {
   const positive = delta.value > 0;
   const negative = delta.value < 0;
   const cls = positive
-    ? 'text-green-700 bg-green-50'
+    ? 'pill-up'
     : negative
-      ? 'text-red-700 bg-red-50'
-      : 'text-gray-500 bg-gray-50';
+      ? 'pill-down'
+      : 'pill-flat';
   const Icon = positive ? ArrowUp : negative ? ArrowDown : Minus;
   const sign = positive ? '+' : '';
   const suffix = delta.kind === 'pp' ? 'pp' : '%';

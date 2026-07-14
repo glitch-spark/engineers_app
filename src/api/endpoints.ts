@@ -1,4 +1,4 @@
-import { apiFetch, BASE_URL, getToken } from './client';
+import { apiFetch, BASE_URL, getToken, type ApiFetchOptions } from './client';
 
 // ---------- shared types ----------
 
@@ -36,6 +36,18 @@ export interface ProfileShape {
   resumePromptBody?: string;
   screeningPromptBody?: string;
   coverLetterPromptBody?: string;
+  freeLlmModelId?: string;
+  freeLlmMaxTokens?: number | null;
+  freeLlmApiKeySet?: boolean;
+  freeLlmApiKeyHint?: string;
+  freeLlmKeyVerified?: boolean;
+}
+
+export interface FreeLlmModelPreset {
+  id: string;
+  label: string;
+  model: string;
+  defaultMaxTokens: number;
 }
 
 export interface TransactionListParams {
@@ -75,8 +87,12 @@ function qs(params?: object): string {
   return '?' + entries.map(([k, v]) => `${enc(k)}=${enc(String(v))}`).join('&');
 }
 
-function postJSON<T>(path: string, body: unknown) {
-  return apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) });
+function postJSON<T>(path: string, body: unknown, options?: Pick<ApiFetchOptions, 'timeoutMs'>) {
+  return apiFetch<T>(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    timeoutMs: options?.timeoutMs,
+  });
 }
 
 function putJSON<T>(path: string, body: unknown) {
@@ -116,6 +132,32 @@ export const updateProfile = (body: {
 
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
   putJSON<{ message: string }>('/profile/password', body);
+
+export const listFreeLlmModels = () =>
+  apiFetch<{ models: FreeLlmModelPreset[] }>('/profile/free-llm-models');
+
+export const updateFreeLlmSettings = (body: {
+  freeLlmModelId?: string;
+  freeLlmMaxTokens?: number | null;
+  freeLlmApiKey?: string;
+}) => putJSON<{
+  message: string;
+  freeLlmModelId: string;
+  freeLlmMaxTokens: number | null;
+  freeLlmApiKeySet: boolean;
+  freeLlmApiKeyHint: string;
+  freeLlmKeyVerified: boolean;
+}>('/profile/free-llm', body);
+
+export const testFreeLlm = () =>
+  postJSON<{
+    ok: boolean;
+    model: string;
+    sample: string;
+    freeLlmKeyVerified: boolean;
+    freeLlmApiKeySet: boolean;
+    freeLlmApiKeyHint: string;
+  }>('/profile/free-llm-test', {}, { timeoutMs: 60_000 });
 
 // ---------- users (admin) ----------
 
@@ -753,6 +795,12 @@ export interface ResumeJob {
   inputTokens?: number | null;
   outputTokens?: number | null;
   reasoningTokens?: number | null;
+  resumeLlmProvider?: 'free' | 'openai' | null;
+  resumeLlmModel?: string | null;
+  resumeLlmFallbackUsed?: boolean | null;
+  screeningLlmProvider?: 'free' | 'openai' | null;
+  screeningLlmModel?: string | null;
+  screeningLlmFallbackUsed?: boolean | null;
   matchSnippet?: string;
   coverLetterText?: string | null;
   createdAt?: string | null;
