@@ -1,6 +1,5 @@
-import type { Config } from 'tailwindcss'
-
-export default {
+/** @type {import('tailwindcss').Config} */
+module.exports = {
   darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
@@ -93,57 +92,49 @@ export default {
         },
       },
       borderRadius: {
-        'xs': '0.25rem',
-        'sm': '0.375rem',
-        'md': '0.5rem',
-        'lg': '0.75rem',
-        'xl': '1rem',
+        xs: '0.25rem',
+        sm: '0.375rem',
+        md: '0.5rem',
+        lg: '0.75rem',
+        xl: '1rem',
         '2xl': '1.5rem',
         '3xl': '2rem',
       },
       boxShadow: {
-        'soft': '0 2px 20px 0 rgba(0, 0, 0, 0.06)',
-        'medium': '0 4px 25px 0 rgba(0, 0, 0, 0.08)',
-        'strong': '0 8px 40px 0 rgba(0, 0, 0, 0.12)',
-        'card': '0 24px 80px -48px rgba(15, 23, 42, 0.18)',
-        'modal': '0 24px 64px -32px rgba(15, 23, 42, 0.22)',
-        'inner': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+        soft: '0 2px 20px 0 rgba(0, 0, 0, 0.06)',
+        medium: '0 4px 25px 0 rgba(0, 0, 0, 0.08)',
+        strong: '0 8px 40px 0 rgba(0, 0, 0, 0.12)',
+        card: '0 24px 80px -48px rgba(15, 23, 42, 0.18)',
+        modal: '0 24px 64px -32px rgba(15, 23, 42, 0.22)',
+        inner: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
       },
       fontFamily: {
-        // Single family across the app — Inter for everything, including
-        // <code>. Aliasing mono to sans kills accidental family switching.
         sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
-      // Role-named tokens come first — use these in components. The raw
-      // numeric aliases (xs/sm/base/lg/xl/2xl/...) stay so existing markup
-      // and Tailwind utility consumers keep compiling; they map to the
-      // same pixel values as their role twins.
       fontSize: {
-        // Role tokens (preferred)
-        'title':      ['22px', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
-        'heading':    ['16px', { lineHeight: '1.4' }],
-        'subheading': ['13px', { lineHeight: '1.5' }],
-        'body':       ['14px', { lineHeight: '1.55' }],
-        'label':      ['13px', { lineHeight: '1.4' }],
-        'caption':    ['12px', { lineHeight: '1.4' }],
-        'micro':      ['11px', { lineHeight: '1.3' }],
-        // Legacy raw aliases (keep for back-compat — same pixels as roles)
-        'xs':   ['12px', { lineHeight: '1.4' }],
-        'sm':   ['13px', { lineHeight: '1.5' }],
-        'base': ['14px', { lineHeight: '1.55' }],
-        'lg':   ['16px', { lineHeight: '1.4' }],
-        'xl':   ['18px', { lineHeight: '1.35' }],
-        '2xl':  ['22px', { lineHeight: '1.3' }],
-        '3xl':  ['26px', { lineHeight: '1.25' }],
-        '4xl':  ['30px', { lineHeight: '1.2' }],
-        '5xl':  ['36px', { lineHeight: '1.15' }],
-        '6xl':  ['44px', { lineHeight: '1.1' }],
+        title: ['22px', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        heading: ['16px', { lineHeight: '1.4' }],
+        subheading: ['13px', { lineHeight: '1.5' }],
+        body: ['14px', { lineHeight: '1.55' }],
+        label: ['13px', { lineHeight: '1.4' }],
+        caption: ['12px', { lineHeight: '1.4' }],
+        micro: ['11px', { lineHeight: '1.3' }],
+        xs: ['12px', { lineHeight: '1.4' }],
+        sm: ['13px', { lineHeight: '1.5' }],
+        base: ['14px', { lineHeight: '1.55' }],
+        lg: ['16px', { lineHeight: '1.4' }],
+        xl: ['18px', { lineHeight: '1.35' }],
+        '2xl': ['22px', { lineHeight: '1.3' }],
+        '3xl': ['26px', { lineHeight: '1.25' }],
+        '4xl': ['30px', { lineHeight: '1.2' }],
+        '5xl': ['36px', { lineHeight: '1.15' }],
+        '6xl': ['44px', { lineHeight: '1.1' }],
       },
       spacing: {
-        '18': '4.5rem',
-        '88': '22rem',
-        '128': '32rem',
+        18: '4.5rem',
+        88: '22rem',
+        128: '32rem',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',
@@ -170,9 +161,9 @@ export default {
         },
       },
       backdropBlur: {
-        'xs': '2px',
+        xs: '2px',
       },
     },
   },
   plugins: [],
-} satisfies Config
+};
