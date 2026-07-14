@@ -798,9 +798,11 @@ export interface ResumeJob {
   resumeLlmProvider?: 'free' | 'openai' | null;
   resumeLlmModel?: string | null;
   resumeLlmFallbackUsed?: boolean | null;
+  resumeLlmFallbackReason?: string | null;
   screeningLlmProvider?: 'free' | 'openai' | null;
   screeningLlmModel?: string | null;
   screeningLlmFallbackUsed?: boolean | null;
+  screeningLlmFallbackReason?: string | null;
   matchSnippet?: string;
   coverLetterText?: string | null;
   createdAt?: string | null;

@@ -59,10 +59,12 @@ function LlmProviderBadge({
   provider,
   model,
   fallbackUsed,
+  fallbackReason,
 }: {
   provider?: 'free' | 'openai' | null;
   model?: string | null;
   fallbackUsed?: boolean | null;
+  fallbackReason?: string | null;
 }) {
   if (!provider) {
     return <span className="text-xs text-faint">—</span>;
@@ -83,11 +85,16 @@ function LlmProviderBadge({
         : 'badge-neutral';
 
   return (
-    <div className="flex flex-col items-start gap-0.5" title={model || providerLabel}>
+    <div className="flex flex-col items-start gap-0.5" title={fallbackReason || model || providerLabel}>
       <span className={badgeClass}>{providerLabel}</span>
       {short && (
         <span className="max-w-[140px] truncate font-mono text-[11px] text-muted">
           {short}
+        </span>
+      )}
+      {fallbackUsed && fallbackReason && (
+        <span className="text-[11px] text-amber-600 dark:text-amber-400 max-w-[220px] leading-tight">
+          {fallbackReason}
         </span>
       )}
     </div>
@@ -519,6 +526,7 @@ function JobRow({
             provider={job.resumeLlmProvider}
             model={job.resumeLlmModel}
             fallbackUsed={job.resumeLlmFallbackUsed}
+            fallbackReason={job.resumeLlmFallbackReason}
           />
         </td>
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{elapsed}</td>
@@ -655,6 +663,7 @@ function ScreeningPanel({
                   provider={job.screeningLlmProvider}
                   model={job.screeningLlmModel}
                   fallbackUsed={job.screeningLlmFallbackUsed}
+                  fallbackReason={job.screeningLlmFallbackReason}
                 />
               </div>
             )}
@@ -663,6 +672,22 @@ function ScreeningPanel({
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {(job.resumeLlmFallbackReason || job.screeningLlmFallbackReason) && (
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-1.5">
+              <div className="text-xs font-semibold text-amber-700 dark:text-amber-400">Fallback details</div>
+              {job.resumeLlmFallbackReason && (
+                <div className="text-[12px] text-amber-800 dark:text-amber-300 leading-snug">
+                  <span className="font-medium">Resume:</span> {job.resumeLlmFallbackReason}
+                </div>
+              )}
+              {job.screeningLlmFallbackReason && (
+                <div className="text-[12px] text-amber-800 dark:text-amber-300 leading-snug">
+                  <span className="font-medium">Screening:</span> {job.screeningLlmFallbackReason}
+                </div>
+              )}
+            </div>
+          )}
+
           <section>
             <button
               type="button"
