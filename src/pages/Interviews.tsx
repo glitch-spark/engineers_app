@@ -72,6 +72,7 @@ const BOARD_COLUMNS = [
   { key: 'hiring_manager', label: 'Hiring Manager', tone: 'border-pink-300', columnClass: 'flex-1 min-w-0' },
   { key: 'panel', label: 'Panel', tone: 'border-purple-300', columnClass: 'flex-1 min-w-0' },
   { key: 'final', label: 'Final', tone: 'border-amber-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'rejected', label: 'Rejected', tone: 'border-red-400', columnClass: 'flex-1 min-w-0' },
 ] as const;
 
 type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
@@ -107,10 +108,18 @@ const BOARD_CARD_STYLES: Record<BoardColumnKey, { card: string; hover: string; a
     hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80',
     accent: 'bg-amber-400',
   },
+  rejected: {
+    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90',
+    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80',
+    accent: 'bg-red-500',
+  },
 };
 
-const BOARD_COLUMNS_NARROW = 4;
-const BOARD_WIDE_MIN_PX = 1281;
+/** Visible pans at ~1440px desktop widths (7 pans are too cramped). */
+const BOARD_VISIBLE_WIDE = 5;
+/** Fewer pans on narrower viewports. */
+const BOARD_VISIBLE_NARROW = 4;
+const BOARD_WIDE_MIN_PX = 1280;
 
 /** API stage written when a card is dropped on a board column. */
 const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
@@ -120,6 +129,7 @@ const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
   hiring_manager: 'cultural',
   panel: 'panel',
   final: 'final',
+  rejected: 'rejected',
 };
 
 function columnDroppableId(columnKey: BoardColumnKey): string {
@@ -177,6 +187,8 @@ function boardColumnForStage(stage?: string | null): BoardColumnKey {
     case 'final':
     case 'offer':
       return 'final';
+    case 'rejected':
+      return 'rejected';
     case 'intro':
     case 'others':
     default:
@@ -388,15 +400,18 @@ export default function InterviewsPage() {
   const [to, setTo] = useState('');
   const sort: 'desc' = 'desc';
   const [boardOffset, setBoardOffset] = useState(0);
-  const [showAllBoardColumns, setShowAllBoardColumns] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth >= BOARD_WIDE_MIN_PX,
+  const [visibleColumnCount, setVisibleColumnCount] = useState(
+    () => (typeof window !== 'undefined' && window.innerWidth >= BOARD_WIDE_MIN_PX
+      ? BOARD_VISIBLE_WIDE
+      : BOARD_VISIBLE_NARROW),
   );
 
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${BOARD_WIDE_MIN_PX}px)`);
     const onChange = () => {
-      setShowAllBoardColumns(mq.matches);
-      if (mq.matches) setBoardOffset(0);
+      const next = mq.matches ? BOARD_VISIBLE_WIDE : BOARD_VISIBLE_NARROW;
+      setVisibleColumnCount(next);
+      setBoardOffset((o) => Math.min(o, Math.max(0, BOARD_COLUMNS.length - next)));
     };
     onChange();
     mq.addEventListener('change', onChange);
@@ -455,23 +470,21 @@ export default function InterviewsPage() {
     return buckets;
   }, [interviews]);
 
-  const visibleColumns = showAllBoardColumns
-    ? BOARD_COLUMNS
-    : BOARD_COLUMNS.slice(boardOffset, boardOffset + BOARD_COLUMNS_NARROW);
-  const canBoardPrev = !showAllBoardColumns && boardOffset > 0;
-  const canBoardNext = !showAllBoardColumns && boardOffset + BOARD_COLUMNS_NARROW < BOARD_COLUMNS.length;
+  const visibleColumns = BOARD_COLUMNS.slice(boardOffset, boardOffset + visibleColumnCount);
+  const canBoardPrev = boardOffset > 0;
+  const canBoardNext = boardOffset + visibleColumnCount < BOARD_COLUMNS.length;
 
   useEffect(() => {
-    if (!stage || showAllBoardColumns) return;
+    if (!stage) return;
     const colKey = boardColumnForStage(stage);
     const idx = BOARD_COLUMNS.findIndex((c) => c.key === colKey);
     if (idx < 0) return;
     setBoardOffset((prev) => {
       if (idx < prev) return idx;
-      if (idx >= prev + BOARD_COLUMNS_NARROW) return idx - BOARD_COLUMNS_NARROW + 1;
+      if (idx >= prev + visibleColumnCount) return idx - visibleColumnCount + 1;
       return prev;
     });
-  }, [stage, showAllBoardColumns]);
+  }, [stage, visibleColumnCount]);
 
   // Modal state
   const [mode, setMode] = useState<ModalMode>(null);
@@ -661,7 +674,7 @@ export default function InterviewsPage() {
   };
 
   const handleBoardPrev = () => setBoardOffset((o) => Math.max(0, o - 1));
-  const handleBoardNext = () => setBoardOffset((o) => Math.min(BOARD_COLUMNS.length - BOARD_COLUMNS_NARROW, o + 1));
+  const handleBoardNext = () => setBoardOffset((o) => Math.min(BOARD_COLUMNS.length - visibleColumnCount, o + 1));
 
   const [activeDragInterview, setActiveDragInterview] = useState<Interview | null>(null);
   const [dropTargetColumn, setDropTargetColumn] = useState<BoardColumnKey | null>(null);
@@ -753,6 +766,7 @@ export default function InterviewsPage() {
   const stageOptions = useMemo(() => [
     { value: '', label: 'All' },
     ...STAGES,
+    { value: 'rejected', label: 'Rejected' },
   ], []);
 
   const statusOptions = useMemo(() => [
@@ -763,6 +777,7 @@ export default function InterviewsPage() {
   const stageFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
     ...STAGES,
+    { value: 'rejected', label: 'Rejected' },
   ], []);
 
   const statusFormOptions = useMemo(() => [
@@ -846,8 +861,7 @@ export default function InterviewsPage() {
       ) : (
         <>
           <div className="flex flex-col gap-3 w-full">
-            {!showAllBoardColumns && (
-              <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={handleBoardPrev}
@@ -859,6 +873,7 @@ export default function InterviewsPage() {
                 </button>
                 <p className="text-xs text-gray-500 text-center flex-1">
                   {visibleColumns.map((c) => c.label).join(' · ')}
+                  <span className="text-gray-400"> · {boardOffset + 1}–{boardOffset + visibleColumns.length} of {BOARD_COLUMNS.length}</span>
                 </p>
                 <button
                   type="button"
@@ -870,7 +885,6 @@ export default function InterviewsPage() {
                   <ChevronRight size={16} />
                 </button>
               </div>
-            )}
 
             {interviews.length === 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800">
