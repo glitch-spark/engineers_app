@@ -17,11 +17,11 @@ export default function PageHeader({
   backTo?: string;
 }) {
   return (
-    <header className="flex items-center justify-between gap-4 mb-1">
-      <div className="flex items-center gap-3 min-w-0">
+    <header className="mb-6 flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-3">
         {backTo && (
-          <Link to={backTo} className="text-gray-500 hover:text-primary flex-shrink-0">
-            <ArrowLeft className="w-5 h-5" />
+          <Link to={backTo} className="shell-icon-btn flex-shrink-0" aria-label="Go back">
+            <ArrowLeft className="h-5 w-5" />
           </Link>
         )}
         <h1 className="page-title truncate">{title}</h1>

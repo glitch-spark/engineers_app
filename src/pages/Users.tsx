@@ -142,7 +142,7 @@ export default function UsersPage() {
       case 'admin': return 'bg-red-100 text-red-800 border-red-200';
       case 'accountant': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'staff': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      default: return 'bg-zinc-100 dark:bg-zinc-800 text-strong border-zinc-200 dark:border-zinc-700';
     }
   };
 
@@ -172,9 +172,9 @@ export default function UsersPage() {
       <div className="card">
         <div className="flex items-end gap-4 flex-wrap">
           <div className="flex-1 min-w-64">
-            <label className="block text-xs mb-1 text-gray-600">Search Users</label>
+            <label className="block text-xs mb-1 text-muted">Search Users</label>
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-faint" />
               <input
                 className="input pl-10 w-full"
                 type="text"
@@ -188,7 +188,7 @@ export default function UsersPage() {
           <div>
             <Select
               label="Role Filter"
-              labelClassName="text-xs mb-1 text-gray-600"
+              labelClassName="text-xs mb-1 text-muted"
               value={roleFilter}
               onChange={setRoleFilter}
               options={[
@@ -203,7 +203,7 @@ export default function UsersPage() {
           <div>
             <Select
               label="Status"
-              labelClassName="text-xs mb-1 text-gray-600"
+              labelClassName="text-xs mb-1 text-muted"
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
@@ -219,8 +219,8 @@ export default function UsersPage() {
           </button>
 
           {isSearching && (
-            <div className="text-sm text-gray-600 flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+            <div className="text-sm text-muted flex items-center">
+              <div className="spinner spinner-sm mr-2"></div>
               Searching...
             </div>
           )}
@@ -229,7 +229,7 @@ export default function UsersPage() {
 
       {pagination && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted">
             {searchTerm || roleFilter || statusFilter ? (
               <span>Found {pagination.total} user{pagination.total !== 1 ? 's' : ''} matching your criteria</span>
             ) : (
@@ -254,30 +254,30 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="table-wrap">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
+          <thead className="table-head">
             <tr>
-              <th className="px-4 py-3 font-medium text-gray-900">User</th>
-              <th className="px-4 py-3 font-medium text-gray-900">Role</th>
-              <th className="px-4 py-3 font-medium text-gray-900">Status</th>
-              <th className="px-4 py-3 font-medium text-gray-900">Created</th>
-              <th className="px-4 py-3 font-medium text-gray-900 w-32">Actions</th>
+              <th className="px-4 py-3 font-medium text-strong">User</th>
+              <th className="px-4 py-3 font-medium text-strong">Role</th>
+              <th className="px-4 py-3 font-medium text-strong">Status</th>
+              <th className="px-4 py-3 font-medium text-strong">Created</th>
+              <th className="px-4 py-3 font-medium text-strong w-32">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="row-divider">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted">
                   <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                    <div className="spinner spinner-md mr-3"></div>
                     Loading users...
                   </div>
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted">
                   {searchTerm || roleFilter || statusFilter ? (
                     <div>
                       <p>No users found matching your search criteria.</p>
@@ -293,21 +293,21 @@ export default function UsersPage() {
               </tr>
             ) : (
               users.map(user => (
-                <tr key={user._id} className="hover:bg-gray-50 transition-colors">
+                <tr key={user._id} className="table-row transition-colors">
                   <td className="px-4 py-4">
                     <div className="flex items-center">
-                      <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center mr-3">
+                      <div className="h-10 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center mr-3">
                         {user.image ? (
                           <img src={user.image} alt={user.name || 'User'} className="h-10 w-10 rounded-full object-cover" />
                         ) : (
-                          <span className="text-gray-600 font-medium">
+                          <span className="text-muted font-medium">
                             {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
                           </span>
                         )}
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">{user.name || 'Unnamed User'}</div>
-                        <div className="text-gray-500 text-xs">{user.email}</div>
+                        <div className="font-medium text-strong">{user.name || 'Unnamed User'}</div>
+                        <div className="text-muted text-xs">{user.email}</div>
                       </div>
                     </div>
                   </td>
@@ -335,7 +335,7 @@ export default function UsersPage() {
                     )}
                   </td>
 
-                  <td className="px-4 py-4 text-gray-500 text-sm">
+                  <td className="px-4 py-4 text-muted text-sm">
                     {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
                   </td>
 
@@ -343,7 +343,7 @@ export default function UsersPage() {
                     <div className="flex gap-2">
                       {user.isActive === false && (
                         <button
-                          className="btn btn-sm bg-green-600 text-white hover:bg-green-700"
+                          className="btn-success btn-sm"
                           onClick={() => approve(user)}
                           title="Approve user — allow login"
                         >
@@ -367,7 +367,7 @@ export default function UsersPage() {
 
       {pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted">
             Page {pagination.page} of {pagination.totalPages}
           </div>
           <div className="flex gap-2">
@@ -398,7 +398,7 @@ export default function UsersPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">Full Name</label>
+            <label className="block text-sm font-medium mb-2 text-body">Full Name</label>
             <input
               className="input w-full"
               type="text"
@@ -409,7 +409,7 @@ export default function UsersPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">Email Address</label>
+            <label className="block text-sm font-medium mb-2 text-body">Email Address</label>
             <input
               className="input w-full"
               type="email"
@@ -419,7 +419,7 @@ export default function UsersPage() {
               disabled={!!editing}
             />
             {editing && (
-              <p className="text-xs text-gray-500 mt-1">Email address cannot be changed for existing users</p>
+              <p className="text-xs text-muted mt-1">Email address cannot be changed for existing users</p>
             )}
           </div>
 
@@ -437,7 +437,7 @@ export default function UsersPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">Phone Number</label>
+            <label className="block text-sm font-medium mb-2 text-body">Phone Number</label>
             <input
               className="input w-full"
               type="tel"
@@ -448,7 +448,7 @@ export default function UsersPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">Birthday</label>
+            <label className="block text-sm font-medium mb-2 text-body">Birthday</label>
             <input
               className="input w-full"
               type="date"

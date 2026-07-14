@@ -36,7 +36,15 @@ function Protected({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <>
-      <Toaster position="top-center" gutter={8} />
+      <Toaster
+        position="top-center"
+        gutter={8}
+        toastOptions={{
+          className: '!rounded-xl !border !border-zinc-200 !bg-white !text-sm !text-zinc-800 !shadow-modal dark:!border-zinc-700 dark:!bg-zinc-900 dark:!text-zinc-100',
+          success: { iconTheme: { primary: '#18181b', secondary: '#fafafa' } },
+          error: { iconTheme: { primary: '#dc2626', secondary: '#fafafa' } },
+        }}
+      />
       <Routes>
         <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />

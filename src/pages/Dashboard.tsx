@@ -5,6 +5,7 @@ import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tool
 import MotivationHero from '../components/MotivationHero';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
+import { useChartTheme } from '../theme/useChartTheme';
 import * as api from '../api/endpoints';
 import { Delta, RankChip, TargetCell, fmtConversion } from '../lib/leaderboardUI';
 
@@ -100,29 +101,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Trend chart — 12 weeks bids vs interviews */}
-      <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
-        <header className="flex items-center justify-between mb-3">
-          <h2 className="card-title uppercase tracking-wide">Trend — last 12 weeks</h2>
-          <Link to="/leaderboard" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
-            See leaderboard <ArrowRight size={12} />
-          </Link>
-        </header>
-        {meTrend.length === 0 ? (
-          <div className="text-sm text-gray-400 italic">No activity in the last 12 weeks yet.</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={meTrend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
-              <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="bids" name="Bids" stroke="#2563eb" strokeWidth={2} dot />
-              <Line type="monotone" dataKey="interviews" name="Interviews" stroke="#f59e0b" strokeWidth={2} dot />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </section>
+      <TrendSection data={meTrend} />
 
       {/* Upcoming interviews + recent activity */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -141,19 +120,19 @@ function HeroCard({
   label: string; value: number; target: number; prev: number; rank?: number;
 }) {
   return (
-    <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
+    <div className="panel p-4">
       <div className="flex items-center justify-between">
-        <div className="text-xs text-gray-500">{label} — this week</div>
+        <div className="text-xs text-muted">{label} — this week</div>
         <RankChip rank={rank} large />
       </div>
-      <div className="mt-2 text-3xl font-bold text-gray-900 tabular-nums">
+      <div className="mt-2 text-3xl font-bold text-strong tabular-nums">
         {value.toLocaleString()}
         {target > 0 && (
-          <span className="text-base font-medium text-gray-400"> / {target}</span>
+          <span className="text-base font-medium text-faint"> / {target}</span>
         )}
       </div>
       <div className="mt-1 flex items-center gap-3 text-xs">
-        {target > 0 ? <TargetCell value={value} target={target} /> : <span className="text-gray-400">no target set</span>}
+        {target > 0 ? <TargetCell value={value} target={target} /> : <span className="text-faint">no target set</span>}
         <Delta cur={value} prev={prev} />
       </div>
     </div>
@@ -164,22 +143,22 @@ function ConversionHeroCard({
   value, prev, rank, minBids, qualifies,
 }: { value: number; prev: number; rank?: number; minBids: number; qualifies: boolean }) {
   return (
-    <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
+    <div className="panel p-4">
       <div className="flex items-center justify-between">
-        <div className="text-xs text-gray-500">Conversion — this week</div>
+        <div className="text-xs text-muted">Conversion — this week</div>
         <RankChip rank={rank} large />
       </div>
       {qualifies ? (
         <>
-          <div className="mt-2 text-3xl font-bold text-gray-900 tabular-nums">{fmtConversion(value)}</div>
+          <div className="mt-2 text-3xl font-bold text-strong tabular-nums">{fmtConversion(value)}</div>
           <div className="mt-1 flex items-center gap-3 text-xs">
             <Delta cur={value} prev={prev} />
           </div>
         </>
       ) : (
         <>
-          <div className="mt-2 text-3xl font-bold text-gray-400 tabular-nums">—</div>
-          <div className="mt-1 text-xs text-gray-400">{minBids}+ bids needed to qualify</div>
+          <div className="mt-2 text-3xl font-bold text-faint tabular-nums">—</div>
+          <div className="mt-1 text-xs text-faint">{minBids}+ bids needed to qualify</div>
         </>
       )}
     </div>
@@ -190,10 +169,10 @@ function SkeletonHero() {
   return (
     <>
       {[0, 1, 2].map((i) => (
-        <div key={i} className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
-          <div className="h-3 w-24 bg-gray-100 rounded mb-3" />
-          <div className="h-8 w-32 bg-gray-100 rounded" />
-          <div className="mt-2 h-3 w-20 bg-gray-100 rounded" />
+        <div key={i} className="panel p-4">
+          <div className="h-3 w-24 bg-zinc-100 dark:bg-zinc-800 rounded mb-3" />
+          <div className="h-8 w-32 bg-zinc-100 dark:bg-zinc-800 rounded" />
+          <div className="mt-2 h-3 w-20 bg-zinc-100 dark:bg-zinc-800 rounded" />
         </div>
       ))}
     </>
@@ -211,21 +190,21 @@ function FunnelCard({
   ];
   const top = Math.max(...stages.map((s) => s.value), 1);
   return (
-    <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
+    <div className="panel p-4">
       <header className="flex items-center justify-between mb-3">
         <h2 className="card-title uppercase tracking-wide">Pipeline — this week</h2>
-        <div className="text-xs text-gray-500">
-          Bid → Interview <span className="font-semibold text-gray-700">{bids >= minBids ? fmtConversion(conversion) : `${minBids}+ needed`}</span>
+        <div className="text-xs text-muted">
+          Bid → Interview <span className="font-semibold text-body">{bids >= minBids ? fmtConversion(conversion) : `${minBids}+ needed`}</span>
         </div>
       </header>
       <div className="space-y-2">
         {stages.map((s) => (
           <div key={s.label} className="flex items-center gap-3">
-            <div className="w-24 text-sm text-gray-700">{s.label}</div>
-            <div className="flex-1 h-6 bg-gray-100 rounded-[6px] overflow-hidden">
+            <div className="w-24 text-sm text-body">{s.label}</div>
+            <div className="flex-1 h-6 bg-zinc-100 dark:bg-zinc-800 rounded-[6px] overflow-hidden">
               <div className={`h-full ${s.color}`} style={{ width: `${Math.max(2, (s.value / top) * 100)}%` }} />
             </div>
-            <div className="w-12 text-right text-sm font-semibold text-gray-900 tabular-nums">{s.value}</div>
+            <div className="w-12 text-right text-sm font-semibold text-strong tabular-nums">{s.value}</div>
           </div>
         ))}
       </div>
@@ -239,15 +218,15 @@ function WeeklyPlanCTA() {
   return (
     <Link
       to="/weekly-plan"
-      className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4 hover:bg-gray-50 transition flex flex-col justify-between min-h-[140px]"
+      className="panel-hover p-4 flex flex-col justify-between min-h-[140px]"
     >
-      <div className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="flex items-center gap-2 text-xs text-muted">
         <ClipboardCheck size={14} /> Weekly plan
       </div>
-      <div className="text-sm text-gray-800 mt-2">
+      <div className="text-sm text-strong mt-2">
         Set this week's targets, log results at Friday EOD.
       </div>
-      <span className="mt-3 text-xs text-primary inline-flex items-center gap-1">
+      <span className="mt-3 link-inline text-xs">
         Open weekly plan <ArrowRight size={12} />
       </span>
     </Link>
@@ -261,30 +240,30 @@ function UpcomingInterviewsCard({ upcoming, loading }: {
   loading: boolean;
 }) {
   return (
-    <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
+    <div className="panel p-4">
       <header className="flex items-center justify-between mb-3">
         <h2 className="card-title uppercase tracking-wide flex items-center gap-2">
-          <Calendar size={14} className="text-gray-500" /> Upcoming interviews
+          <Calendar size={14} className="text-muted" /> Upcoming interviews
         </h2>
-        <Link to="/interviews" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+        <Link to="/interviews" className="link-inline text-xs">
           All <ArrowRight size={12} />
         </Link>
       </header>
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+        <div className="flex items-center gap-2 text-sm text-muted"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
       ) : upcoming.length === 0 ? (
-        <div className="text-sm text-gray-400 italic">Nothing scheduled.</div>
+        <div className="text-sm text-faint italic">Nothing scheduled.</div>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="row-divider">
           {upcoming.map((iv) => (
             <li key={iv.interviewId} className="py-2 flex items-center justify-between gap-3 text-sm">
               <div className="min-w-0">
-                <Link to={`/interviews/${iv.interviewId}`} className="font-medium text-gray-900 hover:underline truncate">
+                <Link to={`/interviews/${iv.interviewId}`} className="font-medium text-strong hover:underline truncate">
                   {iv.company || 'Interview'}
                 </Link>
-                {iv.stage && <span className="ml-2 text-xs text-gray-500">{iv.stage}</span>}
+                {iv.stage && <span className="ml-2 text-xs text-muted">{iv.stage}</span>}
               </div>
-              <span className="text-xs text-gray-500 whitespace-nowrap">{formatWhen(iv.scheduledAt)}</span>
+              <span className="text-xs text-muted whitespace-nowrap">{formatWhen(iv.scheduledAt)}</span>
             </li>
           ))}
         </ul>
@@ -300,18 +279,18 @@ function RecentActivityCard({ recent, loading }: {
   loading: boolean;
 }) {
   return (
-    <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
+    <div className="panel p-4">
       <header className="flex items-center justify-between mb-3">
         <h2 className="card-title uppercase tracking-wide flex items-center gap-2">
-          <Sparkles size={14} className="text-gray-500" /> Recent activity
+          <Sparkles size={14} className="text-muted" /> Recent activity
         </h2>
       </header>
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+        <div className="flex items-center gap-2 text-sm text-muted"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
       ) : recent.length === 0 ? (
-        <div className="text-sm text-gray-400 italic">No activity yet.</div>
+        <div className="text-sm text-faint italic">No activity yet.</div>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="row-divider">
           {recent.map((ev, i) => (
             <li key={i} className="py-2 flex items-center justify-between gap-3 text-sm">
               <div className="flex items-center gap-2 min-w-0">
@@ -320,7 +299,7 @@ function RecentActivityCard({ recent, loading }: {
                 ) : (
                   <Calendar size={14} className="text-amber-500 flex-shrink-0" />
                 )}
-                <span className="text-gray-700 truncate">
+                <span className="text-body truncate">
                   {ev.kind === 'bid' ? (
                     <>Bid sent to <strong>{ev.company || '—'}</strong></>
                   ) : (
@@ -328,11 +307,48 @@ function RecentActivityCard({ recent, loading }: {
                   )}
                 </span>
               </div>
-              <span className="text-xs text-gray-400 whitespace-nowrap">{timeAgo(ev.at)}</span>
+              <span className="text-xs text-faint whitespace-nowrap">{timeAgo(ev.at)}</span>
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function TrendSection({ data }: { data: { label: string; bids: number; interviews: number }[] }) {
+  const chart = useChartTheme();
+  return (
+    <section className="panel p-4">
+      <header className="flex items-center justify-between mb-3">
+        <h2 className="card-title uppercase tracking-wide">Trend — last 12 weeks</h2>
+        <Link to="/leaderboard" className="link-inline text-xs">
+          See leaderboard <ArrowRight size={12} />
+        </Link>
+      </header>
+      {data.length === 0 ? (
+        <div className="text-sm text-faint italic">No activity in the last 12 weeks yet.</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+            <XAxis dataKey="label" stroke={chart.axis} fontSize={12} tick={{ fill: chart.axis }} />
+            <YAxis stroke={chart.axis} fontSize={12} allowDecimals={false} tick={{ fill: chart.axis }} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: chart.tooltipBg,
+                borderColor: chart.tooltipBorder,
+                color: chart.tooltipText,
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+            />
+            <Legend wrapperStyle={{ color: chart.axis, fontSize: 12 }} />
+            <Line type="monotone" dataKey="bids" name="Bids" stroke="#2563eb" strokeWidth={2} dot />
+            <Line type="monotone" dataKey="interviews" name="Interviews" stroke="#f59e0b" strokeWidth={2} dot />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </section>
   );
 }

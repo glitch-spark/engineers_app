@@ -142,15 +142,15 @@ export default function AiReviewPanel({ selectedIds }: Props) {
             {selCount} interview{selCount === 1 ? '' : 's'} selected
           </span>
           {selCount === 0 && (
-            <span className="text-gray-500">Switch to the Interviews tab and check rows to use AI review.</span>
+            <span className="text-muted">Switch to the Interviews tab and check rows to use AI review.</span>
           )}
         </div>
 
         {/* Skills grid */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">Skills</h3>
+          <h3 className="text-sm font-semibold text-strong mb-2">Skills</h3>
           {skills.length === 0 ? (
-            <div className="text-sm text-gray-500 border border-dashed border-gray-200 rounded-[8px] p-4">
+            <div className="text-sm text-muted border border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl p-4">
               No skills defined yet. {/* admin will see Review Ideas tab */}
             </div>
           ) : (
@@ -166,24 +166,22 @@ export default function AiReviewPanel({ selectedIds }: Props) {
                     onClick={() => selectSkill(s._id)}
                     disabled={disabled}
                     className={
-                      'text-left p-3 rounded-[8px] border transition ' +
-                      (active
-                        ? 'border-primary bg-blue-50 ring-2 ring-primary/20'
-                        : 'border-gray-200 bg-white hover:border-gray-300') +
+                      'text-left p-3 choice-card ' +
+                      (active ? 'choice-card-selected ring-2' : 'bg-zinc-50 dark:bg-zinc-900') +
                       (disabled ? ' opacity-50 cursor-not-allowed' : ' cursor-pointer')
                     }
                     title={ok ? '' : `Needs ${s.minInterviews}–${s.maxInterviews} interviews`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="font-medium text-sm text-gray-900">{s.title}</div>
-                      <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                      <div className="font-medium text-sm text-strong">{s.title}</div>
+                      <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-muted">
                         {s.minInterviews === s.maxInterviews
                           ? `${s.minInterviews}`
                           : `${s.minInterviews}–${s.maxInterviews}`}
                       </span>
                     </div>
                     {s.systemPrompt && (
-                      <div className="mt-1 text-xs text-gray-500 line-clamp-2">{s.systemPrompt}</div>
+                      <div className="mt-1 text-xs text-muted line-clamp-2">{s.systemPrompt}</div>
                     )}
                   </button>
                 );
@@ -194,7 +192,7 @@ export default function AiReviewPanel({ selectedIds }: Props) {
 
         {/* Custom prompt */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">Or write a custom prompt</h3>
+          <h3 className="text-sm font-semibold text-strong mb-2">Or write a custom prompt</h3>
           <textarea
             className="input w-full min-h-[90px] text-sm"
             placeholder="e.g. Compare these two candidates on systems-design fluency."
@@ -203,7 +201,7 @@ export default function AiReviewPanel({ selectedIds }: Props) {
             disabled={streaming || !!activeSkillId}
             maxLength={4000}
           />
-          <div className="text-xs text-gray-400 mt-1">{customPrompt.length}/4000</div>
+          <div className="text-xs text-faint mt-1">{customPrompt.length}/4000</div>
         </div>
 
         {/* Run / Stop */}
@@ -223,15 +221,15 @@ export default function AiReviewPanel({ selectedIds }: Props) {
               <Sparkles size={14} className="mr-1" /> Run AI review
             </button>
           )}
-          {streaming && <span className="text-sm text-gray-500 animate-pulse">Streaming…</span>}
+          {streaming && <span className="text-sm text-muted animate-pulse">Streaming…</span>}
         </div>
 
         {/* Output */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">Output</h3>
+          <h3 className="text-sm font-semibold text-strong mb-2">Output</h3>
           <div
             ref={outScrollRef}
-            className="card p-5 max-h-[60vh] overflow-y-auto bg-white"
+            className="card p-5 max-h-[60vh] overflow-y-auto"
           >
             {output ? (
               <div
@@ -239,7 +237,7 @@ export default function AiReviewPanel({ selectedIds }: Props) {
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }}
               />
             ) : (
-              <p className="text-sm text-gray-400 italic">
+              <p className="text-sm text-faint italic">
                 Output will appear here as the model streams its response.
               </p>
             )}
@@ -249,11 +247,11 @@ export default function AiReviewPanel({ selectedIds }: Props) {
 
       {/* Past runs sidebar */}
       <aside className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+        <h3 className="text-sm font-semibold text-strong flex items-center gap-1.5">
           <Clock size={14} /> Past runs
         </h3>
         {runs.length === 0 ? (
-          <p className="text-sm text-gray-400">No runs yet.</p>
+          <p className="text-sm text-faint">No runs yet.</p>
         ) : (
           <div className="space-y-1.5 max-h-[70vh] overflow-y-auto pr-1">
             {runs.map((r) => {
@@ -267,14 +265,12 @@ export default function AiReviewPanel({ selectedIds }: Props) {
                   onClick={() => loadRun(r._id)}
                   disabled={streaming}
                   className={
-                    'w-full text-left p-2.5 rounded-lg border transition ' +
-                    (active
-                      ? 'border-primary bg-blue-50'
-                      : 'border-gray-200 bg-white hover:border-gray-300')
+                    'w-full text-left p-2.5 choice-card ' +
+                    (active ? 'choice-card-selected' : 'bg-zinc-50 dark:bg-zinc-900')
                   }
                 >
-                  <div className="text-sm font-medium text-gray-900 truncate">{label}</div>
-                  <div className="text-[11px] text-gray-500 mt-0.5 flex items-center justify-between">
+                  <div className="text-sm font-medium text-strong truncate">{label}</div>
+                  <div className="text-[11px] text-muted mt-0.5 flex items-center justify-between">
                     <span>{formatRelative(r.createdAt)}</span>
                     <span>{r.interviewIds.length} iv · {r.completionTokens || 0}t</span>
                   </div>

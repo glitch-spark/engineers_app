@@ -59,13 +59,13 @@ export default function PeriodTable({
   if (rows.length === 0) return null;
 
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
-      <header className="px-4 py-2.5 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Period breakdown</h2>
+    <section className="table-wrap">
+      <header className="px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800">
+        <h2 className="text-sm font-semibold text-body uppercase tracking-wide">Period breakdown</h2>
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-600">
+          <thead className="bg-zinc-50 dark:bg-zinc-900/80 text-xs text-muted">
             <tr>
               <Th label="Period" k="bucketStart" sortKey={sortKey} dir={dir} onClick={toggle} />
               {want('income') && <Th label="Income" k="income" sortKey={sortKey} dir={dir} onClick={toggle} alignRight />}
@@ -74,14 +74,14 @@ export default function PeriodTable({
               {want('rate') && <Th label="Conv %" k="rate" sortKey={sortKey} dir={dir} onClick={toggle} alignRight />}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="row-divider">
             {rows.map((r) => (
-              <tr key={r.bucketStart} className="hover:bg-gray-50">
-                <td className="px-4 py-2 text-gray-800">{formatBucketLabel(r.bucketStart, data.bucket)}</td>
-                {want('income') && <td className="px-4 py-2 text-right text-gray-800">{dollar(r.income)}</td>}
-                {want('bids') && <td className="px-4 py-2 text-right text-gray-800">{r.bids}</td>}
-                {want('interviews') && <td className="px-4 py-2 text-right text-gray-800">{r.interviews}</td>}
-                {want('rate') && <td className="px-4 py-2 text-right text-gray-800">{pct(r.rate)}</td>}
+              <tr key={r.bucketStart} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                <td className="px-4 py-2 text-strong">{formatBucketLabel(r.bucketStart, data.bucket)}</td>
+                {want('income') && <td className="px-4 py-2 text-right text-strong">{dollar(r.income)}</td>}
+                {want('bids') && <td className="px-4 py-2 text-right text-strong">{r.bids}</td>}
+                {want('interviews') && <td className="px-4 py-2 text-right text-strong">{r.interviews}</td>}
+                {want('rate') && <td className="px-4 py-2 text-right text-strong">{pct(r.rate)}</td>}
               </tr>
             ))}
           </tbody>
@@ -109,7 +109,7 @@ function Th({
     >
       <span className={'inline-flex items-center gap-1 ' + (alignRight ? 'justify-end' : '')}>
         {label}
-        <Icon size={11} className={active ? 'text-gray-700' : 'text-gray-300'} />
+        <Icon size={11} className={active ? 'text-body' : 'text-faint'} />
       </span>
     </th>
   );

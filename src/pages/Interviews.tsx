@@ -70,13 +70,13 @@ const STATUSES = [
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
     case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'completed': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
     case 'passed': return 'bg-green-100 text-green-800 border-green-200';
     case 'failed': return 'bg-red-100 text-red-800 border-red-200';
     case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
     case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'canceled': return 'bg-gray-200 text-gray-700 border-gray-300';
-    default: return 'bg-gray-50 text-gray-500 border-gray-200';
+    case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600';
+    default: return 'bg-zinc-50 dark:bg-zinc-900/80 text-muted border-zinc-200 dark:border-zinc-700';
   }
 };
 
@@ -177,7 +177,7 @@ const formatTimeRange = (startIso: string, endIso?: string | null) => formatPret
 
 const stageBadgeClass = (stage: string) => {
   switch (stage) {
-    case 'intro': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'intro': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
     case 'tech': return 'bg-blue-100 text-blue-800 border-blue-200';
     case 'panel': return 'bg-purple-100 text-purple-800 border-purple-200';
     case 'live_coding': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
@@ -185,7 +185,7 @@ const stageBadgeClass = (stage: string) => {
     case 'cultural': return 'bg-pink-100 text-pink-800 border-pink-200';
     case 'final': return 'bg-amber-100 text-amber-800 border-amber-200';
     case 'ai_interview': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    default: return 'bg-gray-100 text-gray-700 border-gray-200';
+    default: return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
   }
 };
 
@@ -486,7 +486,7 @@ export default function InterviewsPage() {
     return (
       <tr
         key={iv._id}
-        className="border-t hover:bg-gray-50 cursor-pointer"
+        className="table-row cursor-pointer"
         onClick={() => navigate(`/interviews/${iv._id}`)}
       >
         <td className="px-3 py-2 align-middle">{(() => {
@@ -497,28 +497,28 @@ export default function InterviewsPage() {
         <td className="px-3 py-2 align-middle">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</td>
         <td className="px-3 py-2 align-middle">
           {iv.stage ? (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
+            <span className={`badge ${stageBadgeClass(iv.stage)}`}>
               {stageLabel(iv.stage)}
             </span>
-          ) : <span className="text-gray-400">—</span>}
+          ) : <span className="text-faint">—</span>}
         </td>
         <td className="px-3 py-2 align-middle">
           {iv.status ? (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
+            <span className={`badge ${statusBadgeClass(iv.status)}`}>
               {statusLabel(iv.status)}
             </span>
-          ) : <span className="text-gray-400">—</span>}
+          ) : <span className="text-faint">—</span>}
         </td>
         <td className="px-3 py-2 align-middle">
           {iv.jobUrl ? (
-            <a href={iv.jobUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-primary hover:underline">
+            <a href={iv.jobUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="link">
               {iv.companyName || iv.jobUrl}
             </a>
           ) : (
-            iv.companyName || <span className="text-gray-400">—</span>
+            iv.companyName || <span className="text-faint">—</span>
           )}
         </td>
-        <td className="px-3 py-2 align-middle">{iv.interviewerName || <span className="text-gray-400">—</span>}</td>
+        <td className="px-3 py-2 align-middle">{iv.interviewerName || <span className="text-faint">—</span>}</td>
         <td className="px-3 py-2 align-middle">{account?.name || account?.email || '—'}</td>
         <td className="px-3 py-2 align-middle" onClick={(e) => e.stopPropagation()}>
           <div className="flex gap-1 whitespace-nowrap">
@@ -556,38 +556,38 @@ export default function InterviewsPage() {
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             {iv.stage && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${stageBadgeClass(iv.stage)}`}>
+              <span className={`badge ${stageBadgeClass(iv.stage)}`}>
                 {stageLabel(iv.stage)}
               </span>
             )}
             {iv.status && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${statusBadgeClass(iv.status)}`}>
+              <span className={`badge ${statusBadgeClass(iv.status)}`}>
                 {statusLabel(iv.status)}
               </span>
             )}
           </div>
-          <span className="text-xs text-gray-500">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</span>
+          <span className="text-xs text-muted">{formatTimeRange(iv.scheduledAt, iv.endsAt)}</span>
         </div>
         {(iv.companyName || iv.interviewerName || iv.appliedPosition) && (
           <div className="text-sm">
             <div className="font-medium">{iv.companyName || '—'}</div>
-            {iv.appliedPosition && <div className="text-gray-600 text-xs">{iv.appliedPosition}</div>}
-            {iv.interviewerName && <div className="text-gray-500 text-xs">w/ {iv.interviewerName}</div>}
+            {iv.appliedPosition && <div className="text-muted text-xs">{iv.appliedPosition}</div>}
+            {iv.interviewerName && <div className="text-muted text-xs">w/ {iv.interviewerName}</div>}
           </div>
         )}
         <div className="text-sm">
-          <div className="text-gray-500">Profile</div>
+          <div className="text-muted">Profile</div>
           <div className="font-medium">{account?.name || account?.email || '—'}</div>
         </div>
         <div className="text-sm">
-          <div className="text-gray-500">Creator</div>
+          <div className="text-muted">Creator</div>
           <div>{(() => {
               const display = iv.ownerName || creator?.name || iv.ownerEmail || creator?.email;
               const img = (iv as { ownerImage?: string | null }).ownerImage || (creator as { image?: string } | undefined)?.image;
               return display ? <NameWithAvatar name={display} imageUrl={img} /> : '—';
             })()}</div>
         </div>
-        <div className="flex gap-1 pt-2 border-t border-gray-100">
+        <div className="flex gap-1 pt-2 border-t border-zinc-200 dark:border-zinc-800">
           <Link to={`/interviews/${iv._id}`} className="btn-icon" title="Open"><Eye size={16} /></Link>
           <button type="button" className="btn-icon" onClick={() => openUpdate(iv)} disabled={!editable} title="Update"><Pencil size={16} /></button>
           <button type="button" className="btn-icon" onClick={() => openDelete(iv)} disabled={!editable} title="Delete"><Trash2 size={16} /></button>
@@ -613,31 +613,31 @@ export default function InterviewsPage() {
 
       <div className="space-y-6">
       {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+      <div className="flex items-end gap-3 flex-wrap toolbar">
         {isAdmin && (
           <div className="w-44">
-            <label className="block text-xs text-gray-500 mb-1">Creator</label>
+            <label className="block text-xs text-muted mb-1">Creator</label>
             <Select value={creatorId} onChange={(v) => { setCreatorId(v); setCurrentPage(1); }} options={creatorOptions} />
           </div>
         )}
         <div className="w-44">
-          <label className="block text-xs text-gray-500 mb-1">Profile</label>
+          <label className="block text-xs text-muted mb-1">Profile</label>
           <Select value={accountId} onChange={(v) => { setAccountId(v); setCurrentPage(1); }} options={accountOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-gray-500 mb-1">Stage</label>
+          <label className="block text-xs text-muted mb-1">Stage</label>
           <Select value={stage} onChange={(v) => { setStage(v); setCurrentPage(1); }} options={stageOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-gray-500 mb-1">Status</label>
+          <label className="block text-xs text-muted mb-1">Status</label>
           <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); setCurrentPage(1); }} options={statusOptions} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-gray-500 mb-1">From</label>
+          <label className="block text-xs text-muted mb-1">From</label>
           <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setCurrentPage(1); }} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-gray-500 mb-1">To</label>
+          <label className="block text-xs text-muted mb-1">To</label>
           <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); setCurrentPage(1); }} />
         </div>
       </div>
@@ -645,7 +645,7 @@ export default function InterviewsPage() {
       {/* Total + page-size */}
       {data && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted">
             <span>Showing {pagination?.total ?? 0} interview{pagination?.total !== 1 ? 's' : ''} total</span>
           </div>
           <div className="flex items-center gap-2">
@@ -665,9 +665,9 @@ export default function InterviewsPage() {
 
       {/* List */}
       {viewMode === 'table' ? (
-        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="table-wrap">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
+            <thead className="table-head">
               <tr>
                 <th className="px-3 py-2 font-medium">Creator</th>
                 <th className="px-3 py-2 font-medium">Date / Time</th>
@@ -679,18 +679,18 @@ export default function InterviewsPage() {
                 <th className="px-3 py-2 font-medium whitespace-nowrap text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="row-divider">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-muted">
                     <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                      <div className="spinner spinner-md mr-3"></div>
                       Loading interviews...
                     </div>
                   </td>
                 </tr>
               ) : interviews.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-500">No interviews found.</td></tr>
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-muted">No interviews found.</td></tr>
               ) : (
                 interviews.map(renderRow)
               )}
@@ -699,12 +699,12 @@ export default function InterviewsPage() {
         </div>
       ) : (
         isLoading ? (
-          <div className="flex items-center justify-center py-8 text-gray-500">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+          <div className="flex items-center justify-center py-8 text-muted">
+            <div className="spinner spinner-md mr-3"></div>
             Loading interviews...
           </div>
         ) : interviews.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">No interviews found.</div>
+          <div className="text-center text-muted py-8">No interviews found.</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {interviews.map(renderCard)}
@@ -715,7 +715,7 @@ export default function InterviewsPage() {
       {/* Pagination */}
       {pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted">
             Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
           </div>
@@ -723,14 +723,14 @@ export default function InterviewsPage() {
             <button
               onClick={() => setCurrentPage(pagination.page - 1)}
               disabled={!pagination.hasPrev}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               Previous
             </button>
             <div className="flex gap-1">
               {pageNumbers(pagination.page, pagination.totalPages).map((n, idx) =>
                 n === '…' ? (
-                  <span key={`dots-${idx}`} className="px-2 py-1 text-sm text-gray-500">…</span>
+                  <span key={`dots-${idx}`} className="px-2 py-1 text-sm text-muted">…</span>
                 ) : (
                   <button
                     key={n}
@@ -738,7 +738,7 @@ export default function InterviewsPage() {
                     className={`px-3 py-1 border rounded text-sm ${
                       n === pagination.page
                         ? 'bg-blue-500 text-white border-blue-500'
-                        : 'hover:bg-gray-50'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
                     }`}
                   >
                     {n}
@@ -749,7 +749,7 @@ export default function InterviewsPage() {
             <button
               onClick={() => setCurrentPage(pagination.page + 1)}
               disabled={!pagination.hasNext}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               Next
             </button>
@@ -775,7 +775,7 @@ export default function InterviewsPage() {
             <>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <div className="text-gray-500 text-xs">Profile</div>
+                  <div className="text-muted text-xs">Profile</div>
                   <div className="font-medium">
                     {(() => {
                       const a = accounts.find((x) => x._id === form.accountId);
@@ -784,65 +784,65 @@ export default function InterviewsPage() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Stage</div>
+                  <div className="text-muted text-xs">Stage</div>
                   <div>
                     {form.stage ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${stageBadgeClass(form.stage)}`}>
+                      <span className={`badge ${stageBadgeClass(form.stage)}`}>
                         {stageLabel(form.stage)}
                       </span>
-                    ) : <span className="text-gray-400">—</span>}
+                    ) : <span className="text-faint">—</span>}
                   </div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Status</div>
+                  <div className="text-muted text-xs">Status</div>
                   <div>
                     {form.status ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${statusBadgeClass(form.status)}`}>
+                      <span className={`badge ${statusBadgeClass(form.status)}`}>
                         {statusLabel(form.status)}
                       </span>
-                    ) : <span className="text-gray-400">—</span>}
+                    ) : <span className="text-faint">—</span>}
                   </div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Company</div>
+                  <div className="text-muted text-xs">Company</div>
                   <div className="font-medium">{form.companyName || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Interviewer Name</div>
+                  <div className="text-muted text-xs">Interviewer Name</div>
                   <div className="font-medium">{form.interviewerName || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Applied Position</div>
+                  <div className="text-muted text-xs">Applied Position</div>
                   <div className="font-medium">{form.appliedPosition || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Date</div>
+                  <div className="text-muted text-xs">Date</div>
                   <div>{form.date || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Start time</div>
+                  <div className="text-muted text-xs">Start time</div>
                   <div>{form.startTime || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">End time</div>
+                  <div className="text-muted text-xs">End time</div>
                   <div>{form.endTime || '—'}</div>
                 </div>
               </div>
               <div>
-                <div className="text-gray-500 text-xs mb-1">Interview Transcript</div>
+                <div className="text-muted text-xs mb-1">Interview Transcript</div>
                 <div
-                  className="prose-readonly bg-white"
-                  dangerouslySetInnerHTML={{ __html: form.transcript || '<p class="text-gray-400 italic">—</p>' }}
+                  className="prose-readonly panel p-4"
+                  dangerouslySetInnerHTML={{ __html: form.transcript || '<p class="text-faint italic">—</p>' }}
                 />
               </div>
               <div>
-                <div className="text-gray-500 text-xs mb-1">Note</div>
+                <div className="text-muted text-xs mb-1">Note</div>
                 <div
-                  className="prose-readonly bg-gray-50"
-                  dangerouslySetInnerHTML={{ __html: form.note || '<p class="text-gray-400 italic">—</p>' }}
+                  className="prose-readonly bg-zinc-50 dark:bg-zinc-900/80"
+                  dangerouslySetInnerHTML={{ __html: form.note || '<p class="text-faint italic">—</p>' }}
                 />
               </div>
-              <div className="flex justify-end pt-3 border-t border-gray-100">
+              <div className="flex justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 <button type="button" className="btn" onClick={closeModal}>Close</button>
               </div>
             </>
@@ -944,7 +944,7 @@ export default function InterviewsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
+                <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-faint font-normal">(optional)</span></label>
                 <input
                   className="input"
                   type="url"
@@ -1009,11 +1009,11 @@ export default function InterviewsPage() {
                   </label>
                 </div>
                 {form.transcript ? (
-                  <div className="border border-gray-300 rounded-md p-3 max-h-60 overflow-auto bg-gray-50">
-                    <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
+                  <div className="border border-zinc-300 dark:border-zinc-600 rounded-md p-3 max-h-60 overflow-auto bg-zinc-50 dark:bg-zinc-900/80">
+                    <pre className="whitespace-pre-wrap text-xs font-mono text-body">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
                   </div>
                 ) : (
-                  <div className="border border-dashed border-gray-300 rounded-md p-4 text-center text-xs text-gray-400">
+                  <div className="border border-dashed border-zinc-300 dark:border-zinc-600 rounded-md p-4 text-center text-xs text-faint">
                     No transcript yet. Upload a file above.
                   </div>
                 )}
@@ -1039,7 +1039,7 @@ export default function InterviewsPage() {
                 />
               </div>
 
-              <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
+              <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 <button type="button" className="btn" onClick={closeModal} disabled={saving}>Cancel</button>
                 <button
                   type="button"
@@ -1059,16 +1059,16 @@ export default function InterviewsPage() {
       <Modal open={mode === 'delete'} onClose={closeModal} title="Delete Interview">
         <div className="space-y-6">
           {error && <p className="text-red-600 text-sm">{error}</p>}
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-body">
             Are you sure you want to delete this interview? This action cannot be undone.
           </p>
           {active && (
-            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-              <div><span className="text-gray-500">Stage:</span> {active.stage ? stageLabel(active.stage) : '—'}</div>
-              <div><span className="text-gray-500">When:</span> {formatScheduled(active.scheduledAt)}</div>
+            <div className="text-sm text-muted bg-zinc-50 dark:bg-zinc-900/80 p-3 rounded">
+              <div><span className="text-muted">Stage:</span> {active.stage ? stageLabel(active.stage) : '—'}</div>
+              <div><span className="text-muted">When:</span> {formatScheduled(active.scheduledAt)}</div>
             </div>
           )}
-          <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
+          <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
             <button type="button" className="btn" onClick={closeModal} disabled={saving}>Cancel</button>
             <button
               type="button"

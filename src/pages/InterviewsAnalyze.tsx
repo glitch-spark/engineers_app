@@ -78,21 +78,21 @@ export default function InterviewsAnalyzePage() {
       <InterviewTabs />
 
       {/* Filters */}
-      <div className="flex items-end gap-2 flex-wrap text-xs bg-white rounded-[12px] border border-gray-100 shadow-sm p-3">
+      <div className="flex items-end gap-2 flex-wrap text-xs panel p-3">
         <div className="w-44">
-          <label className="block mb-1 text-gray-600">Profile</label>
+          <label className="block mb-1 text-muted">Profile</label>
           <Select value={accountId} onChange={setAccountId} options={accountOptions} />
         </div>
         <div className="w-40">
-          <label className="block mb-1 text-gray-600">Stage</label>
+          <label className="block mb-1 text-muted">Stage</label>
           <Select value={stage} onChange={setStage} options={STAGE_OPTS} />
         </div>
         <div className="w-36">
-          <label className="block mb-1 text-gray-600">From</label>
+          <label className="block mb-1 text-muted">From</label>
           <input className="input w-full" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
         <div className="w-36">
-          <label className="block mb-1 text-gray-600">To</label>
+          <label className="block mb-1 text-muted">To</label>
           <input className="input w-full" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         <button
@@ -106,20 +106,20 @@ export default function InterviewsAnalyzePage() {
           Analyze
         </button>
         {meta && (
-          <span className="text-gray-500 ml-2">
+          <span className="text-muted ml-2">
             {meta.transcriptCount}/{meta.interviewCount} interviews with transcripts
           </span>
         )}
       </div>
 
       {!result && !running && (
-        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-8 text-center text-sm text-gray-500">
+        <div className="panel p-8 text-center text-sm text-muted">
           Pick filters → click Analyze to run.
         </div>
       )}
 
       {running && (
-        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-8 text-center text-sm text-gray-500">
+        <div className="panel p-8 text-center text-sm text-muted">
           <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
           Analyzing transcripts… 30-60s.
         </div>
@@ -157,25 +157,25 @@ export default function InterviewsAnalyzePage() {
 function StageScoreboard({ stages }: { stages: InterviewAnalyzeStage[] }) {
   if (!stages.length) return null;
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <BarChart3 className="w-4 h-4 text-gray-500" />
+        <BarChart3 className="w-4 h-4 text-muted" />
         <h2 className="card-title uppercase tracking-wide">Score per stage</h2>
       </header>
       <div className="space-y-2">
         {stages.map((s) => (
           <div key={s.stage} className="flex items-center gap-3">
-            <div className="w-32 text-sm text-gray-700">{s.stageLabel}</div>
-            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+            <div className="w-32 text-sm text-body">{s.stageLabel}</div>
+            <div className="flex-1 h-3 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
               <div
                 className={`h-full ${scoreColor(s.overallScore)}`}
                 style={{ width: `${Math.max(0, Math.min(100, (s.overallScore / 10) * 100))}%` }}
               />
             </div>
-            <div className="w-16 text-right text-sm font-semibold text-gray-900">
+            <div className="w-16 text-right text-sm font-semibold text-strong">
               {s.overallScore.toFixed(1)}/10
             </div>
-            <div className="w-16 text-right text-xs text-gray-400">
+            <div className="w-16 text-right text-xs text-faint">
               n={s.interviewCount}
             </div>
           </div>
@@ -189,21 +189,21 @@ function TopQuestions({ stages }: { stages: InterviewAnalyzeStage[] }) {
   const withQs = stages.filter((s) => s.topQuestions.length > 0);
   if (!withQs.length) return null;
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <TrendingUp className="w-4 h-4 text-gray-500" />
+        <TrendingUp className="w-4 h-4 text-muted" />
         <h2 className="card-title uppercase tracking-wide">Most-asked questions per stage</h2>
       </header>
       <div className="space-y-6">
         {withQs.map((s) => (
           <div key={s.stage}>
-            <h3 className="text-xs font-semibold text-gray-700 mb-2">{s.stageLabel}</h3>
+            <h3 className="text-xs font-semibold text-body mb-2">{s.stageLabel}</h3>
             <ul className="space-y-1">
               {s.topQuestions.map((q, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                  <span className="text-gray-400 mt-0.5">{i + 1}.</span>
+                <li key={i} className="flex items-start gap-2 text-sm text-body">
+                  <span className="text-faint mt-0.5">{i + 1}.</span>
                   <span className="flex-1">{q.question}</span>
-                  <span className="text-xs text-gray-400 whitespace-nowrap">×{q.frequency}</span>
+                  <span className="text-xs text-faint whitespace-nowrap">×{q.frequency}</span>
                   <span className={`text-xs font-semibold ${scoreTextColor(q.exampleScore)}`}>
                     {q.exampleScore}/10
                   </span>
@@ -220,7 +220,7 @@ function TopQuestions({ stages }: { stages: InterviewAnalyzeStage[] }) {
 function WeakSpots({ weakSpots }: { weakSpots: InterviewAnalyzeWeakSpot[] }) {
   if (!weakSpots.length) return null;
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
         <AlertTriangle className="w-4 h-4 text-amber-600" />
         <h2 className="card-title uppercase tracking-wide">Weak spots</h2>
@@ -229,13 +229,13 @@ function WeakSpots({ weakSpots }: { weakSpots: InterviewAnalyzeWeakSpot[] }) {
         {weakSpots.map((w, i) => (
           <li key={i} className="border border-amber-100 rounded-md p-3 bg-amber-50/40">
             <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border bg-gray-100 text-gray-700 border-gray-200">
+              <span className="badge bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700">
                 {w.stage}
               </span>
-              <strong className="text-sm text-gray-900">{w.topic}</strong>
+              <strong className="text-sm text-strong">{w.topic}</strong>
             </div>
-            <p className="text-sm text-gray-700 mb-1">{w.explanation}</p>
-            <p className="text-sm text-gray-700"><span className="font-medium">Tip:</span> {w.tip}</p>
+            <p className="text-sm text-body mb-1">{w.explanation}</p>
+            <p className="text-sm text-body"><span className="font-medium">Tip:</span> {w.tip}</p>
           </li>
         ))}
       </ul>
@@ -249,15 +249,15 @@ function PrepTips({ stages, overall }: { stages: InterviewAnalyzeStage[]; overal
   );
   if (!stagesWithDrills.length && !overall.length) return null;
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
         <Lightbulb className="w-4 h-4 text-yellow-600" />
         <h2 className="card-title uppercase tracking-wide">Prep tips</h2>
       </header>
       {overall.length > 0 && (
         <div className="mb-4">
-          <h3 className="text-xs font-semibold text-gray-700 mb-2">Overall</h3>
-          <ul className="space-y-1.5 list-disc pl-5 text-sm text-gray-700">
+          <h3 className="text-xs font-semibold text-body mb-2">Overall</h3>
+          <ul className="space-y-1.5 list-disc pl-5 text-sm text-body">
             {overall.map((t, i) => (
               <li key={i}>{t}</li>
             ))}
@@ -266,20 +266,20 @@ function PrepTips({ stages, overall }: { stages: InterviewAnalyzeStage[]; overal
       )}
       <div className="space-y-6">
         {stagesWithDrills.map((s) => (
-          <div key={s.stage} className="border-t border-gray-100 pt-3 first:border-t-0 first:pt-0">
-            <h3 className="text-xs font-semibold text-gray-700 mb-2">{s.stageLabel}</h3>
+          <div key={s.stage} className="border-t border-zinc-200 dark:border-zinc-800 pt-3 first:border-t-0 first:pt-0">
+            <h3 className="text-xs font-semibold text-body mb-2">{s.stageLabel}</h3>
             {s.drills.length > 0 && (
               <>
-                <div className="text-xs font-medium text-gray-500 mb-1">Drills</div>
-                <ul className="space-y-1 list-disc pl-5 text-sm text-gray-700 mb-2">
+                <div className="text-xs font-medium text-muted mb-1">Drills</div>
+                <ul className="space-y-1 list-disc pl-5 text-sm text-body mb-2">
                   {s.drills.map((t, i) => <li key={i}>{t}</li>)}
                 </ul>
               </>
             )}
             {s.styleImprovements.length > 0 && (
               <>
-                <div className="text-xs font-medium text-gray-500 mb-1">Style fixes</div>
-                <ul className="space-y-1 list-disc pl-5 text-sm text-gray-700">
+                <div className="text-xs font-medium text-muted mb-1">Style fixes</div>
+                <ul className="space-y-1 list-disc pl-5 text-sm text-body">
                   {s.styleImprovements.map((t, i) => <li key={i}>{t}</li>)}
                 </ul>
               </>
@@ -295,13 +295,13 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
   const { styleProfile, signatureStrengths, blindSpots } = result;
   if (!styleProfile && !signatureStrengths.length && !blindSpots.length) return null;
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
         <Mic className="w-4 h-4 text-indigo-600" />
         <h2 className="card-title uppercase tracking-wide">Your interview style</h2>
       </header>
       {styleProfile && (
-        <p className="text-sm text-gray-800 mb-4 leading-relaxed">{styleProfile}</p>
+        <p className="text-sm text-strong mb-4 leading-relaxed">{styleProfile}</p>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {signatureStrengths.length > 0 && (
@@ -309,7 +309,7 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
             <div className="text-xs font-semibold text-green-700 mb-1.5 flex items-center gap-1">
               <Star size={12} /> Signature strengths
             </div>
-            <ul className="space-y-1 list-disc pl-5 text-sm text-gray-700">
+            <ul className="space-y-1 list-disc pl-5 text-sm text-body">
               {signatureStrengths.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
           </div>
@@ -319,7 +319,7 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
             <div className="text-xs font-semibold text-red-700 mb-1.5 flex items-center gap-1">
               <AlertTriangle size={12} /> Blind spots
             </div>
-            <ul className="space-y-1 list-disc pl-5 text-sm text-gray-700">
+            <ul className="space-y-1 list-disc pl-5 text-sm text-body">
               {blindSpots.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
           </div>
@@ -333,19 +333,19 @@ function HowToShine({ result }: { result: InterviewAnalyzeResult }) {
   const { howToShine, interviewTactics } = result;
   if (!howToShine.length && !interviewTactics.length) return null;
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
         <Target className="w-4 h-4 text-blue-600" />
         <h2 className="card-title uppercase tracking-wide">How to shine next time</h2>
       </header>
       {howToShine.length > 0 && (
         <div className="mb-3">
-          <div className="text-xs font-medium text-gray-500 mb-1.5">Power moves</div>
+          <div className="text-xs font-medium text-muted mb-1.5">Power moves</div>
           <ul className="space-y-2">
             {howToShine.map((m, i) => (
-              <li key={i} className="text-sm text-gray-800">
-                <span className="font-medium text-gray-900">{m.move}</span>
-                {m.why && <span className="text-gray-600"> — {m.why}</span>}
+              <li key={i} className="text-sm text-strong">
+                <span className="font-medium text-strong">{m.move}</span>
+                {m.why && <span className="text-muted"> — {m.why}</span>}
               </li>
             ))}
           </ul>
@@ -353,8 +353,8 @@ function HowToShine({ result }: { result: InterviewAnalyzeResult }) {
       )}
       {interviewTactics.length > 0 && (
         <div>
-          <div className="text-xs font-medium text-gray-500 mb-1.5">Direction-leading tactics</div>
-          <ul className="space-y-1 list-disc pl-5 text-sm text-gray-700">
+          <div className="text-xs font-medium text-muted mb-1.5">Direction-leading tactics</div>
+          <ul className="space-y-1 list-disc pl-5 text-sm text-body">
             {interviewTactics.map((t, i) => <li key={i}>{t}</li>)}
           </ul>
         </div>
@@ -370,20 +370,20 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
   );
   if (!withSignal.length) return null;
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <MessageCircle className="w-4 h-4 text-gray-500" />
+        <MessageCircle className="w-4 h-4 text-muted" />
         <h2 className="card-title uppercase tracking-wide">Per-stage patterns</h2>
       </header>
       <div className="space-y-6">
         {withSignal.map((s) => (
-          <div key={s.stage} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
-            <h3 className="text-sm font-semibold text-gray-800 mb-2">{s.stageLabel}</h3>
+          <div key={s.stage} className="border-t border-zinc-200 dark:border-zinc-800 pt-4 first:border-t-0 first:pt-0">
+            <h3 className="text-sm font-semibold text-strong mb-2">{s.stageLabel}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               {s.askedAlways.length > 0 && (
                 <div>
-                  <div className="text-xs font-medium text-gray-500 mb-1">Asked nearly always</div>
-                  <ul className="space-y-1 list-disc pl-5 text-gray-700">
+                  <div className="text-xs font-medium text-muted mb-1">Asked nearly always</div>
+                  <ul className="space-y-1 list-disc pl-5 text-body">
                     {s.askedAlways.map((t, i) => <li key={i}>{t}</li>)}
                   </ul>
                 </div>
@@ -391,11 +391,11 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
               {s.youShineOn.length > 0 && (
                 <div>
                   <div className="text-xs font-medium text-green-700 mb-1">You shine on</div>
-                  <ul className="space-y-1 list-disc pl-5 text-gray-700">
+                  <ul className="space-y-1 list-disc pl-5 text-body">
                     {s.youShineOn.map((e, i) => (
                       <li key={i}>
                         {e.topic}
-                        {e.evidence && <span className="text-xs text-gray-500"> — “{e.evidence}”</span>}
+                        {e.evidence && <span className="text-xs text-muted"> — “{e.evidence}”</span>}
                       </li>
                     ))}
                   </ul>
@@ -404,7 +404,7 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
               {s.youStumbleOn.length > 0 && (
                 <div>
                   <div className="text-xs font-medium text-red-700 mb-1">You stumble on</div>
-                  <ul className="space-y-1 list-disc pl-5 text-gray-700">
+                  <ul className="space-y-1 list-disc pl-5 text-body">
                     {s.youStumbleOn.map((e, i) => (
                       <li key={i}>
                         {e.topic}
@@ -413,7 +413,7 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
                             {e.failureMode}
                           </span>
                         )}
-                        {e.evidence && <span className="text-xs text-gray-500"> — “{e.evidence}”</span>}
+                        {e.evidence && <span className="text-xs text-muted"> — “{e.evidence}”</span>}
                       </li>
                     ))}
                   </ul>
@@ -432,9 +432,9 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
               return (
                 <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                   {rows.map(([k, v]) => (
-                    <div key={k} className="bg-gray-50 rounded p-2 border border-gray-100">
-                      <div className="font-semibold text-gray-700">{k}</div>
-                      <div className="text-gray-600">{v}</div>
+                    <div key={k} className="bg-zinc-50 dark:bg-zinc-900/80 rounded p-2 border border-zinc-200 dark:border-zinc-800">
+                      <div className="font-semibold text-body">{k}</div>
+                      <div className="text-muted">{v}</div>
                     </div>
                   ))}
                 </div>
@@ -452,7 +452,7 @@ function RedFlagsCard({
 }: { redFlags: string[]; uncertaintyTopics: string[] }) {
   if (!redFlags.length && !uncertaintyTopics.length) return null;
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
         <Flame className="w-4 h-4 text-rose-600" />
         <h2 className="card-title uppercase tracking-wide">Watch list</h2>
@@ -461,7 +461,7 @@ function RedFlagsCard({
         {redFlags.length > 0 && (
           <div>
             <div className="text-xs font-medium text-rose-700 mb-1.5">Recurring red flags</div>
-            <ul className="space-y-1 list-disc pl-5 text-sm text-gray-700">
+            <ul className="space-y-1 list-disc pl-5 text-sm text-body">
               {redFlags.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
           </div>
@@ -469,7 +469,7 @@ function RedFlagsCard({
         {uncertaintyTopics.length > 0 && (
           <div>
             <div className="text-xs font-medium text-amber-700 mb-1.5">Uncertainty (from your AI follow-ups)</div>
-            <ul className="space-y-1 list-disc pl-5 text-sm text-gray-700">
+            <ul className="space-y-1 list-disc pl-5 text-sm text-body">
               {uncertaintyTopics.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
           </div>
@@ -567,7 +567,7 @@ function FollowUpChat({
   };
 
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-5">
+    <section className="panel p-5">
       <header className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
@@ -585,7 +585,7 @@ function FollowUpChat({
       </header>
 
       {chat.length === 0 && (
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-muted mb-3">
           Ask anything about your analysis — drill blind spots, expand drills, draft a pitch, plan a week of prep.
         </p>
       )}
@@ -597,8 +597,8 @@ function FollowUpChat({
               <div
                 className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
                   m.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-50 border border-gray-200 text-gray-800'
+                    ? 'segmented-btn-active'
+                    : 'bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 text-strong'
                 }`}
               >
                 {m.role === 'assistant' ? <MdBlock text={m.content} /> : m.content}
@@ -607,7 +607,7 @@ function FollowUpChat({
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-500">
+              <div className="bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm text-muted">
                 <span className="inline-flex gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" />
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" style={{ animationDelay: '120ms' }} />
@@ -626,7 +626,7 @@ function FollowUpChat({
             <button
               key={p}
               type="button"
-              className="text-xs border border-gray-200 rounded-full px-3 py-1 text-gray-700 hover:bg-gray-50"
+              className="text-xs border border-zinc-200 dark:border-zinc-700 rounded-full px-3 py-1 text-body hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
               onClick={() => setInput(p)}
               disabled={loading}
             >

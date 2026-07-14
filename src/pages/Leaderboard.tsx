@@ -54,17 +54,15 @@ export default function LeaderboardPage() {
       <PageHeader
         title="Leaderboard"
         action={
-          <div className="flex items-center gap-1 bg-white border border-gray-100 rounded-md p-0.5">
+          <div className="segmented">
             {RANGES.map((r) => (
               <button
                 key={r.value}
                 type="button"
                 onClick={() => setRange(r.value)}
                 className={
-                  'text-xs px-2 py-1 rounded ' +
-                  (range === r.value
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-50')
+                  'segmented-btn ' +
+                  (range === r.value ? 'segmented-btn-active' : '')
                 }
               >
                 {r.label}
@@ -75,13 +73,13 @@ export default function LeaderboardPage() {
       />
 
       {error && (
-        <div className="bg-white rounded-[12px] border border-red-100 p-4 text-sm text-red-700">
+        <div className="alert-error text-sm text-red-700">
           Failed to load leaderboard.
         </div>
       )}
 
       {(isLoading || !data) && !error && (
-        <div className="bg-white rounded-[12px] border border-gray-100 p-4 flex items-center gap-2 text-sm text-gray-500">
+        <div className="panel p-4 flex items-center gap-2 text-sm text-muted">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading…
         </div>
       )}
@@ -101,10 +99,10 @@ export default function LeaderboardPage() {
           )}
 
           {/* Table */}
-          <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="table-wrap">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                <thead className="table-head">
                   <tr>
                     <th className="px-4 py-2 text-left w-12">#</th>
                     <th className="px-4 py-2 text-left">User</th>
@@ -114,18 +112,18 @@ export default function LeaderboardPage() {
                     <th className="px-4 py-2 text-center text-xs uppercase tracking-wide">Trend (8w)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="row-divider">
                   {sortedUsers.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">No qualifying users yet.</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-muted">No qualifying users yet.</td></tr>
                   )}
                   {sortedUsers.map((u, idx) => {
                     const isMe = u.userId === user?.id;
                     return (
-                      <tr key={u.userId} className={'hover:bg-gray-50 ' + (isMe ? 'bg-blue-50/40' : '')}>
-                        <td className="px-4 py-2 text-center text-gray-700">{idx + 1}</td>
-                        <td className="px-4 py-2 text-gray-900">
+                      <tr key={u.userId} className={'table-row ' + (isMe ? 'table-row-me' : '')}>
+                        <td className="px-4 py-2 text-center text-body">{idx + 1}</td>
+                        <td className="px-4 py-2 text-strong">
                           <NameWithAvatar name={u.name} imageUrl={u.image} />
-                          {isMe && <span className="ml-2 text-[10px] uppercase tracking-wider text-blue-700 font-semibold">you</span>}
+                          {isMe && <span className="ml-2 text-[10px] uppercase tracking-wider text-sky-700 dark:text-sky-400 font-semibold">you</span>}
                         </td>
                         <MetricCell
                           value={u.bids}
@@ -144,14 +142,14 @@ export default function LeaderboardPage() {
                         <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
                           {u.qualifiesConversion ? (
                             <>
-                              <span className="font-semibold text-gray-900">{fmtConversion(u.conversion)}</span>
-                              <div className="text-[10px] text-gray-400 flex items-center justify-end gap-1">
+                              <span className="font-semibold text-strong">{fmtConversion(u.conversion)}</span>
+                              <div className="text-[10px] text-faint flex items-center justify-end gap-1">
                                 <RankChip rank={u.rank_conversion} />
                                 <Delta cur={u.conversion} prev={u.prevConversion} />
                               </div>
                             </>
                           ) : (
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-faint">
                               {data.conversionMinBids}+ bids needed
                             </span>
                           )}
@@ -174,7 +172,7 @@ export default function LeaderboardPage() {
 
 function ColHeader({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <th className={`px-4 py-2 text-right cursor-pointer select-none uppercase tracking-wide ${active ? 'text-primary' : 'text-gray-500'}`}
+    <th className={`px-4 py-2 text-right cursor-pointer select-none uppercase tracking-wide ${active ? 'text-sky-600 dark:text-sky-400' : 'text-muted'}`}
         onClick={onClick}>
       {label} {active && '▾'}
     </th>
@@ -188,9 +186,9 @@ function MetricCell({
 }) {
   return (
     <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
-      <span className="font-semibold text-gray-900">{value.toLocaleString()}</span>
+      <span className="font-semibold text-strong">{value.toLocaleString()}</span>
       {showTarget && target > 0 && (
-        <span className="text-gray-400 text-xs font-medium"> / {target}</span>
+        <span className="text-faint text-xs font-medium"> / {target}</span>
       )}
       <div className="text-[10px] flex items-center justify-end gap-1 mt-0.5">
         <RankChip rank={rank} />
@@ -210,13 +208,13 @@ function ChampionCard({
   winner: { userId: string; name: string; image?: string | null; value: number } | null;
 }) {
   return (
-    <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-4">
-      <div className="flex items-center gap-2 text-xs text-gray-500">
+    <div className="panel p-4">
+      <div className="flex items-center gap-2 text-xs text-muted">
         <Trophy size={12} className="text-amber-500" /> {label}
       </div>
       {winner ? (
         <>
-          <div className="mt-2 text-2xl font-bold text-gray-900 tabular-nums">
+          <div className="mt-2 text-2xl font-bold text-strong tabular-nums">
             {value !== undefined ? fmt(value) : '—'}
           </div>
           <div className="mt-1 text-xs">
@@ -224,7 +222,7 @@ function ChampionCard({
           </div>
         </>
       ) : (
-        <div className="mt-2 text-sm text-gray-400 italic">No qualifying user yet</div>
+        <div className="mt-2 text-sm text-faint italic">No qualifying user yet</div>
       )}
     </div>
   );
@@ -235,8 +233,8 @@ function YourStats({ stats, range }: {
   range: string;
 }) {
   return (
-    <div className="bg-blue-50/50 rounded-[12px] border border-blue-100 p-4">
-      <div className="text-xs font-medium text-blue-800 mb-2">Your numbers — {range}</div>
+    <div className="banner-info">
+      <div className="text-xs font-medium text-sky-800 dark:text-sky-300 mb-2">Your numbers — {range}</div>
       <div className="grid grid-cols-3 gap-4">
         <StatBlock
           label="Bids"
@@ -277,10 +275,10 @@ function StatBlock({
   const display = isConversion ? fmtConversion(value) : value.toLocaleString();
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-blue-700/70">{label}</div>
-      <div className="text-xl font-bold text-gray-900 tabular-nums">{display}</div>
-      <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-0.5">
-        {rank && <span className="font-semibold text-gray-700">#{rank}</span>}
+      <div className="text-[11px] uppercase tracking-wide text-sky-700/70 dark:text-sky-400/80">{label}</div>
+      <div className="text-xl font-bold text-strong tabular-nums">{display}</div>
+      <div className="flex items-center gap-2 text-[11px] text-muted mt-0.5">
+        {rank && <span className="font-semibold text-body">#{rank}</span>}
         {!isConversion && target && target > 0 && <TargetCell value={value} target={target} />}
         <Delta cur={value} prev={prev} />
       </div>

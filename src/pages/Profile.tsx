@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import useSWR from 'swr';
+import { Loader2, Save, Zap, CheckCircle2, KeyRound, AlertCircle } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
+import type { FreeLlmModelPreset } from '../api/endpoints';
 import { notify } from '../lib/notify';
 import PageHeader from '../components/PageHeader';
 
@@ -182,7 +185,7 @@ export default function ProfilePage() {
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex flex-col items-center lg:items-start space-y-4">
             <div className="relative group">
-              <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-gray-100 shadow-lg">
+              <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-zinc-200 dark:border-zinc-700 shadow-lg">
                 {formData.image ? (
                   <img
                     src={formData.image}
@@ -232,9 +235,9 @@ export default function ProfilePage() {
                       notify.error(err, 'Failed to read image');
                     }
                   }}
-                  className="block text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-[8px] file:border-0 file:bg-primary file:text-white file:font-medium file:cursor-pointer hover:file:bg-primary-dark"
+                  className="block text-xs text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-primary file:text-white file:font-medium file:cursor-pointer hover:file:bg-primary-dark"
                 />
-                <div className="text-[11px] text-gray-400">or paste a URL</div>
+                <div className="text-[11px] text-faint">or paste a URL</div>
                 <input
                   id="image"
                   name="image"
@@ -335,11 +338,13 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      <FreeLlmSettingsCard />
+
       <div className="card mt-4">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="card-header mb-0">Change Password</h3>
-            <p className="text-gray-600">Update your account password for enhanced security</p>
+            <p className="text-muted">Update your account password for enhanced security</p>
           </div>
           {!isChangingPassword && (
             <button type="button" onClick={() => setIsChangingPassword(true)} className="btn-outline">
@@ -383,7 +388,7 @@ export default function ProfilePage() {
                   minLength={6}
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+                <p className="text-xs text-muted mt-1">Minimum 6 characters</p>
               </div>
 
               <div className="form-group">
@@ -434,12 +439,12 @@ export default function ProfilePage() {
         <h3 className="card-header">Account Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-600">Account Type</p>
-            <p className="text-gray-900">Standard Account</p>
+            <p className="text-sm font-medium text-muted">Account Type</p>
+            <p className="text-strong">Standard Account</p>
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-600">Member Since</p>
-            <p className="text-gray-900">
+            <p className="text-sm font-medium text-muted">Member Since</p>
+            <p className="text-strong">
               {user?.email ? new Date().toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
@@ -448,8 +453,8 @@ export default function ProfilePage() {
             </p>
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-600">Last Login</p>
-            <p className="text-gray-900">
+            <p className="text-sm font-medium text-muted">Last Login</p>
+            <p className="text-strong">
               {new Date().toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
@@ -460,11 +465,267 @@ export default function ProfilePage() {
             </p>
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-600">Status</p>
+            <p className="text-sm font-medium text-muted">Status</p>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
               Active
             </span>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FreeLlmSettingsCard() {
+  const { data: profile, mutate: mutateProfile } = useSWR('profile-free-llm', () => api.getProfile());
+  const { data: modelsData } = useSWR('free-llm-models', () => api.listFreeLlmModels());
+  const models = modelsData?.models ?? [];
+
+  const [modelId, setModelId] = useState('');
+  const [maxTokens, setMaxTokens] = useState<number>(8192);
+  const [apiKey, setApiKey] = useState('');
+  const [keyHint, setKeyHint] = useState('');
+  const [keySet, setKeySet] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testStatus, setTestStatus] = useState('');
+
+  useEffect(() => {
+    if (profile && !loaded) {
+      const u = profile.user;
+      setModelId(u.freeLlmModelId || '');
+      setMaxTokens(u.freeLlmMaxTokens ?? 8192);
+      setKeyHint(u.freeLlmApiKeyHint || '');
+      setKeySet(!!u.freeLlmApiKeySet);
+      setVerified(!!u.freeLlmKeyVerified);
+      setLoaded(true);
+    }
+  }, [profile, loaded]);
+
+  function applyFreeLlmFields(res: {
+    freeLlmApiKeySet: boolean;
+    freeLlmApiKeyHint: string;
+    freeLlmKeyVerified?: boolean;
+  }) {
+    setKeySet(res.freeLlmApiKeySet);
+    setKeyHint(res.freeLlmApiKeyHint);
+    if (res.freeLlmKeyVerified !== undefined) {
+      setVerified(res.freeLlmKeyVerified);
+    }
+    setApiKey('');
+  }
+
+  function onModelChange(id: string) {
+    setModelId(id);
+    const preset = models.find((m) => m.id === id);
+    if (preset) setMaxTokens(preset.defaultMaxTokens);
+  }
+
+  const connected = verified && keySet && !!modelId;
+  const pendingVerify = keySet && !verified;
+
+  async function handleSave() {
+    if (!modelId) return;
+    setSaving(true);
+    try {
+      const res = await api.updateFreeLlmSettings({
+        freeLlmModelId: modelId,
+        freeLlmMaxTokens: maxTokens,
+        ...(apiKey.trim() ? { freeLlmApiKey: apiKey.trim() } : {}),
+      });
+      applyFreeLlmFields(res);
+      if (apiKey.trim()) {
+        setVerified(false);
+        notify.success('API key saved — run Test connection to verify');
+      } else {
+        notify.success('Free LLM settings saved');
+      }
+      mutateProfile();
+    } catch (err) {
+      notify.error(err, 'Failed to save free LLM settings');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTest() {
+    if (!modelId) return;
+    setTesting(true);
+    setTestStatus('');
+    try {
+      if (apiKey.trim() || !keySet) {
+        setTestStatus('Saving API key…');
+        const saveRes = await api.updateFreeLlmSettings({
+          freeLlmModelId: modelId,
+          freeLlmMaxTokens: maxTokens,
+          ...(apiKey.trim() ? { freeLlmApiKey: apiKey.trim() } : {}),
+        });
+        applyFreeLlmFields(saveRes);
+      }
+      setTestStatus('Contacting NVIDIA — this can take up to 45 seconds…');
+      const res = await api.testFreeLlm();
+      applyFreeLlmFields(res);
+      setVerified(true);
+      setTestStatus('');
+      notify.success(`Connected to ${res.model}`);
+      mutateProfile();
+    } catch (err) {
+      setVerified(false);
+      setTestStatus('');
+      notify.error(err, 'Free LLM test failed');
+      mutateProfile();
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="panel mt-4 p-0 overflow-hidden">
+      <div className="border-b border-zinc-200/80 px-5 py-4 dark:border-zinc-800">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="section-title flex items-center gap-2">
+              <Zap className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+              Resume LLM (free tier)
+            </h3>
+            <p className="section-desc mt-1 max-w-2xl">
+              NVIDIA Integrate models for resume generation and screening. OpenAI is used when the free tier is unavailable.
+            </p>
+          </div>
+          {connected ? (
+            <span className="badge-success inline-flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+              Connected
+            </span>
+          ) : pendingVerify ? (
+            <span className="badge-warning inline-flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5" aria-hidden />
+              Key saved
+            </span>
+          ) : (
+            <span className="badge-neutral inline-flex items-center gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5" aria-hidden />
+              Not configured
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-5 p-5">
+        {connected && (
+          <div className="banner-info text-sm text-body">
+            Free tier is active. Model <span className="font-mono text-xs">{models.find((m) => m.id === modelId)?.model}</span> will be used for resume and screening tasks.
+          </div>
+        )}
+        {pendingVerify && !testing && (
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+            Key saved as <span className="font-mono">{keyHint}</span>. Run <strong>Test connection</strong> to verify and enable the free tier.
+          </div>
+        )}
+        {testing && testStatus && (
+          <div className="banner-info flex items-center gap-2 text-sm text-body">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-600 dark:text-sky-400" aria-hidden />
+            {testStatus}
+          </div>
+        )}
+
+        <div>
+          <label className="form-label">Model</label>
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {models.map((m: FreeLlmModelPreset) => {
+              const selected = modelId === m.id;
+              const active = selected && connected;
+              return (
+                <label
+                  key={m.id}
+                  className={`choice-card flex flex-col gap-1.5 p-4 transition ${
+                    active
+                      ? 'choice-card-selected ring-2 ring-emerald-500/25 dark:ring-emerald-400/30'
+                      : selected
+                        ? 'choice-card-selected'
+                        : connected
+                          ? 'opacity-80'
+                          : ''
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="freeLlmModel"
+                    value={m.id}
+                    checked={selected}
+                    onChange={() => onModelChange(m.id)}
+                    className="sr-only"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-strong">{m.label}</span>
+                    {active && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />}
+                  </div>
+                  <span className="font-mono text-xs text-muted">{m.model}</span>
+                  <span className="text-xs text-faint">
+                    Default {m.defaultMaxTokens.toLocaleString()} tokens
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="form-group">
+            <label htmlFor="freeLlmApiKey" className="form-label">NVIDIA API key</label>
+            <input
+              id="freeLlmApiKey"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="input focus-ring font-mono text-sm"
+              placeholder={keySet ? `${keyHint} (leave blank to keep)` : 'nvapi-...'}
+              autoComplete="off"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Saved securely on your profile. Only the last four characters are shown after saving.
+            </p>
+          </div>
+          <div className="form-group">
+            <label htmlFor="freeLlmMaxTokens" className="form-label">Max tokens</label>
+            <input
+              id="freeLlmMaxTokens"
+              type="number"
+              min={512}
+              max={16384}
+              value={maxTokens}
+              onChange={(e) => setMaxTokens(Number(e.target.value))}
+              className="input focus-ring"
+            />
+            <p className="mt-1 text-xs text-muted">~40 requests/minute shared across all models on your key.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
+          <button type="button" onClick={handleSave} disabled={saving || !modelId} className="btn">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save settings
+          </button>
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={testing || !modelId || (!keySet && !apiKey.trim())}
+            className="btn-accent"
+          >
+            {testing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Testing…
+              </>
+            ) : (
+              <>
+                <Zap className="h-4 w-4" />
+                Test connection
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

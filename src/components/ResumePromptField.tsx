@@ -57,15 +57,15 @@ export default function ResumePromptField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs font-medium text-gray-600">{label}</label>
+        <label className="block text-xs font-medium text-muted">{label}</label>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-gray-400">{value.length}/{MAX}</span>
+          <span className="text-[11px] text-faint">{value.length}/{MAX}</span>
           {defaultSource === 'global' && (
             <button
               type="button"
               onClick={loadDefault}
               disabled={loadingDefault}
-              className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
+              className="link-inline text-[11px] disabled:opacity-50"
             >
               {loadingDefault ? <Loader2 size={11} className="animate-spin" /> : <FileDown size={11} />}
               Load global
@@ -81,7 +81,7 @@ export default function ResumePromptField({
         onChange={(e) => onChange(e.target.value)}
         placeholder="Leave empty to inherit."
       />
-      <p className="text-xs text-gray-400 mt-1">{hint}</p>
+      <p className="text-xs text-faint mt-1">{hint}</p>
     </div>
   );
 }

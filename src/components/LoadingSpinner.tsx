@@ -18,9 +18,9 @@ export default function LoadingSpinner({
   };
 
   const colorClasses = {
-    primary: 'text-primary',
+    primary: 'text-sky-600 dark:text-sky-400',
     white: 'text-white',
-    gray: 'text-gray-500'
+    gray: 'text-zinc-500 dark:text-zinc-400',
   };
 
   return (
@@ -56,7 +56,7 @@ export default function LoadingSpinner({
 
 export function SkeletonCard({ className = '' }: { className?: string }) {
   return (
-    <div className={`animate-pulse bg-gray-200 rounded-[12px] h-32 ${className}`} />
+    <div className={`animate-pulse skeleton h-32 ${className}`} />
   );
 }
 
@@ -66,7 +66,7 @@ export function SkeletonText({ lines = 1, className = '' }: { lines?: number; cl
       {Array.from({ length: lines }).map((_, i) => (
         <div
           key={i}
-          className="h-4 bg-gray-200 rounded animate-pulse"
+          className="h-4 skeleton animate-pulse"
           style={{ width: i === lines - 1 ? '60%' : '100%' }}
         />
       ))}
@@ -79,10 +79,10 @@ export function SkeletonTable({ rows = 5, className = '' }: { rows?: number; cla
     <div className={`space-y-3 ${className}`}>
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center space-x-4">
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-1/4" />
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-1/3" />
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-1/4" />
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-1/6" />
+          <div className="h-4 skeleton animate-pulse w-1/4" />
+          <div className="h-4 skeleton animate-pulse w-1/3" />
+          <div className="h-4 skeleton animate-pulse w-1/4" />
+          <div className="h-4 skeleton animate-pulse w-1/6" />
         </div>
       ))}
     </div>

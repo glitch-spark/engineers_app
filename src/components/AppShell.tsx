@@ -26,19 +26,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   if (isAuth) return <>{children}</>;
   return (
-    <div className="flex flex-col min-h-screen bg-background transition-all duration-300">
+    <div className="shell-content flex min-h-screen flex-col transition-all duration-300">
       <Topbar />
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed((v) => !v)}
       />
       <div className={`flex-1 pt-16 transition-all duration-300 ${
-        isSidebarCollapsed ? 'pl-20' : 'pl-64'
+        isSidebarCollapsed ? 'pl-[4.75rem]' : 'pl-64'
       }`}>
-        <div className="max-w-7xl mx-auto p-6 pb-12">
-          <div className="animate-fade-in-up">
-            {children}
-          </div>
+        <div className="mx-auto max-w-7xl px-6 pb-12 pt-2">
+          <div className="page-stack animate-fade-in-up">{children}</div>
         </div>
       </div>
     </div>
