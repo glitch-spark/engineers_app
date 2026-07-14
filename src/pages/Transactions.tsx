@@ -188,11 +188,11 @@ export default function TransactionsPage() {
         action={<button type="button" className="btn" onClick={openAdd}>Add</button>}
       />
 
-      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+      <div className="flex items-end gap-3 flex-wrap toolbar">
         {isAdmin && (
           <>
             <div className="w-44">
-              <label className="block text-xs text-gray-500 mb-1">From</label>
+              <label className="block text-xs text-muted mb-1">From</label>
               <input
                 className="input w-full text-sm"
                 type="date"
@@ -201,7 +201,7 @@ export default function TransactionsPage() {
               />
             </div>
             <div className="w-44">
-              <label className="block text-xs text-gray-500 mb-1">To</label>
+              <label className="block text-xs text-muted mb-1">To</label>
               <input
                 className="input w-full text-sm"
                 type="date"
@@ -210,7 +210,7 @@ export default function TransactionsPage() {
               />
             </div>
             <div className="w-56">
-              <label className="block text-xs text-gray-500 mb-1">User</label>
+              <label className="block text-xs text-muted mb-1">User</label>
               <select
                 className="select focus-ring w-full text-sm"
                 value={userId}
@@ -227,7 +227,7 @@ export default function TransactionsPage() {
           </>
         )}
         <div className="w-44">
-          <label className="block text-xs text-gray-500 mb-1">Pay method</label>
+          <label className="block text-xs text-muted mb-1">Pay method</label>
           <select
             className="select focus-ring w-full text-sm"
             value={payMethodFilter}
@@ -242,7 +242,7 @@ export default function TransactionsPage() {
 
       {data && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted">
             <span>
               Showing {pagination?.total ?? 0} transaction{pagination?.total !== 1 ? 's' : ''} total
             </span>
@@ -264,9 +264,9 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="table-wrap">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
+          <thead className="table-head">
             <tr>
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">Amount</th>
@@ -280,22 +280,22 @@ export default function TransactionsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-muted">
                   <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                    <div className="spinner spinner-md mr-3"></div>
                     Loading transactions...
                   </div>
                 </td>
               </tr>
             ) : transactions.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-gray-500">No transactions found.</td>
+                <td colSpan={7} className="px-3 py-6 text-center text-muted">No transactions found.</td>
               </tr>
             ) : (
               transactions.map((t) => {
                 const isPending = t.status === 'pending';
                 return (
-                  <tr key={t._id} className="border-t">
+                  <tr key={t._id} className="table-row">
                     <td className="px-3 py-2">
                       {t.date ? new Date(t.date).toISOString().split('T')[0] : '—'}
                     </td>
@@ -346,7 +346,7 @@ export default function TransactionsPage() {
 
       {pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted">
             Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
             {pagination.total} results
@@ -356,7 +356,7 @@ export default function TransactionsPage() {
             <button
               onClick={() => setCurrentPage(pagination.page - 1)}
               disabled={!pagination.hasPrev}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               Previous
             </button>
@@ -376,7 +376,7 @@ export default function TransactionsPage() {
                     className={`px-3 py-1 border rounded text-sm ${
                       pageNum === pagination.page
                         ? 'bg-blue-500 text-white border-blue-500'
-                        : 'hover:bg-gray-50'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
                     }`}
                   >
                     {pageNum}
@@ -388,7 +388,7 @@ export default function TransactionsPage() {
             <button
               onClick={() => setCurrentPage(pagination.page + 1)}
               disabled={!pagination.hasNext}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               Next
             </button>
@@ -430,7 +430,7 @@ export default function TransactionsPage() {
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
           />
           <div>
-            <label className="block text-xs mb-1 text-gray-600">Pay method <span className="text-red-500">*</span></label>
+            <label className="block text-xs mb-1 text-muted">Pay method <span className="text-red-500">*</span></label>
             <select
               className="select focus-ring w-full"
               value={form.payMethod}
@@ -446,7 +446,7 @@ export default function TransactionsPage() {
           </div>
           {form.payMethod === 'card' && (
             <div>
-              <label className="block text-xs mb-1 text-gray-600">Last 4 digits of card <span className="text-red-500">*</span></label>
+              <label className="block text-xs mb-1 text-muted">Last 4 digits of card <span className="text-red-500">*</span></label>
               <input
                 className="input"
                 inputMode="numeric"

@@ -27,14 +27,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
   if (isAuth) return <>{children}</>;
   const useWideLayout = pathname === '/interviews' || pathname === '/pipeline';
   return (
-    <div className="flex flex-col min-h-screen bg-background transition-all duration-300">
+    <div className="shell-content flex min-h-screen flex-col transition-all duration-300">
       <Topbar />
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed((v) => !v)}
       />
       <div className={`flex-1 pt-16 transition-all duration-300 ${
-        isSidebarCollapsed ? 'pl-20' : 'pl-64'
+        isSidebarCollapsed ? 'pl-[4.75rem]' : 'pl-64'
       }`}>
         <div className={
           useWideLayout

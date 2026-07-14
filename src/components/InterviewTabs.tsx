@@ -9,7 +9,7 @@ const TABS = [
 export default function InterviewTabs() {
   const { pathname } = useLocation();
   return (
-    <nav className="flex items-center gap-1 border-b border-gray-200 mb-5">
+    <nav className="tab-nav" aria-label="Interview sections">
       {TABS.map((t) => {
         const active = t.exact ? pathname === t.to : pathname.startsWith(t.to);
         const Icon = t.icon;
@@ -17,13 +17,10 @@ export default function InterviewTabs() {
           <Link
             key={t.to}
             to={t.to}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              active
-                ? 'border-primary text-primary'
-                : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
+            aria-current={active ? 'page' : undefined}
+            className={`tab-nav-link ${active ? 'tab-nav-link-active' : 'tab-nav-link-inactive'}`}
           >
-            <Icon className="w-4 h-4" />
+            <Icon className="h-4 w-4 shrink-0" aria-hidden />
             {t.label}
           </Link>
         );

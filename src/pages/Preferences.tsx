@@ -57,10 +57,10 @@ function GlobalPromptsCard() {
 
   return (
     <div className="space-y-5">
-      <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-3">
+      <section className="panel p-6 space-y-3">
         <div>
           <h2 className="section-title">Resume generating prompt — global</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             Default content prompt for every profile. A profile can override this on its Prompts tab;
             a single generation can override it on the Resume Generator page.
           </p>
@@ -73,10 +73,10 @@ function GlobalPromptsCard() {
         />
       </section>
 
-      <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-3">
+      <section className="panel p-6 space-y-3">
         <div>
           <h2 className="section-title">Screening Q&amp;A answering prompt — global</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             Default screening-answer prompt for every profile. A profile can override this on its
             Prompts tab.
           </p>
@@ -90,10 +90,10 @@ function GlobalPromptsCard() {
         />
       </section>
 
-      <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-3">
+      <section className="panel p-6 space-y-3">
         <div>
           <h2 className="section-title">Cover letter prompt — global</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             Default cover-letter prompt used when "Also generate a cover letter" is checked at
             submit time. A profile can override this on its Prompts tab.
           </p>
@@ -112,7 +112,7 @@ function GlobalPromptsCard() {
           type="button"
           onClick={handleSave}
           disabled={saving || !data}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50"
+          className="btn disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Save prompts

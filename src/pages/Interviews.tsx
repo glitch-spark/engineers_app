@@ -197,13 +197,13 @@ const STATUSES = [
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
     case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'completed': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
     case 'passed': return 'bg-green-100 text-green-800 border-green-200';
     case 'failed': return 'bg-red-100 text-red-800 border-red-200';
     case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
     case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'canceled': return 'bg-gray-200 text-gray-700 border-gray-300';
-    default: return 'bg-gray-50 text-gray-500 border-gray-200';
+    case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600';
+    default: return 'bg-zinc-50 dark:bg-zinc-900/80 text-muted border-zinc-200 dark:border-zinc-700';
   }
 };
 
@@ -966,7 +966,7 @@ export default function InterviewsPage() {
             <>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <div className="text-gray-500 text-xs">Profile</div>
+                  <div className="text-muted text-xs">Profile</div>
                   <div className="font-medium">
                     {(() => {
                       const a = accounts.find((x) => x._id === form.accountId);
@@ -975,65 +975,65 @@ export default function InterviewsPage() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Stage</div>
+                  <div className="text-muted text-xs">Stage</div>
                   <div>
                     {form.stage ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${stageBadgeClass(form.stage)}`}>
+                      <span className={`badge ${stageBadgeClass(form.stage)}`}>
                         {stageLabel(form.stage)}
                       </span>
-                    ) : <span className="text-gray-400">—</span>}
+                    ) : <span className="text-faint">—</span>}
                   </div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Status</div>
+                  <div className="text-muted text-xs">Status</div>
                   <div>
                     {form.status ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${statusBadgeClass(form.status)}`}>
+                      <span className={`badge ${statusBadgeClass(form.status)}`}>
                         {statusLabel(form.status)}
                       </span>
-                    ) : <span className="text-gray-400">—</span>}
+                    ) : <span className="text-faint">—</span>}
                   </div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Company</div>
+                  <div className="text-muted text-xs">Company</div>
                   <div className="font-medium">{form.companyName || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Interviewer Name</div>
+                  <div className="text-muted text-xs">Interviewer Name</div>
                   <div className="font-medium">{form.interviewerName || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Applied Position</div>
+                  <div className="text-muted text-xs">Applied Position</div>
                   <div className="font-medium">{form.appliedPosition || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Date</div>
+                  <div className="text-muted text-xs">Date</div>
                   <div>{form.date || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">Start time</div>
+                  <div className="text-muted text-xs">Start time</div>
                   <div>{form.startTime || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500 text-xs">End time</div>
+                  <div className="text-muted text-xs">End time</div>
                   <div>{form.endTime || '—'}</div>
                 </div>
               </div>
               <div>
-                <div className="text-gray-500 text-xs mb-1">Interview Transcript</div>
+                <div className="text-muted text-xs mb-1">Interview Transcript</div>
                 <div
-                  className="prose-readonly bg-white"
-                  dangerouslySetInnerHTML={{ __html: form.transcript || '<p class="text-gray-400 italic">—</p>' }}
+                  className="prose-readonly panel p-4"
+                  dangerouslySetInnerHTML={{ __html: form.transcript || '<p class="text-faint italic">—</p>' }}
                 />
               </div>
               <div>
-                <div className="text-gray-500 text-xs mb-1">Note</div>
+                <div className="text-muted text-xs mb-1">Note</div>
                 <div
-                  className="prose-readonly bg-gray-50"
-                  dangerouslySetInnerHTML={{ __html: form.note || '<p class="text-gray-400 italic">—</p>' }}
+                  className="prose-readonly bg-zinc-50 dark:bg-zinc-900/80"
+                  dangerouslySetInnerHTML={{ __html: form.note || '<p class="text-faint italic">—</p>' }}
                 />
               </div>
-              <div className="flex justify-end pt-3 border-t border-gray-100">
+              <div className="flex justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 <button type="button" className="btn" onClick={closeModal}>Close</button>
               </div>
             </>
@@ -1049,7 +1049,7 @@ export default function InterviewsPage() {
                 datalistId="applied-position-suggestions-modal"
               />
 
-              <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
+              <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 <button type="button" className="btn" onClick={closeModal} disabled={saving}>Cancel</button>
                 <button
                   type="button"
@@ -1069,16 +1069,16 @@ export default function InterviewsPage() {
       <Modal open={mode === 'delete'} onClose={closeModal} title="Delete Interview">
         <div className="space-y-6">
           {error && <p className="text-red-600 text-sm">{error}</p>}
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-body">
             Are you sure you want to delete this interview? This action cannot be undone.
           </p>
           {active && (
-            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-              <div><span className="text-gray-500">Stage:</span> {active.stage ? stageLabel(active.stage) : '—'}</div>
-              <div><span className="text-gray-500">When:</span> {formatScheduled(active.scheduledAt)}</div>
+            <div className="text-sm text-muted bg-zinc-50 dark:bg-zinc-900/80 p-3 rounded">
+              <div><span className="text-muted">Stage:</span> {active.stage ? stageLabel(active.stage) : '—'}</div>
+              <div><span className="text-muted">When:</span> {formatScheduled(active.scheduledAt)}</div>
             </div>
           )}
-          <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
+          <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
             <button type="button" className="btn" onClick={closeModal} disabled={saving}>Cancel</button>
             <button
               type="button"

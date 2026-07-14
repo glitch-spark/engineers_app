@@ -83,7 +83,7 @@ export default function AccountEditPage() {
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center gap-2 text-sm text-gray-500">
+      <div className="p-6 flex items-center gap-2 text-sm text-muted">
         <Loader2 className="w-4 h-4 animate-spin" /> Loading...
       </div>
     );
@@ -94,9 +94,9 @@ export default function AccountEditPage() {
       <div className="space-y-6 max-w-xl">
         <PageHeader title="New profile" backTo="/accounts" />
 
-        <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-4">
+        <section className="panel p-6 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
+            <label className="block text-xs font-medium text-muted mb-1">
               Profile name <span className="text-red-500">*</span>
             </label>
             <input
@@ -106,7 +106,7 @@ export default function AccountEditPage() {
               placeholder="e.g. AI Full-stack, Backend, QA Engineer"
               autoFocus
             />
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-faint mt-1">
               A label to distinguish this profile in dropdowns. After creating, upload your HTML
               resume template and (optionally) customize the prompts.
             </p>
@@ -116,7 +116,7 @@ export default function AccountEditPage() {
             <button
               onClick={createProfile}
               disabled={saving || !name.trim()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50"
+              className="btn disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Create profile
@@ -194,7 +194,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
   if (loading) {
     return (
       <Section title="Prompts" desc="">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-muted">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading prompts...
         </div>
       </Section>
@@ -248,7 +248,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
         <button
           onClick={save}
           disabled={saving}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50"
+          className="btn disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Save prompts
@@ -266,10 +266,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 p-6 shadow-sm space-y-3">
+    <section className="panel p-6 space-y-3">
       <div>
         <h2 className="card-title">{title}</h2>
-        {desc && <p className="text-xs text-gray-500">{desc}</p>}
+        {desc && <p className="text-xs text-muted">{desc}</p>}
       </div>
       {children}
     </section>

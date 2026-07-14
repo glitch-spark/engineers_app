@@ -56,21 +56,49 @@ export class ApiError extends Error {
   }
 }
 
+export type ApiFetchOptions = RequestInit & {
+  /** Abort the request after this many milliseconds. */
+  timeoutMs?: number;
+};
+
 // Lazy require to avoid an import cycle (notify.ts imports ApiError from this file).
 function emitToast(level: 'info' | 'error', message: string): void {
   import('../lib/notify').then(({ notify }) => notify[level](message)).catch(() => {});
 }
 
-export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T = unknown>(path: string, init: ApiFetchOptions = {}): Promise<T> {
+  const { timeoutMs, ...fetchInit } = init;
   const token = getToken();
-  const headers = new Headers(init.headers);
-  if (init.body !== undefined && !headers.has('Content-Type')) {
+  const headers = new Headers(fetchInit.headers);
+  if (fetchInit.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
-  const res = await fetch(url, { ...init, headers });
+
+  const controller = timeoutMs != null ? new AbortController() : null;
+  const timeoutId =
+    controller != null
+      ? globalThis.setTimeout(() => controller.abort(), timeoutMs)
+      : undefined;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...fetchInit,
+      headers,
+      signal: controller?.signal ?? fetchInit.signal,
+    });
+  } catch (err) {
+    if (controller?.signal.aborted) {
+      const seconds = Math.round((timeoutMs ?? 0) / 1000);
+      throw new ApiError(408, null, `Request timed out after ${seconds}s`);
+    }
+    throw err;
+  } finally {
+    if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
+  }
 
   if (res.status === 401) {
     clearToken();

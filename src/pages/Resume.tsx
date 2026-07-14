@@ -178,9 +178,9 @@ export default function ResumeGeneratorPage() {
       <PageHeader title="Resume Generator" />
       <ResumeTabs />
 
-      <div className="bg-white rounded-[12px] border border-gray-100 p-4 shadow-sm">
+      <div className="panel p-4">
         {accountsLoading ? (
-          <p className="text-sm text-gray-500">Loading profiles...</p>
+          <p className="text-sm text-muted">Loading profiles...</p>
         ) : accounts.length === 0 ? (
           <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
             You don't own any profiles yet.{' '}
@@ -192,12 +192,12 @@ export default function ResumeGeneratorPage() {
               <button
                 type="button"
                 onClick={() => setProfilesOpen((v) => !v)}
-                className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-primary"
+                className="inline-flex items-center gap-1 text-xs font-medium text-body hover:text-primary"
                 aria-expanded={profilesOpen}
               >
-                <span className="text-gray-400">{profilesOpen ? '▾' : '▸'}</span>
+                <span className="text-faint">{profilesOpen ? '▾' : '▸'}</span>
                 Profiles <span className="text-red-500">*</span>
-                <span className="ml-2 text-gray-400 font-normal">
+                <span className="ml-2 text-faint font-normal">
                   ({accountIds.length} selected)
                 </span>
               </button>
@@ -205,20 +205,20 @@ export default function ResumeGeneratorPage() {
                 <button
                   type="button"
                   onClick={toggleAll}
-                  className="text-xs text-primary hover:underline"
+                  className="link text-xs"
                 >
                   {allSelected ? 'Clear all' : 'Select all'}
                 </button>
               )}
             </div>
             {profilesOpen && (
-            <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+            <ul className="row-divider border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
               {accounts.map((a) => {
                 const checked = accountIds.includes(a._id);
                 const disabled = !a.hasTemplate;
                 const promptMissing = !a.hasPrompt && !globalPromptSet;
                 return (
-                  <li key={a._id} className={disabled ? 'opacity-60' : 'hover:bg-gray-50'}>
+                  <li key={a._id} className={disabled ? 'opacity-60' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}>
                     <label
                       htmlFor={`acc-${a._id}`}
                       className={'flex items-center gap-3 px-3 py-2 ' + (disabled ? '' : 'cursor-pointer')}
@@ -231,7 +231,7 @@ export default function ResumeGeneratorPage() {
                         onChange={() => toggle(a._id)}
                         className="h-4 w-4 m-0 flex-shrink-0"
                       />
-                      <span className="flex-1 text-sm text-gray-800 leading-none">{a.name}</span>
+                      <span className="flex-1 text-sm text-strong leading-none">{a.name}</span>
                       {disabled && (
                         <span className="text-xs text-amber-700 flex items-center gap-1">
                           <AlertTriangle size={12} /> No template —{' '}
@@ -263,10 +263,10 @@ export default function ResumeGeneratorPage() {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-[12px] border border-gray-100 p-6 space-y-5 shadow-sm">
+      <form onSubmit={handleSubmit} className="panel p-6 space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium mb-1 text-gray-600">
+            <label className="block text-xs font-medium mb-1 text-muted">
               Company<span className="text-red-500 ml-1">*</span>
             </label>
             <input
@@ -279,8 +279,8 @@ export default function ResumeGeneratorPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1 text-gray-600">
-              Job posting URL <span className="text-xs text-gray-400 font-normal">(optional)</span>
+            <label className="block text-xs font-medium mb-1 text-muted">
+              Job posting URL <span className="text-xs text-faint font-normal">(optional)</span>
             </label>
             <input
               type="url"
@@ -293,7 +293,7 @@ export default function ResumeGeneratorPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1 text-gray-600">
+          <label className="block text-xs font-medium mb-1 text-muted">
             Job description<span className="text-red-500 ml-1">*</span>
           </label>
           <textarea
@@ -304,11 +304,11 @@ export default function ResumeGeneratorPage() {
             className="input focus-ring w-full text-sm"
             required
           />
-          <p className="text-xs text-gray-400 mt-1">{jobDescription.length.toLocaleString()} characters</p>
+          <p className="text-xs text-faint mt-1">{jobDescription.length.toLocaleString()} characters</p>
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <label className="inline-flex items-center gap-2 text-sm text-body cursor-pointer">
             <input
               type="checkbox"
               className="h-4 w-4"
@@ -316,12 +316,12 @@ export default function ResumeGeneratorPage() {
               onChange={(e) => setGenerateCoverLetter(e.target.checked)}
             />
             Also generate a cover letter
-            <span className="text-xs text-gray-400"></span>
+            <span className="text-xs text-faint"></span>
           </label>
           <button
             type="submit"
             disabled={submitting || accountIds.length === 0}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="btn disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> Queueing...</>

@@ -136,7 +136,7 @@ export default function ReviewIdeasPanel() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="section-title">Skills</h2>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted">
               Each skill defines a system prompt and how many interviews it expects.
             </p>
           </div>
@@ -147,7 +147,7 @@ export default function ReviewIdeasPanel() {
 
         <div className="card p-0 overflow-hidden">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-100 text-left">
+            <thead className="bg-zinc-100 dark:bg-zinc-800 text-left">
               <tr>
                 <th className="px-3 py-2">Title</th>
                 <th className="px-3 py-2 w-24">Min</th>
@@ -159,17 +159,17 @@ export default function ReviewIdeasPanel() {
             <tbody>
               {skills.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-gray-500">
+                  <td colSpan={5} className="px-3 py-6 text-center text-muted">
                     No skills yet. Add one to let users run AI reviews.
                   </td>
                 </tr>
               ) : (
                 skills.map((s) => (
-                  <tr key={s._id} className="border-t hover:bg-gray-50">
+                  <tr key={s._id} className="table-row">
                     <td className="px-3 py-2 font-medium">{s.title}</td>
                     <td className="px-3 py-2">{s.minInterviews}</td>
                     <td className="px-3 py-2">{s.maxInterviews}</td>
-                    <td className="px-3 py-2 text-gray-600 max-w-md">
+                    <td className="px-3 py-2 text-muted max-w-md">
                       <div className="line-clamp-2">{s.systemPrompt || '—'}</div>
                     </td>
                     <td className="px-3 py-2">
@@ -203,7 +203,7 @@ export default function ReviewIdeasPanel() {
       {/* Global prompt */}
       <section>
         <h2 className="section-title mb-1">Global system prompt</h2>
-        <p className="text-sm text-gray-500 mb-3">
+        <p className="text-sm text-muted mb-3">
           Prepended to every skill prompt and to every custom-prompt run. Use this for
           house-style instructions ("act as a senior interview consultant…").
         </p>
@@ -215,7 +215,7 @@ export default function ReviewIdeasPanel() {
           placeholder="System prompt prefix used for all AI runs"
         />
         <div className="flex items-center justify-between mt-2">
-          <div className="text-xs text-gray-400">{globalText.length}/20000</div>
+          <div className="text-xs text-faint">{globalText.length}/20000</div>
           <button
             type="button"
             className="btn"
@@ -288,10 +288,10 @@ export default function ReviewIdeasPanel() {
               maxLength={20000}
               placeholder="Act as a senior interview consultant…"
             />
-            <div className="text-xs text-gray-400 mt-1">{form.systemPrompt.length}/20000</div>
+            <div className="text-xs text-faint mt-1">{form.systemPrompt.length}/20000</div>
           </div>
 
-          <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
+          <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
             <button type="button" className="btn" onClick={closeModal} disabled={saving}>
               Cancel
             </button>
@@ -311,11 +311,11 @@ export default function ReviewIdeasPanel() {
       {/* Delete confirm */}
       <Modal open={mode === 'delete'} onClose={closeModal} title="Delete skill">
         <div className="space-y-4">
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-body">
             Delete <span className="font-medium">{active?.title}</span>? Past runs that used
             this skill will keep their saved output.
           </p>
-          <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
+          <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
             <button type="button" className="btn" onClick={closeModal} disabled={saving}>
               Cancel
             </button>

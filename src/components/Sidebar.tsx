@@ -9,35 +9,28 @@ const NavLink = ({ href, label, isCollapsed, icon, badge }: {
   badge?: number;
 }) => {
   const { pathname } = useLocation();
-  const active = pathname === href;
+  const active = pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       to={href}
-      className={`group relative flex items-center gap-3 px-4 py-3 rounded-[8px] transition-all duration-200 ${
-        active
-          ? 'bg-primary/10 text-primary font-medium shadow-sm'
-          : 'text-gray-700 hover:bg-gray-50 hover:text-primary'
-      } ${isCollapsed ? 'justify-center' : ''}`}
+      className={`${active ? 'nav-item-active group' : 'nav-item-inactive group'} ${isCollapsed ? 'justify-center' : ''}`}
       title={isCollapsed ? label : undefined}
     >
-      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
+      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 w-full'}`}>
         <div className={`flex-shrink-0 transition-colors duration-200 ${
-          active ? 'text-primary' : 'text-gray-500 group-hover:text-primary'
+          active ? 'nav-item-icon-active' : 'nav-item-icon-inactive'
         }`}>
           {icon}
         </div>
-        {!isCollapsed && (
-          <span className="flex-1">{label}</span>
-        )}
-        {!isCollapsed && badge && (
-          <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium bg-primary text-white rounded-full min-w-[20px]">
+        {!isCollapsed && <span className="flex-1 text-sm">{label}</span>}
+        {!isCollapsed && badge ? (
+          <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-sky-500 px-2 py-0.5 text-xs font-medium text-white">
             {badge}
           </span>
-        )}
+        ) : null}
       </div>
-
       {active && !isCollapsed && (
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
+        <div className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full bg-sky-500 dark:bg-sky-400" />
       )}
     </Link>
   );
@@ -54,20 +47,21 @@ export default function Sidebar({
   const role = user?.role;
 
   return (
-    <aside className={`fixed top-16 left-0 bottom-0 border-r border-gray-100 bg-white/80 backdrop-blur-md z-30 overflow-y-auto transition-all duration-300 ${
-      isCollapsed ? 'w-20' : 'w-64'
-    }`}>
-      {/* Collapse toggle — pinned at the top of the sidebar. */}
+    <aside
+      className={`shell-surface fixed bottom-0 left-0 top-16 z-30 overflow-y-auto border-r transition-all duration-300 ${
+        isCollapsed ? 'w-[4.75rem]' : 'w-64'
+      }`}
+    >
       {onToggle && (
-        <div className={`flex ${isCollapsed ? 'justify-center' : 'justify-end'} px-3 pt-3`}>
+        <div className={`flex px-3 pt-3 pb-1 ${isCollapsed ? 'justify-center' : 'justify-end'}`}>
           <button
             type="button"
             onClick={onToggle}
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="p-1.5 rounded-[8px] text-gray-500 hover:text-primary hover:bg-gray-100 transition"
+            className="shell-icon-btn"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {isCollapsed ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
               ) : (
@@ -77,19 +71,6 @@ export default function Sidebar({
           </button>
         </div>
       )}
-      <nav className="p-4 space-y-2">
-        <div className="mb-4">
-          <NavLink
-            href="/dashboard"
-            label="Dashboard"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z" />
-              </svg>
-            }
-          />
 
           <NavLink
             href="/leaderboard"
@@ -179,29 +160,26 @@ export default function Sidebar({
             }
           />
 
-        </div>
 
         {role === 'admin' && (
-          <div className="mb-4">
+          <div className="mt-4 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
             {!isCollapsed && (
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-2">
-                Administration
-              </h3>
+              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-500">
+                Admin
+              </p>
             )}
-
             <NavLink
               href="/users"
               label="Users"
               isCollapsed={isCollapsed}
               icon={
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                 </svg>
               }
             />
           </div>
         )}
-      </nav>
     </aside>
   );
 }

@@ -23,7 +23,7 @@ export default function Select({
   options,
   placeholder,
   label,
-  labelClassName = 'block text-sm font-medium mb-2 text-gray-700',
+  labelClassName = 'block text-sm font-medium mb-2 text-body',
   className = '',
   disabled = false,
   required = false,

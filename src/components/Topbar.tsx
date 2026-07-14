@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../auth/useAuth';
+import { useTheme } from '../theme/ThemeProvider';
 import { LogoWordmark } from './Logo';
+import ThemeToggle from './ThemeToggle';
 
 export default function Topbar() {
   const { user, logout } = useAuth();
+  const { theme } = useTheme();
   const [open, setOpen] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
-  // Reset the failed flag when the avatar URL changes (new upload).
   useEffect(() => { setImgFailed(false); }, [user?.image]);
 
   useEffect(() => {
@@ -28,22 +30,22 @@ export default function Topbar() {
     .join('');
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-soft">
-      <div className="mx-auto h-full px-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-3 group transition-transform duration-200 group-hover:scale-105"
-          >
-            <LogoWordmark />
-          </Link>
-        </div>
+    <header className="shell-surface fixed top-0 left-0 right-0 z-40 h-16 border-b">
+      <div className="flex h-full items-center justify-between gap-4 px-4 sm:px-6">
+        <Link
+          to="/dashboard"
+          className="group flex shrink-0 items-center transition-transform duration-200 hover:scale-[1.02]"
+        >
+          <LogoWordmark variant={theme === 'dark' ? 'dark' : 'light'} />
+        </Link>
 
-        <div className="flex items-center gap-4" ref={ref}>
+        <div className="flex items-center gap-2" ref={ref}>
+          <ThemeToggle />
+
           <div className="relative">
             <button
-              className="flex items-center gap-3 p-2 rounded-[8px] hover:bg-gray-100 transition-all duration-200 group"
-              onClick={() => setOpen(v => !v)}
+              className="group flex items-center gap-3 rounded-xl p-2 transition hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60"
+              onClick={() => setOpen((v) => !v)}
               aria-haspopup="menu"
               aria-expanded={open}
             >
@@ -55,23 +57,23 @@ export default function Topbar() {
                     width={36}
                     height={36}
                     onError={() => setImgFailed(true)}
-                    className="w-9 h-9 rounded-full object-cover border-2 border-gray-200 group-hover:border-primary transition-colors duration-200"
+                    className="h-9 w-9 rounded-full border-2 border-zinc-200 object-cover transition group-hover:border-zinc-300 dark:border-zinc-700 dark:group-hover:border-zinc-600"
                   />
                 ) : (
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white font-semibold text-sm shadow-medium">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-white shadow-medium dark:bg-zinc-700">
                     {initials || 'U'}
                   </div>
                 )}
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-success-500 border-2 border-white rounded-full"></div>
+                <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-zinc-100 bg-emerald-500 dark:border-zinc-950" />
               </div>
 
-              <div className="hidden md:block text-left">
-                <p className="text-sm font-medium text-gray-900">{user?.name || 'User'}</p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
+              <div className="hidden text-left md:block">
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{user?.name || 'User'}</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{user?.email}</p>
               </div>
 
               <svg
-                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+                className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -81,8 +83,8 @@ export default function Topbar() {
             </button>
 
             {open && (
-              <div className="absolute right-0 mt-2 w-64 rounded-[12px] border border-gray-100 bg-white shadow-strong overflow-hidden animate-fade-in-up z-50">
-                <div className="p-4 border-b border-gray-100 bg-gray-50">
+              <div className="panel-elevated absolute right-0 z-50 mt-2 w-64 animate-fade-in-up overflow-hidden dark:bg-zinc-900">
+                <div className="border-b border-zinc-200/80 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
                   <div className="flex items-center gap-3">
                     {user?.image && !imgFailed ? (
                       <img
@@ -91,16 +93,16 @@ export default function Topbar() {
                         width={40}
                         height={40}
                         onError={() => setImgFailed(true)}
-                        className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
+                        className="h-10 w-10 rounded-full border-2 border-zinc-200 object-cover dark:border-zinc-700"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white font-semibold">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-white dark:bg-zinc-700">
                         {initials || 'U'}
                       </div>
                     )}
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">{user?.name || 'User'}</p>
-                      <p className="text-xs text-gray-500">{user?.email}</p>
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{user?.name || 'User'}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{user?.email}</p>
                     </div>
                   </div>
                 </div>
@@ -108,25 +110,25 @@ export default function Topbar() {
                 <div className="p-2">
                   <Link
                     to="/profile"
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 transition-colors duration-200"
+                    className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     onClick={() => setOpen(false)}
                   >
-                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     Account settings
                   </Link>
 
-                  <div className="border-t border-gray-100 my-2"></div>
+                  <div className="my-2 border-t border-zinc-100 dark:border-zinc-800" />
 
                   <button
                     onClick={() => { setOpen(false); logout(); }}
-                    className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-red-50 text-sm text-red-600 transition-colors duration-200"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
-                    Sign Out
+                    Sign out
                   </button>
                 </div>
               </div>

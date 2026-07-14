@@ -28,7 +28,7 @@ export default function Tabs({ tabs, value, onChange, children, className }: Tab
 
   return (
     <div className={className}>
-      <div role="tablist" className="flex border-b border-gray-200 mb-6 gap-1 overflow-x-auto">
+      <div role="tablist" className="tab-nav mb-6 overflow-x-auto">
         {visible.map((t) => {
           const active = t.key === value;
           return (
@@ -51,12 +51,7 @@ export default function Tabs({ tabs, value, onChange, children, className }: Tab
                   focusByOffset(t.key, -1);
                 }
               }}
-              className={
-                'px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ' +
-                (active
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300')
-              }
+              className={`tab-nav-link ${active ? 'tab-nav-link-active' : 'tab-nav-link-inactive'}`}
             >
               {t.label}
             </button>

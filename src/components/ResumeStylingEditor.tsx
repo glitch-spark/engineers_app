@@ -52,7 +52,7 @@ export default function ResumeStylingEditor({
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center gap-2 text-sm text-gray-500">
+      <div className="p-6 flex items-center gap-2 text-sm text-muted">
         <Loader2 className="w-4 h-4 animate-spin" /> Loading...
       </div>
     );
@@ -62,10 +62,10 @@ export default function ResumeStylingEditor({
   return (
     <div className="flex flex-col">
       {showHeader && (
-        <header className="border border-gray-100 bg-white px-6 py-4 rounded-[12px] flex items-center justify-between mb-3 shadow-sm">
+        <header className="panel px-6 py-4 flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">{account.name}</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="text-lg font-semibold text-strong">{account.name}</h2>
+            <p className="text-xs text-muted">
               Upload an HTML template. The resume LLM rewrites its text per generation while
               preserving structure and styles.
             </p>
@@ -73,7 +73,7 @@ export default function ResumeStylingEditor({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50"
+            className="btn disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save
@@ -81,7 +81,7 @@ export default function ResumeStylingEditor({
         </header>
       )}
 
-      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm p-6 space-y-4">
+      <div className="panel p-6 space-y-4">
         <HtmlTemplatePane
           html={templateHtml}
           name={templateName}
@@ -99,7 +99,7 @@ export default function ResumeStylingEditor({
             <button
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-[8px] bg-primary text-white font-medium shadow-sm hover:bg-primary-dark disabled:opacity-50"
+              className="btn disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save template
@@ -137,7 +137,7 @@ function HtmlTemplatePane({
   return (
     <div className="space-y-3">
       <label
-        className="block border-2 border-dashed border-gray-200 rounded-[8px] p-6 text-center cursor-pointer hover:border-primary hover:bg-blue-50/30 transition"
+        className="block border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl p-6 text-center cursor-pointer hover:border-primary hover:bg-sky-50/40 dark:hover:bg-sky-950/20 transition"
         onDragOver={(e) => { e.preventDefault(); }}
         onDrop={(e) => {
           e.preventDefault();
@@ -155,16 +155,16 @@ function HtmlTemplatePane({
             e.target.value = '';
           }}
         />
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-muted">
           Drop your <code>.html</code> file here, or click to choose
         </div>
       </label>
 
       {html ? (
-        <div className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between gap-3">
-          <div className="text-sm text-gray-700 truncate">
+        <div className="panel p-3 flex items-center justify-between gap-3">
+          <div className="text-sm text-body truncate">
             <span className="font-medium">{name || 'template.html'}</span>
-            <span className="text-xs text-gray-400 ml-2">
+            <span className="text-xs text-faint ml-2">
               {(new Blob([html]).size / 1024).toFixed(1)} KB
             </span>
           </div>
@@ -180,7 +180,7 @@ function HtmlTemplatePane({
                 if (w) w.addEventListener('beforeunload', () => URL.revokeObjectURL(url));
                 else URL.revokeObjectURL(url);
               }}
-              className="text-xs text-primary hover:underline"
+              className="link text-xs"
               title="Open the uploaded HTML in a new tab"
             >
               Preview
@@ -195,7 +195,7 @@ function HtmlTemplatePane({
           </div>
         </div>
       ) : (
-        <div className="text-xs text-gray-400 italic">No template uploaded yet.</div>
+        <div className="text-xs text-faint italic">No template uploaded yet.</div>
       )}
     </div>
   );

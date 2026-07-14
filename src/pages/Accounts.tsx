@@ -73,11 +73,11 @@ export default function AccountsPage() {
         action={<button className="btn" onClick={() => navigate('/accounts/new')}>Add</button>}
       />
 
-      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+      <div className="flex items-end gap-3 flex-wrap toolbar">
         <div className="flex-1 min-w-64 max-w-md">
-          <label className="block text-xs text-gray-500 mb-1">Search</label>
+          <label className="block text-xs text-muted mb-1">Search</label>
           <div className="relative">
-            <svg className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4 text-faint absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
@@ -90,7 +90,7 @@ export default function AccountsPage() {
             {searchTerm && (
               <button
                 onClick={clearSearch}
-                className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600"
+                className="absolute inset-y-0 right-2 flex items-center text-faint hover:text-muted"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -102,7 +102,7 @@ export default function AccountsPage() {
 
         {isAdmin && (
           <div className="w-56">
-            <label className="block text-xs text-gray-500 mb-1">User</label>
+            <label className="block text-xs text-muted mb-1">User</label>
             <select
               className="select focus-ring w-full text-sm"
               value={userId}
@@ -119,7 +119,7 @@ export default function AccountsPage() {
         )}
 
         <div className="w-28">
-          <label className="block text-xs text-gray-500 mb-1">Show</label>
+          <label className="block text-xs text-muted mb-1">Show</label>
           <select
             value={pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
@@ -134,7 +134,7 @@ export default function AccountsPage() {
       </div>
 
       {debouncedSearch && (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-muted">
           {pagination ? (
             <>
               Found {pagination.total} result{pagination.total !== 1 ? 's' : ''} for "{debouncedSearch}"
@@ -151,9 +151,9 @@ export default function AccountsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="table-wrap">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
+          <thead className="table-head">
             <tr>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Owner</th>
@@ -163,23 +163,23 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={3} className="px-4 py-8 text-center text-muted">
                   <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                    <div className="spinner spinner-md mr-3"></div>
                     Loading profiles...
                   </div>
                 </td>
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={3} className="px-3 py-6 text-center text-muted">
                   {debouncedSearch ? `No profiles found matching "${debouncedSearch}"` : 'No profiles found.'}
                 </td>
               </tr>
             ) : accounts.map((a) => (
               <tr
                 key={a._id}
-                className="border-t hover:bg-gray-50 cursor-pointer"
+                className="table-row cursor-pointer"
                 onClick={() => navigate(`/accounts/${a._id}`)}
               >
                 <td className="px-3 py-2">{a.name}</td>
@@ -195,7 +195,7 @@ export default function AccountsPage() {
 
       {pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted">
             {!debouncedSearch && (
               <>
                 Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
@@ -209,7 +209,7 @@ export default function AccountsPage() {
             <button
               onClick={() => setCurrentPage(pagination.page - 1)}
               disabled={!pagination.hasPrev}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               Previous
             </button>
@@ -229,7 +229,7 @@ export default function AccountsPage() {
                     className={`px-3 py-1 border rounded text-sm ${
                       pageNum === pagination.page
                         ? 'bg-blue-500 text-white border-blue-500'
-                        : 'hover:bg-gray-50'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
                     }`}
                   >
                     {pageNum}
@@ -241,7 +241,7 @@ export default function AccountsPage() {
             <button
               onClick={() => setCurrentPage(pagination.page + 1)}
               disabled={!pagination.hasNext}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
             >
               Next
             </button>
