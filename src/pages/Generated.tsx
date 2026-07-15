@@ -591,14 +591,14 @@ function JobRow({
 }
 
 function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  async function copyText(key: string, text: string, label: string) {
+  async function copyAnswer(index: number, answer: string) {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopiedKey(key);
-      notify.success(`${label} copied`);
-      window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+      await navigator.clipboard.writeText(answer);
+      setCopiedIndex(index);
+      notify.success('Answer copied');
+      window.setTimeout(() => setCopiedIndex((i) => (i === index ? null : i)), 1200);
     } catch {
       notify.error('Failed to copy');
     }
@@ -608,40 +608,28 @@ function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
     <ol className="space-y-3">
       {pairs.map((p, i) => {
         const answer = unwrapScreeningAnswer(p.answer);
-        const qKey = `q-${i}`;
-        const aKey = `a-${i}`;
+        const copied = copiedIndex === i;
         return (
-        <li key={i} className="panel overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-800">
-          <button
-            type="button"
-            onClick={() => copyText(qKey, p.question, 'Question')}
-            className="group w-full text-left px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
-            title="Click to copy question"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-medium text-strong whitespace-pre-wrap">
+          <li key={i}>
+            <button
+              type="button"
+              onClick={() => copyAnswer(i, answer)}
+              className={
+                'panel w-full text-left p-3 cursor-pointer transition-colors ' +
+                'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ' +
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ' +
+                (copied ? 'ring-1 ring-green-400/60 dark:ring-green-600/50' : '')
+              }
+              title="Click to copy answer"
+              aria-label={`Copy answer ${i + 1}`}
+            >
+              <p className="text-sm font-medium text-strong whitespace-pre-wrap mb-1.5">
                 <span className="text-faint mr-2">{i + 1}.</span>
                 {p.question}
               </p>
-              <span className="text-xs text-faint flex-shrink-0 pt-0.5 group-hover:text-muted">
-                {copiedKey === qKey ? 'Copied!' : 'Copy question'}
-              </span>
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => copyText(aKey, answer, 'Answer')}
-            className="group w-full text-left px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
-            title="Click to copy answer"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm text-body whitespace-pre-wrap leading-relaxed flex-1">{answer}</p>
-              <span className="text-xs text-faint flex-shrink-0 pt-0.5 group-hover:text-muted">
-                {copiedKey === aKey ? 'Copied!' : 'Copy answer'}
-              </span>
-            </div>
-          </button>
-        </li>
+              <p className="text-sm text-body whitespace-pre-wrap leading-relaxed">{answer}</p>
+            </button>
+          </li>
         );
       })}
     </ol>
