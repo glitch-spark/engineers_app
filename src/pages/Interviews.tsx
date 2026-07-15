@@ -35,10 +35,6 @@ const editorStyles = `
   .prose p { margin-bottom: 0.75em; line-height: 1.6; }
   .prose ul, .prose ol { margin-bottom: 0.75em; padding-left: 1.5em; }
   .prose strong { font-weight: 600; } .prose em { font-style: italic; } .prose u { text-decoration: underline; }
-  .prose a { color: #2563eb; text-decoration: underline; }
-
-  /* Read-modal prose blocks: word-wrap, scroll vertically only, min 2 / max 5 lines.
-     line-height 1.5 * font-size 14px = 21px per line; padding adds ~16px each side. */
   .prose-readonly {
     font-size: 14px;
     line-height: 1.5;
@@ -53,6 +49,9 @@ const editorStyles = `
     word-wrap: break-word;
     word-break: break-word;
   }
+  html.dark .prose-readonly { border-color: #3f3f46; }
+  .prose a { color: #2563eb; text-decoration: underline; }
+  html.dark .prose a, html.dark .prose-readonly a { color: #38bdf8; }
   .prose-readonly p { margin: 0 0 0.5em 0; }
   .prose-readonly p:last-child { margin-bottom: 0; }
   .prose-readonly h1, .prose-readonly h2, .prose-readonly h3 { font-weight: 600; margin: 0.5em 0 0.25em; }
