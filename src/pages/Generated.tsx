@@ -591,27 +591,56 @@ function JobRow({
 }
 
 function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  async function copyText(key: string, text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      notify.success(`${label} copied`);
+      window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+    } catch {
+      notify.error('Failed to copy');
+    }
+  }
+
   return (
     <ol className="space-y-3">
       {pairs.map((p, i) => {
         const answer = unwrapScreeningAnswer(p.answer);
+        const qKey = `q-${i}`;
+        const aKey = `a-${i}`;
         return (
-        <li key={i} className="panel p-3">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <p className="text-sm font-medium text-strong whitespace-pre-wrap">
-              <span className="text-faint mr-2">{i + 1}.</span>
-              {p.question}
-            </p>
-            <button
-              type="button"
-              onClick={() => navigator.clipboard.writeText(answer).then(() => notify.success('Answer copied'))}
-              className="link-inline text-xs text-muted flex-shrink-0"
-            >
-              <Copy className="w-3 h-3" />
-              Copy
-            </button>
-          </div>
-          <p className="text-sm text-body whitespace-pre-wrap leading-relaxed">{answer}</p>
+        <li key={i} className="panel overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          <button
+            type="button"
+            onClick={() => copyText(qKey, p.question, 'Question')}
+            className="group w-full text-left px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+            title="Click to copy question"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-medium text-strong whitespace-pre-wrap">
+                <span className="text-faint mr-2">{i + 1}.</span>
+                {p.question}
+              </p>
+              <span className="text-xs text-faint flex-shrink-0 pt-0.5 group-hover:text-muted">
+                {copiedKey === qKey ? 'Copied!' : 'Copy question'}
+              </span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => copyText(aKey, answer, 'Answer')}
+            className="group w-full text-left px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+            title="Click to copy answer"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm text-body whitespace-pre-wrap leading-relaxed flex-1">{answer}</p>
+              <span className="text-xs text-faint flex-shrink-0 pt-0.5 group-hover:text-muted">
+                {copiedKey === aKey ? 'Copied!' : 'Copy answer'}
+              </span>
+            </div>
+          </button>
         </li>
         );
       })}

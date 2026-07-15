@@ -29,10 +29,15 @@ export default function ResumeGeneratorPage() {
     () => api.lookupAccounts()
   );
 
-  const accounts = useMemo(() => {
+  const ownedAccounts = useMemo(() => {
     const all = accountsData?.accounts ?? [];
     return all.filter((a) => a.createdBy && user?.id && a.createdBy === user.id);
   }, [accountsData, user?.id]);
+
+  const accounts = useMemo(
+    () => ownedAccounts.filter((a) => a.showInGenerate !== false),
+    [ownedAccounts],
+  );
 
   const [accountIds, setAccountIds] = useState<string[]>(loadInitialSelection);
 
@@ -181,10 +186,16 @@ export default function ResumeGeneratorPage() {
       <div className="panel p-4">
         {accountsLoading ? (
           <p className="text-sm text-muted">Loading profiles...</p>
-        ) : accounts.length === 0 ? (
+        ) : ownedAccounts.length === 0 ? (
           <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 dark:text-amber-300 dark:bg-amber-950/30 dark:border-amber-800">
             You don't own any profiles yet.{' '}
             <Link to="/accounts" className="font-medium underline">Create one</Link> to start generating.
+          </p>
+        ) : accounts.length === 0 ? (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 dark:text-amber-300 dark:bg-amber-950/30 dark:border-amber-800">
+            No profiles are enabled for generation.{' '}
+            <Link to="/accounts" className="font-medium underline">Open Profiles</Link>{' '}
+            and check <span className="font-medium">Generate</span> for the ones you want to use here.
           </p>
         ) : (
           <div>
