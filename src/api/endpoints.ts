@@ -293,6 +293,7 @@ export interface AccountLookup {
   hasTemplate?: boolean;
   hasPrompt?: boolean;
   createdBy?: string;
+  showInGenerate?: boolean;
 }
 
 export const lookupAccounts = () =>

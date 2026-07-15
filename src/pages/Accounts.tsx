@@ -14,6 +14,7 @@ type Acc = {
   title?: string;
   ownerName?: string;
   ownerImage?: string | null;
+  showInGenerate?: boolean;
 };
 
 export default function AccountsPage() {
@@ -61,6 +62,17 @@ export default function AccountsPage() {
   const clearSearch = () => {
     setSearchTerm('');
     setDebouncedSearch('');
+  };
+
+  const toggleShowInGenerate = async (acc: Acc) => {
+    const next = acc.showInGenerate === false;
+    try {
+      await api.updateAccount(acc._id, { showInGenerate: next });
+      notify.success(next ? `"${acc.name}" will appear in Generate` : `"${acc.name}" hidden from Generate`);
+      mutate();
+    } catch (err) {
+      notify.error(err, 'Failed to update profile');
+    }
   };
 
   const accounts = (data?.accounts as Acc[]) || [];
@@ -157,13 +169,16 @@ export default function AccountsPage() {
             <tr>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Owner</th>
+              <th className="px-3 py-2 w-24 text-center" title="Include in Resume Generator profile picker">
+                Generate
+              </th>
               <th className="px-3 py-2 w-20">Actions</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-muted">
+                <td colSpan={4} className="px-4 py-8 text-center text-muted">
                   <div className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3"></div>
                     Loading profiles...
@@ -172,7 +187,7 @@ export default function AccountsPage() {
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-3 py-6 text-center text-muted">
+                <td colSpan={4} className="px-3 py-6 text-center text-muted">
                   {debouncedSearch ? `No profiles found matching "${debouncedSearch}"` : 'No profiles found.'}
                 </td>
               </tr>
@@ -184,6 +199,16 @@ export default function AccountsPage() {
               >
                 <td className="px-3 py-2">{a.name}</td>
                 <td className="px-3 py-2"><NameWithAvatar name={a.ownerName} imageUrl={a.ownerImage} /></td>
+                <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={a.showInGenerate !== false}
+                    onChange={() => toggleShowInGenerate(a)}
+                    title="Show this profile in Resume Generator"
+                    aria-label={`Show ${a.name} in Resume Generator`}
+                    className="h-4 w-4"
+                  />
+                </td>
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                   <button className="btn-icon" onClick={() => remove(a)} title="Delete"><Trash2 size={16} /></button>
                 </td>
