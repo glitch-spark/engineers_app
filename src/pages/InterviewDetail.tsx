@@ -19,12 +19,12 @@ const STATUSES: Record<string, string> = {
 
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
-    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
     case 'completed': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
-    case 'passed': return 'bg-green-100 text-green-800 border-green-200';
-    case 'failed': return 'bg-red-100 text-red-800 border-red-200';
-    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
-    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'passed': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800';
+    case 'failed': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
+    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800';
+    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-300 dark:border-yellow-800';
     case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600';
     default: return 'bg-zinc-50 dark:bg-zinc-900/80 text-muted border-zinc-200 dark:border-zinc-700';
   }
@@ -41,12 +41,18 @@ const proseStyles = `
     overflow-wrap: break-word;
     word-break: break-word;
   }
+  html.dark .prose-block {
+    border-color: #3f3f46;
+    background: #09090b;
+    color: #e4e4e7;
+  }
   .prose-block p { margin: 0 0 0.5em 0; }
   .prose-block p:last-child { margin-bottom: 0; }
   .prose-block h1, .prose-block h2, .prose-block h3 { font-weight: 600; margin: 0.5em 0 0.25em; }
   .prose-block h1 { font-size: 1.25em; } .prose-block h2 { font-size: 1.15em; } .prose-block h3 { font-size: 1.05em; }
   .prose-block ul, .prose-block ol { margin: 0 0 0.5em 0; padding-left: 1.25em; }
   .prose-block a { color: #2563eb; text-decoration: underline; }
+  html.dark .prose-block a { color: #38bdf8; }
   .prose-block img { max-width: 100%; height: auto; }
   .prose-block pre, .prose-block code { white-space: pre-wrap; word-break: break-all; }
 `;
@@ -346,7 +352,7 @@ function ExtractedQuestions({ interviewId, hasTranscript }: { interviewId: strin
                 </p>
               )}
               {q.improvementTip && (
-                <p className="text-xs text-blue-700">
+                <p className="text-xs text-blue-700 dark:text-blue-400">
                   <strong>Tip:</strong> {q.improvementTip}
                 </p>
               )}
@@ -359,8 +365,8 @@ function ExtractedQuestions({ interviewId, hasTranscript }: { interviewId: strin
 }
 
 function scoreTextColor(n: number): string {
-  if (n >= 8) return 'text-green-700';
-  if (n >= 6) return 'text-blue-700';
-  if (n >= 4) return 'text-amber-700';
-  return 'text-red-700';
+  if (n >= 8) return 'text-green-700 dark:text-green-400';
+  if (n >= 6) return 'text-blue-700 dark:text-blue-400';
+  if (n >= 4) return 'text-amber-700 dark:text-amber-400';
+  return 'text-red-700 dark:text-red-400';
 }

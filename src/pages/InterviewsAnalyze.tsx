@@ -227,7 +227,7 @@ function WeakSpots({ weakSpots }: { weakSpots: InterviewAnalyzeWeakSpot[] }) {
       </header>
       <ul className="space-y-3">
         {weakSpots.map((w, i) => (
-          <li key={i} className="border border-amber-100 rounded-md p-3 bg-amber-50/40">
+          <li key={i} className="border border-amber-100 rounded-md p-3 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/30">
             <div className="flex items-center gap-2 mb-1">
               <span className="badge bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700">
                 {w.stage}
@@ -306,7 +306,7 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {signatureStrengths.length > 0 && (
           <div>
-            <div className="text-xs font-semibold text-green-700 mb-1.5 flex items-center gap-1">
+            <div className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1.5 flex items-center gap-1">
               <Star size={12} /> Signature strengths
             </div>
             <ul className="space-y-1 list-disc pl-5 text-sm text-body">
@@ -316,7 +316,7 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
         )}
         {blindSpots.length > 0 && (
           <div>
-            <div className="text-xs font-semibold text-red-700 mb-1.5 flex items-center gap-1">
+            <div className="text-xs font-semibold text-red-700 dark:text-red-400 mb-1.5 flex items-center gap-1">
               <AlertTriangle size={12} /> Blind spots
             </div>
             <ul className="space-y-1 list-disc pl-5 text-sm text-body">
@@ -390,7 +390,7 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
               )}
               {s.youShineOn.length > 0 && (
                 <div>
-                  <div className="text-xs font-medium text-green-700 mb-1">You shine on</div>
+                  <div className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">You shine on</div>
                   <ul className="space-y-1 list-disc pl-5 text-body">
                     {s.youShineOn.map((e, i) => (
                       <li key={i}>
@@ -403,13 +403,13 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
               )}
               {s.youStumbleOn.length > 0 && (
                 <div>
-                  <div className="text-xs font-medium text-red-700 mb-1">You stumble on</div>
+                  <div className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">You stumble on</div>
                   <ul className="space-y-1 list-disc pl-5 text-body">
                     {s.youStumbleOn.map((e, i) => (
                       <li key={i}>
                         {e.topic}
                         {e.failureMode && (
-                          <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-100">
+                          <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-100 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50">
                             {e.failureMode}
                           </span>
                         )}
@@ -468,7 +468,7 @@ function RedFlagsCard({
         )}
         {uncertaintyTopics.length > 0 && (
           <div>
-            <div className="text-xs font-medium text-amber-700 mb-1.5">Uncertainty (from your AI follow-ups)</div>
+            <div className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1.5">Uncertainty (from your AI follow-ups)</div>
             <ul className="space-y-1 list-disc pl-5 text-sm text-body">
               {uncertaintyTopics.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
@@ -489,7 +489,7 @@ function filterSig(args: { accountId: string; stage: string; from: string; to: s
 
 function MdBlock({ text }: { text: string }) {
   const html = marked.parse(text || '', { async: false }) as string;
-  return <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function FollowUpChat({
@@ -684,8 +684,8 @@ function scoreColor(n: number): string {
 }
 
 function scoreTextColor(n: number): string {
-  if (n >= 8) return 'text-green-700';
-  if (n >= 6) return 'text-blue-700';
-  if (n >= 4) return 'text-amber-700';
-  return 'text-red-700';
+  if (n >= 8) return 'text-green-700 dark:text-green-400';
+  if (n >= 6) return 'text-blue-700 dark:text-blue-400';
+  if (n >= 4) return 'text-amber-700 dark:text-amber-400';
+  return 'text-red-700 dark:text-red-400';
 }

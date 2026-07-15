@@ -53,6 +53,11 @@ const reviewStyles = `
   .review-md code { background: #f3f4f6; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.9em; }
   .review-md blockquote { border-left: 3px solid #d1d5db; padding-left: 0.75em; color: #4b5563; margin: 0.5em 0; }
   .review-md a { color: #2563eb; text-decoration: underline; }
+  html.dark .review-md th, html.dark .review-md td { border-color: #3f3f46; }
+  html.dark .review-md th { background: #18181b; }
+  html.dark .review-md code { background: #27272a; color: #e4e4e7; }
+  html.dark .review-md blockquote { border-left-color: #52525b; color: #a1a1aa; }
+  html.dark .review-md a { color: #38bdf8; }
 `;
 
 function MdBlock({ text }: { text: string }) {

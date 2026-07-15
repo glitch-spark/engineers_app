@@ -2,7 +2,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 const STYLES = `
-  :root { color-scheme: light; }
+  :root { color-scheme: light dark; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     line-height: 1.6;
@@ -34,6 +34,19 @@ const STYLES = `
   table { border-collapse: collapse; margin: 1rem 0; }
   th, td { border: 1px solid #e5e7eb; padding: 0.5rem 0.75rem; }
   th { background: #f9fafb; font-weight: 600; text-align: left; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #fafafa; background: #09090b; }
+    header { border-bottom-color: #3f3f46; }
+    header h1 { color: #a1a1aa; }
+    main { background: #18181b; border-color: #3f3f46; }
+    a { color: #38bdf8; }
+    a:hover { color: #7dd3fc; }
+    blockquote { border-left-color: #52525b; color: #a1a1aa; }
+    code, pre { background: #27272a; }
+    hr { border-top-color: #3f3f46; }
+    th, td { border-color: #3f3f46; }
+    th { background: #27272a; }
+  }
 `;
 
 function escapeHtml(s: string): string {

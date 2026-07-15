@@ -143,15 +143,15 @@ export default function IntegrationsPage() {
     <div className="space-y-6">
       <PageHeader title="Integrations" />
 
-      <section className="bg-white border border-gray-200 rounded-[8px] p-6">
+      <section className="panel p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-start gap-3 min-w-[260px]">
-            <div className="p-2 rounded-md bg-red-50">
-              <Mail className="w-5 h-5 text-red-500" />
+            <div className="p-2 rounded-md bg-red-50 dark:bg-red-950/40">
+              <Mail className="w-5 h-5 text-red-500 dark:text-red-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Email (Gmail · Outlook)</h2>
-              <p className="text-sm text-gray-600 mt-1 max-w-xl">
+              <h2 className="text-lg font-semibold text-strong">Email (Gmail · Outlook)</h2>
+              <p className="text-sm text-muted mt-1 max-w-xl">
                 Connect your inbox so application emails — recruiter reach-outs, interview invites, offers,
                 rejections — auto-flow into the Pipeline board. First sync pulls the last 7 days; after that
                 you click "Sync now" to fetch new mail.
@@ -180,24 +180,24 @@ export default function IntegrationsPage() {
           </div>
         </div>
 
-        <div className="mt-6 border-t border-gray-100 pt-4">
+        <div className="mt-6 border-t border-zinc-200 dark:border-zinc-800 pt-4">
           {isLoading ? (
-            <div className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+            <div className="text-sm text-muted flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
           ) : accounts.length === 0 ? (
-            <p className="text-sm text-gray-500">No accounts connected yet.</p>
+            <p className="text-sm text-muted">No accounts connected yet.</p>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {accounts.map((a) => (
                 <li key={a.id} className="py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900 truncate">{a.email}</span>
+                      <span className="text-sm font-medium text-strong truncate">{a.email}</span>
                       <span className={`px-1.5 py-0.5 text-[10px] uppercase tracking-wide rounded ${
-                        a.provider === 'outlook' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                        a.provider === 'outlook' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
                       }`}>{a.provider}</span>
                       <StatusBadge status={a.syncStatus} error={a.lastSyncError} />
                     </div>
-                    <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                    <div className="text-xs text-muted mt-0.5 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       Last sync: {formatTime(a.lastSyncAt)}
                       {a.lastSyncError && (
@@ -212,7 +212,7 @@ export default function IntegrationsPage() {
                       type="button"
                       onClick={() => onSync(a.id)}
                       disabled={syncingId === a.id || a.syncStatus === 'running'}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-[6px] border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                      className="btn-outline btn-sm"
                     >
                       {syncingId === a.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -224,7 +224,7 @@ export default function IntegrationsPage() {
                     <button
                       type="button"
                       onClick={() => onReset(a.id, a.email)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-[6px] border border-gray-200 text-gray-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-zinc-200 text-body hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 dark:border-zinc-700 dark:hover:bg-amber-950/40 dark:hover:text-amber-300 dark:hover:border-amber-800"
                       title="Unstick a stuck sync, optionally clear the history cursor"
                     >
                       Reset
@@ -232,7 +232,7 @@ export default function IntegrationsPage() {
                     <button
                       type="button"
                       onClick={() => onDisconnect(a.id, a.email)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-[6px] border border-gray-200 text-gray-700 hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-zinc-200 text-body hover:bg-red-50 hover:text-red-700 hover:border-red-200 dark:border-zinc-700 dark:hover:bg-red-950/40 dark:hover:text-red-300 dark:hover:border-red-800"
                     >
                       <Unplug className="w-3.5 h-3.5" />
                       Disconnect
@@ -245,8 +245,8 @@ export default function IntegrationsPage() {
         </div>
       </section>
 
-      <section className="bg-gray-50 border border-gray-200 rounded-[8px] p-4 text-sm text-gray-600">
-        <p className="font-medium text-gray-800 mb-1">How it works</p>
+      <section className="panel p-4 text-sm text-body">
+        <p className="font-medium text-strong mb-1">How it works</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Only headers + snippets are stored. Email bodies are fetched on demand and never persisted.</li>
           <li>High-confidence labels (≥80%) auto-advance the matching Application stage.</li>
@@ -261,18 +261,18 @@ export default function IntegrationsPage() {
 function StatusBadge({ status, error }: { status: 'idle' | 'running' | 'error'; error?: string | null }) {
   if (status === 'running')
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
         <Loader2 className="w-3 h-3 animate-spin" /> syncing
       </span>
     );
   if (status === 'error' || error)
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-50 text-red-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300">
         <AlertCircle className="w-3 h-3" /> error
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
       <CheckCircle2 className="w-3 h-3" /> connected
     </span>
   );

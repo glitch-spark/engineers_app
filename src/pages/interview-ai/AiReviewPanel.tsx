@@ -138,7 +138,7 @@ export default function AiReviewPanel({ selectedIds }: Props) {
       <div className="space-y-5">
         {/* Selection summary */}
         <div className="flex items-center gap-2 text-sm">
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-primary font-medium">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-primary font-medium dark:bg-blue-950/40 dark:text-sky-400">
             {selCount} interview{selCount === 1 ? '' : 's'} selected
           </span>
           {selCount === 0 && (
@@ -233,7 +233,7 @@ export default function AiReviewPanel({ selectedIds }: Props) {
           >
             {output ? (
               <div
-                className="prose prose-sm max-w-none"
+                className="prose prose-sm max-w-none dark:prose-invert"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }}
               />
             ) : (

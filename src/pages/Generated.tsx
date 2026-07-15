@@ -28,9 +28,9 @@ const STEP_LABEL: Record<ResumeJobStep, string> = {
 
 const STATUS_BADGE: Record<ResumeJobStatus, string> = {
   queued: 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700',
-  in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
-  completed: 'bg-green-100 text-green-800 border-green-200',
-  failed: 'bg-red-100 text-red-800 border-red-200',
+  in_progress: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
+  completed: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800',
+  failed: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800',
 };
 
 const STATUS_LABEL: Record<ResumeJobStatus, string> = {

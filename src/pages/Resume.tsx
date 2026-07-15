@@ -182,7 +182,7 @@ export default function ResumeGeneratorPage() {
         {accountsLoading ? (
           <p className="text-sm text-muted">Loading profiles...</p>
         ) : accounts.length === 0 ? (
-          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 dark:text-amber-300 dark:bg-amber-950/30 dark:border-amber-800">
             You don't own any profiles yet.{' '}
             <Link to="/accounts" className="font-medium underline">Create one</Link> to start generating.
           </p>
@@ -233,13 +233,13 @@ export default function ResumeGeneratorPage() {
                       />
                       <span className="flex-1 text-sm text-strong leading-none">{a.name}</span>
                       {disabled && (
-                        <span className="text-xs text-amber-700 flex items-center gap-1">
+                        <span className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
                           <AlertTriangle size={12} /> No template —{' '}
                           <Link to={`/accounts/${a._id}`} className="underline">upload</Link>
                         </span>
                       )}
                       {!disabled && checked && promptMissing && (
-                        <span className="text-xs text-amber-700 flex items-center gap-1" title="No profile prompt and no global prompt set">
+                        <span className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1" title="No profile prompt and no global prompt set">
                           <AlertTriangle size={12} /> No prompt
                         </span>
                       )}
@@ -252,7 +252,7 @@ export default function ResumeGeneratorPage() {
           </div>
         )}
         {missingPromptCount > 0 && (
-          <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
+          <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3 dark:text-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
             <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <div>
               {missingPromptCount} selected profile{missingPromptCount === 1 ? '' : 's'} have no
