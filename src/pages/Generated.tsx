@@ -593,7 +593,9 @@ function JobRow({
 function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
   return (
     <ol className="space-y-3">
-      {pairs.map((p, i) => (
+      {pairs.map((p, i) => {
+        const answer = unwrapScreeningAnswer(p.answer);
+        return (
         <li key={i} className="panel p-3">
           <div className="flex items-start justify-between gap-2 mb-1">
             <p className="text-sm font-medium text-strong whitespace-pre-wrap">
@@ -602,18 +604,60 @@ function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
             </p>
             <button
               type="button"
-              onClick={() => navigator.clipboard.writeText(p.answer).then(() => notify.success('Answer copied'))}
+              onClick={() => navigator.clipboard.writeText(answer).then(() => notify.success('Answer copied'))}
               className="link-inline text-xs text-muted flex-shrink-0"
             >
               <Copy className="w-3 h-3" />
               Copy
             </button>
           </div>
-          <p className="text-sm text-body whitespace-pre-wrap leading-relaxed">{p.answer}</p>
+          <p className="text-sm text-body whitespace-pre-wrap leading-relaxed">{answer}</p>
         </li>
-      ))}
+        );
+      })}
     </ol>
   );
+}
+
+/** Unwrap legacy/bad stores where the answer is a stringified object with an `answer` field. */
+function unwrapScreeningAnswer(raw: string): string {
+  const text = (raw || '').trim();
+  if (!text) return '';
+  if (!(text.startsWith('{') && text.endsWith('}'))) return text;
+
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object' && typeof parsed.answer === 'string') {
+      return parsed.answer;
+    }
+  } catch {
+    /* continue — often Python-style single-quoted dicts */
+  }
+
+  const keyMatch = text.match(/['"]answer['"]\s*:\s*/);
+  if (!keyMatch || keyMatch.index == null) return text;
+  const rest = text.slice(keyMatch.index + keyMatch[0].length);
+  const quote = rest[0];
+  if (quote !== "'" && quote !== '"') return text;
+
+  let i = 1;
+  let out = '';
+  while (i < rest.length) {
+    const ch = rest[i];
+    if (ch === '\\' && i + 1 < rest.length) {
+      const next = rest[i + 1];
+      out += next === 'n' ? '\n' : next;
+      i += 2;
+      continue;
+    }
+    if (ch === quote) {
+      const after = rest.slice(i + 1).trimStart();
+      if (after.startsWith(',') || after.startsWith('}')) return out;
+    }
+    out += ch;
+    i += 1;
+  }
+  return text;
 }
 
 function ScreeningPanel({
