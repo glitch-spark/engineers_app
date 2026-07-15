@@ -20,7 +20,7 @@ const BOARD_COLUMNS = [
   {
     key: 'applied',
     label: 'Applied',
-    tone: 'border-gray-300',
+    tone: 'border-zinc-300 dark:border-zinc-600',
     layout: 'list',
     columnClass: 'w-64 shrink-0',
   },
@@ -265,16 +265,16 @@ export default function PipelinePage() {
       />
 
       {pendingCount > 0 && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-[12px] px-4 py-2.5 text-sm flex items-center gap-2">
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-2.5 text-sm flex items-center gap-2 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300">
           <Sparkles className="w-4 h-4 shrink-0" />
           <span><strong>{pendingCount}</strong> AI-suggested {pendingCount === 1 ? 'card' : 'cards'} awaiting your confirmation — review the dashed cards and keep (✓) or remove (✕) each.</span>
         </div>
       )}
 
       {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+      <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
         <div className="w-64">
-          <label className="block text-xs text-gray-500 mb-1">Search company</label>
+          <label className="block text-xs text-muted mb-1">Search company</label>
           <input
             className="input w-full text-sm"
             value={search}
@@ -283,7 +283,7 @@ export default function PipelinePage() {
           />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-gray-500 mb-1">Outcome</label>
+          <label className="block text-xs text-muted mb-1">Outcome</label>
           <select className="select focus-ring w-full text-sm" value={outcome} onChange={(e) => setOutcome(e.target.value)}>
             <option value="">All</option>
             <option value="active">Active</option>
@@ -295,14 +295,14 @@ export default function PipelinePage() {
         </div>
         {isAdmin && (
           <div className="w-56">
-            <label className="block text-xs text-gray-500 mb-1">User</label>
+            <label className="block text-xs text-muted mb-1">User</label>
             <select className="select focus-ring w-full text-sm" value={adminUserId} onChange={(e) => setAdminUserId(e.target.value)}>
               <option value="">All users</option>
               {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
             </select>
           </div>
         )}
-        <label className="inline-flex items-center gap-2 text-xs text-gray-600 pb-2">
+        <label className="inline-flex items-center gap-2 text-xs text-muted pb-2">
           <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
           Show archived
         </label>
@@ -310,11 +310,11 @@ export default function PipelinePage() {
 
       {/* Board */}
       {isLoading && !data ? (
-        <div className="bg-white rounded-[12px] border border-gray-100 p-6 flex items-center gap-2 text-sm text-gray-500 shadow-sm">
+        <div className="panel p-6 flex items-center gap-2 text-sm text-muted">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading pipeline…
         </div>
       ) : apps.length === 0 ? (
-        <div className="bg-white rounded-[12px] border border-gray-100 p-8 text-center text-sm text-gray-500 shadow-sm">
+        <div className="panel p-8 text-center text-sm text-muted">
           No applications yet. Connect an inbox in <Link to="/integrations" className="text-primary hover:underline">Integrations</Link> and hit <strong>Sync inbox</strong>, or generate a resume to create a bid.
           {isAdmin && ' Admins can also Initialize to backfill from existing interviews.'}
         </div>
@@ -383,10 +383,10 @@ export default function PipelinePage() {
 function LabelChip({ label, confidence }: { label?: string | null; confidence: number }) {
   if (!label) return null;
   const tone =
-    label === 'offer' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-    : label === 'rejection' ? 'bg-rose-50 text-rose-700 border-rose-200'
-    : label === 'noise' || label === 'follow_up' ? 'bg-gray-50 text-gray-600 border-gray-200'
-    : 'bg-blue-50 text-blue-700 border-blue-200';
+    label === 'offer' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+    : label === 'rejection' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+    : label === 'noise' || label === 'follow_up' ? 'bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700'
+    : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
   return (
     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-medium ${tone}`}>
       {label.replace(/_/g, ' ')}
@@ -462,10 +462,10 @@ function Column({
     : 'p-2 space-y-2 min-h-[80px]';
 
   return (
-    <div className={`${columnClass} bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
-      <header className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 uppercase tracking-wide font-medium">
+    <div className={`${columnClass} bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border-t-4 ${tone} border-x border-b border-zinc-100 dark:border-zinc-800`}>
+      <header className="px-3 py-2 flex items-center justify-between text-xs text-muted uppercase tracking-wide font-medium">
         <span>{label}</span>
-        <span className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums">{cards.length}</span>
+        <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-0.5 text-[10px] tabular-nums">{cards.length}</span>
       </header>
       <SortableContext id={columnKey} items={ids} strategy={sortStrategy}>
         <div className={cardsClass} data-stage={columnKey} id={columnKey}>
@@ -536,9 +536,9 @@ function Card({
   return (
     <div className={'rounded-[8px] p-3 text-sm cursor-grab active:cursor-grabbing shadow-sm '
       + (grid ? 'h-full ' : '')
-      + (pending ? 'bg-amber-50 border border-dashed border-amber-300 ' : 'bg-white border border-gray-200 ')
+      + (pending ? 'bg-amber-50 dark:bg-amber-950/30 border border-dashed border-amber-300 dark:border-amber-700 ' : 'bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 ')
       + (isOverlay ? 'ring-2 ring-primary' : (pending ? 'hover:border-amber-400' : 'hover:border-primary'))}>
-      <div className="font-medium text-gray-900 truncate">
+      <div className="font-medium text-strong truncate">
         {app.companyName || 'Untitled'}
       </div>
       {showStageBadge && (
@@ -556,7 +556,7 @@ function Card({
           <ExternalLink size={10} /> JD
         </a>
       )}
-      <div className="mt-1 flex items-center justify-between text-[11px] text-gray-500">
+      <div className="mt-1 flex items-center justify-between text-[11px] text-muted">
         <span>{bidCount} bid{bidCount === 1 ? '' : 's'} · {ivCount} rounds</span>
         <span>{timeAgo(app.lastTouchedAt)}</span>
       </div>
@@ -566,7 +566,7 @@ function Card({
         </div>
       )}
       {app.archivedAt && (
-        <span className="inline-flex items-center gap-1 mt-2 text-[10px] text-gray-500">
+        <span className="inline-flex items-center gap-1 mt-2 text-[10px] text-muted">
           <Archive size={10} /> archived
         </span>
       )}
@@ -583,7 +583,7 @@ function Card({
           <button
             type="button"
             onClick={(e) => { stop(e); onReject(app); }}
-            className="inline-flex items-center justify-center gap-1 px-2 py-1 text-xs rounded-[6px] border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+            className="inline-flex items-center justify-center gap-1 px-2 py-1 text-xs rounded-[6px] border border-zinc-300 dark:border-zinc-600 text-body bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800"
             title="Remove — wrong label"
           >
             <X className="w-3.5 h-3.5" /> Remove
@@ -603,23 +603,23 @@ function TerminalList({
   isAdmin: boolean;
 }) {
   return (
-    <section className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
-      <header className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-        <h2 className="text-xs font-medium text-gray-600 uppercase tracking-wide">{title}</h2>
-        <span className="text-[10px] tabular-nums text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">
+    <section className="panel overflow-hidden">
+      <header className="px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+        <h2 className="text-xs font-medium text-muted uppercase tracking-wide">{title}</h2>
+        <span className="text-[10px] tabular-nums text-muted bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-0.5">
           {cards.length}
         </span>
       </header>
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
         {cards.map((app) => (
           <li key={app._id}>
             <button
               type="button"
               onClick={() => onCardClick(app)}
-              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center justify-between gap-3"
+              className="w-full text-left px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/60 flex items-center justify-between gap-3"
             >
               <div className="min-w-0">
-                <div className="font-medium text-sm text-gray-900 truncate">{app.companyName || 'Untitled'}</div>
+                <div className="font-medium text-sm text-strong truncate">{app.companyName || 'Untitled'}</div>
                 {isAdmin && app.ownerName && (
                   <div className="mt-1 text-[11px]">
                     <NameWithAvatar name={app.ownerName} imageUrl={app.ownerImage} />
@@ -629,7 +629,7 @@ function TerminalList({
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 <StageBadgeRow app={app} align="end" />
                 {isTerminalApp(app) && <StageBadge stage={app.stage} />}
-                <span className="text-[11px] text-gray-500 whitespace-nowrap">{timeAgo(app.lastTouchedAt)}</span>
+                <span className="text-[11px] text-muted whitespace-nowrap">{timeAgo(app.lastTouchedAt)}</span>
               </div>
             </button>
           </li>
@@ -684,12 +684,12 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
   return (
     <>
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-      <aside className="fixed top-0 right-0 bottom-0 w-full sm:w-[520px] bg-white shadow-strong border-l border-gray-100 z-50 flex flex-col">
-        <header className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-2">
+      <aside className="fixed top-0 right-0 bottom-0 w-full sm:w-[520px] bg-white dark:bg-zinc-950 shadow-strong border-l border-zinc-200 dark:border-zinc-800 z-50 flex flex-col">
+        <header className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-xs text-gray-500">Application</div>
-            <div className="font-semibold text-gray-900 truncate text-lg">{app.companyName}</div>
-            <div className="text-xs text-gray-500 mt-1 space-y-1">
+            <div className="text-xs text-muted">Application</div>
+            <div className="font-semibold text-strong truncate text-lg">{app.companyName}</div>
+            <div className="text-xs text-muted mt-1 space-y-1">
               {(getReachedInterviewStages(app).length > 0
                 || isInProgressStage(app.stage)
                 || (isTerminalApp(app) && !isInProgressStage(app.stage))) && (
@@ -702,7 +702,7 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
                 </div>
               )}
               <div>
-                Outcome: <span className="font-medium text-gray-700">{app.outcome}</span>
+                Outcome: <span className="font-medium text-body">{app.outcome}</span>
               </div>
             </div>
           </div>
@@ -728,7 +728,7 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
                   </li>
                 ))}
               </ul>
-            ) : <p className="text-xs text-gray-400 italic">No bids linked.</p>}
+            ) : <p className="text-xs text-faint italic">No bids linked.</p>}
           </section>
 
           <section>
@@ -741,7 +741,7 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
                   </li>
                 ))}
               </ul>
-            ) : <p className="text-xs text-gray-400 italic">No interviews linked.</p>}
+            ) : <p className="text-xs text-faint italic">No interviews linked.</p>}
           </section>
 
           <section>
@@ -762,25 +762,25 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
 
           <section>
             <h3 className="card-title mb-2">History</h3>
-            <ol className="space-y-1 text-xs text-gray-600">
+            <ol className="space-y-1 text-xs text-muted">
               {app.stageHistory.map((h, i) => (
                 <li key={i}>
-                  <span className="font-medium text-gray-800">{stageLabel(h.stage)}</span>
-                  <span className="text-gray-400"> · {new Date(h.at).toLocaleString()}</span>
-                  {h.source && <span className="text-gray-400"> · {h.source}</span>}
+                  <span className="font-medium text-body">{stageLabel(h.stage)}</span>
+                  <span className="text-faint"> · {new Date(h.at).toLocaleString()}</span>
+                  {h.source && <span className="text-faint"> · {h.source}</span>}
                 </li>
               ))}
             </ol>
           </section>
         </div>
 
-        <footer className="p-4 border-t border-gray-100 flex flex-wrap gap-2 justify-between">
+        <footer className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap gap-2 justify-between">
           <div className="flex gap-2">
             <button type="button" className="btn-outline" onClick={() => setOutcome('offer')}>Mark Offer</button>
             <button type="button" className="btn-outline" onClick={() => setOutcome('rejected')}>Mark Rejected</button>
             <button type="button" className="btn-outline" onClick={() => setOutcome('withdrawn')}>Withdraw</button>
           </div>
-          <button type="button" className="text-xs text-gray-500 hover:text-red-600" onClick={archive}>
+          <button type="button" className="text-xs text-muted hover:text-red-600 dark:hover:text-red-400" onClick={archive}>
             <Archive size={12} className="inline mr-1" /> Archive
           </button>
         </footer>
