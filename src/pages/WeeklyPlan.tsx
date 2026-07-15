@@ -331,7 +331,7 @@ export default function WeeklyPlanPage() {
           </select>
         </div>
         <div className="w-56">
-          <label className="block text-xs text-gray-500 mb-1">User</label>
+          <label className="block text-xs text-muted mb-1">User</label>
           <select className="select focus-ring w-full text-sm" value={userId} onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}>
             <option value="">All users</option>
             {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
@@ -356,8 +356,8 @@ export default function WeeklyPlanPage() {
 
       {/* Team progress — rollup of planned vs actual per user */}
       {rollup && rollup.users.length > 0 && (
-        <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
+        <div className="panel overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
             <h2 className="card-title uppercase tracking-wide">Team progress</h2>
             <p className="hint">Planned vs actual per user for the current filter. Run Progress Report to refresh.</p>
           </div>

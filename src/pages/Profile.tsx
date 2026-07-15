@@ -466,7 +466,7 @@ export default function ProfilePage() {
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted">Status</p>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300">
               Active
             </span>
           </div>

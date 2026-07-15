@@ -139,9 +139,9 @@ export default function UsersPage() {
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
-      case 'admin': return 'bg-red-100 text-red-800 border-red-200';
-      case 'accountant': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'staff': return 'bg-green-100 text-green-800 border-green-200';
+      case 'admin': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
+      case 'accountant': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
+      case 'staff': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800';
       default: return 'bg-zinc-100 dark:bg-zinc-800 text-strong border-zinc-200 dark:border-zinc-700';
     }
   };
@@ -323,12 +323,12 @@ export default function UsersPage() {
 
                   <td className="px-4 py-4">
                     {user.isActive === false ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-100 text-amber-800 border-amber-200">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
                         <UserX size={12} />
                         Pending approval
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-green-100 text-green-800 border-green-200">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800">
                         <UserCheck size={12} />
                         Active
                       </span>
@@ -392,7 +392,7 @@ export default function UsersPage() {
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit User' : 'Add New User'}>
         <div className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm dark:bg-red-950/40 dark:border-red-900/50 dark:text-red-400">
               {error}
             </div>
           )}
