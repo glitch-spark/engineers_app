@@ -26,7 +26,18 @@ import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
-import { INTERVIEW_STAGES, stageBadgeClass, stageLabel } from '../lib/stageBadge';
+import {
+  BOARD_FORM_STAGES,
+  INTERVIEW_STAGES,
+  TECH_SUB_STAGES,
+  getInterviewMovementTrail,
+  isTechBoardStage,
+  resolveInterviewStage,
+  stageBadgeClass,
+  stageLabel,
+  toBoardFormStage,
+  toTechSubStage,
+} from '../lib/stageBadge';
 
 const editorStyles = `
   .ql-editor { min-height: 140px; font-size: 14px; line-height: 1.5; }
@@ -72,6 +83,7 @@ const BOARD_COLUMNS = [
   { key: 'hiring_manager', label: 'Hiring Manager', tone: 'border-pink-300', columnClass: 'flex-1 min-w-0' },
   { key: 'panel', label: 'Panel', tone: 'border-purple-300', columnClass: 'flex-1 min-w-0' },
   { key: 'final', label: 'Final', tone: 'border-amber-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'rejected', label: 'Rejected', tone: 'border-red-300', columnClass: 'flex-1 min-w-0' },
 ] as const;
 
 type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
@@ -107,19 +119,28 @@ const BOARD_CARD_STYLES: Record<BoardColumnKey, { card: string; hover: string; a
     hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80',
     accent: 'bg-amber-400',
   },
+  rejected: {
+    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90',
+    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80',
+    accent: 'bg-red-400',
+  },
 };
 
-const BOARD_COLUMNS_NARROW = 4;
-const BOARD_WIDE_MIN_PX = 1281;
+/** Visible column counts — 7 pans never all fit; scroll with arrows. */
+const BOARD_VISIBLE_WIDE = 5;   // window width > 1440px
+const BOARD_VISIBLE_NARROW = 4;
+const BOARD_WIDE_MIN_PX = 1441; // >1440px
 
 /** API stage written when a card is dropped on a board column. */
 const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
   ai_interview: 'ai_interview',
   intro: 'intro',
-  tech: 'tech',
+  // Tech pan always opens the sub-stage picker; this fallback is unused.
+  tech: 'tech_round_1',
   hiring_manager: 'cultural',
   panel: 'panel',
   final: 'final',
+  rejected: 'rejected',
 };
 
 function columnDroppableId(columnKey: BoardColumnKey): string {
@@ -166,8 +187,11 @@ function boardColumnForStage(stage?: string | null): BoardColumnKey {
     case 'tech':
     case 'tech1':
     case 'tech2':
+    case 'tech_round_1':
+    case 'tech_round_2':
     case 'live_coding':
     case 'system_design':
+    case 'home_assessment':
       return 'tech';
     case 'cultural':
     case 'hiring_manager':
@@ -177,6 +201,8 @@ function boardColumnForStage(stage?: string | null): BoardColumnKey {
     case 'final':
     case 'offer':
       return 'final';
+    case 'rejected':
+      return 'rejected';
     case 'intro':
     case 'others':
     default:
@@ -243,6 +269,7 @@ type Interview = {
   jobUrl?: string | null;
   transcript?: string;
   note?: string;
+  stageHistory?: Array<{ stage: string; at?: string; source?: string }>;
   ownerName?: string | null;
   ownerEmail?: string | null;
   createdAt?: string;
@@ -257,6 +284,9 @@ type InterviewFormState = {
   startTime: string;
   endTime: string;
   stage: string;
+  techSubStage: string;
+  /** Ordered API stage keys for the movement trail (editable on the form). */
+  stageHistory: string[];
   status: string;
   companyName: string;
   interviewerName: string;
@@ -280,6 +310,8 @@ function blankInterviewForm(): InterviewFormState {
     startTime: `${hh}:${mi}`,
     endTime: `${endHour}:${mi}`,
     stage: '',
+    techSubStage: '',
+    stageHistory: [],
     status: '',
     companyName: '',
     interviewerName: '',
@@ -299,7 +331,9 @@ function interviewToForm(iv: Interview): InterviewFormState {
     date: start.date,
     startTime: start.time,
     endTime: end.time || start.time,
-    stage: iv.stage || '',
+    stage: toBoardFormStage(iv.stage),
+    techSubStage: toTechSubStage(iv.stage),
+    stageHistory: getInterviewMovementTrail(iv),
     status: iv.status || '',
     companyName: iv.companyName || '',
     interviewerName: iv.interviewerName || '',
@@ -308,6 +342,22 @@ function interviewToForm(iv: Interview): InterviewFormState {
     transcript: iv.transcript || '',
     note: iv.note || '',
   };
+}
+
+/** Keep form stage fields in sync with the last movement-history entry. */
+function applyHistoryTipToForm(history: string[]): Pick<InterviewFormState, 'stage' | 'techSubStage'> {
+  const tip = history[history.length - 1] || '';
+  return {
+    stage: toBoardFormStage(tip),
+    techSubStage: toTechSubStage(tip),
+  };
+}
+
+/** Ensure the resolved current stage is the tip of the movement history. */
+function withCurrentStageInHistory(history: string[], currentStage: string): string[] {
+  if (!currentStage) return history;
+  if (history[history.length - 1] === currentStage) return history;
+  return [...history, currentStage];
 }
 
 function combineDateTime(date: string, time: string): string {
@@ -361,7 +411,14 @@ function formatPretty(startIso: string, endIso?: string | null): string {
 }
 
 const formatScheduled = (iso: string) => formatPretty(iso);
-const formatTimeRange = (startIso: string, endIso?: string | null) => formatPretty(startIso, endIso);
+
+/** Date-only label for board cards (no time / timezone). */
+function formatScheduledDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
+}
 
 function toDateInputValue(d: Date): string {
   const yyyy = d.getFullYear();
@@ -370,7 +427,7 @@ function toDateInputValue(d: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/** Current week Mon–Fri as YYYY-MM-DD values for the date filter inputs. */
+/** Default filter: this week's Monday → next week's Friday. */
 function currentWeekdayRange(): { from: string; to: string } {
   const today = new Date();
   const day = today.getDay(); // 0=Sun … 6=Sat
@@ -378,9 +435,22 @@ function currentWeekdayRange(): { from: string; to: string } {
   const monday = new Date(today);
   monday.setDate(today.getDate() + mondayOffset);
   monday.setHours(0, 0, 0, 0);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  return { from: toDateInputValue(monday), to: toDateInputValue(friday) };
+  const nextFriday = new Date(monday);
+  nextFriday.setDate(monday.getDate() + 11); // this Mon + 11 days = next Fri
+  return { from: toDateInputValue(monday), to: toDateInputValue(nextFriday) };
+}
+
+/** Build scheduledAt/endsAt; always keep endsAt after scheduledAt (edit form hides times). */
+function schedulePayload(date: string, startTime: string, endTime: string): { scheduledAt: string; endsAt: string } {
+  const start = combineDateTime(date, startTime || '09:00');
+  let end = combineDateTime(date, endTime || startTime || '10:00');
+  const startMs = new Date(start).getTime();
+  let endMs = new Date(end).getTime();
+  if (!(endMs > startMs)) {
+    endMs = startMs + 60 * 60 * 1000;
+    end = new Date(endMs).toISOString();
+  }
+  return { scheduledAt: start, endsAt: end };
 }
 
 export default function InterviewsPage() {
@@ -408,15 +478,18 @@ export default function InterviewsPage() {
   const [to, setTo] = useState(() => currentWeekdayRange().to);
   const sort: 'desc' = 'desc';
   const [boardOffset, setBoardOffset] = useState(0);
-  const [showAllBoardColumns, setShowAllBoardColumns] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth >= BOARD_WIDE_MIN_PX,
+  const [visibleColumnCount, setVisibleColumnCount] = useState(
+    () => (typeof window !== 'undefined' && window.innerWidth >= BOARD_WIDE_MIN_PX
+      ? BOARD_VISIBLE_WIDE
+      : BOARD_VISIBLE_NARROW),
   );
 
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${BOARD_WIDE_MIN_PX}px)`);
     const onChange = () => {
-      setShowAllBoardColumns(mq.matches);
-      if (mq.matches) setBoardOffset(0);
+      const count = mq.matches ? BOARD_VISIBLE_WIDE : BOARD_VISIBLE_NARROW;
+      setVisibleColumnCount(count);
+      setBoardOffset((prev) => Math.min(prev, Math.max(0, BOARD_COLUMNS.length - count)));
     };
     onChange();
     mq.addEventListener('change', onChange);
@@ -475,23 +548,21 @@ export default function InterviewsPage() {
     return buckets;
   }, [interviews]);
 
-  const visibleColumns = showAllBoardColumns
-    ? BOARD_COLUMNS
-    : BOARD_COLUMNS.slice(boardOffset, boardOffset + BOARD_COLUMNS_NARROW);
-  const canBoardPrev = !showAllBoardColumns && boardOffset > 0;
-  const canBoardNext = !showAllBoardColumns && boardOffset + BOARD_COLUMNS_NARROW < BOARD_COLUMNS.length;
+  const visibleColumns = BOARD_COLUMNS.slice(boardOffset, boardOffset + visibleColumnCount);
+  const canBoardPrev = boardOffset > 0;
+  const canBoardNext = boardOffset + visibleColumnCount < BOARD_COLUMNS.length;
 
   useEffect(() => {
-    if (!stage || showAllBoardColumns) return;
+    if (!stage) return;
     const colKey = boardColumnForStage(stage);
     const idx = BOARD_COLUMNS.findIndex((c) => c.key === colKey);
     if (idx < 0) return;
     setBoardOffset((prev) => {
       if (idx < prev) return idx;
-      if (idx >= prev + BOARD_COLUMNS_NARROW) return idx - BOARD_COLUMNS_NARROW + 1;
+      if (idx >= prev + visibleColumnCount) return idx - visibleColumnCount + 1;
       return prev;
     });
-  }, [stage, showAllBoardColumns]);
+  }, [stage, visibleColumnCount]);
 
   // Modal state
   const [mode, setMode] = useState<ModalMode>(null);
@@ -584,12 +655,18 @@ export default function InterviewsPage() {
       notify.error('Select a date');
       return;
     }
-    if (!form.startTime || !form.endTime) {
-      notify.error('Select start and end time');
-      return;
+    if (mode === 'create') {
+      if (!form.startTime || !form.endTime) {
+        notify.error('Select start and end time');
+        return;
+      }
+      if (form.endTime <= form.startTime) {
+        notify.error('End time must be after start time');
+        return;
+      }
     }
-    if (form.endTime <= form.startTime) {
-      notify.error('End time must be after start time');
+    if (form.stage === 'tech' && !form.techSubStage) {
+      notify.error('Select a Tech sub-stage');
       return;
     }
     setSaving(true);
@@ -598,7 +675,8 @@ export default function InterviewsPage() {
       const body = buildSaveBody(form);
       const account = ownAccounts.find((a) => a._id === form.accountId);
       const accountLabel = account?.name || account?.title || 'account';
-      const stageText = form.stage ? `${stageLabel(form.stage)} ` : '';
+      const resolvedStage = resolveInterviewStage(form.stage, form.techSubStage);
+      const stageText = resolvedStage ? `${stageLabel(resolvedStage)} ` : '';
       if (mode === 'update' && active) {
         await api.updateInterview(active._id, body);
         notify.success(`${stageText}interview for ${accountLabel} updated successfully`);
@@ -631,28 +709,33 @@ export default function InterviewsPage() {
     }
   };
 
-  const buildSaveBody = (f: InterviewFormState): Record<string, unknown> => ({
-    accountId: f.accountId,
-    scheduledAt: combineDateTime(f.date, f.startTime),
-    endsAt: combineDateTime(f.date, f.endTime),
-    stage: f.stage,
-    status: f.status,
-    companyName: f.companyName,
-    interviewerName: f.interviewerName,
-    appliedPosition: f.appliedPosition,
-    jobUrl: f.jobUrl,
-    transcript: f.transcript,
-    note: f.note,
-  });
+  const buildSaveBody = (f: InterviewFormState): Record<string, unknown> => {
+    const resolvedStage = resolveInterviewStage(f.stage, f.techSubStage);
+    const { scheduledAt, endsAt } = schedulePayload(f.date, f.startTime, f.endTime);
+    return {
+      accountId: f.accountId,
+      scheduledAt,
+      endsAt,
+      stage: resolvedStage,
+      status: f.status,
+      companyName: f.companyName,
+      interviewerName: f.interviewerName,
+      appliedPosition: f.appliedPosition,
+      jobUrl: f.jobUrl,
+      transcript: f.transcript,
+      note: f.note,
+      stageHistory: withCurrentStageInHistory(f.stageHistory, resolvedStage),
+    };
+  };
 
   const savePanel = async () => {
     if (!panelInterview) return;
-    if (!panelForm.date || !panelForm.startTime || !panelForm.endTime) {
-      notify.error('Select date and time');
+    if (!panelForm.date) {
+      notify.error('Select a date');
       return;
     }
-    if (panelForm.endTime <= panelForm.startTime) {
-      notify.error('End time must be after start time');
+    if (panelForm.stage === 'tech' && !panelForm.techSubStage) {
+      notify.error('Select a Tech sub-stage');
       return;
     }
     if (!canEdit(panelInterview)) {
@@ -681,11 +764,61 @@ export default function InterviewsPage() {
   };
 
   const handleBoardPrev = () => setBoardOffset((o) => Math.max(0, o - 1));
-  const handleBoardNext = () => setBoardOffset((o) => Math.min(BOARD_COLUMNS.length - BOARD_COLUMNS_NARROW, o + 1));
+  const handleBoardNext = () => setBoardOffset((o) => Math.min(BOARD_COLUMNS.length - visibleColumnCount, o + 1));
 
   const [activeDragInterview, setActiveDragInterview] = useState<Interview | null>(null);
   const [dropTargetColumn, setDropTargetColumn] = useState<BoardColumnKey | null>(null);
+  const [techPickInterview, setTechPickInterview] = useState<Interview | null>(null);
+  const [techPickSubStage, setTechPickSubStage] = useState('');
+  const [techPickSaving, setTechPickSaving] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const applyStageMove = async (iv: Interview, newStage: string, label: string) => {
+    const ivId = iv._id;
+    const previousData = data;
+    const prevStage = iv.stage || undefined;
+    mutate(
+      (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          interviews: (current.interviews as Interview[]).map((item) => {
+            if (item._id !== ivId) return item;
+            const existing = getInterviewMovementTrail(item);
+            let nextHistory = existing;
+            if (prevStage && nextHistory.length === 0) {
+              nextHistory = [prevStage];
+            } else if (prevStage && nextHistory[nextHistory.length - 1] !== prevStage) {
+              nextHistory = [...nextHistory, prevStage];
+            }
+            if (nextHistory[nextHistory.length - 1] !== newStage) {
+              nextHistory = [...nextHistory, newStage];
+            }
+            return {
+              ...item,
+              stage: newStage,
+              stageHistory: nextHistory.map((s) => ({ stage: s })),
+            };
+          }),
+        };
+      },
+      { revalidate: false },
+    );
+
+    try {
+      const updated = await api.updateInterview(iv._id, { stage: newStage });
+      if (panelInterview?._id === ivId) {
+        setPanelInterview(updated as unknown as Interview);
+        setPanelForm(interviewToForm(updated as unknown as Interview));
+      }
+      if (stage && stage !== newStage && !isTechBoardStage(stage)) setStage('');
+      await mutate();
+      notify.success(`Moved to ${label}`);
+    } catch (err) {
+      mutate(previousData, { revalidate: false });
+      notify.error(err, 'Failed to move interview');
+    }
+  };
 
   const onInterviewDragStart = (e: DragStartEvent) => {
     const iv = interviews.find((i) => i._id === String(e.active.id));
@@ -715,36 +848,35 @@ export default function InterviewsPage() {
       return;
     }
     const sourceCol = boardColumnForStage(iv.stage);
+
+    // Dropping onto Tech always opens the sub-stage picker (including Tech → Tech).
+    if (targetCol === 'tech') {
+      setTechPickInterview(iv);
+      setTechPickSubStage(toTechSubStage(iv.stage) || TECH_SUB_STAGES[0].value);
+      return;
+    }
+
     if (targetCol === sourceCol) return;
     const newStage = BOARD_COLUMN_TO_STAGE[targetCol];
     const colLabel = BOARD_COLUMNS.find((c) => c.key === targetCol)?.label ?? stageLabel(newStage);
+    await applyStageMove(iv, newStage, colLabel);
+  };
 
-    const previousData = data;
-    mutate(
-      (current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          interviews: (current.interviews as Interview[]).map((item) =>
-            item._id === ivId ? { ...item, stage: newStage } : item,
-          ),
-        };
-      },
-      { revalidate: false },
-    );
-
+  const confirmTechPick = async () => {
+    if (!techPickInterview || !techPickSubStage) {
+      notify.error('Select a Tech sub-stage');
+      return;
+    }
+    if (techPickInterview.stage === techPickSubStage) {
+      setTechPickInterview(null);
+      return;
+    }
+    setTechPickSaving(true);
     try {
-      const updated = await api.updateInterview(iv._id, { stage: newStage });
-      if (panelInterview?._id === ivId) {
-        setPanelInterview(updated as unknown as Interview);
-        setPanelForm((prev) => ({ ...prev, stage: newStage }));
-      }
-      if (stage && stage !== newStage) setStage('');
-      await mutate();
-      notify.success(`Moved to ${colLabel}`);
-    } catch (err) {
-      mutate(previousData, { revalidate: false });
-      notify.error(err, 'Failed to move interview');
+      await applyStageMove(techPickInterview, techPickSubStage, stageLabel(techPickSubStage));
+      setTechPickInterview(null);
+    } finally {
+      setTechPickSaving(false);
     }
   };
 
@@ -782,7 +914,12 @@ export default function InterviewsPage() {
 
   const stageFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
-    ...STAGES,
+    ...BOARD_FORM_STAGES,
+  ], []);
+
+  const techSubStageOptions = useMemo(() => [
+    { value: '', label: 'Select Tech sub-stage' },
+    ...TECH_SUB_STAGES,
   ], []);
 
   const statusFormOptions = useMemo(() => [
@@ -866,8 +1003,7 @@ export default function InterviewsPage() {
       ) : (
         <>
           <div className="flex flex-col gap-3 w-full">
-            {!showAllBoardColumns && (
-              <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={handleBoardPrev}
@@ -890,7 +1026,6 @@ export default function InterviewsPage() {
                   <ChevronRight size={16} />
                 </button>
               </div>
-            )}
 
             {interviews.length === 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800">
@@ -961,6 +1096,7 @@ export default function InterviewsPage() {
             editable={canEdit(panelInterview)}
             accountSelectOptions={accountSelectOptions}
             stageFormOptions={stageFormOptions}
+            techSubStageOptions={techSubStageOptions}
             statusFormOptions={statusFormOptions}
             onClose={closePanel}
             onSave={savePanel}
@@ -997,11 +1133,14 @@ export default function InterviewsPage() {
                 <div>
                   <div className="text-muted text-xs">Stage</div>
                   <div>
-                    {form.stage ? (
-                      <span className={`badge ${stageBadgeClass(form.stage)}`}>
-                        {stageLabel(form.stage)}
-                      </span>
-                    ) : <span className="text-faint">—</span>}
+                    {(() => {
+                      const displayStage = resolveInterviewStage(form.stage, form.techSubStage) || form.stage;
+                      return displayStage ? (
+                        <span className={`badge ${stageBadgeClass(displayStage)}`}>
+                          {stageLabel(displayStage)}
+                        </span>
+                      ) : <span className="text-faint">—</span>;
+                    })()}
                   </div>
                 </div>
                 <div>
@@ -1064,9 +1203,11 @@ export default function InterviewsPage() {
                 setForm={setForm}
                 accountSelectOptions={accountSelectOptions}
                 stageFormOptions={stageFormOptions}
+                techSubStageOptions={techSubStageOptions}
                 statusFormOptions={statusFormOptions}
                 accountDisabled={mode === 'update' && !!active && !canEdit(active)}
                 datalistId="applied-position-suggestions-modal"
+                showTimes={mode === 'create'}
               />
 
               <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
@@ -1075,7 +1216,12 @@ export default function InterviewsPage() {
                   type="button"
                   className="btn"
                   onClick={save}
-                  disabled={saving || !form.date || !form.startTime || !form.endTime || (mode === 'create' && !form.accountId)}
+                  disabled={
+                    saving
+                    || !form.date
+                    || (mode === 'create' && (!form.startTime || !form.endTime || !form.accountId))
+                    || (form.stage === 'tech' && !form.techSubStage)
+                  }
                 >
                   {saving ? 'Saving…' : mode === 'update' ? 'Save changes' : 'Create'}
                 </button>
@@ -1108,6 +1254,59 @@ export default function InterviewsPage() {
               style={{ backgroundColor: '#dc2626', color: 'white' }}
             >
               {saving ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Tech sub-stage picker when dropping onto Tech pan */}
+      <Modal
+        open={!!techPickInterview}
+        onClose={() => { if (!techPickSaving) setTechPickInterview(null); }}
+        title="Select Tech sub-stage"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Choose which Tech round this interview is in.
+          </p>
+          <div className="space-y-2">
+            {TECH_SUB_STAGES.map((opt) => (
+              <label
+                key={opt.value}
+                className={`flex items-center gap-3 rounded-[10px] border px-3 py-2.5 cursor-pointer transition-colors ${
+                  techPickSubStage === opt.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="tech-sub-stage"
+                  value={opt.value}
+                  checked={techPickSubStage === opt.value}
+                  onChange={() => setTechPickSubStage(opt.value)}
+                  className="accent-primary"
+                />
+                <span className="text-sm font-medium text-gray-900">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => setTechPickInterview(null)}
+              disabled={techPickSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={confirmTechPick}
+              disabled={techPickSaving || !techPickSubStage}
+            >
+              {techPickSaving ? 'Moving…' : 'Confirm'}
             </button>
           </div>
         </div>
@@ -1199,7 +1398,7 @@ function InterviewBoardCardPreview({
       <div className="font-medium text-gray-900 truncate pl-1" title={profileName}>{profileName}</div>
       <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>{companyName}</div>
       <div className="mt-1 text-[11px] text-gray-500 pl-1">
-        {formatTimeRange(interview.scheduledAt, interview.endsAt)}
+        {formatScheduledDate(interview.scheduledAt)}
       </div>
       <div className="mt-1.5 pl-1">
         {interview.status ? (
@@ -1295,7 +1494,7 @@ function InterviewBoardCard({
         {companyName}
       </div>
       <div className="mt-1 text-[11px] text-gray-500 pl-1">
-        {formatTimeRange(interview.scheduledAt, interview.endsAt)}
+        {formatScheduledDate(interview.scheduledAt)}
       </div>
       <div className="mt-1.5 pl-1">
         {interview.status ? (
@@ -1306,30 +1505,55 @@ function InterviewBoardCard({
           <span className="text-[11px] text-gray-400">No status</span>
         )}
       </div>
+      <StageMovementTrail interview={interview} />
     </div>
   );
 }
 
 type SelectOption = { value: string; label: string };
 
+function StageMovementTrail({ interview }: { interview: Interview }) {
+  const trail = getInterviewMovementTrail(interview);
+  // Prefer an explicit trail; fall back to current stage so Tech→Tech still shows something.
+  const shown = trail.length > 0 ? trail : (interview.stage ? [interview.stage] : []);
+  if (shown.length === 0) return null;
+  return (
+    <div className="mt-1.5 pl-1 flex flex-wrap items-center gap-1">
+      {shown.map((s, i) => (
+        <span key={`${s}-${i}`} className="inline-flex items-center gap-1">
+          {i > 0 && <span className="text-[10px] text-gray-400">→</span>}
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-[6px] text-[10px] font-medium border ${stageBadgeClass(s)}`}>
+            {stageLabel(s)}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function InterviewFormFields({
   form,
   setForm,
   accountSelectOptions,
   stageFormOptions,
+  techSubStageOptions,
   statusFormOptions,
   accountDisabled,
   datalistId,
   disabled,
+  showTimes = true,
 }: {
   form: InterviewFormState;
   setForm: React.Dispatch<React.SetStateAction<InterviewFormState>>;
   accountSelectOptions: SelectOption[];
   stageFormOptions: SelectOption[];
+  techSubStageOptions: SelectOption[];
   statusFormOptions: SelectOption[];
   accountDisabled?: boolean;
   datalistId: string;
   disabled?: boolean;
+  /** Create form shows start/end time; edit/panel hide them. */
+  showTimes?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -1346,26 +1570,35 @@ function InterviewFormFields({
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      {showTimes ? (
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Date <span className="text-red-500">*</span>
+            </label>
+            <input className="input" type="date" value={form.date} disabled={disabled} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Start time <span className="text-red-500">*</span>
+            </label>
+            <input className="input" type="time" value={form.startTime} disabled={disabled} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              End time <span className="text-red-500">*</span>
+            </label>
+            <input className="input" type="time" value={form.endTime} disabled={disabled} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
+          </div>
+        </div>
+      ) : (
         <div>
           <label className="block text-sm font-medium mb-1">
             Date <span className="text-red-500">*</span>
           </label>
           <input className="input" type="date" value={form.date} disabled={disabled} onChange={(e) => setForm({ ...form, date: e.target.value })} />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Start time <span className="text-red-500">*</span>
-          </label>
-          <input className="input" type="time" value={form.startTime} disabled={disabled} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            End time <span className="text-red-500">*</span>
-          </label>
-          <input className="input" type="time" value={form.endTime} disabled={disabled} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -1396,13 +1629,97 @@ function InterviewFormFields({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium mb-1">Interview Stage</label>
-          <Select value={form.stage} onChange={(v) => setForm({ ...form, stage: v })} options={stageFormOptions} placeholder="Select a stage" disabled={disabled} />
+          <Select
+            value={form.stage}
+            onChange={(v) => {
+              const techSub = v === 'tech' ? form.techSubStage : '';
+              const resolved = resolveInterviewStage(v, techSub);
+              setForm({
+                ...form,
+                stage: v,
+                techSubStage: techSub,
+                stageHistory: withCurrentStageInHistory(
+                  form.stageHistory.filter((s) => s !== resolved),
+                  resolved,
+                ),
+              });
+            }}
+            options={stageFormOptions}
+            placeholder="Select a stage"
+            disabled={disabled}
+          />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Status</label>
           <Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={statusFormOptions} placeholder="Select a status" disabled={disabled} />
         </div>
       </div>
+
+      {form.stage === 'tech' && (
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Tech sub-stage <span className="text-red-500">*</span>
+          </label>
+          <Select
+            value={form.techSubStage}
+            onChange={(v) => {
+              const resolved = resolveInterviewStage('tech', v);
+              setForm({
+                ...form,
+                techSubStage: v,
+                stageHistory: withCurrentStageInHistory(
+                  form.stageHistory.filter((s) => s !== resolved),
+                  resolved,
+                ),
+              });
+            }}
+            options={techSubStageOptions}
+            placeholder="Select a Tech sub-stage"
+            disabled={disabled}
+          />
+        </div>
+      )}
+
+      {(form.stageHistory.length > 0 || !disabled) && (
+        <div>
+          <label className="block text-sm font-medium mb-1">Stage movement</label>
+          <p className="text-xs text-gray-500 mb-2">
+            Path used for pass-rate analysis. Remove a mistaken board move here.
+          </p>
+          {form.stageHistory.length === 0 ? (
+            <div className="text-xs text-gray-400 italic">No stage moves yet.</div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {form.stageHistory.map((s, i) => (
+                <span key={`${s}-${i}`} className="inline-flex items-center gap-1">
+                  {i > 0 && <span className="text-[10px] text-gray-400">→</span>}
+                  <span className={`inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-[6px] text-[11px] font-medium border ${stageBadgeClass(s)}`}>
+                    {stageLabel(s)}
+                    {!disabled && (
+                      <button
+                        type="button"
+                        className="ml-0.5 p-0.5 rounded hover:bg-black/10 text-current/70 hover:text-current"
+                        title={`Remove ${stageLabel(s)}`}
+                        aria-label={`Remove ${stageLabel(s)}`}
+                        onClick={() => {
+                          const next = form.stageHistory.filter((_, idx) => idx !== i);
+                          setForm({
+                            ...form,
+                            stageHistory: next,
+                            ...applyHistoryTipToForm(next),
+                          });
+                        }}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -1465,6 +1782,7 @@ function InterviewSidePanel({
   editable,
   accountSelectOptions,
   stageFormOptions,
+  techSubStageOptions,
   statusFormOptions,
   onClose,
   onSave,
@@ -1478,6 +1796,7 @@ function InterviewSidePanel({
   editable: boolean;
   accountSelectOptions: SelectOption[];
   stageFormOptions: SelectOption[];
+  techSubStageOptions: SelectOption[];
   statusFormOptions: SelectOption[];
   onClose: () => void;
   onSave: () => void;
@@ -1485,6 +1804,10 @@ function InterviewSidePanel({
 }) {
   const account = typeof interview.accountId === 'object' ? interview.accountId : null;
   const title = interview.companyName || account?.name || 'Interview';
+  const saveDisabled = saving
+    || !form.date
+    || !form.accountId
+    || (form.stage === 'tech' && !form.techSubStage);
 
   return (
     <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white shadow-strong border-l border-gray-100 z-50 flex flex-col">
@@ -1497,6 +1820,9 @@ function InterviewSidePanel({
               {stageLabel(interview.stage)}
             </span>
           )}
+          <div className="mt-1">
+            <StageMovementTrail interview={interview} />
+          </div>
         </div>
         <button type="button" onClick={onClose} className="btn-icon shrink-0" title="Close panel" aria-label="Close panel">
           <X size={16} />
@@ -1510,10 +1836,12 @@ function InterviewSidePanel({
           setForm={setForm}
           accountSelectOptions={accountSelectOptions}
           stageFormOptions={stageFormOptions}
+          techSubStageOptions={techSubStageOptions}
           statusFormOptions={statusFormOptions}
           accountDisabled={!editable}
           datalistId="applied-position-suggestions-panel"
           disabled={!editable}
+          showTimes={false}
         />
       </div>
 
@@ -1523,7 +1851,7 @@ function InterviewSidePanel({
         </button>
         <button type="button" className="btn-outline text-sm" onClick={onClose}>Close</button>
         {editable && (
-          <button type="button" className="btn text-sm" onClick={onSave} disabled={saving || !form.date || !form.startTime || !form.endTime || !form.accountId}>
+          <button type="button" className="btn text-sm" onClick={onSave} disabled={saveDisabled}>
             {saving ? 'Saving…' : 'Save changes'}
           </button>
         )}

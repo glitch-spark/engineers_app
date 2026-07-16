@@ -1,26 +1,102 @@
 /** Interview / pipeline stage labels and badge styling (shared across pages). */
 
-export const INTERVIEW_STAGES = [
+/** Board-level stage shown in the interview form (Tech expands to sub-stages). */
+export const BOARD_FORM_STAGES = [
+  { value: 'ai_interview', label: 'AI Interview' },
   { value: 'intro', label: 'Intro' },
   { value: 'tech', label: 'Tech' },
+  { value: 'cultural', label: 'Hiring Manager' },
   { value: 'panel', label: 'Panel' },
+  { value: 'final', label: 'Final' },
+  { value: 'rejected', label: 'Rejected' },
+] as const;
+
+/** Sub-stages that live under the Tech board column. */
+export const TECH_SUB_STAGES = [
+  { value: 'tech_round_1', label: 'Tech round 1' },
+  { value: 'tech_round_2', label: 'Tech round 2' },
   { value: 'live_coding', label: 'Live Coding' },
   { value: 'system_design', label: 'System Design' },
-  { value: 'cultural', label: 'Cultural' },
-  { value: 'final', label: 'Final' },
+  { value: 'home_assessment', label: 'Home Assessment' },
+] as const;
+
+export const TECH_SUB_STAGE_VALUES = TECH_SUB_STAGES.map((s) => s.value);
+
+export function isTechSubStage(stage?: string | null): boolean {
+  return !!stage && (TECH_SUB_STAGE_VALUES as readonly string[]).includes(stage);
+}
+
+/** True when the stored stage belongs in the Tech pan (including legacy `tech`). */
+export function isTechBoardStage(stage?: string | null): boolean {
+  return stage === 'tech' || stage === 'tech1' || stage === 'tech2' || isTechSubStage(stage);
+}
+
+/** Map a stored API stage → board-level form stage value. */
+export function toBoardFormStage(stage?: string | null): string {
+  if (!stage) return '';
+  if (isTechBoardStage(stage)) return 'tech';
+  if (stage === 'hiring_manager') return 'cultural';
+  return stage;
+}
+
+/** Tech sub-stage value for the form (empty when not a known tech sub-stage). */
+export function toTechSubStage(stage?: string | null): string {
+  if (!stage) return '';
+  if (stage === 'tech' || stage === 'tech1') return 'tech_round_1';
+  if (stage === 'tech2') return 'tech_round_2';
+  if (isTechSubStage(stage)) return stage;
+  return '';
+}
+
+/**
+ * Coerce legacy/generic tech keys to a concrete Tech sub-stage.
+ * Plain `tech` is a board column, not a real interview stage — never show/store it.
+ * Also strip leaked Python enum labels like `InterviewStage.tech`.
+ */
+export function normalizeInterviewStage(stage?: string | null): string {
+  if (!stage) return '';
+  let s = stage;
+  if (s.startsWith('InterviewStage.')) s = s.slice('InterviewStage.'.length);
+  if (s === 'tech' || s === 'tech1') return 'tech_round_1';
+  if (s === 'tech2') return 'tech_round_2';
+  if (s === 'hiring_manager') return 'cultural';
+  return s;
+}
+
+/** Resolve form board stage + optional tech sub-stage into the API stage string. */
+export function resolveInterviewStage(boardStage: string, techSubStage: string): string {
+  if (!boardStage) return '';
+  if (boardStage === 'tech') return techSubStage || 'tech_round_1';
+  return boardStage;
+}
+
+export const INTERVIEW_STAGES = [
   { value: 'ai_interview', label: 'AI Interview' },
+  { value: 'intro', label: 'Intro' },
+  { value: 'tech_round_1', label: 'Tech round 1' },
+  { value: 'tech_round_2', label: 'Tech round 2' },
+  { value: 'live_coding', label: 'Live Coding' },
+  { value: 'system_design', label: 'System Design' },
+  { value: 'home_assessment', label: 'Home Assessment' },
+  { value: 'cultural', label: 'Hiring Manager' },
+  { value: 'panel', label: 'Panel' },
+  { value: 'final', label: 'Final' },
+  { value: 'rejected', label: 'Rejected' },
 ] as const;
 
 /** Canonical interview-stage order (mirrors backend STAGE_ORDER, minus bid_sent/terminal). */
 export const INTERVIEW_STAGE_ORDER = [
   'intro',
-  'tech',
+  'tech_round_1',
+  'tech_round_2',
   'live_coding',
   'system_design',
+  'home_assessment',
   'panel',
   'cultural',
   'ai_interview',
   'final',
+  'rejected',
 ] as const;
 
 export type InterviewStageValue = (typeof INTERVIEW_STAGE_ORDER)[number];
@@ -28,7 +104,7 @@ export type InterviewStageValue = (typeof INTERVIEW_STAGE_ORDER)[number];
 const INTERVIEW_STAGE_SET = new Set<string>(INTERVIEW_STAGE_ORDER);
 
 export function isInterviewStage(stage: string): stage is InterviewStageValue {
-  return INTERVIEW_STAGE_SET.has(stage);
+  return INTERVIEW_STAGE_SET.has(normalizeInterviewStage(stage));
 }
 
 /** Distinct interview stages reached, from history + current stage, in pipeline order. */
@@ -38,10 +114,31 @@ export function getReachedInterviewStages(app: {
 }): string[] {
   const reached = new Set<string>();
   for (const h of app.stageHistory) {
-    if (isInterviewStage(h.stage)) reached.add(h.stage);
+    const s = normalizeInterviewStage(h.stage);
+    if (isInterviewStage(s)) reached.add(s);
   }
-  if (isInterviewStage(app.stage)) reached.add(app.stage);
+  const current = normalizeInterviewStage(app.stage);
+  if (isInterviewStage(current)) reached.add(current);
   return INTERVIEW_STAGE_ORDER.filter((s) => reached.has(s));
+}
+
+/** Chronological movement trail for an interview card (history + current). */
+export function getInterviewMovementTrail(iv: {
+  stage?: string | null;
+  stageHistory?: Array<{ stage: string }>;
+}): string[] {
+  const trail: string[] = [];
+  const push = (raw?: string | null) => {
+    const s = normalizeInterviewStage(raw);
+    if (!s) return;
+    if (trail[trail.length - 1] === s) return;
+    trail.push(s);
+  };
+  for (const h of iv.stageHistory ?? []) {
+    push(h.stage);
+  }
+  push(iv.stage);
+  return trail;
 }
 
 const EXTRA_LABELS: Record<string, string> = {
@@ -49,13 +146,19 @@ const EXTRA_LABELS: Record<string, string> = {
   offer: 'Offer',
   rejected: 'Rejected',
   withdrawn: 'Withdrawn',
+  hiring_manager: 'Hiring Manager',
+  tech: 'Tech round 1',
+  tech1: 'Tech round 1',
+  tech2: 'Tech round 2',
 };
 
 export function stageLabel(stage?: string | null): string {
   if (!stage) return '—';
-  return INTERVIEW_STAGES.find((s) => s.value === stage)?.label
+  const s = normalizeInterviewStage(stage) || stage;
+  return INTERVIEW_STAGES.find((x) => x.value === s)?.label
+    ?? EXTRA_LABELS[s]
     ?? EXTRA_LABELS[stage]
-    ?? stage.replace(/_/g, ' ');
+    ?? s.replace(/_/g, ' ');
 }
 
 export function stageBadgeClass(stage?: string | null): string {
@@ -63,6 +166,10 @@ export function stageBadgeClass(stage?: string | null): string {
     case 'intro':
       return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
     case 'tech':
+    case 'tech_round_1':
+    case 'tech_round_2':
+    case 'tech1':
+    case 'tech2':
       return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
     case 'panel':
       return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800';
@@ -70,7 +177,10 @@ export function stageBadgeClass(stage?: string | null): string {
       return 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800';
     case 'system_design':
       return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800';
+    case 'home_assessment':
+      return 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800';
     case 'cultural':
+    case 'hiring_manager':
       return 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-800';
     case 'final':
       return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';

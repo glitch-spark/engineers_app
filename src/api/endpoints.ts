@@ -489,7 +489,8 @@ export const getDashboardFeed = () => apiFetch<DashboardFeed>('/metrics/dashboar
 // ---------- pipeline ----------
 
 export type KanbanStage =
-  | 'bid_sent' | 'intro' | 'tech' | 'live_coding' | 'system_design'
+  | 'bid_sent' | 'intro' | 'tech' | 'tech_round_1' | 'tech_round_2'
+  | 'live_coding' | 'system_design' | 'home_assessment'
   | 'panel' | 'cultural' | 'final' | 'ai_interview' | 'offer'
   | 'rejected' | 'withdrawn';
 
