@@ -35,6 +35,10 @@ const editorStyles = `
   .prose p { margin-bottom: 0.75em; line-height: 1.6; }
   .prose ul, .prose ol { margin-bottom: 0.75em; padding-left: 1.5em; }
   .prose strong { font-weight: 600; } .prose em { font-style: italic; } .prose u { text-decoration: underline; }
+  .prose a { color: #2563eb; text-decoration: underline; }
+
+  /* Read-modal prose blocks: word-wrap, scroll vertically only, min 2 / max 5 lines.
+     line-height 1.5 * font-size 14px = 21px per line; padding adds ~16px each side. */
   .prose-readonly {
     font-size: 14px;
     line-height: 1.5;
@@ -49,9 +53,6 @@ const editorStyles = `
     word-wrap: break-word;
     word-break: break-word;
   }
-  html.dark .prose-readonly { border-color: #3f3f46; }
-  .prose a { color: #2563eb; text-decoration: underline; }
-  html.dark .prose a, html.dark .prose-readonly a { color: #38bdf8; }
   .prose-readonly p { margin: 0 0 0.5em 0; }
   .prose-readonly p:last-child { margin-bottom: 0; }
   .prose-readonly h1, .prose-readonly h2, .prose-readonly h3 { font-weight: 600; margin: 0.5em 0 0.25em; }
@@ -66,59 +67,50 @@ const STAGES = INTERVIEW_STAGES;
 
 const BOARD_COLUMNS = [
   { key: 'ai_interview', label: 'AI Interview', tone: 'border-emerald-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'intro', label: 'Intro', tone: 'border-zinc-300 dark:border-zinc-600', columnClass: 'flex-1 min-w-0' },
+  { key: 'intro', label: 'Intro', tone: 'border-gray-300', columnClass: 'flex-1 min-w-0' },
   { key: 'tech', label: 'Tech', tone: 'border-blue-300', columnClass: 'flex-1 min-w-0' },
   { key: 'hiring_manager', label: 'Hiring Manager', tone: 'border-pink-300', columnClass: 'flex-1 min-w-0' },
   { key: 'panel', label: 'Panel', tone: 'border-purple-300', columnClass: 'flex-1 min-w-0' },
   { key: 'final', label: 'Final', tone: 'border-amber-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'rejected', label: 'Rejected', tone: 'border-red-400', columnClass: 'flex-1 min-w-0' },
 ] as const;
 
 type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
 
 const BOARD_CARD_STYLES: Record<BoardColumnKey, { card: string; hover: string; accent: string }> = {
   ai_interview: {
-    card: 'bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 border-emerald-200/90 dark:from-emerald-950/40 dark:via-zinc-950 dark:to-teal-950/30 dark:border-emerald-800/60',
-    hover: 'hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-100/80 dark:hover:border-emerald-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 border-emerald-200/90',
+    hover: 'hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-100/80',
     accent: 'bg-emerald-400',
   },
   intro: {
-    card: 'bg-gradient-to-br from-slate-50 via-white to-gray-50 border-slate-200 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900 dark:border-zinc-700',
-    hover: 'hover:border-slate-400 hover:shadow-md hover:shadow-slate-100/80 dark:hover:border-zinc-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-slate-50 via-white to-gray-50 border-slate-200',
+    hover: 'hover:border-slate-400 hover:shadow-md hover:shadow-slate-100/80',
     accent: 'bg-slate-400',
   },
   tech: {
-    card: 'bg-gradient-to-br from-blue-50 via-white to-sky-50/80 border-blue-200/90 dark:from-blue-950/40 dark:via-zinc-950 dark:to-sky-950/30 dark:border-blue-800/60',
-    hover: 'hover:border-blue-400 hover:shadow-md hover:shadow-blue-100/80 dark:hover:border-blue-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-blue-50 via-white to-sky-50/80 border-blue-200/90',
+    hover: 'hover:border-blue-400 hover:shadow-md hover:shadow-blue-100/80',
     accent: 'bg-blue-400',
   },
   hiring_manager: {
-    card: 'bg-gradient-to-br from-pink-50 via-white to-rose-50/80 border-pink-200/90 dark:from-pink-950/40 dark:via-zinc-950 dark:to-rose-950/30 dark:border-pink-800/60',
-    hover: 'hover:border-pink-400 hover:shadow-md hover:shadow-pink-100/80 dark:hover:border-pink-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-pink-50 via-white to-rose-50/80 border-pink-200/90',
+    hover: 'hover:border-pink-400 hover:shadow-md hover:shadow-pink-100/80',
     accent: 'bg-pink-400',
   },
   panel: {
-    card: 'bg-gradient-to-br from-purple-50 via-white to-violet-50/80 border-purple-200/90 dark:from-purple-950/40 dark:via-zinc-950 dark:to-violet-950/30 dark:border-purple-800/60',
-    hover: 'hover:border-purple-400 hover:shadow-md hover:shadow-purple-100/80 dark:hover:border-purple-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-purple-50 via-white to-violet-50/80 border-purple-200/90',
+    hover: 'hover:border-purple-400 hover:shadow-md hover:shadow-purple-100/80',
     accent: 'bg-purple-400',
   },
   final: {
-    card: 'bg-gradient-to-br from-amber-50 via-white to-orange-50/80 border-amber-200/90 dark:from-amber-950/40 dark:via-zinc-950 dark:to-orange-950/30 dark:border-amber-800/60',
-    hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80 dark:hover:border-amber-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-amber-50 via-white to-orange-50/80 border-amber-200/90',
+    hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80',
     accent: 'bg-amber-400',
-  },
-  rejected: {
-    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90 dark:from-red-950/40 dark:via-zinc-950 dark:to-rose-950/30 dark:border-red-800/60',
-    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80 dark:hover:border-red-500 dark:hover:shadow-none',
-    accent: 'bg-red-500',
   },
 };
 
-/** Visible pans at ~1440px desktop widths (7 pans are too cramped). */
-const BOARD_VISIBLE_WIDE = 5;
-/** Fewer pans on narrower viewports. */
-const BOARD_VISIBLE_NARROW = 4;
-const BOARD_WIDE_MIN_PX = 1280;
+const BOARD_COLUMNS_NARROW = 4;
+const BOARD_WIDE_MIN_PX = 1281;
 
 /** API stage written when a card is dropped on a board column. */
 const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
@@ -128,7 +120,6 @@ const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
   hiring_manager: 'cultural',
   panel: 'panel',
   final: 'final',
-  rejected: 'rejected',
 };
 
 function columnDroppableId(columnKey: BoardColumnKey): string {
@@ -186,8 +177,6 @@ function boardColumnForStage(stage?: string | null): BoardColumnKey {
     case 'final':
     case 'offer':
       return 'final';
-    case 'rejected':
-      return 'rejected';
     case 'intro':
     case 'others':
     default:
@@ -207,12 +196,12 @@ const STATUSES = [
 
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
-    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
+    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
     case 'completed': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
-    case 'passed': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800';
-    case 'failed': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
-    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800';
-    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-300 dark:border-yellow-800';
+    case 'passed': return 'bg-green-100 text-green-800 border-green-200';
+    case 'failed': return 'bg-red-100 text-red-800 border-red-200';
+    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
+    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600';
     default: return 'bg-zinc-50 dark:bg-zinc-900/80 text-muted border-zinc-200 dark:border-zinc-700';
   }
@@ -229,10 +218,10 @@ function boardStatusLabel(status?: string | null): string {
 
 function boardStatusClass(status?: string | null): string {
   if (status === 'scheduled' || status === 'rescheduled') {
-    return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
+    return 'bg-blue-100 text-blue-800 border-blue-200';
   }
   if (status === 'completed') {
-    return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
   }
   return statusBadgeClass(status);
 }
@@ -399,18 +388,15 @@ export default function InterviewsPage() {
   const [to, setTo] = useState('');
   const sort: 'desc' = 'desc';
   const [boardOffset, setBoardOffset] = useState(0);
-  const [visibleColumnCount, setVisibleColumnCount] = useState(
-    () => (typeof window !== 'undefined' && window.innerWidth >= BOARD_WIDE_MIN_PX
-      ? BOARD_VISIBLE_WIDE
-      : BOARD_VISIBLE_NARROW),
+  const [showAllBoardColumns, setShowAllBoardColumns] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= BOARD_WIDE_MIN_PX,
   );
 
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${BOARD_WIDE_MIN_PX}px)`);
     const onChange = () => {
-      const next = mq.matches ? BOARD_VISIBLE_WIDE : BOARD_VISIBLE_NARROW;
-      setVisibleColumnCount(next);
-      setBoardOffset((o) => Math.min(o, Math.max(0, BOARD_COLUMNS.length - next)));
+      setShowAllBoardColumns(mq.matches);
+      if (mq.matches) setBoardOffset(0);
     };
     onChange();
     mq.addEventListener('change', onChange);
@@ -469,21 +455,23 @@ export default function InterviewsPage() {
     return buckets;
   }, [interviews]);
 
-  const visibleColumns = BOARD_COLUMNS.slice(boardOffset, boardOffset + visibleColumnCount);
-  const canBoardPrev = boardOffset > 0;
-  const canBoardNext = boardOffset + visibleColumnCount < BOARD_COLUMNS.length;
+  const visibleColumns = showAllBoardColumns
+    ? BOARD_COLUMNS
+    : BOARD_COLUMNS.slice(boardOffset, boardOffset + BOARD_COLUMNS_NARROW);
+  const canBoardPrev = !showAllBoardColumns && boardOffset > 0;
+  const canBoardNext = !showAllBoardColumns && boardOffset + BOARD_COLUMNS_NARROW < BOARD_COLUMNS.length;
 
   useEffect(() => {
-    if (!stage) return;
+    if (!stage || showAllBoardColumns) return;
     const colKey = boardColumnForStage(stage);
     const idx = BOARD_COLUMNS.findIndex((c) => c.key === colKey);
     if (idx < 0) return;
     setBoardOffset((prev) => {
       if (idx < prev) return idx;
-      if (idx >= prev + visibleColumnCount) return idx - visibleColumnCount + 1;
+      if (idx >= prev + BOARD_COLUMNS_NARROW) return idx - BOARD_COLUMNS_NARROW + 1;
       return prev;
     });
-  }, [stage, visibleColumnCount]);
+  }, [stage, showAllBoardColumns]);
 
   // Modal state
   const [mode, setMode] = useState<ModalMode>(null);
@@ -673,7 +661,7 @@ export default function InterviewsPage() {
   };
 
   const handleBoardPrev = () => setBoardOffset((o) => Math.max(0, o - 1));
-  const handleBoardNext = () => setBoardOffset((o) => Math.min(BOARD_COLUMNS.length - visibleColumnCount, o + 1));
+  const handleBoardNext = () => setBoardOffset((o) => Math.min(BOARD_COLUMNS.length - BOARD_COLUMNS_NARROW, o + 1));
 
   const [activeDragInterview, setActiveDragInterview] = useState<Interview | null>(null);
   const [dropTargetColumn, setDropTargetColumn] = useState<BoardColumnKey | null>(null);
@@ -765,7 +753,6 @@ export default function InterviewsPage() {
   const stageOptions = useMemo(() => [
     { value: '', label: 'All' },
     ...STAGES,
-    { value: 'rejected', label: 'Rejected' },
   ], []);
 
   const statusOptions = useMemo(() => [
@@ -776,7 +763,6 @@ export default function InterviewsPage() {
   const stageFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
     ...STAGES,
-    { value: 'rejected', label: 'Rejected' },
   ], []);
 
   const statusFormOptions = useMemo(() => [
@@ -801,9 +787,9 @@ export default function InterviewsPage() {
 
       <div className="space-y-6">
       {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
+      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">User</label>
+          <label className="block text-xs text-gray-500 mb-1">User</label>
           <Select
             value={creatorId}
             onChange={(v) => {
@@ -815,30 +801,30 @@ export default function InterviewsPage() {
           />
         </div>
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Profile</label>
+          <label className="block text-xs text-gray-500 mb-1">Profile</label>
           <Select value={accountId} onChange={(v) => { setAccountId(v); resetFiltersPage(); }} options={accountOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-muted mb-1">Stage</label>
+          <label className="block text-xs text-gray-500 mb-1">Stage</label>
           <Select value={stage} onChange={(v) => { setStage(v); resetFiltersPage(); }} options={stageOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-muted mb-1">Status</label>
+          <label className="block text-xs text-gray-500 mb-1">Status</label>
           <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); resetFiltersPage(); }} options={statusOptions} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-muted mb-1">From</label>
+          <label className="block text-xs text-gray-500 mb-1">From</label>
           <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetFiltersPage(); }} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-muted mb-1">To</label>
+          <label className="block text-xs text-gray-500 mb-1">To</label>
           <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); resetFiltersPage(); }} />
         </div>
       </div>
 
       {/* Total */}
       {data && (
-        <div className="text-sm text-muted">
+        <div className="text-sm text-gray-600">
           <span>Showing {pagination?.total ?? 0} interview{pagination?.total !== 1 ? 's' : ''} total</span>
           {(pagination?.total ?? 0) > boardPageSize && (
             <span className="text-amber-700 ml-2">
@@ -850,43 +836,44 @@ export default function InterviewsPage() {
 
       {/* Board — Pipeline-style kanban */}
       {isLoading && !data ? (
-        <div className="panel p-6 flex items-center gap-2 text-sm text-muted">
+        <div className="bg-white rounded-[12px] border border-gray-100 p-6 flex items-center gap-2 text-sm text-gray-500 shadow-sm">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading interviews…
         </div>
       ) : loadError ? (
-        <div className="panel border-red-200 dark:border-red-900/50 p-6 text-sm text-red-600 dark:text-red-400">
+        <div className="bg-white rounded-[12px] border border-red-100 p-6 text-sm text-red-600 shadow-sm">
           Failed to load interviews. Try refreshing the page.
         </div>
       ) : (
         <>
           <div className="flex flex-col gap-3 w-full">
-            <div className="flex items-center justify-between gap-3">
+            {!showAllBoardColumns && (
+              <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={handleBoardPrev}
                   disabled={!canBoardPrev}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Show previous columns"
                 >
                   <ChevronLeft size={16} />
                 </button>
-                <p className="text-xs text-muted text-center flex-1">
+                <p className="text-xs text-gray-500 text-center flex-1">
                   {visibleColumns.map((c) => c.label).join(' · ')}
-                  <span className="text-faint"> · {boardOffset + 1}–{boardOffset + visibleColumns.length} of {BOARD_COLUMNS.length}</span>
                 </p>
                 <button
                   type="button"
                   onClick={handleBoardNext}
                   disabled={!canBoardNext}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Show next columns"
                 >
                   <ChevronRight size={16} />
                 </button>
               </div>
+            )}
 
             {interviews.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300">
+              <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800">
                 No interviews match the current filters.
                 {creatorId && ' Try setting User to All, or pick a different profile.'}
               </div>
@@ -1141,10 +1128,10 @@ function InterviewBoardColumn({
   const highlight = isOver || isDropTarget;
 
   return (
-    <div className={`${columnClass} bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border-t-4 ${tone} border-x border-b border-zinc-100 dark:border-zinc-800`}>
-      <header className="px-3 py-2 flex items-center justify-between text-xs text-muted uppercase tracking-wide font-medium">
+    <div className={`${columnClass} bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
+      <header className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 uppercase tracking-wide font-medium">
         <span className="truncate">{label}</span>
-        <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-0.5 text-[10px] tabular-nums ml-2 shrink-0">
+        <span className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums ml-2 shrink-0">
           {cards.length}
         </span>
       </header>
@@ -1153,7 +1140,7 @@ function InterviewBoardColumn({
         className={`p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto transition-colors ${highlight ? 'bg-primary/5 ring-1 ring-inset ring-primary/20 rounded-b-[12px]' : ''}`}
       >
         {cards.length === 0 ? (
-          <div className="text-xs text-faint text-center py-8">Drop here</div>
+          <div className="text-xs text-gray-400 text-center py-8">Drop here</div>
         ) : (
           cards.map((iv) => (
             <InterviewBoardCard
@@ -1189,9 +1176,9 @@ function InterviewBoardCardPreview({
   return (
     <div className={`rounded-[10px] p-3 text-sm shadow-md border relative overflow-hidden ${panStyle.card} ring-2 ring-primary`}>
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
-      <div className="font-medium text-strong truncate pl-1" title={profileName}>{profileName}</div>
-      <div className="mt-1 text-body truncate pl-1" title={companyName}>{companyName}</div>
-      <div className="mt-1 text-[11px] text-muted pl-1">
+      <div className="font-medium text-gray-900 truncate pl-1" title={profileName}>{profileName}</div>
+      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>{companyName}</div>
+      <div className="mt-1 text-[11px] text-gray-500 pl-1">
         {formatTimeRange(interview.scheduledAt, interview.endsAt)}
       </div>
       <div className="mt-1.5 pl-1">
@@ -1200,7 +1187,7 @@ function InterviewBoardCardPreview({
             {boardStatusLabel(interview.status)}
           </span>
         ) : (
-          <span className="text-[11px] text-faint">No status</span>
+          <span className="text-[11px] text-gray-400">No status</span>
         )}
       </div>
     </div>
@@ -1262,7 +1249,7 @@ function InterviewBoardCard({
           type="button"
           onClick={(e) => { stop(e); onOpenTranscript(); }}
           onPointerDown={stop}
-          className="p-1 rounded-[6px] text-zinc-400 hover:text-primary hover:bg-blue-50 dark:text-zinc-500 dark:hover:bg-blue-950/40"
+          className="p-1 rounded-[6px] text-gray-400 hover:text-primary hover:bg-blue-50"
           title="Open transcript"
           aria-label="Open transcript"
         >
@@ -1273,7 +1260,7 @@ function InterviewBoardCard({
             type="button"
             onClick={(e) => { stop(e); onDelete(); }}
             onPointerDown={stop}
-            className="p-1 rounded-[6px] text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:text-zinc-500 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+            className="p-1 rounded-[6px] text-gray-400 hover:text-red-600 hover:bg-red-50"
             title="Delete interview"
             aria-label="Delete interview"
           >
@@ -1281,13 +1268,13 @@ function InterviewBoardCard({
           </button>
         )}
       </div>
-      <div className="font-medium text-strong truncate pr-14 pl-1" title={profileName}>
+      <div className="font-medium text-gray-900 truncate pr-14 pl-1" title={profileName}>
         {profileName}
       </div>
-      <div className="mt-1 text-body truncate pl-1" title={companyName}>
+      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>
         {companyName}
       </div>
-      <div className="mt-1 text-[11px] text-muted pl-1">
+      <div className="mt-1 text-[11px] text-gray-500 pl-1">
         {formatTimeRange(interview.scheduledAt, interview.endsAt)}
       </div>
       <div className="mt-1.5 pl-1">
@@ -1296,7 +1283,7 @@ function InterviewBoardCard({
             {boardStatusLabel(interview.status)}
           </span>
         ) : (
-          <span className="text-[11px] text-faint">No status</span>
+          <span className="text-[11px] text-gray-400">No status</span>
         )}
       </div>
     </div>
@@ -1382,7 +1369,7 @@ function InterviewFormFields({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-faint font-normal">(optional)</span></label>
+        <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
         <input className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm({ ...form, jobUrl: e.target.value })} placeholder="https://..." />
       </div>
 
@@ -1428,11 +1415,11 @@ function InterviewFormFields({
           )}
         </div>
         {form.transcript ? (
-          <div className="border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 max-h-40 overflow-auto bg-zinc-50 dark:bg-zinc-900/80">
-            <pre className="whitespace-pre-wrap text-xs font-mono text-body">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
+          <div className="border border-gray-300 rounded-md p-3 max-h-40 overflow-auto bg-gray-50">
+            <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
           </div>
         ) : (
-          <div className="border border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg p-4 text-center text-xs text-faint">
+          <div className="border border-dashed border-gray-300 rounded-md p-4 text-center text-xs text-gray-400">
             No transcript yet.
           </div>
         )}
@@ -1480,11 +1467,11 @@ function InterviewSidePanel({
   const title = interview.companyName || account?.name || 'Interview';
 
   return (
-    <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white dark:bg-zinc-950 shadow-strong border-l border-zinc-200 dark:border-zinc-800 z-50 flex flex-col">
-      <header className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2 shrink-0">
+    <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white shadow-strong border-l border-gray-100 z-50 flex flex-col">
+      <header className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
         <div className="min-w-0">
-          <div className="text-xs text-muted">Interview details</div>
-          <div className="font-semibold text-strong truncate">{title}</div>
+          <div className="text-xs text-gray-500">Interview details</div>
+          <div className="font-semibold text-gray-900 truncate">{title}</div>
           {interview.stage && (
             <span className={`inline-flex mt-1 items-center px-2 py-0.5 rounded-[8px] text-[10px] font-medium border ${stageBadgeClass(interview.stage)}`}>
               {stageLabel(interview.stage)}
@@ -1510,7 +1497,7 @@ function InterviewSidePanel({
         />
       </div>
 
-      <footer className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap gap-2 justify-end shrink-0 bg-zinc-50/80 dark:bg-zinc-900/80">
+      <footer className="px-4 py-3 border-t border-gray-100 flex flex-wrap gap-2 justify-end shrink-0 bg-gray-50/80">
         <button type="button" className="btn-outline text-sm" onClick={onOpenTranscript}>
           <FileText size={14} className="mr-1" /> Transcript
         </button>
