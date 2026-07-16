@@ -58,12 +58,10 @@ function LlmProviderBadge({
   provider,
   model,
   fallbackUsed,
-  fallbackReason,
 }: {
   provider?: 'free' | 'openai' | null;
   model?: string | null;
   fallbackUsed?: boolean | null;
-  fallbackReason?: string | null;
 }) {
   if (!provider) {
     return <span className="text-xs text-faint">—</span>;
@@ -84,16 +82,11 @@ function LlmProviderBadge({
         : 'badge-neutral';
 
   return (
-    <div className="flex flex-col items-start gap-0.5" title={fallbackReason || model || providerLabel}>
+    <div className="flex flex-col items-start gap-0.5" title={model || providerLabel}>
       <span className={badgeClass}>{providerLabel}</span>
       {short && (
         <span className="max-w-[140px] truncate font-mono text-[11px] text-muted">
           {short}
-        </span>
-      )}
-      {fallbackUsed && fallbackReason && (
-        <span className="text-[11px] text-amber-600 dark:text-amber-400 max-w-[220px] leading-tight">
-          {fallbackReason}
         </span>
       )}
     </div>
@@ -525,7 +518,6 @@ function JobRow({
             provider={job.resumeLlmProvider}
             model={job.resumeLlmModel}
             fallbackUsed={job.resumeLlmFallbackUsed}
-            fallbackReason={job.resumeLlmFallbackReason}
           />
         </td>
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{elapsed}</td>
@@ -738,7 +730,6 @@ function ScreeningPanel({
                   provider={job.screeningLlmProvider}
                   model={job.screeningLlmModel}
                   fallbackUsed={job.screeningLlmFallbackUsed}
-                  fallbackReason={job.screeningLlmFallbackReason}
                 />
               </div>
             )}
