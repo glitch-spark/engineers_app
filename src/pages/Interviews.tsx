@@ -363,6 +363,26 @@ function formatPretty(startIso: string, endIso?: string | null): string {
 const formatScheduled = (iso: string) => formatPretty(iso);
 const formatTimeRange = (startIso: string, endIso?: string | null) => formatPretty(startIso, endIso);
 
+function toDateInputValue(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Current week Mon–Fri as YYYY-MM-DD values for the date filter inputs. */
+function currentWeekdayRange(): { from: string; to: string } {
+  const today = new Date();
+  const day = today.getDay(); // 0=Sun … 6=Sat
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  monday.setHours(0, 0, 0, 0);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  return { from: toDateInputValue(monday), to: toDateInputValue(friday) };
+}
+
 export default function InterviewsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -384,8 +404,8 @@ export default function InterviewsPage() {
   const [accountId, setAccountId] = useState('');
   const [stage, setStage] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [from, setFrom] = useState(() => currentWeekdayRange().from);
+  const [to, setTo] = useState(() => currentWeekdayRange().to);
   const sort: 'desc' = 'desc';
   const [boardOffset, setBoardOffset] = useState(0);
   const [showAllBoardColumns, setShowAllBoardColumns] = useState(
