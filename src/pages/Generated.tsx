@@ -5,7 +5,6 @@ import {
   RefreshCw,
   Download,
   Trash2,
-  Copy,
   MessageSquare,
   X,
 } from 'lucide-react';
@@ -687,7 +686,22 @@ function ScreeningPanel({
   const [text, setText] = useState('');
   const [asking, setAsking] = useState(false);
   const [jdOpen, setJdOpen] = useState(false);
+  const [coverLetterOpen, setCoverLetterOpen] = useState(false);
+  const [coverLetterCopied, setCoverLetterCopied] = useState(false);
   const pairs = job.screeningPairs || [];
+
+  async function copyCoverLetter() {
+    const content = job.coverLetterText || '';
+    if (!content) return;
+    try {
+      await navigator.clipboard.writeText(content);
+      setCoverLetterCopied(true);
+      notify.success('Cover letter copied');
+      window.setTimeout(() => setCoverLetterCopied(false), 1200);
+    } catch {
+      notify.error('Failed to copy');
+    }
+  }
 
   async function ask() {
     const questions = parseNumberedQuestions(text);
@@ -765,20 +779,35 @@ function ScreeningPanel({
           </section>
 
           {job.coverLetterText && (
-            <section>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="card-title">Cover letter</h3>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(job.coverLetterText || '').then(() => notify.success('Cover letter copied'))}
-                  className="link-inline text-xs text-muted"
-                >
-                  <Copy className="w-3 h-3" /> Copy
-                </button>
-              </div>
-              <pre className="text-sm text-strong bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-[400px] overflow-y-auto leading-relaxed">
-                {job.coverLetterText}
-              </pre>
+            <section className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setCoverLetterOpen((v) => !v)}
+                className="link-inline text-xs text-muted hover:text-sky-600 dark:hover:text-sky-400"
+              >
+                {coverLetterOpen ? '▾' : '▸'} Cover letter
+              </button>
+              <button
+                type="button"
+                onClick={copyCoverLetter}
+                className={
+                  'panel w-full text-left px-3 py-2.5 cursor-pointer transition-colors ' +
+                  'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ' +
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ' +
+                  (coverLetterCopied ? 'ring-1 ring-green-400/60 dark:ring-green-600/50' : '')
+                }
+                title="Click to copy cover letter"
+                aria-label="Copy cover letter"
+              >
+                <p className="text-sm text-body">
+                  {coverLetterCopied ? 'Copied!' : 'Click to copy cover letter'}
+                </p>
+              </button>
+              {coverLetterOpen && (
+                <pre className="text-sm text-strong bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                  {job.coverLetterText}
+                </pre>
+              )}
             </section>
           )}
 
