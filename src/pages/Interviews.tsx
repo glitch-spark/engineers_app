@@ -30,6 +30,7 @@ import {
   BOARD_FORM_STAGES,
   INTERVIEW_STAGES,
   TECH_SUB_STAGES,
+  getInterviewMovementEntries,
   getInterviewMovementTrail,
   isTechBoardStage,
   resolveInterviewStage,
@@ -37,6 +38,7 @@ import {
   stageLabel,
   toBoardFormStage,
   toTechSubStage,
+  type MovementEntry,
 } from '../lib/stageBadge';
 
 const editorStyles = `
@@ -269,7 +271,7 @@ type Interview = {
   jobUrl?: string | null;
   transcript?: string;
   note?: string;
-  stageHistory?: Array<{ stage: string; at?: string; source?: string }>;
+  stageHistory?: Array<{ stage: string; at?: string; source?: string; scheduledAt?: string | null }>;
   ownerName?: string | null;
   ownerEmail?: string | null;
   createdAt?: string;
@@ -285,8 +287,8 @@ type InterviewFormState = {
   endTime: string;
   stage: string;
   techSubStage: string;
-  /** Ordered API stage keys for the movement trail (editable on the form). */
-  stageHistory: string[];
+  /** Ordered stage entries for the movement trail (editable on the form). */
+  stageHistory: MovementEntry[];
   status: string;
   companyName: string;
   interviewerName: string;
@@ -333,7 +335,7 @@ function interviewToForm(iv: Interview): InterviewFormState {
     endTime: end.time || start.time,
     stage: toBoardFormStage(iv.stage),
     techSubStage: toTechSubStage(iv.stage),
-    stageHistory: getInterviewMovementTrail(iv),
+    stageHistory: getInterviewMovementEntries(iv),
     status: iv.status || '',
     companyName: iv.companyName || '',
     interviewerName: iv.interviewerName || '',
@@ -345,19 +347,43 @@ function interviewToForm(iv: Interview): InterviewFormState {
 }
 
 /** Keep form stage fields in sync with the last movement-history entry. */
-function applyHistoryTipToForm(history: string[]): Pick<InterviewFormState, 'stage' | 'techSubStage'> {
-  const tip = history[history.length - 1] || '';
+function applyHistoryTipToForm(
+  history: MovementEntry[],
+): Partial<Pick<InterviewFormState, 'stage' | 'techSubStage' | 'date'>> {
+  const tip = history[history.length - 1];
+  const tipStage = tip?.stage || '';
   return {
-    stage: toBoardFormStage(tip),
-    techSubStage: toTechSubStage(tip),
+    stage: toBoardFormStage(tipStage),
+    techSubStage: toTechSubStage(tipStage),
+    ...(tip?.scheduledAt ? { date: tip.scheduledAt } : {}),
   };
 }
 
 /** Ensure the resolved current stage is the tip of the movement history. */
-function withCurrentStageInHistory(history: string[], currentStage: string): string[] {
+function withCurrentStageInHistory(
+  history: MovementEntry[],
+  currentStage: string,
+  scheduledDate?: string,
+): MovementEntry[] {
   if (!currentStage) return history;
-  if (history[history.length - 1] === currentStage) return history;
-  return [...history, currentStage];
+  const tip = history[history.length - 1];
+  if (tip?.stage === currentStage) {
+    if (scheduledDate && tip.scheduledAt !== scheduledDate) {
+      return [...history.slice(0, -1), { ...tip, scheduledAt: scheduledDate }];
+    }
+    return history;
+  }
+  return [
+    ...history,
+    { stage: currentStage, ...(scheduledDate ? { scheduledAt: scheduledDate } : {}) },
+  ];
+}
+
+/** When the scheduled date changes, stamp it onto the current tip stage entry. */
+function withTipScheduledDate(history: MovementEntry[], scheduledDate: string): MovementEntry[] {
+  if (!history.length || !scheduledDate) return history;
+  const tip = history[history.length - 1];
+  return [...history.slice(0, -1), { ...tip, scheduledAt: scheduledDate }];
 }
 
 function combineDateTime(date: string, time: string): string {
@@ -412,9 +438,14 @@ function formatPretty(startIso: string, endIso?: string | null): string {
 
 const formatScheduled = (iso: string) => formatPretty(iso);
 
-/** Date-only label for board cards (no time / timezone). */
+/** Date-only label for board cards / stage badges (no time / timezone). */
 function formatScheduledDate(iso?: string | null): string {
   if (!iso) return '—';
+  // YYYY-MM-DD — parse as local calendar date (avoid UTC midnight shift).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [, m, d] = iso.split('-').map(Number);
+    return `${MONTH_NAMES[m - 1]} ${d}`;
+  }
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '—';
   return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
@@ -451,6 +482,26 @@ function schedulePayload(date: string, startTime: string, endTime: string): { sc
     end = new Date(endMs).toISOString();
   }
   return { scheduledAt: start, endsAt: end };
+}
+
+/** YYYY-MM-DD for date inputs from an interview's scheduledAt. */
+function interviewDateInput(iv: { scheduledAt?: string | null }): string {
+  const raw = iv.scheduledAt;
+  if (!raw) return toDateInputValue(new Date());
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return toDateInputValue(new Date());
+  return toDateInputValue(d);
+}
+
+/** Keep existing clock times when only the calendar date changes on a board move. */
+function scheduleFromInterviewDate(
+  iv: { scheduledAt?: string | null; endsAt?: string | null },
+  date: string,
+): { scheduledAt: string; endsAt: string } {
+  const start = splitDateTime(iv.scheduledAt || '');
+  const end = splitDateTime(iv.endsAt || '');
+  return schedulePayload(date, start.time || '09:00', end.time || '10:00');
 }
 
 export default function InterviewsPage() {
@@ -652,18 +703,8 @@ export default function InterviewsPage() {
       return;
     }
     if (!form.date) {
-      notify.error('Select a date');
+      notify.error('Select a scheduled date');
       return;
-    }
-    if (mode === 'create') {
-      if (!form.startTime || !form.endTime) {
-        notify.error('Select start and end time');
-        return;
-      }
-      if (form.endTime <= form.startTime) {
-        notify.error('End time must be after start time');
-        return;
-      }
     }
     if (form.stage === 'tech' && !form.techSubStage) {
       notify.error('Select a Tech sub-stage');
@@ -712,6 +753,7 @@ export default function InterviewsPage() {
   const buildSaveBody = (f: InterviewFormState): Record<string, unknown> => {
     const resolvedStage = resolveInterviewStage(f.stage, f.techSubStage);
     const { scheduledAt, endsAt } = schedulePayload(f.date, f.startTime, f.endTime);
+    const history = withCurrentStageInHistory(f.stageHistory, resolvedStage, f.date);
     return {
       accountId: f.accountId,
       scheduledAt,
@@ -724,14 +766,17 @@ export default function InterviewsPage() {
       jobUrl: f.jobUrl,
       transcript: f.transcript,
       note: f.note,
-      stageHistory: withCurrentStageInHistory(f.stageHistory, resolvedStage),
+      stageHistory: history.map((e) => ({
+        stage: e.stage,
+        ...(e.scheduledAt ? { scheduledAt: e.scheduledAt } : {}),
+      })),
     };
   };
 
   const savePanel = async () => {
     if (!panelInterview) return;
     if (!panelForm.date) {
-      notify.error('Select a date');
+      notify.error('Select a scheduled date');
       return;
     }
     if (panelForm.stage === 'tech' && !panelForm.techSubStage) {
@@ -768,15 +813,48 @@ export default function InterviewsPage() {
 
   const [activeDragInterview, setActiveDragInterview] = useState<Interview | null>(null);
   const [dropTargetColumn, setDropTargetColumn] = useState<BoardColumnKey | null>(null);
-  const [techPickInterview, setTechPickInterview] = useState<Interview | null>(null);
-  const [techPickSubStage, setTechPickSubStage] = useState('');
-  const [techPickSaving, setTechPickSaving] = useState(false);
+  /** Confirm dialog after dropping a card onto another pan (Tech includes sub-stage radios). */
+  const [movePrompt, setMovePrompt] = useState<null | {
+    interview: Interview;
+    kind: 'tech' | 'stage';
+    targetStage: string;
+    label: string;
+  }>(null);
+  const [moveSubStage, setMoveSubStage] = useState('');
+  const [moveDate, setMoveDate] = useState('');
+  const [moveSaving, setMoveSaving] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  const applyStageMove = async (iv: Interview, newStage: string, label: string) => {
+  const syncInterviewForms = (ivId: string, updated: Interview) => {
+    if (panelInterview?._id === ivId) {
+      setPanelInterview(updated);
+      setPanelForm(interviewToForm(updated));
+    }
+    if (active?._id === ivId) {
+      setActive(updated);
+      setForm(interviewToForm(updated));
+    }
+  };
+
+  const applyStageMove = async (
+    iv: Interview,
+    newStage: string,
+    label: string,
+    scheduledDate?: string,
+  ) => {
     const ivId = iv._id;
     const previousData = data;
     const prevStage = iv.stage || undefined;
+    const tipDate = scheduledDate || (() => {
+      const raw = iv.scheduledAt;
+      if (!raw) return undefined;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return undefined;
+      return toDateInputValue(d);
+    })();
+    const schedulePatch = scheduledDate ? scheduleFromInterviewDate(iv, scheduledDate) : null;
+
     mutate(
       (current) => {
         if (!current) return current;
@@ -784,20 +862,23 @@ export default function InterviewsPage() {
           ...current,
           interviews: (current.interviews as Interview[]).map((item) => {
             if (item._id !== ivId) return item;
-            const existing = getInterviewMovementTrail(item);
-            let nextHistory = existing;
+            let nextHistory = getInterviewMovementEntries(item);
             if (prevStage && nextHistory.length === 0) {
-              nextHistory = [prevStage];
-            } else if (prevStage && nextHistory[nextHistory.length - 1] !== prevStage) {
-              nextHistory = [...nextHistory, prevStage];
+              nextHistory = [{ stage: prevStage, ...(item.scheduledAt ? { scheduledAt: interviewDateInput(item) } : {}) }];
+            } else if (prevStage && nextHistory[nextHistory.length - 1]?.stage !== prevStage) {
+              nextHistory = [
+                ...nextHistory,
+                { stage: prevStage, ...(item.scheduledAt ? { scheduledAt: interviewDateInput(item) } : {}) },
+              ];
             }
-            if (nextHistory[nextHistory.length - 1] !== newStage) {
-              nextHistory = [...nextHistory, newStage];
-            }
+            nextHistory = withCurrentStageInHistory(nextHistory, newStage, tipDate);
             return {
               ...item,
               stage: newStage,
-              stageHistory: nextHistory.map((s) => ({ stage: s })),
+              stageHistory: nextHistory,
+              ...(schedulePatch
+                ? { scheduledAt: schedulePatch.scheduledAt, endsAt: schedulePatch.endsAt }
+                : {}),
             };
           }),
         };
@@ -806,11 +887,13 @@ export default function InterviewsPage() {
     );
 
     try {
-      const updated = await api.updateInterview(iv._id, { stage: newStage });
-      if (panelInterview?._id === ivId) {
-        setPanelInterview(updated as unknown as Interview);
-        setPanelForm(interviewToForm(updated as unknown as Interview));
+      const body: Record<string, unknown> = { stage: newStage };
+      if (schedulePatch) {
+        body.scheduledAt = schedulePatch.scheduledAt;
+        body.endsAt = schedulePatch.endsAt;
       }
+      const updated = await api.updateInterview(iv._id, body);
+      syncInterviewForms(ivId, updated as unknown as Interview);
       if (stage && stage !== newStage && !isTechBoardStage(stage)) setStage('');
       await mutate();
       notify.success(`Moved to ${label}`);
@@ -835,6 +918,13 @@ export default function InterviewsPage() {
     setDropTargetColumn(col ?? null);
   };
 
+  const closeMovePrompt = () => {
+    if (moveSaving) return;
+    setMovePrompt(null);
+    setMoveSubStage('');
+    setMoveDate('');
+  };
+
   const onInterviewDragEnd = async (e: DragEndEvent) => {
     setActiveDragInterview(null);
     const ivId = String(e.active.id);
@@ -849,34 +939,47 @@ export default function InterviewsPage() {
     }
     const sourceCol = boardColumnForStage(iv.stage);
 
-    // Dropping onto Tech always opens the sub-stage picker (including Tech → Tech).
+    // Dropping onto Tech always opens the sub-stage + date picker (including Tech → Tech).
     if (targetCol === 'tech') {
-      setTechPickInterview(iv);
-      setTechPickSubStage(toTechSubStage(iv.stage) || TECH_SUB_STAGES[0].value);
+      setMovePrompt({ interview: iv, kind: 'tech', targetStage: '', label: 'Tech' });
+      setMoveSubStage(toTechSubStage(iv.stage) || TECH_SUB_STAGES[0].value);
+      setMoveDate(interviewDateInput(iv));
       return;
     }
 
     if (targetCol === sourceCol) return;
     const newStage = BOARD_COLUMN_TO_STAGE[targetCol];
     const colLabel = BOARD_COLUMNS.find((c) => c.key === targetCol)?.label ?? stageLabel(newStage);
-    await applyStageMove(iv, newStage, colLabel);
+    setMovePrompt({ interview: iv, kind: 'stage', targetStage: newStage, label: colLabel });
+    setMoveDate(interviewDateInput(iv));
   };
 
-  const confirmTechPick = async () => {
-    if (!techPickInterview || !techPickSubStage) {
-      notify.error('Select a Tech sub-stage');
+  const confirmMovePrompt = async () => {
+    if (!movePrompt) return;
+    if (!moveDate) {
+      notify.error('Select a scheduled date');
       return;
     }
-    if (techPickInterview.stage === techPickSubStage) {
-      setTechPickInterview(null);
+    const newStage = movePrompt.kind === 'tech' ? moveSubStage : movePrompt.targetStage;
+    if (!newStage) {
+      notify.error(movePrompt.kind === 'tech' ? 'Select a Tech sub-stage' : 'Select a stage');
       return;
     }
-    setTechPickSaving(true);
+    const label = movePrompt.kind === 'tech' ? stageLabel(newStage) : movePrompt.label;
+    const sameStage = movePrompt.interview.stage === newStage;
+    const sameDate = interviewDateInput(movePrompt.interview) === moveDate;
+    if (sameStage && sameDate) {
+      closeMovePrompt();
+      return;
+    }
+    setMoveSaving(true);
     try {
-      await applyStageMove(techPickInterview, techPickSubStage, stageLabel(techPickSubStage));
-      setTechPickInterview(null);
+      await applyStageMove(movePrompt.interview, newStage, label, moveDate);
+      setMovePrompt(null);
+      setMoveSubStage('');
+      setMoveDate('');
     } finally {
-      setTechPickSaving(false);
+      setMoveSaving(false);
     }
   };
 
@@ -917,10 +1020,7 @@ export default function InterviewsPage() {
     ...BOARD_FORM_STAGES,
   ], []);
 
-  const techSubStageOptions = useMemo(() => [
-    { value: '', label: 'Select Tech sub-stage' },
-    ...TECH_SUB_STAGES,
-  ], []);
+  const techSubStageOptions = useMemo(() => [...TECH_SUB_STAGES], []);
 
   const statusFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
@@ -1166,16 +1266,8 @@ export default function InterviewsPage() {
                   <div className="font-medium">{form.appliedPosition || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-muted text-xs">Date</div>
+                  <div className="text-muted text-xs">Scheduled date</div>
                   <div>{form.date || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">Start time</div>
-                  <div>{form.startTime || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">End time</div>
-                  <div>{form.endTime || '—'}</div>
                 </div>
               </div>
               <div>
@@ -1207,7 +1299,6 @@ export default function InterviewsPage() {
                 statusFormOptions={statusFormOptions}
                 accountDisabled={mode === 'update' && !!active && !canEdit(active)}
                 datalistId="applied-position-suggestions-modal"
-                showTimes={mode === 'create'}
               />
 
               <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
@@ -1219,7 +1310,7 @@ export default function InterviewsPage() {
                   disabled={
                     saving
                     || !form.date
-                    || (mode === 'create' && (!form.startTime || !form.endTime || !form.accountId))
+                    || (mode === 'create' && !form.accountId)
                     || (form.stage === 'tech' && !form.techSubStage)
                   }
                 >
@@ -1259,54 +1350,76 @@ export default function InterviewsPage() {
         </div>
       </Modal>
 
-      {/* Tech sub-stage picker when dropping onto Tech pan */}
+      {/* Stage-move confirm: scheduled date (+ Tech sub-stage radios when dropping on Tech) */}
       <Modal
-        open={!!techPickInterview}
-        onClose={() => { if (!techPickSaving) setTechPickInterview(null); }}
-        title="Select Tech sub-stage"
+        open={!!movePrompt}
+        onClose={closeMovePrompt}
+        title={movePrompt?.kind === 'tech' ? 'Select Tech sub-stage' : `Move to ${movePrompt?.label ?? 'stage'}`}
       >
         <div className="space-y-4">
-          <p className="text-sm text-muted">
-            Choose which Tech round this interview is in.
-          </p>
-          <div className="space-y-2">
-            {TECH_SUB_STAGES.map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex items-center gap-3 rounded-[10px] border px-3 py-2.5 cursor-pointer transition-colors ${
-                  techPickSubStage === opt.value
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="tech-sub-stage"
-                  value={opt.value}
-                  checked={techPickSubStage === opt.value}
-                  onChange={() => setTechPickSubStage(opt.value)}
-                  className="accent-primary"
-                />
-                <span className="text-sm font-medium text-gray-900">{opt.label}</span>
-              </label>
-            ))}
+          {movePrompt?.kind === 'tech' ? (
+            <>
+              <p className="text-sm text-muted">
+                Choose which Tech round this interview is in, and the scheduled date for that round.
+              </p>
+              <div className="space-y-2">
+                {TECH_SUB_STAGES.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center gap-3 rounded-[10px] border px-3 py-2.5 cursor-pointer transition-colors ${
+                      moveSubStage === opt.value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="tech-sub-stage"
+                      value={opt.value}
+                      checked={moveSubStage === opt.value}
+                      onChange={() => setMoveSubStage(opt.value)}
+                      className="accent-primary"
+                    />
+                    <span className="text-sm font-medium text-gray-900">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              Set the scheduled date for <span className="font-medium text-gray-900">{movePrompt?.label}</span>.
+            </p>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Scheduled date <span className="text-red-500">*</span>
+            </label>
+            <input
+              className="input"
+              type="date"
+              value={moveDate}
+              disabled={moveSaving}
+              onChange={(e) => setMoveDate(e.target.value)}
+            />
           </div>
+
           <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
             <button
               type="button"
               className="btn-outline"
-              onClick={() => setTechPickInterview(null)}
-              disabled={techPickSaving}
+              onClick={closeMovePrompt}
+              disabled={moveSaving}
             >
               Cancel
             </button>
             <button
               type="button"
               className="btn"
-              onClick={confirmTechPick}
-              disabled={techPickSaving || !techPickSubStage}
+              onClick={confirmMovePrompt}
+              disabled={moveSaving || !moveDate || (movePrompt?.kind === 'tech' && !moveSubStage)}
             >
-              {techPickSaving ? 'Moving…' : 'Confirm'}
+              {moveSaving ? 'Moving…' : 'Confirm'}
             </button>
           </div>
         </div>
@@ -1541,7 +1654,6 @@ function InterviewFormFields({
   accountDisabled,
   datalistId,
   disabled,
-  showTimes = true,
 }: {
   form: InterviewFormState;
   setForm: React.Dispatch<React.SetStateAction<InterviewFormState>>;
@@ -1552,8 +1664,6 @@ function InterviewFormFields({
   accountDisabled?: boolean;
   datalistId: string;
   disabled?: boolean;
-  /** Create form shows start/end time; edit/panel hide them. */
-  showTimes?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -1570,50 +1680,20 @@ function InterviewFormFields({
         />
       </div>
 
-      {showTimes ? (
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Date <span className="text-red-500">*</span>
-            </label>
-            <input className="input" type="date" value={form.date} disabled={disabled} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Start time <span className="text-red-500">*</span>
-            </label>
-            <input className="input" type="time" value={form.startTime} disabled={disabled} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              End time <span className="text-red-500">*</span>
-            </label>
-            <input className="input" type="time" value={form.endTime} disabled={disabled} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
-          </div>
-        </div>
-      ) : (
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Date <span className="text-red-500">*</span>
-          </label>
-          <input className="input" type="date" value={form.date} disabled={disabled} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-        </div>
-      )}
-
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium mb-1">Company Name</label>
-          <input className="input" type="text" value={form.companyName} disabled={disabled} onChange={(e) => setForm({ ...form, companyName: e.target.value })} placeholder="e.g. Acme Corp" />
+          <input className="input" type="text" value={form.companyName} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))} placeholder="e.g. Acme Corp" />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Interviewer Name</label>
-          <input className="input" type="text" value={form.interviewerName} disabled={disabled} onChange={(e) => setForm({ ...form, interviewerName: e.target.value })} placeholder="e.g. Jane Smith" />
+          <input className="input" type="text" value={form.interviewerName} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, interviewerName: e.target.value }))} placeholder="e.g. Jane Smith" />
         </div>
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Applied Position</label>
-        <input className="input" type="text" value={form.appliedPosition} disabled={disabled} onChange={(e) => setForm({ ...form, appliedPosition: e.target.value })} placeholder="e.g. Backend, Frontend…" list={datalistId} />
+        <input className="input" type="text" value={form.appliedPosition} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, appliedPosition: e.target.value }))} placeholder="e.g. Backend, Frontend…" list={datalistId} />
         <datalist id={datalistId}>
           <option value="Backend" /><option value="Frontend" /><option value="Fullstack" />
           <option value="AI / ML" /><option value="Mobile" /><option value="DevOps" />
@@ -1623,7 +1703,7 @@ function InterviewFormFields({
 
       <div>
         <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
-        <input className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm({ ...form, jobUrl: e.target.value })} placeholder="https://..." />
+        <input className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, jobUrl: e.target.value }))} placeholder="https://..." />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -1632,16 +1712,28 @@ function InterviewFormFields({
           <Select
             value={form.stage}
             onChange={(v) => {
-              const techSub = v === 'tech' ? form.techSubStage : '';
-              const resolved = resolveInterviewStage(v, techSub);
-              setForm({
-                ...form,
-                stage: v,
-                techSubStage: techSub,
-                stageHistory: withCurrentStageInHistory(
-                  form.stageHistory.filter((s) => s !== resolved),
-                  resolved,
-                ),
+              setForm((prev) => {
+                if (v === 'tech') {
+                  // Board-level Tech only — wait for a concrete sub-stage before history.
+                  return {
+                    ...prev,
+                    stage: 'tech',
+                    techSubStage: '',
+                  };
+                }
+                const resolved = resolveInterviewStage(v, '');
+                return {
+                  ...prev,
+                  stage: v,
+                  techSubStage: '',
+                  stageHistory: resolved
+                    ? withCurrentStageInHistory(
+                        prev.stageHistory.filter((e) => e.stage !== resolved),
+                        resolved,
+                        prev.date,
+                      )
+                    : prev.stageHistory,
+                };
               });
             }}
             options={stageFormOptions}
@@ -1650,69 +1742,97 @@ function InterviewFormFields({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Status</label>
-          <Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={statusFormOptions} placeholder="Select a status" disabled={disabled} />
+          <label className="block text-sm font-medium mb-1">
+            Scheduled date <span className="text-red-500">*</span>
+          </label>
+          <input
+            className="input"
+            type="date"
+            value={form.date}
+            disabled={disabled}
+            onChange={(e) => {
+              const nextDate = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                date: nextDate,
+                stageHistory: withTipScheduledDate(prev.stageHistory, nextDate),
+              }));
+            }}
+          />
         </div>
       </div>
 
-      {form.stage === 'tech' && (
+      <div className={`grid gap-3 ${form.stage === 'tech' ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div>
-          <label className="block text-sm font-medium mb-1">
-            Tech sub-stage <span className="text-red-500">*</span>
-          </label>
-          <Select
-            value={form.techSubStage}
-            onChange={(v) => {
-              const resolved = resolveInterviewStage('tech', v);
-              setForm({
-                ...form,
-                techSubStage: v,
-                stageHistory: withCurrentStageInHistory(
-                  form.stageHistory.filter((s) => s !== resolved),
-                  resolved,
-                ),
-              });
-            }}
-            options={techSubStageOptions}
-            placeholder="Select a Tech sub-stage"
-            disabled={disabled}
-          />
+          <label className="block text-sm font-medium mb-1">Status</label>
+          <Select value={form.status} onChange={(v) => setForm((prev) => ({ ...prev, status: v }))} options={statusFormOptions} placeholder="Select a status" disabled={disabled} />
         </div>
-      )}
+        {form.stage === 'tech' && (
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Tech sub-stage <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={form.techSubStage}
+              onChange={(v) => {
+                setForm((prev) => ({
+                  ...prev,
+                  techSubStage: v,
+                  stageHistory: v
+                    ? withCurrentStageInHistory(
+                        prev.stageHistory.filter((e) => e.stage !== v),
+                        v,
+                        prev.date,
+                      )
+                    : prev.stageHistory,
+                }));
+              }}
+              options={techSubStageOptions}
+              placeholder="Select a Tech sub-stage"
+              disabled={disabled}
+            />
+          </div>
+        )}
+      </div>
 
       {(form.stageHistory.length > 0 || !disabled) && (
         <div>
           <label className="block text-sm font-medium mb-1">Stage movement</label>
           <p className="text-xs text-gray-500 mb-2">
-            Path used for pass-rate analysis. Remove a mistaken board move here.
+            Path used for pass-rate analysis. Each badge shows that round&apos;s interview date.
           </p>
           {form.stageHistory.length === 0 ? (
             <div className="text-xs text-gray-400 italic">No stage moves yet.</div>
           ) : (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {form.stageHistory.map((s, i) => (
-                <span key={`${s}-${i}`} className="inline-flex items-center gap-1">
-                  {i > 0 && <span className="text-[10px] text-gray-400">→</span>}
-                  <span className={`inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-[6px] text-[11px] font-medium border ${stageBadgeClass(s)}`}>
-                    {stageLabel(s)}
-                    {!disabled && (
-                      <button
-                        type="button"
-                        className="ml-0.5 p-0.5 rounded hover:bg-black/10 text-current/70 hover:text-current"
-                        title={`Remove ${stageLabel(s)}`}
-                        aria-label={`Remove ${stageLabel(s)}`}
-                        onClick={() => {
-                          const next = form.stageHistory.filter((_, idx) => idx !== i);
-                          setForm({
-                            ...form,
-                            stageHistory: next,
-                            ...applyHistoryTipToForm(next),
-                          });
-                        }}
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
+            <div className="flex flex-wrap items-end gap-1.5">
+              {form.stageHistory.map((entry, i) => (
+                <span key={`${entry.stage}-${i}`} className="inline-flex items-end gap-1">
+                  {i > 0 && <span className="text-[10px] text-gray-400 pb-4">→</span>}
+                  <span className="inline-flex flex-col items-center gap-0.5">
+                    <span className={`inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-[6px] text-[11px] font-medium border ${stageBadgeClass(entry.stage)}`}>
+                      {stageLabel(entry.stage)}
+                      {!disabled && (
+                        <button
+                          type="button"
+                          className="ml-0.5 p-0.5 rounded hover:bg-black/10 text-current/70 hover:text-current"
+                          title={`Remove ${stageLabel(entry.stage)}`}
+                          aria-label={`Remove ${stageLabel(entry.stage)}`}
+                          onClick={() => {
+                            const next = form.stageHistory.filter((_, idx) => idx !== i);
+                            setForm({
+                              ...form,
+                              stageHistory: next,
+                              ...applyHistoryTipToForm(next),
+                            });
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-gray-500 leading-none">
+                      {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : '—'}
+                    </span>
                   </span>
                 </span>
               ))}
@@ -1767,7 +1887,7 @@ function InterviewFormFields({
 
       <div>
         <label className="block text-sm font-medium mb-1">Note</label>
-        <textarea className="input w-full" rows={4} value={form.note} disabled={disabled} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Internal notes…" />
+        <textarea className="input w-full" rows={4} value={form.note} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))} placeholder="Internal notes…" />
       </div>
     </div>
   );
@@ -1841,7 +1961,6 @@ function InterviewSidePanel({
           accountDisabled={!editable}
           datalistId="applied-position-suggestions-panel"
           disabled={!editable}
-          showTimes={false}
         />
       </div>
 

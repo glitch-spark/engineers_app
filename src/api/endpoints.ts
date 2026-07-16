@@ -510,7 +510,7 @@ export interface ApplicationDoc {
   appliedAt?: string | null;
   lastTouchedAt?: string | null;
   notes: string;
-  stageHistory: Array<{ stage: string; at: string; by?: string | null; source?: string }>;
+  stageHistory: Array<{ stage: string; at: string; by?: string | null; source?: string; scheduledAt?: string | null }>;
   archivedAt?: string | null;
   // AI-proposed cards (from email) start unconfirmed and render with Yes/No.
   confirmed: boolean;

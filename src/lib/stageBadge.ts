@@ -66,7 +66,8 @@ export function normalizeInterviewStage(stage?: string | null): string {
 /** Resolve form board stage + optional tech sub-stage into the API stage string. */
 export function resolveInterviewStage(boardStage: string, techSubStage: string): string {
   if (!boardStage) return '';
-  if (boardStage === 'tech') return techSubStage || 'tech_round_1';
+  // Tech is only a board column — no stage until a sub-stage is chosen.
+  if (boardStage === 'tech') return techSubStage || '';
   return boardStage;
 }
 
@@ -127,17 +128,44 @@ export function getInterviewMovementTrail(iv: {
   stage?: string | null;
   stageHistory?: Array<{ stage: string }>;
 }): string[] {
-  const trail: string[] = [];
-  const push = (raw?: string | null) => {
-    const s = normalizeInterviewStage(raw);
+  return getInterviewMovementEntries(iv).map((e) => e.stage);
+}
+
+export type MovementEntry = { stage: string; scheduledAt?: string };
+
+/** Movement trail with per-round scheduled dates (YYYY-MM-DD when available). */
+export function getInterviewMovementEntries(iv: {
+  stage?: string | null;
+  scheduledAt?: string | null;
+  stageHistory?: Array<{ stage: string; scheduledAt?: string | null }>;
+}): MovementEntry[] {
+  const trail: MovementEntry[] = [];
+  const toDate = (raw?: string | null): string | undefined => {
+    if (!raw) return undefined;
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return undefined;
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  const push = (rawStage?: string | null, rawDate?: string | null) => {
+    const s = normalizeInterviewStage(rawStage);
     if (!s) return;
-    if (trail[trail.length - 1] === s) return;
-    trail.push(s);
+    const date = toDate(rawDate);
+    const tip = trail[trail.length - 1];
+    if (tip?.stage === s) {
+      if (date && tip.scheduledAt !== date) tip.scheduledAt = date;
+      return;
+    }
+    trail.push({ stage: s, ...(date ? { scheduledAt: date } : {}) });
   };
   for (const h of iv.stageHistory ?? []) {
-    push(h.stage);
+    push(h.stage, h.scheduledAt);
   }
-  push(iv.stage);
+  push(iv.stage, iv.scheduledAt);
   return trail;
 }
 
