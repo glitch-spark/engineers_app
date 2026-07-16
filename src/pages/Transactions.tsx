@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import Modal from '../components/Modal';
 import { Pencil, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
@@ -27,6 +27,7 @@ type Tx = {
 };
 
 export default function TransactionsPage() {
+  const formId = useId();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -268,13 +269,13 @@ export default function TransactionsPage() {
         <table className="min-w-full text-sm">
           <thead className="table-head">
             <tr>
-              <th className="px-3 py-2">Date</th>
-              <th className="px-3 py-2">Amount</th>
-              <th className="px-3 py-2">Description</th>
-              <th className="px-3 py-2">Pay method</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Owner</th>
-              <th className="px-3 py-2 w-48">Actions</th>
+              <th className="px-4 py-2.5">Date</th>
+              <th className="px-4 py-2.5">Amount</th>
+              <th className="px-4 py-2.5">Description</th>
+              <th className="px-4 py-2.5">Pay method</th>
+              <th className="px-4 py-2.5">Status</th>
+              <th className="px-4 py-2.5">Owner</th>
+              <th className="px-4 py-2.5 w-48">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -296,21 +297,22 @@ export default function TransactionsPage() {
                 const isPending = t.status === 'pending';
                 return (
                   <tr key={t._id} className="table-row">
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">
                       {t.date ? new Date(t.date).toISOString().split('T')[0] : '—'}
                     </td>
-                    <td className="px-3 py-2">${Number(t.amount || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2">{t.description || '—'}</td>
-                    <td className="px-3 py-2">{formatPayMethod(t)}</td>
-                    <td className="px-3 py-2">{t.status}</td>
-                    <td className="px-3 py-2"><NameWithAvatar name={t.ownerName || t.userId?.name} imageUrl={t.ownerImage || t.userId?.image} /></td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5 tabular-nums">${Number(t.amount || 0).toFixed(2)}</td>
+                    <td className="px-4 py-2.5">{t.description || '—'}</td>
+                    <td className="px-4 py-2.5">{formatPayMethod(t)}</td>
+                    <td className="px-4 py-2.5 capitalize">{t.status}</td>
+                    <td className="px-4 py-2.5"><NameWithAvatar name={t.ownerName || t.userId?.name} imageUrl={t.ownerImage || t.userId?.image} /></td>
+                    <td className="px-4 py-2.5">
                       <div className="flex gap-1 flex-wrap">
                         <button
                           type="button"
                           className="btn-icon"
                           onClick={() => { setEditing(t); setError(''); setOpen(true); }}
                           disabled={!isPending && !isAdmin}
+                          aria-label="Edit transaction"
                           title="Edit"
                         >
                           <Pencil size={16} />
@@ -320,16 +322,17 @@ export default function TransactionsPage() {
                           className="btn-icon"
                           onClick={() => remove(t)}
                           disabled={!isPending && !isAdmin}
+                          aria-label="Delete transaction"
                           title="Delete"
                         >
                           <Trash2 size={16} />
                         </button>
                         {isAdmin && isPending && (
                           <>
-                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'approved')} title="Approve">
+                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'approved')} aria-label="Approve transaction" title="Approve">
                               <CheckCircle size={16} />
                             </button>
-                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'rejected')} title="Reject">
+                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'rejected')} aria-label="Reject transaction" title="Reject">
                               <XCircle size={16} />
                             </button>
                           </>
@@ -401,37 +404,54 @@ export default function TransactionsPage() {
         onClose={() => setOpen(false)}
         title={editing ? 'Edit Transaction' : 'Add Transaction'}
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {error && <p className="text-red-600 text-sm">{error}</p>}
-          <input
-            className="input"
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-          />
-          <input
-            className="input"
-            type="number"
-            step="0.01"
-            placeholder="Amount (USD)"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: Number(e.target.value || 0) })}
-          />
-          <input
-            className="input"
-            placeholder="Description"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-          <textarea
-            className="input"
-            placeholder="Notes"
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          />
           <div>
-            <label className="block text-xs mb-1 text-muted">Pay method <span className="text-red-500">*</span></label>
+            <label htmlFor={`${formId}-date`} className="form-label mb-1 block">Date <span className="text-red-500">*</span></label>
+            <input
+              id={`${formId}-date`}
+              className="input"
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+            />
+          </div>
+          <div>
+            <label htmlFor={`${formId}-amount`} className="form-label mb-1 block">Amount (USD) <span className="text-red-500">*</span></label>
+            <input
+              id={`${formId}-amount`}
+              className="input"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <label htmlFor={`${formId}-description`} className="form-label mb-1 block">Description</label>
+            <input
+              id={`${formId}-description`}
+              className="input"
+              placeholder="Description"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </div>
+          <div>
+            <label htmlFor={`${formId}-notes`} className="form-label mb-1 block">Notes</label>
+            <textarea
+              id={`${formId}-notes`}
+              className="input"
+              placeholder="Notes"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </div>
+          <div>
+            <label htmlFor={`${formId}-pay-method`} className="form-label mb-1 block">Pay method <span className="text-red-500">*</span></label>
             <select
+              id={`${formId}-pay-method`}
               className="select focus-ring w-full"
               value={form.payMethod}
               onChange={(e) => {
@@ -446,8 +466,9 @@ export default function TransactionsPage() {
           </div>
           {form.payMethod === 'card' && (
             <div>
-              <label className="block text-xs mb-1 text-muted">Last 4 digits of card <span className="text-red-500">*</span></label>
+              <label htmlFor={`${formId}-card-last4`} className="form-label mb-1 block">Last 4 digits of card <span className="text-red-500">*</span></label>
               <input
+                id={`${formId}-card-last4`}
                 className="input"
                 inputMode="numeric"
                 maxLength={4}
@@ -457,7 +478,7 @@ export default function TransactionsPage() {
               />
             </div>
           )}
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end pt-1">
             <button
               type="button"
               className="btn"

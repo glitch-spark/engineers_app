@@ -82,7 +82,7 @@ export default function AccountsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Profiles"
-        action={<button className="btn" onClick={() => navigate('/accounts/new')}>Add</button>}
+        action={<button type="button" className="btn" onClick={() => navigate('/accounts/new')}>Add</button>}
       />
 
       <div className="flex items-end gap-3 flex-wrap toolbar">
@@ -101,8 +101,10 @@ export default function AccountsPage() {
             />
             {searchTerm && (
               <button
+                type="button"
                 onClick={clearSearch}
                 className="absolute inset-y-0 right-2 flex items-center text-faint hover:text-muted"
+                aria-label="Clear search"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -167,12 +169,12 @@ export default function AccountsPage() {
         <table className="min-w-full text-sm">
           <thead className="table-head">
             <tr>
-              <th className="px-3 py-2">Name</th>
-              <th className="px-3 py-2">Owner</th>
-              <th className="px-3 py-2 w-24 text-center" title="Include in Resume Generator profile picker">
+              <th className="px-4 py-2.5">Name</th>
+              <th className="px-4 py-2.5">Owner</th>
+              <th className="px-4 py-2.5 w-24 text-center" title="Include in Resume Generator profile picker">
                 Generate
               </th>
-              <th className="px-3 py-2 w-20">Actions</th>
+              <th className="px-4 py-2.5 w-20">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -194,23 +196,25 @@ export default function AccountsPage() {
             ) : accounts.map((a) => (
               <tr
                 key={a._id}
-                className="table-row cursor-pointer"
+                className="table-row cursor-pointer transition-colors"
                 onClick={() => navigate(`/accounts/${a._id}`)}
               >
-                <td className="px-3 py-2">{a.name}</td>
-                <td className="px-3 py-2"><NameWithAvatar name={a.ownerName} imageUrl={a.ownerImage} /></td>
-                <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={a.showInGenerate !== false}
-                    onChange={() => toggleShowInGenerate(a)}
-                    title="Show this profile in Resume Generator"
-                    aria-label={`Show ${a.name} in Resume Generator`}
-                    className="h-4 w-4"
-                  />
+                <td className="px-4 py-2.5">{a.name}</td>
+                <td className="px-4 py-2.5"><NameWithAvatar name={a.ownerName} imageUrl={a.ownerImage} /></td>
+                <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-center">
+                    <input
+                      type="checkbox"
+                      checked={a.showInGenerate !== false}
+                      onChange={() => toggleShowInGenerate(a)}
+                      title="Show this profile in Resume Generator"
+                      aria-label={`Show ${a.name} in Resume Generator`}
+                      className="h-4 w-4"
+                    />
+                  </div>
                 </td>
-                <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                  <button className="btn-icon" onClick={() => remove(a)} title="Delete"><Trash2 size={16} /></button>
+                <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" className="btn-icon" onClick={() => remove(a)} aria-label={`Delete profile ${a.name}`} title="Delete"><Trash2 size={16} /></button>
                 </td>
               </tr>
             ))}
