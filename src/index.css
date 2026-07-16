@@ -145,9 +145,81 @@ table { font-variant-numeric: tabular-nums; }
   @apply dark:border-red-900/50 dark:text-red-400;
 }
 
+/* transitions-dev — modal + drawer (compositor-friendly; no backdrop blur) */
+:root {
+  --modal-open-dur: 250ms;
+  --modal-close-dur: 150ms;
+  --modal-scale: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --drawer-open-dur: 320ms;
+  --drawer-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-overlay {
+  @apply absolute inset-0 bg-zinc-900/50;
+  opacity: 0;
+  transition: opacity var(--modal-open-dur) var(--modal-ease);
+}
+
+.modal-overlay.is-open {
+  opacity: 1;
+}
+
+.t-modal {
+  transform-origin: center;
+  transform: scale(var(--modal-scale));
+  opacity: 0;
+  transition:
+    transform var(--modal-open-dur) var(--modal-ease),
+    opacity var(--modal-open-dur) var(--modal-ease);
+  will-change: transform, opacity;
+}
+
+.t-modal.is-open {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.drawer-overlay {
+  @apply fixed inset-0 z-40 bg-zinc-900/40;
+  opacity: 0;
+  transition: opacity var(--drawer-open-dur) var(--drawer-ease);
+}
+
+.drawer-overlay.is-open {
+  opacity: 1;
+}
+
 .drawer {
   @apply fixed top-0 bottom-0 z-50 flex flex-col border-l border-zinc-200 bg-white shadow-strong;
   @apply dark:border-zinc-800 dark:bg-zinc-950;
+  transform: translateX(100%);
+  transition: transform var(--drawer-open-dur) var(--drawer-ease);
+  will-change: transform;
+}
+
+.drawer.is-open {
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay,
+  .t-modal,
+  .drawer-overlay,
+  .drawer {
+    transition: none !important;
+  }
+
+  .t-modal,
+  .drawer-overlay,
+  .modal-overlay {
+    opacity: 1 !important;
+  }
+
+  .t-modal,
+  .drawer {
+    transform: none !important;
+  }
 }
 
 .code-block {

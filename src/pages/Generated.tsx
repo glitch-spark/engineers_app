@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   Loader2,
@@ -605,6 +605,12 @@ function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
             <button
               type="button"
               onClick={() => copyAnswer(i, answer)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  copyAnswer(i, answer);
+                }
+              }}
               className={
                 'panel w-full text-left p-3 cursor-pointer transition-colors ' +
                 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ' +
@@ -675,12 +681,62 @@ function ScreeningPanel({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+  const [entered, setEntered] = useState(false);
   const [text, setText] = useState('');
   const [asking, setAsking] = useState(false);
   const [jdOpen, setJdOpen] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetterCopied, setCoverLetterCopied] = useState(false);
   const pairs = job.screeningPairs || [];
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    panel?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !panel) return;
+
+      const focusable = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = prevOverflow;
+      previouslyFocused.current?.focus();
+    };
+  }, [onClose]);
 
   async function copyCoverLetter() {
     const content = job.coverLetterText || '';
@@ -716,12 +772,24 @@ function ScreeningPanel({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-      <aside className="drawer right-0 w-full sm:w-[480px]">
-        <header className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2">
+      <button
+        type="button"
+        className={`drawer-overlay ${entered ? 'is-open' : ''}`}
+        onClick={onClose}
+        aria-label="Close screening panel"
+      />
+      <aside
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={`drawer right-0 w-full sm:w-[480px] outline-none ${entered ? 'is-open' : ''}`}
+      >
+        <header className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs text-muted">Screening Q&amp;A</div>
-            <div className="font-semibold text-strong truncate">{job.companyName}</div>
+            <div id={titleId} className="font-semibold text-strong truncate">{job.companyName}</div>
             <div className="text-xs text-muted truncate">{job.profileName}</div>
             {job.screeningLlmProvider && (
               <div className="mt-1">
@@ -734,10 +802,10 @@ function ScreeningPanel({
               </div>
             )}
           </div>
-          <button type="button" onClick={onClose} className="btn-icon" title="Close"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={onClose} className="btn-icon" aria-label="Close"><X className="w-4 h-4" /></button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {(job.resumeLlmFallbackReason || job.screeningLlmFallbackReason) && (
             <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-1.5">
               <div className="text-xs font-semibold text-amber-700 dark:text-amber-400">Fallback details</div>
@@ -812,7 +880,7 @@ function ScreeningPanel({
           </section>
         </div>
 
-        <footer className="p-4 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+        <footer className="px-6 py-5 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
           <label className="block text-xs text-muted">Ask screening questions — number them (<code>1.</code>, <code>2.</code>) for multiple. Unnumbered = one question.</label>
           <textarea
             value={text}
