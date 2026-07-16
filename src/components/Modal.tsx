@@ -14,7 +14,10 @@ export default function Modal({
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const [entered, setEntered] = useState(false);
+
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) {
@@ -26,6 +29,7 @@ export default function Modal({
     return () => cancelAnimationFrame(frame);
   }, [open]);
 
+  // Focus the dialog only when it opens — not when parent re-renders (e.g. typing).
   useEffect(() => {
     if (!open) return;
 
@@ -35,7 +39,7 @@ export default function Modal({
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !panel) return;
@@ -67,7 +71,7 @@ export default function Modal({
       document.body.style.overflow = prevOverflow;
       previouslyFocused.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -76,7 +80,7 @@ export default function Modal({
       <button
         type="button"
         className={`modal-overlay ${entered ? 'is-open' : ''}`}
-        onClick={onClose}
+        onClick={() => onCloseRef.current()}
         aria-label="Close dialog"
       />
       <div
@@ -91,7 +95,7 @@ export default function Modal({
           <h2 id={titleId} className="section-title">
             {title}
           </h2>
-          <button type="button" onClick={onClose} className="btn-icon text-lg leading-none" aria-label="Close">
+          <button type="button" onClick={() => onCloseRef.current()} className="btn-icon text-lg leading-none" aria-label="Close">
             ×
           </button>
         </div>

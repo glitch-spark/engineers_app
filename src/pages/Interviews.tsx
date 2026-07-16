@@ -26,7 +26,20 @@ import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
-import { INTERVIEW_STAGES, stageBadgeClass, stageLabel } from '../lib/stageBadge';
+import {
+  BOARD_FORM_STAGES,
+  INTERVIEW_STAGES,
+  TECH_SUB_STAGES,
+  getInterviewMovementEntries,
+  getInterviewMovementTrail,
+  isTechBoardStage,
+  resolveInterviewStage,
+  stageBadgeClass,
+  stageLabel,
+  toBoardFormStage,
+  toTechSubStage,
+  type MovementEntry,
+} from '../lib/stageBadge';
 
 const editorStyles = `
   .ql-editor { min-height: 140px; font-size: 14px; line-height: 1.5; }
@@ -35,6 +48,10 @@ const editorStyles = `
   .prose p { margin-bottom: 0.75em; line-height: 1.6; }
   .prose ul, .prose ol { margin-bottom: 0.75em; padding-left: 1.5em; }
   .prose strong { font-weight: 600; } .prose em { font-style: italic; } .prose u { text-decoration: underline; }
+  .prose a { color: #2563eb; text-decoration: underline; }
+
+  /* Read-modal prose blocks: word-wrap, scroll vertically only, min 2 / max 5 lines.
+     line-height 1.5 * font-size 14px = 21px per line; padding adds ~16px each side. */
   .prose-readonly {
     font-size: 14px;
     line-height: 1.5;
@@ -49,9 +66,6 @@ const editorStyles = `
     word-wrap: break-word;
     word-break: break-word;
   }
-  html.dark .prose-readonly { border-color: #3f3f46; }
-  .prose a { color: #2563eb; text-decoration: underline; }
-  html.dark .prose a, html.dark .prose-readonly a { color: #38bdf8; }
   .prose-readonly p { margin: 0 0 0.5em 0; }
   .prose-readonly p:last-child { margin-bottom: 0; }
   .prose-readonly h1, .prose-readonly h2, .prose-readonly h3 { font-weight: 600; margin: 0.5em 0 0.25em; }
@@ -66,65 +80,65 @@ const STAGES = INTERVIEW_STAGES;
 
 const BOARD_COLUMNS = [
   { key: 'ai_interview', label: 'AI Interview', tone: 'border-emerald-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'intro', label: 'Intro', tone: 'border-zinc-300 dark:border-zinc-600', columnClass: 'flex-1 min-w-0' },
+  { key: 'intro', label: 'Intro', tone: 'border-gray-300', columnClass: 'flex-1 min-w-0' },
   { key: 'tech', label: 'Tech', tone: 'border-blue-300', columnClass: 'flex-1 min-w-0' },
   { key: 'hiring_manager', label: 'Hiring Manager', tone: 'border-pink-300', columnClass: 'flex-1 min-w-0' },
   { key: 'panel', label: 'Panel', tone: 'border-purple-300', columnClass: 'flex-1 min-w-0' },
   { key: 'final', label: 'Final', tone: 'border-amber-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'rejected', label: 'Rejected', tone: 'border-red-400', columnClass: 'flex-1 min-w-0' },
+  { key: 'rejected', label: 'Rejected', tone: 'border-red-300', columnClass: 'flex-1 min-w-0' },
 ] as const;
 
 type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
 
 const BOARD_CARD_STYLES: Record<BoardColumnKey, { card: string; hover: string; accent: string }> = {
   ai_interview: {
-    card: 'bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 border-emerald-200/90 dark:from-emerald-950/40 dark:via-zinc-950 dark:to-teal-950/30 dark:border-emerald-800/60',
-    hover: 'hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-100/80 dark:hover:border-emerald-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 border-emerald-200/90',
+    hover: 'hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-100/80',
     accent: 'bg-emerald-400',
   },
   intro: {
-    card: 'bg-gradient-to-br from-slate-50 via-white to-gray-50 border-slate-200 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900 dark:border-zinc-700',
-    hover: 'hover:border-slate-400 hover:shadow-md hover:shadow-slate-100/80 dark:hover:border-zinc-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-slate-50 via-white to-gray-50 border-slate-200',
+    hover: 'hover:border-slate-400 hover:shadow-md hover:shadow-slate-100/80',
     accent: 'bg-slate-400',
   },
   tech: {
-    card: 'bg-gradient-to-br from-blue-50 via-white to-sky-50/80 border-blue-200/90 dark:from-blue-950/40 dark:via-zinc-950 dark:to-sky-950/30 dark:border-blue-800/60',
-    hover: 'hover:border-blue-400 hover:shadow-md hover:shadow-blue-100/80 dark:hover:border-blue-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-blue-50 via-white to-sky-50/80 border-blue-200/90',
+    hover: 'hover:border-blue-400 hover:shadow-md hover:shadow-blue-100/80',
     accent: 'bg-blue-400',
   },
   hiring_manager: {
-    card: 'bg-gradient-to-br from-pink-50 via-white to-rose-50/80 border-pink-200/90 dark:from-pink-950/40 dark:via-zinc-950 dark:to-rose-950/30 dark:border-pink-800/60',
-    hover: 'hover:border-pink-400 hover:shadow-md hover:shadow-pink-100/80 dark:hover:border-pink-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-pink-50 via-white to-rose-50/80 border-pink-200/90',
+    hover: 'hover:border-pink-400 hover:shadow-md hover:shadow-pink-100/80',
     accent: 'bg-pink-400',
   },
   panel: {
-    card: 'bg-gradient-to-br from-purple-50 via-white to-violet-50/80 border-purple-200/90 dark:from-purple-950/40 dark:via-zinc-950 dark:to-violet-950/30 dark:border-purple-800/60',
-    hover: 'hover:border-purple-400 hover:shadow-md hover:shadow-purple-100/80 dark:hover:border-purple-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-purple-50 via-white to-violet-50/80 border-purple-200/90',
+    hover: 'hover:border-purple-400 hover:shadow-md hover:shadow-purple-100/80',
     accent: 'bg-purple-400',
   },
   final: {
-    card: 'bg-gradient-to-br from-amber-50 via-white to-orange-50/80 border-amber-200/90 dark:from-amber-950/40 dark:via-zinc-950 dark:to-orange-950/30 dark:border-amber-800/60',
-    hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80 dark:hover:border-amber-500 dark:hover:shadow-none',
+    card: 'bg-gradient-to-br from-amber-50 via-white to-orange-50/80 border-amber-200/90',
+    hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80',
     accent: 'bg-amber-400',
   },
   rejected: {
-    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90 dark:from-red-950/40 dark:via-zinc-950 dark:to-rose-950/30 dark:border-red-800/60',
-    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80 dark:hover:border-red-500 dark:hover:shadow-none',
-    accent: 'bg-red-500',
+    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90',
+    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80',
+    accent: 'bg-red-400',
   },
 };
 
-/** Visible pans at ~1440px desktop widths (7 pans are too cramped). */
-const BOARD_VISIBLE_WIDE = 5;
-/** Fewer pans on narrower viewports. */
+/** Visible column counts — 7 pans never all fit; scroll with arrows. */
+const BOARD_VISIBLE_WIDE = 5;   // window width > 1440px
 const BOARD_VISIBLE_NARROW = 4;
-const BOARD_WIDE_MIN_PX = 1280;
+const BOARD_WIDE_MIN_PX = 1441; // >1440px
 
 /** API stage written when a card is dropped on a board column. */
 const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
   ai_interview: 'ai_interview',
   intro: 'intro',
-  tech: 'tech',
+  // Tech pan always opens the sub-stage picker; this fallback is unused.
+  tech: 'tech_round_1',
   hiring_manager: 'cultural',
   panel: 'panel',
   final: 'final',
@@ -175,8 +189,11 @@ function boardColumnForStage(stage?: string | null): BoardColumnKey {
     case 'tech':
     case 'tech1':
     case 'tech2':
+    case 'tech_round_1':
+    case 'tech_round_2':
     case 'live_coding':
     case 'system_design':
+    case 'home_assessment':
       return 'tech';
     case 'cultural':
     case 'hiring_manager':
@@ -207,12 +224,12 @@ const STATUSES = [
 
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
-    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
+    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
     case 'completed': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
-    case 'passed': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800';
-    case 'failed': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
-    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800';
-    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-300 dark:border-yellow-800';
+    case 'passed': return 'bg-green-100 text-green-800 border-green-200';
+    case 'failed': return 'bg-red-100 text-red-800 border-red-200';
+    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
+    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600';
     default: return 'bg-zinc-50 dark:bg-zinc-900/80 text-muted border-zinc-200 dark:border-zinc-700';
   }
@@ -229,10 +246,10 @@ function boardStatusLabel(status?: string | null): string {
 
 function boardStatusClass(status?: string | null): string {
   if (status === 'scheduled' || status === 'rescheduled') {
-    return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
+    return 'bg-blue-100 text-blue-800 border-blue-200';
   }
   if (status === 'completed') {
-    return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
   }
   return statusBadgeClass(status);
 }
@@ -254,6 +271,7 @@ type Interview = {
   jobUrl?: string | null;
   transcript?: string;
   note?: string;
+  stageHistory?: Array<{ stage: string; at?: string; source?: string; scheduledAt?: string | null }>;
   ownerName?: string | null;
   ownerEmail?: string | null;
   createdAt?: string;
@@ -268,6 +286,9 @@ type InterviewFormState = {
   startTime: string;
   endTime: string;
   stage: string;
+  techSubStage: string;
+  /** Ordered stage entries for the movement trail (editable on the form). */
+  stageHistory: MovementEntry[];
   status: string;
   companyName: string;
   interviewerName: string;
@@ -291,6 +312,8 @@ function blankInterviewForm(): InterviewFormState {
     startTime: `${hh}:${mi}`,
     endTime: `${endHour}:${mi}`,
     stage: '',
+    techSubStage: '',
+    stageHistory: [],
     status: '',
     companyName: '',
     interviewerName: '',
@@ -310,7 +333,9 @@ function interviewToForm(iv: Interview): InterviewFormState {
     date: start.date,
     startTime: start.time,
     endTime: end.time || start.time,
-    stage: iv.stage || '',
+    stage: toBoardFormStage(iv.stage),
+    techSubStage: toTechSubStage(iv.stage),
+    stageHistory: getInterviewMovementEntries(iv),
     status: iv.status || '',
     companyName: iv.companyName || '',
     interviewerName: iv.interviewerName || '',
@@ -319,6 +344,46 @@ function interviewToForm(iv: Interview): InterviewFormState {
     transcript: iv.transcript || '',
     note: iv.note || '',
   };
+}
+
+/** Keep form stage fields in sync with the last movement-history entry. */
+function applyHistoryTipToForm(
+  history: MovementEntry[],
+): Partial<Pick<InterviewFormState, 'stage' | 'techSubStage' | 'date'>> {
+  const tip = history[history.length - 1];
+  const tipStage = tip?.stage || '';
+  return {
+    stage: toBoardFormStage(tipStage),
+    techSubStage: toTechSubStage(tipStage),
+    ...(tip?.scheduledAt ? { date: tip.scheduledAt } : {}),
+  };
+}
+
+/** Ensure the resolved current stage is the tip of the movement history. */
+function withCurrentStageInHistory(
+  history: MovementEntry[],
+  currentStage: string,
+  scheduledDate?: string,
+): MovementEntry[] {
+  if (!currentStage) return history;
+  const tip = history[history.length - 1];
+  if (tip?.stage === currentStage) {
+    if (scheduledDate && tip.scheduledAt !== scheduledDate) {
+      return [...history.slice(0, -1), { ...tip, scheduledAt: scheduledDate }];
+    }
+    return history;
+  }
+  return [
+    ...history,
+    { stage: currentStage, ...(scheduledDate ? { scheduledAt: scheduledDate } : {}) },
+  ];
+}
+
+/** When the scheduled date changes, stamp it onto the current tip stage entry. */
+function withTipScheduledDate(history: MovementEntry[], scheduledDate: string): MovementEntry[] {
+  if (!history.length || !scheduledDate) return history;
+  const tip = history[history.length - 1];
+  return [...history.slice(0, -1), { ...tip, scheduledAt: scheduledDate }];
 }
 
 function combineDateTime(date: string, time: string): string {
@@ -372,7 +437,72 @@ function formatPretty(startIso: string, endIso?: string | null): string {
 }
 
 const formatScheduled = (iso: string) => formatPretty(iso);
-const formatTimeRange = (startIso: string, endIso?: string | null) => formatPretty(startIso, endIso);
+
+/** Date-only label for board cards / stage badges (no time / timezone). */
+function formatScheduledDate(iso?: string | null): string {
+  if (!iso) return '—';
+  // YYYY-MM-DD — parse as local calendar date (avoid UTC midnight shift).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [, m, d] = iso.split('-').map(Number);
+    return `${MONTH_NAMES[m - 1]} ${d}`;
+  }
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
+}
+
+function toDateInputValue(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Default filter: this week's Monday → next week's Friday. */
+function currentWeekdayRange(): { from: string; to: string } {
+  const today = new Date();
+  const day = today.getDay(); // 0=Sun … 6=Sat
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  monday.setHours(0, 0, 0, 0);
+  const nextFriday = new Date(monday);
+  nextFriday.setDate(monday.getDate() + 11); // this Mon + 11 days = next Fri
+  return { from: toDateInputValue(monday), to: toDateInputValue(nextFriday) };
+}
+
+/** Build scheduledAt/endsAt; always keep endsAt after scheduledAt (edit form hides times). */
+function schedulePayload(date: string, startTime: string, endTime: string): { scheduledAt: string; endsAt: string } {
+  const start = combineDateTime(date, startTime || '09:00');
+  let end = combineDateTime(date, endTime || startTime || '10:00');
+  const startMs = new Date(start).getTime();
+  let endMs = new Date(end).getTime();
+  if (!(endMs > startMs)) {
+    endMs = startMs + 60 * 60 * 1000;
+    end = new Date(endMs).toISOString();
+  }
+  return { scheduledAt: start, endsAt: end };
+}
+
+/** YYYY-MM-DD for date inputs from an interview's scheduledAt. */
+function interviewDateInput(iv: { scheduledAt?: string | null }): string {
+  const raw = iv.scheduledAt;
+  if (!raw) return toDateInputValue(new Date());
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return toDateInputValue(new Date());
+  return toDateInputValue(d);
+}
+
+/** Keep existing clock times when only the calendar date changes on a board move. */
+function scheduleFromInterviewDate(
+  iv: { scheduledAt?: string | null; endsAt?: string | null },
+  date: string,
+): { scheduledAt: string; endsAt: string } {
+  const start = splitDateTime(iv.scheduledAt || '');
+  const end = splitDateTime(iv.endsAt || '');
+  return schedulePayload(date, start.time || '09:00', end.time || '10:00');
+}
 
 export default function InterviewsPage() {
   const { user } = useAuth();
@@ -395,8 +525,8 @@ export default function InterviewsPage() {
   const [accountId, setAccountId] = useState('');
   const [stage, setStage] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [from, setFrom] = useState(() => currentWeekdayRange().from);
+  const [to, setTo] = useState(() => currentWeekdayRange().to);
   const sort: 'desc' = 'desc';
   const [boardOffset, setBoardOffset] = useState(0);
   const [visibleColumnCount, setVisibleColumnCount] = useState(
@@ -408,9 +538,9 @@ export default function InterviewsPage() {
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${BOARD_WIDE_MIN_PX}px)`);
     const onChange = () => {
-      const next = mq.matches ? BOARD_VISIBLE_WIDE : BOARD_VISIBLE_NARROW;
-      setVisibleColumnCount(next);
-      setBoardOffset((o) => Math.min(o, Math.max(0, BOARD_COLUMNS.length - next)));
+      const count = mq.matches ? BOARD_VISIBLE_WIDE : BOARD_VISIBLE_NARROW;
+      setVisibleColumnCount(count);
+      setBoardOffset((prev) => Math.min(prev, Math.max(0, BOARD_COLUMNS.length - count)));
     };
     onChange();
     mq.addEventListener('change', onChange);
@@ -573,15 +703,11 @@ export default function InterviewsPage() {
       return;
     }
     if (!form.date) {
-      notify.error('Select a date');
+      notify.error('Select a scheduled date');
       return;
     }
-    if (!form.startTime || !form.endTime) {
-      notify.error('Select start and end time');
-      return;
-    }
-    if (form.endTime <= form.startTime) {
-      notify.error('End time must be after start time');
+    if (form.stage === 'tech' && !form.techSubStage) {
+      notify.error('Select a Tech sub-stage');
       return;
     }
     setSaving(true);
@@ -590,7 +716,8 @@ export default function InterviewsPage() {
       const body = buildSaveBody(form);
       const account = ownAccounts.find((a) => a._id === form.accountId);
       const accountLabel = account?.name || account?.title || 'account';
-      const stageText = form.stage ? `${stageLabel(form.stage)} ` : '';
+      const resolvedStage = resolveInterviewStage(form.stage, form.techSubStage);
+      const stageText = resolvedStage ? `${stageLabel(resolvedStage)} ` : '';
       if (mode === 'update' && active) {
         await api.updateInterview(active._id, body);
         notify.success(`${stageText}interview for ${accountLabel} updated successfully`);
@@ -623,28 +750,37 @@ export default function InterviewsPage() {
     }
   };
 
-  const buildSaveBody = (f: InterviewFormState): Record<string, unknown> => ({
-    accountId: f.accountId,
-    scheduledAt: combineDateTime(f.date, f.startTime),
-    endsAt: combineDateTime(f.date, f.endTime),
-    stage: f.stage,
-    status: f.status,
-    companyName: f.companyName,
-    interviewerName: f.interviewerName,
-    appliedPosition: f.appliedPosition,
-    jobUrl: f.jobUrl,
-    transcript: f.transcript,
-    note: f.note,
-  });
+  const buildSaveBody = (f: InterviewFormState): Record<string, unknown> => {
+    const resolvedStage = resolveInterviewStage(f.stage, f.techSubStage);
+    const { scheduledAt, endsAt } = schedulePayload(f.date, f.startTime, f.endTime);
+    const history = withCurrentStageInHistory(f.stageHistory, resolvedStage, f.date);
+    return {
+      accountId: f.accountId,
+      scheduledAt,
+      endsAt,
+      stage: resolvedStage,
+      status: f.status,
+      companyName: f.companyName,
+      interviewerName: f.interviewerName,
+      appliedPosition: f.appliedPosition,
+      jobUrl: f.jobUrl,
+      transcript: f.transcript,
+      note: f.note,
+      stageHistory: history.map((e) => ({
+        stage: e.stage,
+        ...(e.scheduledAt ? { scheduledAt: e.scheduledAt } : {}),
+      })),
+    };
+  };
 
   const savePanel = async () => {
     if (!panelInterview) return;
-    if (!panelForm.date || !panelForm.startTime || !panelForm.endTime) {
-      notify.error('Select date and time');
+    if (!panelForm.date) {
+      notify.error('Select a scheduled date');
       return;
     }
-    if (panelForm.endTime <= panelForm.startTime) {
-      notify.error('End time must be after start time');
+    if (panelForm.stage === 'tech' && !panelForm.techSubStage) {
+      notify.error('Select a Tech sub-stage');
       return;
     }
     if (!canEdit(panelInterview)) {
@@ -677,7 +813,95 @@ export default function InterviewsPage() {
 
   const [activeDragInterview, setActiveDragInterview] = useState<Interview | null>(null);
   const [dropTargetColumn, setDropTargetColumn] = useState<BoardColumnKey | null>(null);
+  /** Confirm dialog after dropping a card onto another pan (Tech includes sub-stage radios). */
+  const [movePrompt, setMovePrompt] = useState<null | {
+    interview: Interview;
+    kind: 'tech' | 'stage';
+    targetStage: string;
+    label: string;
+  }>(null);
+  const [moveSubStage, setMoveSubStage] = useState('');
+  const [moveDate, setMoveDate] = useState('');
+  const [moveSaving, setMoveSaving] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const syncInterviewForms = (ivId: string, updated: Interview) => {
+    if (panelInterview?._id === ivId) {
+      setPanelInterview(updated);
+      setPanelForm(interviewToForm(updated));
+    }
+    if (active?._id === ivId) {
+      setActive(updated);
+      setForm(interviewToForm(updated));
+    }
+  };
+
+  const applyStageMove = async (
+    iv: Interview,
+    newStage: string,
+    label: string,
+    scheduledDate?: string,
+  ) => {
+    const ivId = iv._id;
+    const previousData = data;
+    const prevStage = iv.stage || undefined;
+    const tipDate = scheduledDate || (() => {
+      const raw = iv.scheduledAt;
+      if (!raw) return undefined;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return undefined;
+      return toDateInputValue(d);
+    })();
+    const schedulePatch = scheduledDate ? scheduleFromInterviewDate(iv, scheduledDate) : null;
+
+    mutate(
+      (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          interviews: (current.interviews as Interview[]).map((item) => {
+            if (item._id !== ivId) return item;
+            let nextHistory = getInterviewMovementEntries(item);
+            if (prevStage && nextHistory.length === 0) {
+              nextHistory = [{ stage: prevStage, ...(item.scheduledAt ? { scheduledAt: interviewDateInput(item) } : {}) }];
+            } else if (prevStage && nextHistory[nextHistory.length - 1]?.stage !== prevStage) {
+              nextHistory = [
+                ...nextHistory,
+                { stage: prevStage, ...(item.scheduledAt ? { scheduledAt: interviewDateInput(item) } : {}) },
+              ];
+            }
+            nextHistory = withCurrentStageInHistory(nextHistory, newStage, tipDate);
+            return {
+              ...item,
+              stage: newStage,
+              stageHistory: nextHistory,
+              ...(schedulePatch
+                ? { scheduledAt: schedulePatch.scheduledAt, endsAt: schedulePatch.endsAt }
+                : {}),
+            };
+          }),
+        };
+      },
+      { revalidate: false },
+    );
+
+    try {
+      const body: Record<string, unknown> = { stage: newStage };
+      if (schedulePatch) {
+        body.scheduledAt = schedulePatch.scheduledAt;
+        body.endsAt = schedulePatch.endsAt;
+      }
+      const updated = await api.updateInterview(iv._id, body);
+      syncInterviewForms(ivId, updated as unknown as Interview);
+      if (stage && stage !== newStage && !isTechBoardStage(stage)) setStage('');
+      await mutate();
+      notify.success(`Moved to ${label}`);
+    } catch (err) {
+      mutate(previousData, { revalidate: false });
+      notify.error(err, 'Failed to move interview');
+    }
+  };
 
   const onInterviewDragStart = (e: DragStartEvent) => {
     const iv = interviews.find((i) => i._id === String(e.active.id));
@@ -694,6 +918,13 @@ export default function InterviewsPage() {
     setDropTargetColumn(col ?? null);
   };
 
+  const closeMovePrompt = () => {
+    if (moveSaving) return;
+    setMovePrompt(null);
+    setMoveSubStage('');
+    setMoveDate('');
+  };
+
   const onInterviewDragEnd = async (e: DragEndEvent) => {
     setActiveDragInterview(null);
     const ivId = String(e.active.id);
@@ -707,36 +938,48 @@ export default function InterviewsPage() {
       return;
     }
     const sourceCol = boardColumnForStage(iv.stage);
+
+    // Dropping onto Tech always opens the sub-stage + date picker (including Tech → Tech).
+    if (targetCol === 'tech') {
+      setMovePrompt({ interview: iv, kind: 'tech', targetStage: '', label: 'Tech' });
+      setMoveSubStage(toTechSubStage(iv.stage) || TECH_SUB_STAGES[0].value);
+      setMoveDate(interviewDateInput(iv));
+      return;
+    }
+
     if (targetCol === sourceCol) return;
     const newStage = BOARD_COLUMN_TO_STAGE[targetCol];
     const colLabel = BOARD_COLUMNS.find((c) => c.key === targetCol)?.label ?? stageLabel(newStage);
+    setMovePrompt({ interview: iv, kind: 'stage', targetStage: newStage, label: colLabel });
+    setMoveDate(interviewDateInput(iv));
+  };
 
-    const previousData = data;
-    mutate(
-      (current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          interviews: (current.interviews as Interview[]).map((item) =>
-            item._id === ivId ? { ...item, stage: newStage } : item,
-          ),
-        };
-      },
-      { revalidate: false },
-    );
-
+  const confirmMovePrompt = async () => {
+    if (!movePrompt) return;
+    if (!moveDate) {
+      notify.error('Select a scheduled date');
+      return;
+    }
+    const newStage = movePrompt.kind === 'tech' ? moveSubStage : movePrompt.targetStage;
+    if (!newStage) {
+      notify.error(movePrompt.kind === 'tech' ? 'Select a Tech sub-stage' : 'Select a stage');
+      return;
+    }
+    const label = movePrompt.kind === 'tech' ? stageLabel(newStage) : movePrompt.label;
+    const sameStage = movePrompt.interview.stage === newStage;
+    const sameDate = interviewDateInput(movePrompt.interview) === moveDate;
+    if (sameStage && sameDate) {
+      closeMovePrompt();
+      return;
+    }
+    setMoveSaving(true);
     try {
-      const updated = await api.updateInterview(iv._id, { stage: newStage });
-      if (panelInterview?._id === ivId) {
-        setPanelInterview(updated as unknown as Interview);
-        setPanelForm((prev) => ({ ...prev, stage: newStage }));
-      }
-      if (stage && stage !== newStage) setStage('');
-      await mutate();
-      notify.success(`Moved to ${colLabel}`);
-    } catch (err) {
-      mutate(previousData, { revalidate: false });
-      notify.error(err, 'Failed to move interview');
+      await applyStageMove(movePrompt.interview, newStage, label, moveDate);
+      setMovePrompt(null);
+      setMoveSubStage('');
+      setMoveDate('');
+    } finally {
+      setMoveSaving(false);
     }
   };
 
@@ -765,7 +1008,6 @@ export default function InterviewsPage() {
   const stageOptions = useMemo(() => [
     { value: '', label: 'All' },
     ...STAGES,
-    { value: 'rejected', label: 'Rejected' },
   ], []);
 
   const statusOptions = useMemo(() => [
@@ -775,9 +1017,10 @@ export default function InterviewsPage() {
 
   const stageFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
-    ...STAGES,
-    { value: 'rejected', label: 'Rejected' },
+    ...BOARD_FORM_STAGES,
   ], []);
+
+  const techSubStageOptions = useMemo(() => [...TECH_SUB_STAGES], []);
 
   const statusFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
@@ -801,9 +1044,9 @@ export default function InterviewsPage() {
 
       <div className="space-y-6">
       {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
+      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">User</label>
+          <label className="block text-xs text-gray-500 mb-1">User</label>
           <Select
             value={creatorId}
             onChange={(v) => {
@@ -815,30 +1058,30 @@ export default function InterviewsPage() {
           />
         </div>
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Profile</label>
+          <label className="block text-xs text-gray-500 mb-1">Profile</label>
           <Select value={accountId} onChange={(v) => { setAccountId(v); resetFiltersPage(); }} options={accountOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-muted mb-1">Stage</label>
+          <label className="block text-xs text-gray-500 mb-1">Stage</label>
           <Select value={stage} onChange={(v) => { setStage(v); resetFiltersPage(); }} options={stageOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-muted mb-1">Status</label>
+          <label className="block text-xs text-gray-500 mb-1">Status</label>
           <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); resetFiltersPage(); }} options={statusOptions} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-muted mb-1">From</label>
+          <label className="block text-xs text-gray-500 mb-1">From</label>
           <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetFiltersPage(); }} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-muted mb-1">To</label>
+          <label className="block text-xs text-gray-500 mb-1">To</label>
           <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); resetFiltersPage(); }} />
         </div>
       </div>
 
       {/* Total */}
       {data && (
-        <div className="text-sm text-muted">
+        <div className="text-sm text-gray-600">
           <span>Showing {pagination?.total ?? 0} interview{pagination?.total !== 1 ? 's' : ''} total</span>
           {(pagination?.total ?? 0) > boardPageSize && (
             <span className="text-amber-700 ml-2">
@@ -850,11 +1093,11 @@ export default function InterviewsPage() {
 
       {/* Board — Pipeline-style kanban */}
       {isLoading && !data ? (
-        <div className="panel p-6 flex items-center gap-2 text-sm text-muted">
+        <div className="bg-white rounded-[12px] border border-gray-100 p-6 flex items-center gap-2 text-sm text-gray-500 shadow-sm">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading interviews…
         </div>
       ) : loadError ? (
-        <div className="panel border-red-200 dark:border-red-900/50 p-6 text-sm text-red-600 dark:text-red-400">
+        <div className="bg-white rounded-[12px] border border-red-100 p-6 text-sm text-red-600 shadow-sm">
           Failed to load interviews. Try refreshing the page.
         </div>
       ) : (
@@ -865,20 +1108,19 @@ export default function InterviewsPage() {
                   type="button"
                   onClick={handleBoardPrev}
                   disabled={!canBoardPrev}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Show previous columns"
                 >
                   <ChevronLeft size={16} />
                 </button>
-                <p className="text-xs text-muted text-center flex-1">
+                <p className="text-xs text-gray-500 text-center flex-1">
                   {visibleColumns.map((c) => c.label).join(' · ')}
-                  <span className="text-faint"> · {boardOffset + 1}–{boardOffset + visibleColumns.length} of {BOARD_COLUMNS.length}</span>
                 </p>
                 <button
                   type="button"
                   onClick={handleBoardNext}
                   disabled={!canBoardNext}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Show next columns"
                 >
                   <ChevronRight size={16} />
@@ -886,7 +1128,7 @@ export default function InterviewsPage() {
               </div>
 
             {interviews.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300">
+              <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800">
                 No interviews match the current filters.
                 {creatorId && ' Try setting User to All, or pick a different profile.'}
               </div>
@@ -954,6 +1196,7 @@ export default function InterviewsPage() {
             editable={canEdit(panelInterview)}
             accountSelectOptions={accountSelectOptions}
             stageFormOptions={stageFormOptions}
+            techSubStageOptions={techSubStageOptions}
             statusFormOptions={statusFormOptions}
             onClose={closePanel}
             onSave={savePanel}
@@ -990,11 +1233,14 @@ export default function InterviewsPage() {
                 <div>
                   <div className="text-muted text-xs">Stage</div>
                   <div>
-                    {form.stage ? (
-                      <span className={`badge ${stageBadgeClass(form.stage)}`}>
-                        {stageLabel(form.stage)}
-                      </span>
-                    ) : <span className="text-faint">—</span>}
+                    {(() => {
+                      const displayStage = resolveInterviewStage(form.stage, form.techSubStage) || form.stage;
+                      return displayStage ? (
+                        <span className={`badge ${stageBadgeClass(displayStage)}`}>
+                          {stageLabel(displayStage)}
+                        </span>
+                      ) : <span className="text-faint">—</span>;
+                    })()}
                   </div>
                 </div>
                 <div>
@@ -1020,16 +1266,8 @@ export default function InterviewsPage() {
                   <div className="font-medium">{form.appliedPosition || '—'}</div>
                 </div>
                 <div>
-                  <div className="text-muted text-xs">Date</div>
+                  <div className="text-muted text-xs">Scheduled date</div>
                   <div>{form.date || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">Start time</div>
-                  <div>{form.startTime || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">End time</div>
-                  <div>{form.endTime || '—'}</div>
                 </div>
               </div>
               <div>
@@ -1057,6 +1295,7 @@ export default function InterviewsPage() {
                 setForm={setForm}
                 accountSelectOptions={accountSelectOptions}
                 stageFormOptions={stageFormOptions}
+                techSubStageOptions={techSubStageOptions}
                 statusFormOptions={statusFormOptions}
                 accountDisabled={mode === 'update' && !!active && !canEdit(active)}
                 datalistId="applied-position-suggestions-modal"
@@ -1068,7 +1307,12 @@ export default function InterviewsPage() {
                   type="button"
                   className="btn"
                   onClick={save}
-                  disabled={saving || !form.date || !form.startTime || !form.endTime || (mode === 'create' && !form.accountId)}
+                  disabled={
+                    saving
+                    || !form.date
+                    || (mode === 'create' && !form.accountId)
+                    || (form.stage === 'tech' && !form.techSubStage)
+                  }
                 >
                   {saving ? 'Saving…' : mode === 'update' ? 'Save changes' : 'Create'}
                 </button>
@@ -1101,6 +1345,81 @@ export default function InterviewsPage() {
               style={{ backgroundColor: '#dc2626', color: 'white' }}
             >
               {saving ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Stage-move confirm: scheduled date (+ Tech sub-stage radios when dropping on Tech) */}
+      <Modal
+        open={!!movePrompt}
+        onClose={closeMovePrompt}
+        title={movePrompt?.kind === 'tech' ? 'Select Tech sub-stage' : `Move to ${movePrompt?.label ?? 'stage'}`}
+      >
+        <div className="space-y-4">
+          {movePrompt?.kind === 'tech' ? (
+            <>
+              <p className="text-sm text-muted">
+                Choose which Tech round this interview is in, and the scheduled date for that round.
+              </p>
+              <div className="space-y-2">
+                {TECH_SUB_STAGES.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center gap-3 rounded-[10px] border px-3 py-2.5 cursor-pointer transition-colors ${
+                      moveSubStage === opt.value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="tech-sub-stage"
+                      value={opt.value}
+                      checked={moveSubStage === opt.value}
+                      onChange={() => setMoveSubStage(opt.value)}
+                      className="accent-primary"
+                    />
+                    <span className="text-sm font-medium text-gray-900">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              Set the scheduled date for <span className="font-medium text-gray-900">{movePrompt?.label}</span>.
+            </p>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Scheduled date <span className="text-red-500">*</span>
+            </label>
+            <input
+              className="input"
+              type="date"
+              value={moveDate}
+              disabled={moveSaving}
+              onChange={(e) => setMoveDate(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={closeMovePrompt}
+              disabled={moveSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={confirmMovePrompt}
+              disabled={moveSaving || !moveDate || (movePrompt?.kind === 'tech' && !moveSubStage)}
+            >
+              {moveSaving ? 'Moving…' : 'Confirm'}
             </button>
           </div>
         </div>
@@ -1141,10 +1460,10 @@ function InterviewBoardColumn({
   const highlight = isOver || isDropTarget;
 
   return (
-    <div className={`${columnClass} bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border-t-4 ${tone} border-x border-b border-zinc-100 dark:border-zinc-800`}>
-      <header className="px-3 py-2 flex items-center justify-between text-xs text-muted uppercase tracking-wide font-medium">
+    <div className={`${columnClass} bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
+      <header className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 uppercase tracking-wide font-medium">
         <span className="truncate">{label}</span>
-        <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-0.5 text-[10px] tabular-nums ml-2 shrink-0">
+        <span className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums ml-2 shrink-0">
           {cards.length}
         </span>
       </header>
@@ -1153,7 +1472,7 @@ function InterviewBoardColumn({
         className={`p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto transition-colors ${highlight ? 'bg-primary/5 ring-1 ring-inset ring-primary/20 rounded-b-[12px]' : ''}`}
       >
         {cards.length === 0 ? (
-          <div className="text-xs text-faint text-center py-8">Drop here</div>
+          <div className="text-xs text-gray-400 text-center py-8">Drop here</div>
         ) : (
           cards.map((iv) => (
             <InterviewBoardCard
@@ -1189,10 +1508,10 @@ function InterviewBoardCardPreview({
   return (
     <div className={`rounded-[10px] p-3 text-sm shadow-md border relative overflow-hidden ${panStyle.card} ring-2 ring-primary`}>
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
-      <div className="font-medium text-strong truncate pl-1" title={profileName}>{profileName}</div>
-      <div className="mt-1 text-body truncate pl-1" title={companyName}>{companyName}</div>
-      <div className="mt-1 text-[11px] text-muted pl-1">
-        {formatTimeRange(interview.scheduledAt, interview.endsAt)}
+      <div className="font-medium text-gray-900 truncate pl-1" title={profileName}>{profileName}</div>
+      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>{companyName}</div>
+      <div className="mt-1 text-[11px] text-gray-500 pl-1">
+        {formatScheduledDate(interview.scheduledAt)}
       </div>
       <div className="mt-1.5 pl-1">
         {interview.status ? (
@@ -1200,7 +1519,7 @@ function InterviewBoardCardPreview({
             {boardStatusLabel(interview.status)}
           </span>
         ) : (
-          <span className="text-[11px] text-faint">No status</span>
+          <span className="text-[11px] text-gray-400">No status</span>
         )}
       </div>
     </div>
@@ -1262,7 +1581,7 @@ function InterviewBoardCard({
           type="button"
           onClick={(e) => { stop(e); onOpenTranscript(); }}
           onPointerDown={stop}
-          className="p-1 rounded-[6px] text-zinc-400 hover:text-primary hover:bg-blue-50 dark:text-zinc-500 dark:hover:bg-blue-950/40"
+          className="p-1 rounded-[6px] text-gray-400 hover:text-primary hover:bg-blue-50"
           title="Open transcript"
           aria-label="Open transcript"
         >
@@ -1273,7 +1592,7 @@ function InterviewBoardCard({
             type="button"
             onClick={(e) => { stop(e); onDelete(); }}
             onPointerDown={stop}
-            className="p-1 rounded-[6px] text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:text-zinc-500 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+            className="p-1 rounded-[6px] text-gray-400 hover:text-red-600 hover:bg-red-50"
             title="Delete interview"
             aria-label="Delete interview"
           >
@@ -1281,14 +1600,14 @@ function InterviewBoardCard({
           </button>
         )}
       </div>
-      <div className="font-medium text-strong truncate pr-14 pl-1" title={profileName}>
+      <div className="font-medium text-gray-900 truncate pr-14 pl-1" title={profileName}>
         {profileName}
       </div>
-      <div className="mt-1 text-body truncate pl-1" title={companyName}>
+      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>
         {companyName}
       </div>
-      <div className="mt-1 text-[11px] text-muted pl-1">
-        {formatTimeRange(interview.scheduledAt, interview.endsAt)}
+      <div className="mt-1 text-[11px] text-gray-500 pl-1">
+        {formatScheduledDate(interview.scheduledAt)}
       </div>
       <div className="mt-1.5 pl-1">
         {interview.status ? (
@@ -1296,20 +1615,41 @@ function InterviewBoardCard({
             {boardStatusLabel(interview.status)}
           </span>
         ) : (
-          <span className="text-[11px] text-faint">No status</span>
+          <span className="text-[11px] text-gray-400">No status</span>
         )}
       </div>
+      <StageMovementTrail interview={interview} />
     </div>
   );
 }
 
 type SelectOption = { value: string; label: string };
 
+function StageMovementTrail({ interview }: { interview: Interview }) {
+  const trail = getInterviewMovementTrail(interview);
+  // Prefer an explicit trail; fall back to current stage so Tech→Tech still shows something.
+  const shown = trail.length > 0 ? trail : (interview.stage ? [interview.stage] : []);
+  if (shown.length === 0) return null;
+  return (
+    <div className="mt-1.5 pl-1 flex flex-wrap items-center gap-1">
+      {shown.map((s, i) => (
+        <span key={`${s}-${i}`} className="inline-flex items-center gap-1">
+          {i > 0 && <span className="text-[10px] text-gray-400">→</span>}
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-[6px] text-[10px] font-medium border ${stageBadgeClass(s)}`}>
+            {stageLabel(s)}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function InterviewFormFields({
   form,
   setForm,
   accountSelectOptions,
   stageFormOptions,
+  techSubStageOptions,
   statusFormOptions,
   accountDisabled,
   datalistId,
@@ -1319,6 +1659,7 @@ function InterviewFormFields({
   setForm: React.Dispatch<React.SetStateAction<InterviewFormState>>;
   accountSelectOptions: SelectOption[];
   stageFormOptions: SelectOption[];
+  techSubStageOptions: SelectOption[];
   statusFormOptions: SelectOption[];
   accountDisabled?: boolean;
   datalistId: string;
@@ -1339,41 +1680,20 @@ function InterviewFormFields({
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Date <span className="text-red-500">*</span>
-          </label>
-          <input className="input" type="date" value={form.date} disabled={disabled} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Start time <span className="text-red-500">*</span>
-          </label>
-          <input className="input" type="time" value={form.startTime} disabled={disabled} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            End time <span className="text-red-500">*</span>
-          </label>
-          <input className="input" type="time" value={form.endTime} disabled={disabled} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
-        </div>
-      </div>
-
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium mb-1">Company Name</label>
-          <input className="input" type="text" value={form.companyName} disabled={disabled} onChange={(e) => setForm({ ...form, companyName: e.target.value })} placeholder="e.g. Acme Corp" />
+          <input className="input" type="text" value={form.companyName} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))} placeholder="e.g. Acme Corp" />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Interviewer Name</label>
-          <input className="input" type="text" value={form.interviewerName} disabled={disabled} onChange={(e) => setForm({ ...form, interviewerName: e.target.value })} placeholder="e.g. Jane Smith" />
+          <input className="input" type="text" value={form.interviewerName} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, interviewerName: e.target.value }))} placeholder="e.g. Jane Smith" />
         </div>
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Applied Position</label>
-        <input className="input" type="text" value={form.appliedPosition} disabled={disabled} onChange={(e) => setForm({ ...form, appliedPosition: e.target.value })} placeholder="e.g. Backend, Frontend…" list={datalistId} />
+        <input className="input" type="text" value={form.appliedPosition} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, appliedPosition: e.target.value }))} placeholder="e.g. Backend, Frontend…" list={datalistId} />
         <datalist id={datalistId}>
           <option value="Backend" /><option value="Frontend" /><option value="Fullstack" />
           <option value="AI / ML" /><option value="Mobile" /><option value="DevOps" />
@@ -1382,20 +1702,144 @@ function InterviewFormFields({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-faint font-normal">(optional)</span></label>
-        <input className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm({ ...form, jobUrl: e.target.value })} placeholder="https://..." />
+        <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
+        <input className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, jobUrl: e.target.value }))} placeholder="https://..." />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium mb-1">Interview Stage</label>
-          <Select value={form.stage} onChange={(v) => setForm({ ...form, stage: v })} options={stageFormOptions} placeholder="Select a stage" disabled={disabled} />
+          <Select
+            value={form.stage}
+            onChange={(v) => {
+              setForm((prev) => {
+                if (v === 'tech') {
+                  // Board-level Tech only — wait for a concrete sub-stage before history.
+                  return {
+                    ...prev,
+                    stage: 'tech',
+                    techSubStage: '',
+                  };
+                }
+                const resolved = resolveInterviewStage(v, '');
+                return {
+                  ...prev,
+                  stage: v,
+                  techSubStage: '',
+                  stageHistory: resolved
+                    ? withCurrentStageInHistory(
+                        prev.stageHistory.filter((e) => e.stage !== resolved),
+                        resolved,
+                        prev.date,
+                      )
+                    : prev.stageHistory,
+                };
+              });
+            }}
+            options={stageFormOptions}
+            placeholder="Select a stage"
+            disabled={disabled}
+          />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Status</label>
-          <Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={statusFormOptions} placeholder="Select a status" disabled={disabled} />
+          <label className="block text-sm font-medium mb-1">
+            Scheduled date <span className="text-red-500">*</span>
+          </label>
+          <input
+            className="input"
+            type="date"
+            value={form.date}
+            disabled={disabled}
+            onChange={(e) => {
+              const nextDate = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                date: nextDate,
+                stageHistory: withTipScheduledDate(prev.stageHistory, nextDate),
+              }));
+            }}
+          />
         </div>
       </div>
+
+      <div className={`grid gap-3 ${form.stage === 'tech' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div>
+          <label className="block text-sm font-medium mb-1">Status</label>
+          <Select value={form.status} onChange={(v) => setForm((prev) => ({ ...prev, status: v }))} options={statusFormOptions} placeholder="Select a status" disabled={disabled} />
+        </div>
+        {form.stage === 'tech' && (
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Tech sub-stage <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={form.techSubStage}
+              onChange={(v) => {
+                setForm((prev) => ({
+                  ...prev,
+                  techSubStage: v,
+                  stageHistory: v
+                    ? withCurrentStageInHistory(
+                        prev.stageHistory.filter((e) => e.stage !== v),
+                        v,
+                        prev.date,
+                      )
+                    : prev.stageHistory,
+                }));
+              }}
+              options={techSubStageOptions}
+              placeholder="Select a Tech sub-stage"
+              disabled={disabled}
+            />
+          </div>
+        )}
+      </div>
+
+      {(form.stageHistory.length > 0 || !disabled) && (
+        <div>
+          <label className="block text-sm font-medium mb-1">Stage movement</label>
+          <p className="text-xs text-gray-500 mb-2">
+            Path used for pass-rate analysis. Each badge shows that round&apos;s interview date.
+          </p>
+          {form.stageHistory.length === 0 ? (
+            <div className="text-xs text-gray-400 italic">No stage moves yet.</div>
+          ) : (
+            <div className="flex flex-wrap items-end gap-1.5">
+              {form.stageHistory.map((entry, i) => (
+                <span key={`${entry.stage}-${i}`} className="inline-flex items-end gap-1">
+                  {i > 0 && <span className="text-[10px] text-gray-400 pb-4">→</span>}
+                  <span className="inline-flex flex-col items-center gap-0.5">
+                    <span className={`inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-[6px] text-[11px] font-medium border ${stageBadgeClass(entry.stage)}`}>
+                      {stageLabel(entry.stage)}
+                      {!disabled && (
+                        <button
+                          type="button"
+                          className="ml-0.5 p-0.5 rounded hover:bg-black/10 text-current/70 hover:text-current"
+                          title={`Remove ${stageLabel(entry.stage)}`}
+                          aria-label={`Remove ${stageLabel(entry.stage)}`}
+                          onClick={() => {
+                            const next = form.stageHistory.filter((_, idx) => idx !== i);
+                            setForm({
+                              ...form,
+                              stageHistory: next,
+                              ...applyHistoryTipToForm(next),
+                            });
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-gray-500 leading-none">
+                      {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : '—'}
+                    </span>
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -1428,11 +1872,11 @@ function InterviewFormFields({
           )}
         </div>
         {form.transcript ? (
-          <div className="border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 max-h-40 overflow-auto bg-zinc-50 dark:bg-zinc-900/80">
-            <pre className="whitespace-pre-wrap text-xs font-mono text-body">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
+          <div className="border border-gray-300 rounded-md p-3 max-h-40 overflow-auto bg-gray-50">
+            <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
           </div>
         ) : (
-          <div className="border border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg p-4 text-center text-xs text-faint">
+          <div className="border border-dashed border-gray-300 rounded-md p-4 text-center text-xs text-gray-400">
             No transcript yet.
           </div>
         )}
@@ -1443,7 +1887,7 @@ function InterviewFormFields({
 
       <div>
         <label className="block text-sm font-medium mb-1">Note</label>
-        <textarea className="input w-full" rows={4} value={form.note} disabled={disabled} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Internal notes…" />
+        <textarea className="input w-full" rows={4} value={form.note} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))} placeholder="Internal notes…" />
       </div>
     </div>
   );
@@ -1458,6 +1902,7 @@ function InterviewSidePanel({
   editable,
   accountSelectOptions,
   stageFormOptions,
+  techSubStageOptions,
   statusFormOptions,
   onClose,
   onSave,
@@ -1471,6 +1916,7 @@ function InterviewSidePanel({
   editable: boolean;
   accountSelectOptions: SelectOption[];
   stageFormOptions: SelectOption[];
+  techSubStageOptions: SelectOption[];
   statusFormOptions: SelectOption[];
   onClose: () => void;
   onSave: () => void;
@@ -1478,18 +1924,25 @@ function InterviewSidePanel({
 }) {
   const account = typeof interview.accountId === 'object' ? interview.accountId : null;
   const title = interview.companyName || account?.name || 'Interview';
+  const saveDisabled = saving
+    || !form.date
+    || !form.accountId
+    || (form.stage === 'tech' && !form.techSubStage);
 
   return (
-    <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white dark:bg-zinc-950 shadow-strong border-l border-zinc-200 dark:border-zinc-800 z-50 flex flex-col">
-      <header className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2 shrink-0">
+    <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white shadow-strong border-l border-gray-100 z-50 flex flex-col">
+      <header className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
         <div className="min-w-0">
-          <div className="text-xs text-muted">Interview details</div>
-          <div className="font-semibold text-strong truncate">{title}</div>
+          <div className="text-xs text-gray-500">Interview details</div>
+          <div className="font-semibold text-gray-900 truncate">{title}</div>
           {interview.stage && (
             <span className={`inline-flex mt-1 items-center px-2 py-0.5 rounded-[8px] text-[10px] font-medium border ${stageBadgeClass(interview.stage)}`}>
               {stageLabel(interview.stage)}
             </span>
           )}
+          <div className="mt-1">
+            <StageMovementTrail interview={interview} />
+          </div>
         </div>
         <button type="button" onClick={onClose} className="btn-icon shrink-0" title="Close panel" aria-label="Close panel">
           <X size={16} />
@@ -1503,6 +1956,7 @@ function InterviewSidePanel({
           setForm={setForm}
           accountSelectOptions={accountSelectOptions}
           stageFormOptions={stageFormOptions}
+          techSubStageOptions={techSubStageOptions}
           statusFormOptions={statusFormOptions}
           accountDisabled={!editable}
           datalistId="applied-position-suggestions-panel"
@@ -1510,13 +1964,13 @@ function InterviewSidePanel({
         />
       </div>
 
-      <footer className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap gap-2 justify-end shrink-0 bg-zinc-50/80 dark:bg-zinc-900/80">
+      <footer className="px-4 py-3 border-t border-gray-100 flex flex-wrap gap-2 justify-end shrink-0 bg-gray-50/80">
         <button type="button" className="btn-outline text-sm" onClick={onOpenTranscript}>
           <FileText size={14} className="mr-1" /> Transcript
         </button>
         <button type="button" className="btn-outline text-sm" onClick={onClose}>Close</button>
         {editable && (
-          <button type="button" className="btn text-sm" onClick={onSave} disabled={saving || !form.date || !form.startTime || !form.endTime || !form.accountId}>
+          <button type="button" className="btn text-sm" onClick={onSave} disabled={saveDisabled}>
             {saving ? 'Saving…' : 'Save changes'}
           </button>
         )}

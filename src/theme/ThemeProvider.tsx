@@ -1,12 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useLayoutEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -34,24 +26,14 @@ function readStoredTheme(): ThemeMode {
 }
 
 function applyTheme(mode: ThemeMode) {
-  const root = document.documentElement;
-  if (mode === 'dark') {
-    root.classList.add('dark');
-  } else {
-    root.classList.remove('dark');
-  }
-  root.style.colorScheme = mode;
-  root.dataset.theme = mode;
+  document.documentElement.classList.toggle('dark', mode === 'dark');
+  document.documentElement.style.colorScheme = mode;
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(() => {
-    const initial = readStoredTheme();
-    if (typeof document !== 'undefined') applyTheme(initial);
-    return initial;
-  });
+  const [theme, setThemeState] = useState<ThemeMode>(() => readStoredTheme());
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     applyTheme(theme);
     try {
       localStorage.setItem(STORAGE_KEY, theme);

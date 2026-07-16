@@ -489,7 +489,8 @@ export const getDashboardFeed = () => apiFetch<DashboardFeed>('/metrics/dashboar
 // ---------- pipeline ----------
 
 export type KanbanStage =
-  | 'bid_sent' | 'intro' | 'tech' | 'live_coding' | 'system_design'
+  | 'bid_sent' | 'intro' | 'tech' | 'tech_round_1' | 'tech_round_2'
+  | 'live_coding' | 'system_design' | 'home_assessment'
   | 'panel' | 'cultural' | 'final' | 'ai_interview' | 'offer'
   | 'rejected' | 'withdrawn';
 
@@ -509,7 +510,7 @@ export interface ApplicationDoc {
   appliedAt?: string | null;
   lastTouchedAt?: string | null;
   notes: string;
-  stageHistory: Array<{ stage: string; at: string; by?: string | null; source?: string }>;
+  stageHistory: Array<{ stage: string; at: string; by?: string | null; source?: string; scheduledAt?: string | null }>;
   archivedAt?: string | null;
   // AI-proposed cards (from email) start unconfirmed and render with Yes/No.
   confirmed: boolean;

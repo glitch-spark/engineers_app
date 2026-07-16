@@ -37,8 +37,8 @@ type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
 type ColumnLayout = (typeof BOARD_COLUMNS)[number]['layout'];
 
 const IN_PROGRESS_STAGES: KanbanStage[] = [
-  'ai_interview', 'intro', 'tech', 'live_coding',
-  'system_design', 'panel', 'cultural', 'final',
+  'ai_interview', 'intro', 'tech', 'tech_round_1', 'tech_round_2',
+  'live_coding', 'system_design', 'home_assessment', 'panel', 'cultural', 'final',
 ];
 
 const TERMINAL_STAGES: KanbanStage[] = ['rejected', 'offer', 'withdrawn'];
