@@ -699,7 +699,7 @@ function FreeLlmSettingsCard() {
               onChange={(e) => setMaxTokens(Number(e.target.value))}
               className="input focus-ring"
             />
-            <p className="mt-1 text-xs text-muted">~40 requests/minute shared across all models on your key.</p>
+            <p className="mt-1 text-xs text-muted">Higher values allow longer resumes; the free lane also caps output length.</p>
           </div>
         </div>
 
