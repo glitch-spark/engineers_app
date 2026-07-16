@@ -984,6 +984,10 @@ export function deleteResumeJob(id: string) {
   return del<{ ok: boolean }>(`/resume/jobs/${id}`);
 }
 
+export function retryResumeJob(id: string) {
+  return postJSON<{ jobId: string; status: ResumeJobStatus }>(`/resume/jobs/${id}/retry`, {});
+}
+
 function _sanitizeFolderPath(path: string): string {
   // Preserve '/' as a folder separator. Sanitize each segment for FS-unsafe
   // chars. Drop empty segments. Fallback to 'company' if everything strips out.
