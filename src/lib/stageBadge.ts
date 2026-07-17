@@ -142,8 +142,8 @@ export function getInterviewMovementEntries(iv: {
   const trail: MovementEntry[] = [];
   const toDate = (raw?: string | null): string | undefined => {
     if (!raw) return undefined;
-    // Already YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    // Prefer the calendar date prefix so UTC midnight does not shift the day.
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
     const d = new Date(raw);
     if (isNaN(d.getTime())) return undefined;
     const yyyy = d.getFullYear();
