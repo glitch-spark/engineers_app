@@ -28,11 +28,12 @@ import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import {
   BOARD_FORM_STAGES,
-  INTERVIEW_STAGES,
   TECH_SUB_STAGES,
+  TECH_SUB_STAGE_VALUES,
   getInterviewMovementEntries,
   getInterviewMovementTrail,
   isTechBoardStage,
+  normalizeInterviewStage,
   resolveInterviewStage,
   stageBadgeClass,
   stageLabel,
@@ -75,8 +76,6 @@ const editorStyles = `
   .prose-readonly img { max-width: 100%; height: auto; }
   .prose-readonly pre, .prose-readonly code { white-space: pre-wrap; word-break: break-all; }
 `;
-
-const STAGES = INTERVIEW_STAGES;
 
 const BOARD_COLUMNS = [
   { key: 'ai_interview', label: 'AI Interview', tone: 'border-emerald-300', columnClass: 'flex-1 min-w-0' },
@@ -220,6 +219,12 @@ const STATUSES = [
   { value: 'no_show', label: 'No Show' },
   { value: 'rescheduled', label: 'Rescheduled' },
   { value: 'canceled', label: 'Canceled' },
+];
+
+/** Status choices on create/edit forms (filters still use the full list). */
+const FORM_STATUSES = [
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'completed', label: 'Completed' },
 ];
 
 const statusBadgeClass = (s?: string | null) => {
@@ -484,6 +489,180 @@ function schedulePayload(date: string, startTime: string, endTime: string): { sc
   return { scheduledAt: start, endsAt: end };
 }
 
+/** Stages excluded from the board “interviews total” round count. */
+const ROUND_COUNT_EXCLUDED = new Set(['ai_interview', 'rejected', 'home_assessment']);
+
+/** Display order + short labels for the total breakdown. */
+const ROUND_BREAKDOWN_GROUPS: Array<{ key: string; label: string; match: (stage: string) => boolean }> = [
+  { key: 'intro', label: 'Intro', match: (s) => s === 'intro' },
+  {
+    key: 'tech',
+    label: 'Tech',
+    match: (s) =>
+      s === 'tech'
+      || s === 'tech1'
+      || s === 'tech2'
+      || s === 'tech_round_1'
+      || s === 'tech_round_2'
+      || s === 'live_coding'
+      || s === 'system_design',
+    // home_assessment excluded via ROUND_COUNT_EXCLUDED
+  },
+  {
+    key: 'hiring',
+    label: 'Hiring',
+    match: (s) => s === 'cultural' || s === 'hiring_manager',
+  },
+  { key: 'panel', label: 'Panel', match: (s) => s === 'panel' },
+  { key: 'final', label: 'Final', match: (s) => s === 'final' || s === 'offer' },
+];
+
+function roundBreakdownGroupKey(stage: string): string | null {
+  if (ROUND_COUNT_EXCLUDED.has(stage)) return null;
+  const group = ROUND_BREAKDOWN_GROUPS.find((g) => g.match(stage));
+  return group?.key ?? null;
+}
+
+/** YYYY-MM-DD for comparing badge dates against the From/To filter. */
+function movementDateKey(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  // Prefer calendar prefix so timezone conversion cannot move the day.
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return undefined;
+  return toDateInputValue(d);
+}
+
+function dateInSelectedRange(dateKey: string | undefined, fromDate?: string, toDate?: string): boolean {
+  if (!dateKey) return false;
+  if (fromDate && dateKey < fromDate) return false;
+  if (toDate && dateKey > toDate) return false;
+  return true;
+}
+
+/** Stage values that satisfy the board Stage filter. */
+function stageFilterMatchSet(filter: string): Set<string> | null {
+  if (!filter) return null;
+  if (filter === 'tech') {
+    return new Set<string>([
+      'tech',
+      'tech1',
+      'tech2',
+      ...TECH_SUB_STAGE_VALUES,
+    ]);
+  }
+  const n = normalizeInterviewStage(filter);
+  const set = new Set<string>([filter, n].filter(Boolean));
+  if (n === 'cultural' || filter === 'hiring_manager') {
+    set.add('cultural');
+    set.add('hiring_manager');
+  }
+  return set;
+}
+
+/**
+ * Dated rounds for filter/count — each badge keeps its own date.
+ * Current interview.scheduledAt only applies to the current tip stage.
+ */
+function getStrictDatedRounds(iv: Interview): MovementEntry[] {
+  const trail: MovementEntry[] = [];
+  const push = (stageRaw?: string | null, dateRaw?: string | null) => {
+    const stage = normalizeInterviewStage(stageRaw);
+    if (!stage) return;
+    const scheduledAt = movementDateKey(dateRaw);
+    const tip = trail[trail.length - 1];
+    if (tip?.stage === stage) {
+      if (scheduledAt) tip.scheduledAt = scheduledAt;
+      return;
+    }
+    trail.push({ stage, ...(scheduledAt ? { scheduledAt } : {}) });
+  };
+  for (const h of iv.stageHistory ?? []) {
+    // History entries must keep their own dates — never fill from interview.scheduledAt.
+    push(h.stage, h.scheduledAt ?? null);
+  }
+  push(iv.stage, iv.scheduledAt);
+  return trail;
+}
+
+/** True when this card should appear for the current Stage + date filters. */
+function interviewMatchesBoardFilters(
+  iv: Interview,
+  stageFilter: string,
+  fromDate?: string,
+  toDate?: string,
+): boolean {
+  const rounds = getStrictDatedRounds(iv);
+  const matchSet = stageFilterMatchSet(stageFilter);
+
+  if (matchSet) {
+    // Stage filter: must have that badge; when a date range is set, that badge's date must be in range.
+    return rounds.some((e) => {
+      if (!matchSet.has(e.stage)) return false;
+      if (fromDate || toDate) return dateInSelectedRange(e.scheduledAt, fromDate, toDate);
+      return true;
+    });
+  }
+
+  if (fromDate || toDate) {
+    // Date-only: any badge whose own date falls in range.
+    return rounds.some((e) => dateInSelectedRange(e.scheduledAt, fromDate, toDate));
+  }
+  return true;
+}
+
+/**
+ * Count interview rounds (stage badges) whose scheduled date falls in [from, to].
+ * When a Stage filter is set, only badges of that stage are counted
+ * (e.g. Intro filter → Intro only, not later Hiring/Tech on the same card).
+ * Tech = round 1/2 + live coding + system design (never Home Assessment).
+ * Rejected + Scheduled = canceled — counted separately (not in the main total).
+ */
+function countInterviewRoundsInRange(
+  rows: Interview[],
+  fromDate?: string,
+  toDate?: string,
+  stageFilter?: string,
+): { total: number; breakdown: Array<{ label: string; count: number }>; canceled: number } {
+  const counts: Record<string, number> = {};
+  for (const g of ROUND_BREAKDOWN_GROUPS) counts[g.key] = 0;
+  const matchSet = stageFilterMatchSet(stageFilter || '');
+  const showCanceled = !stageFilter || stageFilter === 'rejected';
+
+  let total = 0;
+  let canceled = 0;
+  for (const iv of rows) {
+    const isCanceled =
+      (iv.status || '') === 'scheduled' && normalizeInterviewStage(iv.stage) === 'rejected';
+
+    if (isCanceled) {
+      if (!showCanceled) continue;
+      const inRange =
+        !(fromDate || toDate)
+        || dateInSelectedRange(movementDateKey(iv.scheduledAt), fromDate, toDate)
+        || getStrictDatedRounds(iv).some((e) => dateInSelectedRange(e.scheduledAt, fromDate, toDate));
+      if (inRange) canceled += 1;
+      continue;
+    }
+
+    for (const entry of getStrictDatedRounds(iv)) {
+      if (ROUND_COUNT_EXCLUDED.has(entry.stage)) continue;
+      if (matchSet && !matchSet.has(entry.stage)) continue;
+      if (!dateInSelectedRange(entry.scheduledAt, fromDate, toDate)) continue;
+      const groupKey = roundBreakdownGroupKey(entry.stage);
+      if (!groupKey) continue;
+      counts[groupKey] = (counts[groupKey] || 0) + 1;
+      total += 1;
+    }
+  }
+
+  const breakdown = ROUND_BREAKDOWN_GROUPS
+    .map((g) => ({ label: g.label, count: counts[g.key] || 0 }))
+    .filter((x) => x.count > 0);
+
+  return { total, breakdown, canceled };
+}
+
 /** YYYY-MM-DD for date inputs from an interview's scheduledAt. */
 function interviewDateInput(iv: { scheduledAt?: string | null }): string {
   const raw = iv.scheduledAt;
@@ -580,8 +759,24 @@ export default function InterviewsPage() {
   const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
   const users = (usersData?.users as Array<{ _id: string; name?: string | null; email?: string | null }>) || [];
 
-  const interviews = (data?.interviews as Interview[]) || [];
+  const interviewsRaw = (data?.interviews as Interview[]) || [];
   const pagination = data?.pagination;
+
+  const interviews = useMemo(
+    () =>
+      interviewsRaw.filter((iv) =>
+        interviewMatchesBoardFilters(iv, stage, from || undefined, to || undefined),
+      ),
+    [interviewsRaw, stage, from, to],
+  );
+
+  const interviewRoundStats = useMemo(
+    () => countInterviewRoundsInRange(interviews, from || undefined, to || undefined, stage || undefined),
+    [interviews, from, to, stage],
+  );
+  const interviewRoundTotal = interviewRoundStats.total;
+  const interviewRoundBreakdown = interviewRoundStats.breakdown;
+  const interviewCanceledTotal = interviewRoundStats.canceled;
 
   const boardBuckets = useMemo(() => {
     const buckets = Object.fromEntries(
@@ -603,9 +798,8 @@ export default function InterviewsPage() {
   const canBoardPrev = boardOffset > 0;
   const canBoardNext = boardOffset + visibleColumnCount < BOARD_COLUMNS.length;
 
-  useEffect(() => {
-    if (!stage) return;
-    const colKey = boardColumnForStage(stage);
+  /** Shift the visible window so the given pan is on screen. */
+  const revealBoardColumn = (colKey: BoardColumnKey) => {
     const idx = BOARD_COLUMNS.findIndex((c) => c.key === colKey);
     if (idx < 0) return;
     setBoardOffset((prev) => {
@@ -613,6 +807,14 @@ export default function InterviewsPage() {
       if (idx >= prev + visibleColumnCount) return idx - visibleColumnCount + 1;
       return prev;
     });
+  };
+
+  useEffect(() => {
+    if (!stage) return;
+    const colKey = boardColumnForStage(stage);
+    if (!colKey) return;
+    revealBoardColumn(colKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to stage / width changes
   }, [stage, visibleColumnCount]);
 
   // Modal state
@@ -1007,12 +1209,12 @@ export default function InterviewsPage() {
 
   const stageOptions = useMemo(() => [
     { value: '', label: 'All' },
-    ...STAGES,
+    ...BOARD_FORM_STAGES,
   ], []);
 
   const statusOptions = useMemo(() => [
     { value: '', label: 'All' },
-    ...STATUSES,
+    ...FORM_STATUSES,
   ], []);
 
   const stageFormOptions = useMemo(() => [
@@ -1024,7 +1226,7 @@ export default function InterviewsPage() {
 
   const statusFormOptions = useMemo(() => [
     { value: '', label: '— None —' },
-    ...STATUSES,
+    ...FORM_STATUSES,
   ], []);
 
   return (
@@ -1079,13 +1281,28 @@ export default function InterviewsPage() {
         </div>
       </div>
 
-      {/* Total */}
+      {/* Total — counts stage rounds in the date range (not cards). Excludes AI / Home Assessment / Rejected. */}
       {data && (
         <div className="text-sm text-gray-600">
-          <span>Showing {pagination?.total ?? 0} interview{pagination?.total !== 1 ? 's' : ''} total</span>
+          <span>
+            Showing{' '}
+            <span className="font-semibold text-emerald-600">{interviewRoundTotal}</span>
+            {' '}interview{interviewRoundTotal !== 1 ? 's' : ''} total
+            {interviewRoundBreakdown.length > 0 && (
+              <span className="text-gray-500">
+                {' '}({interviewRoundBreakdown.map((x) => `${x.label}-${x.count}`).join(', ')})
+              </span>
+            )}
+            {interviewCanceledTotal > 0 && (
+              <>
+                <span className="text-gray-400"> / </span>
+                <span className="font-semibold text-red-600">Canceled-{interviewCanceledTotal}</span>
+              </>
+            )}
+          </span>
           {(pagination?.total ?? 0) > boardPageSize && (
             <span className="text-amber-700 ml-2">
-              (first {boardPageSize} loaded — narrow filters to see more)
+              (first {boardPageSize} cards loaded — narrow filters to see more)
             </span>
           )}
         </div>
@@ -1103,24 +1320,66 @@ export default function InterviewsPage() {
       ) : (
         <>
           <div className="flex flex-col gap-3 w-full">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={handleBoardPrev}
                   disabled={!canBoardPrev}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Show previous columns"
                 >
                   <ChevronLeft size={16} />
                 </button>
-                <p className="text-xs text-gray-500 text-center flex-1">
-                  {visibleColumns.map((c) => c.label).join(' · ')}
-                </p>
+
+                <nav
+                  className="relative w-1/2 min-w-0 select-none"
+                  aria-label="Interview stages"
+                >
+                  <div
+                    className="grid"
+                    style={{ gridTemplateColumns: `repeat(${BOARD_COLUMNS.length}, minmax(0, 1fr))` }}
+                  >
+                    {BOARD_COLUMNS.map((c, idx) => {
+                      const isVisible = idx >= boardOffset && idx < boardOffset + visibleColumnCount;
+                      return (
+                        <button
+                          key={c.key}
+                          type="button"
+                          onClick={() => revealBoardColumn(c.key)}
+                          className={`relative z-[1] truncate px-1 pb-3 pt-1 text-center text-[11px] sm:text-xs transition-colors duration-200 ${
+                            isVisible
+                              ? 'font-semibold text-gray-900'
+                              : 'font-medium text-gray-400 hover:text-gray-700'
+                          }`}
+                          title={isVisible ? `${c.label} (showing)` : `Show ${c.label}`}
+                          aria-current={isVisible ? 'true' : undefined}
+                        >
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Base track */}
+                  <div
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-1 rounded-full bg-gray-200"
+                    aria-hidden
+                  />
+                  {/* Sliding underline for the visible pan window */}
+                  <div
+                    className="pointer-events-none absolute bottom-0 h-1 rounded-full bg-gray-800 transition-all duration-300 ease-out"
+                    style={{
+                      left: `${(boardOffset / BOARD_COLUMNS.length) * 100}%`,
+                      width: `${(visibleColumnCount / BOARD_COLUMNS.length) * 100}%`,
+                    }}
+                    aria-hidden
+                  />
+                </nav>
+
                 <button
                   type="button"
                   onClick={handleBoardNext}
                   disabled={!canBoardNext}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Show next columns"
                 >
                   <ChevronRight size={16} />
