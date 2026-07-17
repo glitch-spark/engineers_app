@@ -439,10 +439,15 @@ function JobRow({
 }) {
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const created = job.createdAt ? new Date(job.createdAt) : null;
   const elapsed = job.executionMs != null ? `${(job.executionMs / 1000).toFixed(1)}s` : '—';
   const inFlight = job.status === 'queued' || job.status === 'in_progress';
   const hasAnswers = job.screeningPairs && job.screeningPairs.length > 0;
+  const isFailed = job.status === 'failed';
+  const retryTitle = job.errorMessage
+    ? `Retry: ${job.errorMessage}`
+    : 'Retry generation';
 
   async function download() {
     setDownloading(true);
@@ -466,6 +471,19 @@ function JobRow({
       notify.error(err, 'Delete failed');
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function retry() {
+    setRetrying(true);
+    try {
+      await api.retryResumeJob(job._id);
+      notify.success('Retry queued');
+      onChanged();
+    } catch (err) {
+      notify.error(err, 'Retry failed');
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -512,6 +530,14 @@ function JobRow({
           {inFlight && (
             <div className="text-[11px] text-muted mt-0.5">{STEP_LABEL[job.step]}…</div>
           )}
+          {isFailed && job.errorMessage && (
+            <div
+              className="text-[11px] text-red-600 dark:text-red-400 mt-0.5 line-clamp-2 max-w-[220px]"
+              title={job.errorMessage}
+            >
+              {job.errorMessage}
+            </div>
+          )}
         </td>
         <td className="px-3 py-2">
           <LlmProviderBadge
@@ -541,6 +567,18 @@ function JobRow({
         </td>
         <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
           <div className="inline-flex gap-1 justify-end">
+            {isFailed && (
+              <button
+                type="button"
+                onClick={retry}
+                disabled={retrying}
+                className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted disabled:opacity-50"
+                title={retryTitle}
+                aria-label={retryTitle}
+              >
+                {retrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </button>
+            )}
             <button
               type="button"
               onClick={download}
