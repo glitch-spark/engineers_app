@@ -478,7 +478,9 @@ export interface ConsolidatedLeaderboard {
   users: ConsolidatedLeaderboardUser[];
   yourStats: {
     bids: number; bidsPlan?: number; bidsTailor?: number;
-    interviews: number; interviewsCanceled?: number; conversion: number;
+    interviews: number; interviewsCanceled?: number;
+    interviewBreakdown?: InterviewStageBreakdownItem[];
+    conversion: number;
     rankBids?: number; rankInterviews?: number; rankConversion?: number;
     bidsTarget: number; interviewsTarget: number;
     prevBids: number; prevInterviews: number; prevInterviewsCanceled?: number; prevConversion: number;
