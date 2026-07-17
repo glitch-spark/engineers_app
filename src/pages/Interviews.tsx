@@ -463,7 +463,7 @@ function toDateInputValue(d: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/** Default filter: this week's Monday → next week's Friday. */
+/** Default filter: this week's Monday → Saturday. */
 function currentWeekdayRange(): { from: string; to: string } {
   const today = new Date();
   const day = today.getDay(); // 0=Sun … 6=Sat
@@ -471,9 +471,9 @@ function currentWeekdayRange(): { from: string; to: string } {
   const monday = new Date(today);
   monday.setDate(today.getDate() + mondayOffset);
   monday.setHours(0, 0, 0, 0);
-  const nextFriday = new Date(monday);
-  nextFriday.setDate(monday.getDate() + 11); // this Mon + 11 days = next Fri
-  return { from: toDateInputValue(monday), to: toDateInputValue(nextFriday) };
+  const saturday = new Date(monday);
+  saturday.setDate(monday.getDate() + 5); // Mon + 5 = Sat
+  return { from: toDateInputValue(monday), to: toDateInputValue(saturday) };
 }
 
 /** Build scheduledAt/endsAt; always keep endsAt after scheduledAt (edit form hides times). */
