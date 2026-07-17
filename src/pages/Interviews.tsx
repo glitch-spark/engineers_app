@@ -78,52 +78,52 @@ const editorStyles = `
 `;
 
 const BOARD_COLUMNS = [
-  { key: 'ai_interview', label: 'AI Interview', tone: 'border-emerald-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'intro', label: 'Intro', tone: 'border-gray-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'tech', label: 'Tech', tone: 'border-blue-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'hiring_manager', label: 'Hiring Manager', tone: 'border-pink-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'panel', label: 'Panel', tone: 'border-purple-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'final', label: 'Final', tone: 'border-amber-300', columnClass: 'flex-1 min-w-0' },
-  { key: 'rejected', label: 'Rejected', tone: 'border-red-300', columnClass: 'flex-1 min-w-0' },
+  { key: 'ai_interview', label: 'AI Interview', tone: 'border-emerald-300 dark:border-emerald-600', columnClass: 'flex-1 min-w-0' },
+  { key: 'intro', label: 'Intro', tone: 'border-zinc-300 dark:border-zinc-600', columnClass: 'flex-1 min-w-0' },
+  { key: 'tech', label: 'Tech', tone: 'border-blue-300 dark:border-blue-600', columnClass: 'flex-1 min-w-0' },
+  { key: 'hiring_manager', label: 'Hiring Manager', tone: 'border-pink-300 dark:border-pink-600', columnClass: 'flex-1 min-w-0' },
+  { key: 'panel', label: 'Panel', tone: 'border-purple-300 dark:border-purple-600', columnClass: 'flex-1 min-w-0' },
+  { key: 'final', label: 'Final', tone: 'border-amber-300 dark:border-amber-600', columnClass: 'flex-1 min-w-0' },
+  { key: 'rejected', label: 'Rejected', tone: 'border-red-400 dark:border-red-500', columnClass: 'flex-1 min-w-0' },
 ] as const;
 
 type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
 
 const BOARD_CARD_STYLES: Record<BoardColumnKey, { card: string; hover: string; accent: string }> = {
   ai_interview: {
-    card: 'bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 border-emerald-200/90',
-    hover: 'hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-100/80',
-    accent: 'bg-emerald-400',
+    card: 'bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 border-emerald-200/90 dark:from-emerald-950/50 dark:via-zinc-950 dark:to-teal-950/30 dark:border-emerald-800/80',
+    hover: 'hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-100/80 dark:hover:border-emerald-500 dark:hover:shadow-emerald-950/40',
+    accent: 'bg-emerald-400 dark:bg-emerald-500',
   },
   intro: {
-    card: 'bg-gradient-to-br from-slate-50 via-white to-gray-50 border-slate-200',
-    hover: 'hover:border-slate-400 hover:shadow-md hover:shadow-slate-100/80',
-    accent: 'bg-slate-400',
+    card: 'bg-gradient-to-br from-slate-50 via-white to-gray-50 border-slate-200 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900/80 dark:border-zinc-700',
+    hover: 'hover:border-slate-400 hover:shadow-md hover:shadow-slate-100/80 dark:hover:border-zinc-500 dark:hover:shadow-black/40',
+    accent: 'bg-slate-400 dark:bg-zinc-500',
   },
   tech: {
-    card: 'bg-gradient-to-br from-blue-50 via-white to-sky-50/80 border-blue-200/90',
-    hover: 'hover:border-blue-400 hover:shadow-md hover:shadow-blue-100/80',
-    accent: 'bg-blue-400',
+    card: 'bg-gradient-to-br from-blue-50 via-white to-sky-50/80 border-blue-200/90 dark:from-blue-950/50 dark:via-zinc-950 dark:to-sky-950/30 dark:border-blue-800/80',
+    hover: 'hover:border-blue-400 hover:shadow-md hover:shadow-blue-100/80 dark:hover:border-blue-500 dark:hover:shadow-blue-950/40',
+    accent: 'bg-blue-400 dark:bg-blue-500',
   },
   hiring_manager: {
-    card: 'bg-gradient-to-br from-pink-50 via-white to-rose-50/80 border-pink-200/90',
-    hover: 'hover:border-pink-400 hover:shadow-md hover:shadow-pink-100/80',
-    accent: 'bg-pink-400',
+    card: 'bg-gradient-to-br from-pink-50 via-white to-rose-50/80 border-pink-200/90 dark:from-pink-950/50 dark:via-zinc-950 dark:to-rose-950/30 dark:border-pink-800/80',
+    hover: 'hover:border-pink-400 hover:shadow-md hover:shadow-pink-100/80 dark:hover:border-pink-500 dark:hover:shadow-pink-950/40',
+    accent: 'bg-pink-400 dark:bg-pink-500',
   },
   panel: {
-    card: 'bg-gradient-to-br from-purple-50 via-white to-violet-50/80 border-purple-200/90',
-    hover: 'hover:border-purple-400 hover:shadow-md hover:shadow-purple-100/80',
-    accent: 'bg-purple-400',
+    card: 'bg-gradient-to-br from-purple-50 via-white to-violet-50/80 border-purple-200/90 dark:from-purple-950/50 dark:via-zinc-950 dark:to-violet-950/30 dark:border-purple-800/80',
+    hover: 'hover:border-purple-400 hover:shadow-md hover:shadow-purple-100/80 dark:hover:border-purple-500 dark:hover:shadow-purple-950/40',
+    accent: 'bg-purple-400 dark:bg-purple-500',
   },
   final: {
-    card: 'bg-gradient-to-br from-amber-50 via-white to-orange-50/80 border-amber-200/90',
-    hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80',
-    accent: 'bg-amber-400',
+    card: 'bg-gradient-to-br from-amber-50 via-white to-orange-50/80 border-amber-200/90 dark:from-amber-950/50 dark:via-zinc-950 dark:to-orange-950/30 dark:border-amber-800/80',
+    hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80 dark:hover:border-amber-500 dark:hover:shadow-amber-950/40',
+    accent: 'bg-amber-400 dark:bg-amber-500',
   },
   rejected: {
-    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90',
-    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80',
-    accent: 'bg-red-400',
+    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90 dark:from-red-950/50 dark:via-zinc-950 dark:to-rose-950/30 dark:border-red-800/80',
+    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80 dark:hover:border-red-500 dark:hover:shadow-red-950/40',
+    accent: 'bg-red-500 dark:bg-red-500',
   },
 };
 
@@ -229,13 +229,13 @@ const FORM_STATUSES = [
 
 const statusBadgeClass = (s?: string | null) => {
   switch (s) {
-    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800';
     case 'completed': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
-    case 'passed': return 'bg-green-100 text-green-800 border-green-200';
-    case 'failed': return 'bg-red-100 text-red-800 border-red-200';
-    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
-    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600';
+    case 'passed': return 'bg-green-100 text-green-800 border-green-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800';
+    case 'failed': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800';
+    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800';
+    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800';
+    case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600 dark:text-zinc-300';
     default: return 'bg-zinc-50 dark:bg-zinc-900/80 text-muted border-zinc-200 dark:border-zinc-700';
   }
 };
@@ -251,10 +251,10 @@ function boardStatusLabel(status?: string | null): string {
 
 function boardStatusClass(status?: string | null): string {
   if (status === 'scheduled' || status === 'rescheduled') {
-    return 'bg-blue-100 text-blue-800 border-blue-200';
+    return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800';
   }
   if (status === 'completed') {
-    return 'bg-gray-100 text-gray-700 border-gray-200';
+    return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
   }
   return statusBadgeClass(status);
 }
@@ -1246,9 +1246,9 @@ export default function InterviewsPage() {
 
       <div className="space-y-6">
       {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap bg-white rounded-[12px] border border-gray-100 px-4 py-3 shadow-sm">
+      <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
         <div className="w-44">
-          <label className="block text-xs text-gray-500 mb-1">User</label>
+          <label className="block text-xs text-muted mb-1">User</label>
           <Select
             value={creatorId}
             onChange={(v) => {
@@ -1260,48 +1260,48 @@ export default function InterviewsPage() {
           />
         </div>
         <div className="w-44">
-          <label className="block text-xs text-gray-500 mb-1">Profile</label>
+          <label className="block text-xs text-muted mb-1">Profile</label>
           <Select value={accountId} onChange={(v) => { setAccountId(v); resetFiltersPage(); }} options={accountOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-gray-500 mb-1">Stage</label>
+          <label className="block text-xs text-muted mb-1">Stage</label>
           <Select value={stage} onChange={(v) => { setStage(v); resetFiltersPage(); }} options={stageOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-gray-500 mb-1">Status</label>
+          <label className="block text-xs text-muted mb-1">Status</label>
           <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); resetFiltersPage(); }} options={statusOptions} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-gray-500 mb-1">From</label>
+          <label className="block text-xs text-muted mb-1">From</label>
           <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetFiltersPage(); }} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-gray-500 mb-1">To</label>
+          <label className="block text-xs text-muted mb-1">To</label>
           <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); resetFiltersPage(); }} />
         </div>
       </div>
 
       {/* Total — counts stage rounds in the date range (not cards). Excludes AI / Home Assessment / Rejected. */}
       {data && (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-body">
           <span>
             Showing{' '}
-            <span className="font-semibold text-emerald-600">{interviewRoundTotal}</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{interviewRoundTotal}</span>
             {' '}interview{interviewRoundTotal !== 1 ? 's' : ''} total
             {interviewRoundBreakdown.length > 0 && (
-              <span className="text-gray-500">
+              <span className="text-muted">
                 {' '}({interviewRoundBreakdown.map((x) => `${x.label}-${x.count}`).join(', ')})
               </span>
             )}
             {interviewCanceledTotal > 0 && (
               <>
-                <span className="text-gray-400"> / </span>
-                <span className="font-semibold text-red-600">Canceled-{interviewCanceledTotal}</span>
+                <span className="text-faint"> / </span>
+                <span className="font-semibold text-red-600 dark:text-red-400">Canceled-{interviewCanceledTotal}</span>
               </>
             )}
           </span>
           {(pagination?.total ?? 0) > boardPageSize && (
-            <span className="text-amber-700 ml-2">
+            <span className="text-amber-700 dark:text-amber-400 ml-2">
               (first {boardPageSize} cards loaded — narrow filters to see more)
             </span>
           )}
@@ -1310,11 +1310,11 @@ export default function InterviewsPage() {
 
       {/* Board — Pipeline-style kanban */}
       {isLoading && !data ? (
-        <div className="bg-white rounded-[12px] border border-gray-100 p-6 flex items-center gap-2 text-sm text-gray-500 shadow-sm">
+        <div className="panel p-6 flex items-center gap-2 text-sm text-muted">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading interviews…
         </div>
       ) : loadError ? (
-        <div className="bg-white rounded-[12px] border border-red-100 p-6 text-sm text-red-600 shadow-sm">
+        <div className="panel border-red-200 dark:border-red-900/50 p-6 text-sm text-red-600 dark:text-red-400">
           Failed to load interviews. Try refreshing the page.
         </div>
       ) : (
@@ -1325,7 +1325,7 @@ export default function InterviewsPage() {
                   type="button"
                   onClick={handleBoardPrev}
                   disabled={!canBoardPrev}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   aria-label="Show previous columns"
                 >
                   <ChevronLeft size={16} />
@@ -1348,8 +1348,8 @@ export default function InterviewsPage() {
                           onClick={() => revealBoardColumn(c.key)}
                           className={`relative z-[1] truncate px-1 pb-3 pt-1 text-center text-[11px] sm:text-xs transition-colors duration-200 ${
                             isVisible
-                              ? 'font-semibold text-gray-900'
-                              : 'font-medium text-gray-400 hover:text-gray-700'
+                              ? 'font-semibold text-zinc-900 dark:text-zinc-100'
+                              : 'font-medium text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300'
                           }`}
                           title={isVisible ? `${c.label} (showing)` : `Show ${c.label}`}
                           aria-current={isVisible ? 'true' : undefined}
@@ -1361,12 +1361,12 @@ export default function InterviewsPage() {
                   </div>
                   {/* Base track */}
                   <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-1 rounded-full bg-gray-200"
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-1 rounded-full bg-zinc-200 dark:bg-zinc-700"
                     aria-hidden
                   />
                   {/* Sliding underline for the visible pan window */}
                   <div
-                    className="pointer-events-none absolute bottom-0 h-1 rounded-full bg-gray-800 transition-all duration-300 ease-out"
+                    className="pointer-events-none absolute bottom-0 h-1 rounded-full bg-zinc-800 dark:bg-zinc-200 transition-all duration-300 ease-out"
                     style={{
                       left: `${(boardOffset / BOARD_COLUMNS.length) * 100}%`,
                       width: `${(visibleColumnCount / BOARD_COLUMNS.length) * 100}%`,
@@ -1379,7 +1379,7 @@ export default function InterviewsPage() {
                   type="button"
                   onClick={handleBoardNext}
                   disabled={!canBoardNext}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   aria-label="Show next columns"
                 >
                   <ChevronRight size={16} />
@@ -1387,7 +1387,7 @@ export default function InterviewsPage() {
               </div>
 
             {interviews.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800">
+              <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300">
                 No interviews match the current filters.
                 {creatorId && ' Try setting User to All, or pick a different profile.'}
               </div>
@@ -1627,8 +1627,8 @@ export default function InterviewsPage() {
                     key={opt.value}
                     className={`flex items-center gap-3 rounded-[10px] border px-3 py-2.5 cursor-pointer transition-colors ${
                       moveSubStage === opt.value
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-sky-600 bg-sky-50 dark:border-sky-400 dark:bg-sky-950/40'
+                        : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600'
                     }`}
                   >
                     <input
@@ -1639,14 +1639,14 @@ export default function InterviewsPage() {
                       onChange={() => setMoveSubStage(opt.value)}
                       className="accent-primary"
                     />
-                    <span className="text-sm font-medium text-gray-900">{opt.label}</span>
+                    <span className="text-sm font-medium text-strong">{opt.label}</span>
                   </label>
                 ))}
               </div>
             </>
           ) : (
             <p className="text-sm text-muted">
-              Set the scheduled date for <span className="font-medium text-gray-900">{movePrompt?.label}</span>.
+              Set the scheduled date for <span className="font-medium text-strong">{movePrompt?.label}</span>.
             </p>
           )}
 
@@ -1719,19 +1719,19 @@ function InterviewBoardColumn({
   const highlight = isOver || isDropTarget;
 
   return (
-    <div className={`${columnClass} bg-gray-50 rounded-[12px] border-t-4 ${tone} border-x border-b border-gray-100`}>
-      <header className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 uppercase tracking-wide font-medium">
+    <div className={`${columnClass} bg-zinc-50 dark:bg-zinc-900/60 rounded-[12px] border-t-4 ${tone} border-x border-b border-zinc-100 dark:border-zinc-800`}>
+      <header className="px-3 py-2 flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-wide font-medium">
         <span className="truncate">{label}</span>
-        <span className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums ml-2 shrink-0">
+        <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-0.5 text-[10px] tabular-nums ml-2 shrink-0 text-zinc-700 dark:text-zinc-300">
           {cards.length}
         </span>
       </header>
       <div
         ref={setNodeRef}
-        className={`p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto transition-colors ${highlight ? 'bg-primary/5 ring-1 ring-inset ring-primary/20 rounded-b-[12px]' : ''}`}
+        className={`p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto transition-colors ${highlight ? 'bg-primary/5 ring-1 ring-inset ring-primary/20 rounded-b-[12px] dark:bg-sky-500/5 dark:ring-sky-400/20' : ''}`}
       >
         {cards.length === 0 ? (
-          <div className="text-xs text-gray-400 text-center py-8">Drop here</div>
+          <div className="text-xs text-zinc-400 dark:text-zinc-500 text-center py-8">Drop here</div>
         ) : (
           cards.map((iv) => (
             <InterviewBoardCard
@@ -1765,11 +1765,11 @@ function InterviewBoardCardPreview({
   const panStyle = BOARD_CARD_STYLES[columnKey];
 
   return (
-    <div className={`rounded-[10px] p-3 text-sm shadow-md border relative overflow-hidden ${panStyle.card} ring-2 ring-primary`}>
+    <div className={`rounded-[10px] p-3 text-sm shadow-md border relative overflow-hidden ${panStyle.card} ring-2 ring-primary dark:ring-sky-400/60`}>
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
-      <div className="font-medium text-gray-900 truncate pl-1" title={profileName}>{profileName}</div>
-      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>{companyName}</div>
-      <div className="mt-1 text-[11px] text-gray-500 pl-1">
+      <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate pl-1" title={profileName}>{profileName}</div>
+      <div className="mt-1 text-zinc-700 dark:text-zinc-300 truncate pl-1" title={companyName}>{companyName}</div>
+      <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
         {formatScheduledDate(interview.scheduledAt)}
       </div>
       <div className="mt-1.5 pl-1">
@@ -1778,7 +1778,7 @@ function InterviewBoardCardPreview({
             {boardStatusLabel(interview.status)}
           </span>
         ) : (
-          <span className="text-[11px] text-gray-400">No status</span>
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">No status</span>
         )}
       </div>
     </div>
@@ -1832,7 +1832,7 @@ function InterviewBoardCard({
       {...(draggable ? attributes : { role: 'button', tabIndex: 0 })}
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
-      className={`rounded-[10px] p-3 text-sm shadow-sm border relative overflow-hidden transition-all duration-200 ${panStyle.card} ${panStyle.hover} ${isSelected ? 'ring-2 ring-primary/60 border-primary/40' : ''} ${isDragging ? 'opacity-40' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+      className={`rounded-[10px] p-3 text-sm shadow-sm border relative overflow-hidden transition-all duration-200 ${panStyle.card} ${panStyle.hover} ${isSelected ? 'ring-2 ring-primary/60 border-primary/40 dark:ring-sky-400/50 dark:border-sky-500/40' : ''} ${isDragging ? 'opacity-40' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
     >
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
       <div className="absolute top-2 right-2 flex items-center gap-0.5">
@@ -1840,7 +1840,7 @@ function InterviewBoardCard({
           type="button"
           onClick={(e) => { stop(e); onOpenTranscript(); }}
           onPointerDown={stop}
-          className="p-1 rounded-[6px] text-gray-400 hover:text-primary hover:bg-blue-50"
+          className="p-1 rounded-[6px] text-zinc-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:text-sky-400 dark:hover:bg-sky-950/50"
           title="Open transcript"
           aria-label="Open transcript"
         >
@@ -1851,7 +1851,7 @@ function InterviewBoardCard({
             type="button"
             onClick={(e) => { stop(e); onDelete(); }}
             onPointerDown={stop}
-            className="p-1 rounded-[6px] text-gray-400 hover:text-red-600 hover:bg-red-50"
+            className="p-1 rounded-[6px] text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/40"
             title="Delete interview"
             aria-label="Delete interview"
           >
@@ -1859,13 +1859,13 @@ function InterviewBoardCard({
           </button>
         )}
       </div>
-      <div className="font-medium text-gray-900 truncate pr-14 pl-1" title={profileName}>
+      <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate pr-14 pl-1" title={profileName}>
         {profileName}
       </div>
-      <div className="mt-1 text-gray-700 truncate pl-1" title={companyName}>
+      <div className="mt-1 text-zinc-700 dark:text-zinc-300 truncate pl-1" title={companyName}>
         {companyName}
       </div>
-      <div className="mt-1 text-[11px] text-gray-500 pl-1">
+      <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
         {formatScheduledDate(interview.scheduledAt)}
       </div>
       <div className="mt-1.5 pl-1">
@@ -1874,7 +1874,7 @@ function InterviewBoardCard({
             {boardStatusLabel(interview.status)}
           </span>
         ) : (
-          <span className="text-[11px] text-gray-400">No status</span>
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">No status</span>
         )}
       </div>
       <StageMovementTrail interview={interview} />
@@ -1893,7 +1893,7 @@ function StageMovementTrail({ interview }: { interview: Interview }) {
     <div className="mt-1.5 pl-1 flex flex-wrap items-center gap-1">
       {shown.map((s, i) => (
         <span key={`${s}-${i}`} className="inline-flex items-center gap-1">
-          {i > 0 && <span className="text-[10px] text-gray-400">→</span>}
+          {i > 0 && <span className="text-[10px] text-zinc-400 dark:text-zinc-500">→</span>}
           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-[6px] text-[10px] font-medium border ${stageBadgeClass(s)}`}>
             {stageLabel(s)}
           </span>
@@ -1961,7 +1961,7 @@ function InterviewFormFields({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
+        <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-faint font-normal">(optional)</span></label>
         <input className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, jobUrl: e.target.value }))} placeholder="https://..." />
       </div>
 
@@ -2057,23 +2057,23 @@ function InterviewFormFields({
       {(form.stageHistory.length > 0 || !disabled) && (
         <div>
           <label className="block text-sm font-medium mb-1">Stage movement</label>
-          <p className="text-xs text-gray-500 mb-2">
+          <p className="text-xs text-muted mb-2">
             Path used for pass-rate analysis. Each badge shows that round&apos;s interview date.
           </p>
           {form.stageHistory.length === 0 ? (
-            <div className="text-xs text-gray-400 italic">No stage moves yet.</div>
+            <div className="text-xs text-faint italic">No stage moves yet.</div>
           ) : (
             <div className="flex flex-wrap items-end gap-1.5">
               {form.stageHistory.map((entry, i) => (
                 <span key={`${entry.stage}-${i}`} className="inline-flex items-end gap-1">
-                  {i > 0 && <span className="text-[10px] text-gray-400 pb-4">→</span>}
+                  {i > 0 && <span className="text-[10px] text-faint pb-4">→</span>}
                   <span className="inline-flex flex-col items-center gap-0.5">
                     <span className={`inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-[6px] text-[11px] font-medium border ${stageBadgeClass(entry.stage)}`}>
                       {stageLabel(entry.stage)}
                       {!disabled && (
                         <button
                           type="button"
-                          className="ml-0.5 p-0.5 rounded hover:bg-black/10 text-current/70 hover:text-current"
+                          className="ml-0.5 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 text-current/70 hover:text-current"
                           title={`Remove ${stageLabel(entry.stage)}`}
                           aria-label={`Remove ${stageLabel(entry.stage)}`}
                           onClick={() => {
@@ -2089,7 +2089,7 @@ function InterviewFormFields({
                         </button>
                       )}
                     </span>
-                    <span className="text-[10px] text-gray-500 leading-none">
+                    <span className="text-[10px] text-muted leading-none">
                       {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : '—'}
                     </span>
                   </span>
@@ -2131,11 +2131,11 @@ function InterviewFormFields({
           )}
         </div>
         {form.transcript ? (
-          <div className="border border-gray-300 rounded-md p-3 max-h-40 overflow-auto bg-gray-50">
-            <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
+          <div className="border border-zinc-300 dark:border-zinc-700 rounded-md p-3 max-h-40 overflow-auto bg-zinc-50 dark:bg-zinc-900/80">
+            <pre className="whitespace-pre-wrap text-xs font-mono text-zinc-700 dark:text-zinc-300">{form.transcript.slice(0, 4000)}{form.transcript.length > 4000 ? '\n…(truncated)' : ''}</pre>
           </div>
         ) : (
-          <div className="border border-dashed border-gray-300 rounded-md p-4 text-center text-xs text-gray-400">
+          <div className="border border-dashed border-zinc-300 dark:border-zinc-700 rounded-md p-4 text-center text-xs text-faint">
             No transcript yet.
           </div>
         )}
@@ -2189,11 +2189,11 @@ function InterviewSidePanel({
     || (form.stage === 'tech' && !form.techSubStage);
 
   return (
-    <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white shadow-strong border-l border-gray-100 z-50 flex flex-col">
-      <header className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
+    <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white dark:bg-zinc-950 shadow-strong border-l border-zinc-200 dark:border-zinc-800 z-50 flex flex-col">
+      <header className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2 shrink-0">
         <div className="min-w-0">
-          <div className="text-xs text-gray-500">Interview details</div>
-          <div className="font-semibold text-gray-900 truncate">{title}</div>
+          <div className="text-xs text-muted">Interview details</div>
+          <div className="font-semibold text-strong truncate">{title}</div>
           {interview.stage && (
             <span className={`inline-flex mt-1 items-center px-2 py-0.5 rounded-[8px] text-[10px] font-medium border ${stageBadgeClass(interview.stage)}`}>
               {stageLabel(interview.stage)}
@@ -2209,7 +2209,7 @@ function InterviewSidePanel({
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+        {error && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{error}</p>}
         <InterviewFormFields
           form={form}
           setForm={setForm}
@@ -2223,7 +2223,7 @@ function InterviewSidePanel({
         />
       </div>
 
-      <footer className="px-4 py-3 border-t border-gray-100 flex flex-wrap gap-2 justify-end shrink-0 bg-gray-50/80">
+      <footer className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap gap-2 justify-end shrink-0 bg-zinc-50/80 dark:bg-zinc-900/80">
         <button type="button" className="btn-outline text-sm" onClick={onOpenTranscript}>
           <FileText size={14} className="mr-1" /> Transcript
         </button>
