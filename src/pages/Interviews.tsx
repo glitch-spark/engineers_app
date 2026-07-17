@@ -28,7 +28,6 @@ import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import {
   BOARD_FORM_STAGES,
-  INTERVIEW_STAGES,
   TECH_SUB_STAGES,
   TECH_SUB_STAGE_VALUES,
   getInterviewMovementEntries,
@@ -77,8 +76,6 @@ const editorStyles = `
   .prose-readonly img { max-width: 100%; height: auto; }
   .prose-readonly pre, .prose-readonly code { white-space: pre-wrap; word-break: break-all; }
 `;
-
-const STAGES = INTERVIEW_STAGES;
 
 const BOARD_COLUMNS = [
   { key: 'ai_interview', label: 'AI Interview', tone: 'border-emerald-300', columnClass: 'flex-1 min-w-0' },
