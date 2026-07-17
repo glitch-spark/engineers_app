@@ -463,17 +463,85 @@ function toDateInputValue(d: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+type DateRangePreset =
+  | 'prev_week'
+  | 'this_week'
+  | 'next_week'
+  | 'prev_month'
+  | 'this_month'
+  | 'this_year'
+  | 'custom';
+
+const DATE_RANGE_PRESET_OPTIONS: Array<{ value: DateRangePreset; label: string }> = [
+  { value: 'prev_week', label: 'Previous week' },
+  { value: 'this_week', label: 'This week' },
+  { value: 'next_week', label: 'Next week' },
+  { value: 'prev_month', label: 'Previous month' },
+  { value: 'this_month', label: 'This month' },
+  { value: 'this_year', label: 'This year' },
+  { value: 'custom', label: 'Custom' },
+];
+
+/** Monday 00:00 of the week containing `d` (Sun=0 … Sat=6). */
+function mondayOfWeek(d: Date): Date {
+  const day = d.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + mondayOffset);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+/** Week filter window: Monday → Saturday (matches board badge week). */
+function weekRangeFromMonday(monday: Date): { from: string; to: string } {
+  const saturday = new Date(monday);
+  saturday.setDate(monday.getDate() + 5);
+  return { from: toDateInputValue(monday), to: toDateInputValue(saturday) };
+}
+
 /** Default filter: this week's Monday → Saturday. */
 function currentWeekdayRange(): { from: string; to: string } {
-  const today = new Date();
-  const day = today.getDay(); // 0=Sun … 6=Sat
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + mondayOffset);
-  monday.setHours(0, 0, 0, 0);
-  const saturday = new Date(monday);
-  saturday.setDate(monday.getDate() + 5); // Mon + 5 = Sat
-  return { from: toDateInputValue(monday), to: toDateInputValue(saturday) };
+  return weekRangeFromMonday(mondayOfWeek(new Date()));
+}
+
+function rangeForDatePreset(preset: Exclude<DateRangePreset, 'custom'>, now = new Date()): { from: string; to: string } {
+  if (preset === 'this_week') return weekRangeFromMonday(mondayOfWeek(now));
+  if (preset === 'prev_week') {
+    const monday = mondayOfWeek(now);
+    monday.setDate(monday.getDate() - 7);
+    return weekRangeFromMonday(monday);
+  }
+  if (preset === 'next_week') {
+    const monday = mondayOfWeek(now);
+    monday.setDate(monday.getDate() + 7);
+    return weekRangeFromMonday(monday);
+  }
+  if (preset === 'this_month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { from: toDateInputValue(start), to: toDateInputValue(end) };
+  }
+  if (preset === 'prev_month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: toDateInputValue(start), to: toDateInputValue(end) };
+  }
+  // this_year
+  const start = new Date(now.getFullYear(), 0, 1);
+  const end = new Date(now.getFullYear(), 11, 31);
+  return { from: toDateInputValue(start), to: toDateInputValue(end) };
+}
+
+/** e.g. "July 28 (2026)-Aug 5 (2026)" */
+function formatDateRangeText(from: string, to: string): string {
+  if (!from || !to) return '';
+  const fmt = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    if (!y || !m || !d) return iso;
+    const month = new Date(y, m - 1, 1).toLocaleString('en-US', { month: 'short' });
+    return `${month} ${d} (${y})`;
+  };
+  return `${fmt(from)}-${fmt(to)}`;
 }
 
 /** Build scheduledAt/endsAt; always keep endsAt after scheduledAt (edit form hides times). */
@@ -704,8 +772,18 @@ export default function InterviewsPage() {
   const [accountId, setAccountId] = useState('');
   const [stage, setStage] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('this_week');
   const [from, setFrom] = useState(() => currentWeekdayRange().from);
   const [to, setTo] = useState(() => currentWeekdayRange().to);
+
+  const applyDatePreset = (preset: DateRangePreset) => {
+    setDatePreset(preset);
+    setBoardOffset(0);
+    if (preset === 'custom') return;
+    const range = rangeForDatePreset(preset);
+    setFrom(range.from);
+    setTo(range.to);
+  };
   const sort: 'desc' = 'desc';
   const [boardOffset, setBoardOffset] = useState(0);
   const [visibleColumnCount, setVisibleColumnCount] = useState(
@@ -1271,14 +1349,34 @@ export default function InterviewsPage() {
           <label className="block text-xs text-muted mb-1">Status</label>
           <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); resetFiltersPage(); }} options={statusOptions} />
         </div>
-        <div className="w-40">
-          <label className="block text-xs text-muted mb-1">From</label>
-          <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetFiltersPage(); }} />
+        <div className="w-44">
+          <label className="block text-xs text-muted mb-1">Date range</label>
+          <Select
+            value={datePreset}
+            onChange={(v) => applyDatePreset(v as DateRangePreset)}
+            options={DATE_RANGE_PRESET_OPTIONS}
+          />
         </div>
-        <div className="w-40">
-          <label className="block text-xs text-muted mb-1">To</label>
-          <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); resetFiltersPage(); }} />
-        </div>
+        {datePreset === 'custom' ? (
+          <>
+            <div className="w-40">
+              <label className="block text-xs text-muted mb-1">From</label>
+              <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetFiltersPage(); }} />
+            </div>
+            <div className="w-40">
+              <label className="block text-xs text-muted mb-1">To</label>
+              <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); resetFiltersPage(); }} />
+            </div>
+          </>
+        ) : (
+          from && to && (
+            <div className="flex items-end pb-2 min-w-0">
+              <span className="text-sm text-muted tabular-nums whitespace-nowrap" title={`${from} → ${to}`}>
+                {formatDateRangeText(from, to)}
+              </span>
+            </div>
+          )
+        )}
       </div>
 
       {/* Total — counts stage rounds in the date range (not cards). Excludes AI / Home Assessment / Rejected. */}
