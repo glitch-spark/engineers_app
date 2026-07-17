@@ -68,6 +68,8 @@ export default function DashboardPage() {
               target={yourStats?.bidsTarget ?? 0}
               prev={yourStats?.prevBids ?? 0}
               rank={yourStats?.rankBids}
+              bidsPlan={yourStats?.bidsPlan}
+              bidsTailor={yourStats?.bidsTailor}
             />
             <HeroCard
               label="Interviews"
@@ -75,6 +77,8 @@ export default function DashboardPage() {
               target={yourStats?.interviewsTarget ?? 0}
               prev={yourStats?.prevInterviews ?? 0}
               rank={yourStats?.rankInterviews}
+              canceled={yourStats?.interviewsCanceled}
+              valueClassName="text-emerald-600 dark:text-emerald-400"
             />
             <ConversionHeroCard
               value={yourStats?.conversion ?? 0}
@@ -115,24 +119,47 @@ export default function DashboardPage() {
 // ---------- Hero cards ----------
 
 function HeroCard({
-  label, value, target, prev, rank,
+  label, value, target, prev, rank, canceled, valueClassName, bidsPlan, bidsTailor,
 }: {
   label: string; value: number; target: number; prev: number; rank?: number;
+  canceled?: number; valueClassName?: string;
+  bidsPlan?: number; bidsTailor?: number;
 }) {
+  const showPlanTailor = bidsPlan !== undefined || bidsTailor !== undefined;
   return (
     <div className="panel p-4">
       <div className="flex items-center justify-between">
         <div className="text-xs text-muted">{label} — this week</div>
         <RankChip rank={rank} large />
       </div>
-      <div className="mt-2 text-3xl font-bold text-strong tabular-nums">
-        {value.toLocaleString()}
-        {target > 0 && (
-          <span className="text-base font-medium text-faint"> / {target}</span>
+      <div className="mt-2 text-3xl font-bold tabular-nums">
+        {showPlanTailor ? (
+          <span className="text-strong">
+            Plan {bidsPlan ?? 0}
+            <span className="text-base font-medium text-muted"> / Tailor {bidsTailor ?? 0}</span>
+          </span>
+        ) : (
+          <>
+            <span className={valueClassName || 'text-strong'}>{value.toLocaleString()}</span>
+            {target > 0 && (
+              <span className="text-base font-medium text-faint"> / {target}</span>
+            )}
+            {(canceled ?? 0) > 0 && (
+              <span className="ml-2 text-base font-semibold text-red-600 dark:text-red-400">
+                (Canceled - {canceled})
+              </span>
+            )}
+          </>
         )}
       </div>
       <div className="mt-1 flex items-center gap-3 text-xs">
-        {target > 0 ? <TargetCell value={value} target={target} /> : <span className="text-faint">no target set</span>}
+        {showPlanTailor && (bidsPlan ?? 0) > 0 ? (
+          <TargetCell value={bidsTailor ?? 0} target={bidsPlan ?? 0} />
+        ) : target > 0 ? (
+          <TargetCell value={value} target={target} />
+        ) : (
+          <span className="text-faint">no target set</span>
+        )}
         <Delta cur={value} prev={prev} />
       </div>
     </div>

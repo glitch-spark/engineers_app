@@ -305,7 +305,7 @@ export default function WeeklyPlanPage() {
         title="Weekly Plans"
         action={
           <div className="flex items-center gap-2">
-            <button type="button" className="btn-outline" onClick={runReport} disabled={reporting} title="AI-analyze plans in the current filter into progress metrics">
+            <button type="button" className="btn-outline" onClick={runReport} disabled={reporting} title="Analyze plans in the current filter into progress metrics. Interview counts come from the interview board; next-week interviews are included.">
               <Sparkles size={16} className="mr-2" /> {reporting ? 'Analyzing...' : 'Run Progress Report'}
             </button>
             <button type="button" className="btn" onClick={openAdd}>
@@ -359,7 +359,7 @@ export default function WeeklyPlanPage() {
         <div className="panel overflow-hidden">
           <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
             <h2 className="card-title uppercase tracking-wide">Team progress</h2>
-            <p className="hint">Planned vs actual per user for the current filter. Run Progress Report to refresh.</p>
+            <p className="hint">Planned vs actual per user for the current filter. Interview actuals come from the board. Run Progress Report to refresh.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -439,6 +439,24 @@ export default function WeeklyPlanPage() {
                   )}
                 </div>
 
+                {typeof plan.nextInterviewTarget === 'number' && (
+                  <div className="mb-4 flex items-center gap-4 rounded-xl border-2 border-sky-500/70 bg-gradient-to-r from-sky-50 via-white to-sky-50/80 px-4 py-3 shadow-sm shadow-sky-100/80 dark:border-sky-400/60 dark:from-sky-950/60 dark:via-zinc-900 dark:to-sky-950/40 dark:shadow-none">
+                    <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white shadow-md shadow-sky-600/30 dark:bg-sky-500">
+                      <span className="text-2xl font-bold tabular-nums leading-none">{plan.nextInterviewTarget}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-300">
+                        Next week interviews
+                      </div>
+                      <p className="mt-0.5 text-sm text-sky-900/80 dark:text-sky-100/80">
+                        {plan.nextInterviewTarget === 1
+                          ? '1 interview round already on the board for next week'
+                          : `${plan.nextInterviewTarget} interview rounds already on the board for next week`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {plan.metrics && plan.metrics.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
                     {plan.metrics.map((m) => (
@@ -456,9 +474,9 @@ export default function WeeklyPlanPage() {
                       </div>
                     ))}
                   </div>
-                ) : (
+                ) : typeof plan.nextInterviewTarget !== 'number' ? (
                   <div className="text-xs text-faint italic">No metrics on this plan.</div>
-                )}
+                ) : null}
 
                 {(plan.content || plan.result) && (
                   <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">

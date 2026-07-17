@@ -420,18 +420,30 @@ export interface LeaderboardRow {
   rank: number;
 }
 
+export interface InterviewStageBreakdownItem {
+  label: string;
+  count: number;
+}
+
 export interface ConsolidatedLeaderboardUser {
   userId: string;
   name: string;
   image?: string | null;
   bids: number;
+  bidsPlan?: number;
+  bidsTailor?: number;
   interviews: number;
+  interviewsCanceled?: number;
+  interviewBreakdown?: InterviewStageBreakdownItem[];
   conversion: number;
   qualifiesConversion: boolean;
   bidsTarget: number;
   interviewsTarget: number;
   prevBids: number;
+  prevBidsPlan?: number;
+  prevBidsTailor?: number;
   prevInterviews: number;
+  prevInterviewsCanceled?: number;
   prevConversion: number;
   trend: Array<{ label: string; bids: number; interviews: number }>;
   rank_bids?: number;
@@ -445,16 +457,31 @@ export interface ConsolidatedLeaderboard {
   period: { from: string; to: string };
   conversionMinBids: number;
   champions: {
-    bids: { userId: string; name: string; image?: string | null; value: number } | null;
-    interviews: { userId: string; name: string; image?: string | null; value: number } | null;
+    bids: {
+      userId: string;
+      name: string;
+      image?: string | null;
+      value: number;
+      bidsPlan?: number;
+      bidsTailor?: number;
+    } | null;
+    interviews: {
+      userId: string;
+      name: string;
+      image?: string | null;
+      value: number;
+      breakdown?: InterviewStageBreakdownItem[];
+      canceled?: number;
+    } | null;
     conversion: { userId: string; name: string; image?: string | null; value: number } | null;
   };
   users: ConsolidatedLeaderboardUser[];
   yourStats: {
-    bids: number; interviews: number; conversion: number;
+    bids: number; bidsPlan?: number; bidsTailor?: number;
+    interviews: number; interviewsCanceled?: number; conversion: number;
     rankBids?: number; rankInterviews?: number; rankConversion?: number;
     bidsTarget: number; interviewsTarget: number;
-    prevBids: number; prevInterviews: number; prevConversion: number;
+    prevBids: number; prevInterviews: number; prevInterviewsCanceled?: number; prevConversion: number;
   } | null;
 }
 
