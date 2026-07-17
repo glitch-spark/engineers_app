@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2, Trophy } from 'lucide-react';
 import * as api from '../api/endpoints';
-import type { ConsolidatedLeaderboard, ConsolidatedLeaderboardUser } from '../api/endpoints';
+import type { ConsolidatedLeaderboard, ConsolidatedLeaderboardUser, InterviewStageBreakdownItem } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
@@ -95,7 +95,15 @@ export default function LeaderboardPage() {
 
           {/* Personal panel (non-admin only) */}
           {user && !isAdmin && data.yourStats && (
-            <YourStats stats={data.yourStats} range={data.label} showPlanTailor={range === 'week'} />
+            <YourStats
+              stats={data.yourStats}
+              range={data.label}
+              showPlanTailor={range === 'week'}
+              breakdown={
+                data.yourStats.interviewBreakdown
+                ?? data.users.find((u) => u.userId === user.id)?.interviewBreakdown
+              }
+            />
           )}
 
           {/* Table */}
@@ -141,6 +149,7 @@ export default function LeaderboardPage() {
                           rank={u.rank_interviews}
                           showTarget={range === 'week'}
                           canceled={u.interviewsCanceled}
+                          breakdown={u.interviewBreakdown}
                           valueClassName="text-emerald-600 dark:text-emerald-400"
                         />
                         <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
@@ -183,16 +192,25 @@ function ColHeader({ label, active, onClick }: { label: string; active: boolean;
   );
 }
 
+function formatInterviewBreakdown(items?: InterviewStageBreakdownItem[]): string {
+  return (items ?? [])
+    .filter((x) => x.count > 0)
+    .map((x) => `${x.label}-${x.count}`)
+    .join(', ');
+}
+
 function MetricCell({
-  value, target, prev, rank, showTarget, canceled, valueClassName, bidsPlan, bidsTailor,
+  value, target, prev, rank, showTarget, canceled, breakdown, valueClassName, bidsPlan, bidsTailor,
 }: {
   value: number; target: number; prev: number; rank?: number; showTarget: boolean;
   canceled?: number;
+  breakdown?: InterviewStageBreakdownItem[];
   valueClassName?: string;
   bidsPlan?: number;
   bidsTailor?: number;
 }) {
   const showPlanTailor = bidsPlan !== undefined || bidsTailor !== undefined;
+  const breakdownText = formatInterviewBreakdown(breakdown);
   return (
     <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
       {showPlanTailor ? (
@@ -203,14 +221,17 @@ function MetricCell({
       ) : (
         <>
           <span className={`font-semibold ${valueClassName || 'text-strong'}`}>{value.toLocaleString()}</span>
-          {showTarget && target > 0 && (
+          {breakdownText && (
+            <span className="text-xs font-medium text-muted">({breakdownText})</span>
+          )}
+          {showTarget && target > 0 && !breakdownText && (
             <span className="text-faint text-xs font-medium"> / {target}</span>
           )}
         </>
       )}
       {(canceled ?? 0) > 0 && (
         <span className="ml-1 text-xs font-semibold text-red-600 dark:text-red-400">
-          (Canceled - {canceled})
+          / Canceled-{canceled}
         </span>
       )}
       <div className="text-[10px] flex items-center justify-end gap-1 mt-0.5">
@@ -353,10 +374,7 @@ function InterviewChampionCard({ users }: { users: ConsolidatedLeaderboardUser[]
 
   const activeIdx = ((idx % tied.length) + tied.length) % tied.length;
   const winner = tied[activeIdx];
-  const breakdownText = (winner.interviewBreakdown ?? [])
-    .filter((x) => x.count > 0)
-    .map((x) => `${x.label}-${x.count}`)
-    .join(', ');
+  const breakdownText = formatInterviewBreakdown(winner.interviewBreakdown);
   const canceled = winner.interviewsCanceled ?? 0;
 
   const cycle = () => {
@@ -511,10 +529,11 @@ function ConversionChampionCard({
   );
 }
 
-function YourStats({ stats, range, showPlanTailor }: {
+function YourStats({ stats, range, showPlanTailor, breakdown }: {
   stats: NonNullable<ConsolidatedLeaderboard['yourStats']>;
   range: string;
   showPlanTailor?: boolean;
+  breakdown?: InterviewStageBreakdownItem[];
 }) {
   return (
     <div className="banner-info">
@@ -536,6 +555,7 @@ function YourStats({ stats, range, showPlanTailor }: {
           rank={stats.rankInterviews}
           prev={stats.prevInterviews}
           canceled={stats.interviewsCanceled}
+          breakdown={breakdown ?? stats.interviewBreakdown}
         />
         <StatBlock
           label="Conversion"
@@ -550,7 +570,7 @@ function YourStats({ stats, range, showPlanTailor }: {
 }
 
 function StatBlock({
-  label, value, target, rank, prev, isConversion, canceled, bidsPlan, bidsTailor,
+  label, value, target, rank, prev, isConversion, canceled, breakdown, bidsPlan, bidsTailor,
 }: {
   label: string;
   value: number;
@@ -559,11 +579,13 @@ function StatBlock({
   prev: number;
   isConversion?: boolean;
   canceled?: number;
+  breakdown?: InterviewStageBreakdownItem[];
   bidsPlan?: number;
   bidsTailor?: number;
 }) {
   const showPlanTailor = !isConversion && (bidsPlan !== undefined || bidsTailor !== undefined);
   const display = isConversion ? fmtConversion(value) : value.toLocaleString();
+  const breakdownText = formatInterviewBreakdown(breakdown);
   return (
     <div>
       <div className="text-[11px] uppercase tracking-wide text-sky-700/70 dark:text-sky-400/80">{label}</div>
@@ -576,9 +598,12 @@ function StatBlock({
         ) : (
           <>
             <span className={isConversion ? 'text-strong' : 'text-emerald-600 dark:text-emerald-400'}>{display}</span>
+            {!isConversion && breakdownText && (
+              <span className="text-sm font-medium text-muted">({breakdownText})</span>
+            )}
             {!isConversion && (canceled ?? 0) > 0 && (
-              <span className="ml-1.5 text-sm font-semibold text-red-600 dark:text-red-400">
-                (Canceled - {canceled})
+              <span className="ml-1 text-sm font-semibold text-red-600 dark:text-red-400">
+                / Canceled-{canceled}
               </span>
             )}
           </>
