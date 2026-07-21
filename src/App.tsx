@@ -15,6 +15,7 @@ import Users from './pages/Users';
 import Profile from './pages/Profile';
 import Accountants from './pages/Accountants';
 import Interviews from './pages/Interviews';
+import InterviewsLive from './pages/InterviewsLive';
 import InterviewsAnalyze from './pages/InterviewsAnalyze';
 import InterviewDetail from './pages/InterviewDetail';
 import InterviewReview from './pages/InterviewReview';
@@ -60,6 +61,7 @@ export default function App() {
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
       <Route path="/weekly-plan" element={<Protected><WeeklyPlan /></Protected>} />
       <Route path="/interviews" element={<Protected><Interviews /></Protected>} />
+      <Route path="/interviews/live" element={<Protected><InterviewsLive /></Protected>} />
       <Route path="/interviews/analyze" element={<Protected><InterviewsAnalyze /></Protected>} />
       <Route path="/interviews/:id" element={<Protected><InterviewDetail /></Protected>} />
       <Route path="/interviews/:id/review" element={<Protected><InterviewReview /></Protected>} />
