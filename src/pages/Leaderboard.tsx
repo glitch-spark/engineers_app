@@ -215,8 +215,8 @@ function MetricCell({
     <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
       {showPlanTailor ? (
         <span className="font-semibold text-strong">
-          Plan {bidsPlan ?? 0}
-          <span className="text-faint font-medium"> / Tailor {bidsTailor ?? 0}</span>
+          Tailor {bidsTailor ?? 0}
+          <span className="text-faint font-medium"> / Plan {bidsPlan ?? 0}</span>
         </span>
       ) : (
         <>
@@ -314,8 +314,8 @@ function TailorBidderChampionCard({
       >
         {showPlanTailor ? (
           <>
-            Plan {plan}
-            <span className="text-base font-medium text-muted"> / Tailor {tailor}</span>
+            Tailor {tailor}
+            <span className="text-base font-medium text-muted"> / Plan {plan}</span>
           </>
         ) : (
           tailor
@@ -329,14 +329,14 @@ function TailorBidderChampionCard({
               key={u.userId}
               type="button"
               onClick={() => setIdx(i)}
-              className={`rounded-lg px-1.5 py-1 transition-colors ${
+              className={`rounded-md px-1 py-0.5 transition-colors ${
                 focused
-                  ? 'ring-2 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
+                  ? 'ring-1 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
                   : 'opacity-60 hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
               }`}
               title={focused ? u.name : `Show ${u.name}`}
             >
-              <NameWithAvatar name={u.name} imageUrl={u.image} />
+              <NameWithAvatar name={u.name} imageUrl={u.image} size="sm" />
             </button>
           );
         })}
@@ -421,14 +421,14 @@ function InterviewChampionCard({ users }: { users: ConsolidatedLeaderboardUser[]
               key={u.userId}
               type="button"
               onClick={() => setIdx(i)}
-              className={`rounded-lg px-1.5 py-1 transition-colors ${
+              className={`rounded-md px-1 py-0.5 transition-colors ${
                 focused
-                  ? 'ring-2 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
+                  ? 'ring-1 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
                   : 'opacity-60 hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
               }`}
               title={focused ? u.name : `Show ${u.name}`}
             >
-              <NameWithAvatar name={u.name} imageUrl={u.image} />
+              <NameWithAvatar name={u.name} imageUrl={u.image} size="sm" />
             </button>
           );
         })}
@@ -513,14 +513,14 @@ function ConversionChampionCard({
               key={u.userId}
               type="button"
               onClick={() => setIdx(i)}
-              className={`rounded-lg px-1.5 py-1 transition-colors ${
+              className={`rounded-md px-1 py-0.5 transition-colors ${
                 focused
-                  ? 'ring-2 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
+                  ? 'ring-1 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
                   : 'opacity-60 hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
               }`}
               title={focused ? u.name : `Show ${u.name}`}
             >
-              <NameWithAvatar name={u.name} imageUrl={u.image} />
+              <NameWithAvatar name={u.name} imageUrl={u.image} size="sm" />
             </button>
           );
         })}
@@ -592,8 +592,8 @@ function StatBlock({
       <div className="text-xl font-bold tabular-nums">
         {showPlanTailor ? (
           <span className="text-strong">
-            Plan {bidsPlan ?? 0}
-            <span className="text-sm font-medium text-muted"> / Tailor {bidsTailor ?? 0}</span>
+            Tailor {bidsTailor ?? 0}
+            <span className="text-sm font-medium text-muted"> / Plan {bidsPlan ?? 0}</span>
           </span>
         ) : (
           <>
