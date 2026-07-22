@@ -25,7 +25,6 @@ import {
 } from '../lib/stageBadge';
 import {
   DATE_RANGE_PRESET_OPTIONS,
-  currentWeekdayRange,
   formatDateRangeText,
   rangeForDatePreset,
   type DateRangePreset,
@@ -37,10 +36,10 @@ type CreatorRef = { _id: string; name?: string; email?: string };
 /** Live matrix columns — sync with List stage badges (no Offer, no Rejected). */
 const LIVE_COLUMNS = [
   { key: 'intro', label: 'Intro' },
-  { key: 'tech_round_1', label: 'Tech 1' },
-  { key: 'tech_round_2', label: 'Tech 2' },
   { key: 'home_assessment', label: 'Home assess.' },
   { key: 'live_coding', label: 'Live coding' },
+  { key: 'tech_round_1', label: 'Tech 1' },
+  { key: 'tech_round_2', label: 'Tech 2' },
   { key: 'cultural', label: 'Hiring mgr' },
   { key: 'panel', label: 'Panel' },
   { key: 'final', label: 'Final' },
@@ -134,9 +133,9 @@ export default function InterviewsLivePage() {
   const [creatorId, setCreatorId] = useState('');
   const [userFilterReady, setUserFilterReady] = useState(false);
   const [accountId, setAccountId] = useState('');
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('this_week');
-  const [from, setFrom] = useState(() => currentWeekdayRange().from);
-  const [to, setTo] = useState(() => currentWeekdayRange().to);
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('this_month');
+  const [from, setFrom] = useState(() => rangeForDatePreset('this_month').from);
+  const [to, setTo] = useState(() => rangeForDatePreset('this_month').to);
 
   const [panelInterview, setPanelInterview] = useState<Interview | null>(null);
   const [panelForm, setPanelForm] = useState<InterviewFormState>(blankInterviewForm);
