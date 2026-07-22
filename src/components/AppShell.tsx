@@ -25,7 +25,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }, [isSidebarCollapsed]);
 
   if (isAuth) return <>{children}</>;
-  const useWideLayout = pathname === '/interviews' || pathname === '/pipeline';
+  const useWideLayout =
+    pathname === '/interviews'
+    || pathname === '/interviews/live'
+    || pathname === '/interviews/analyze'
+    || pathname === '/pipeline';
   return (
     <div className="shell-content flex min-h-screen flex-col transition-all duration-300">
       <Topbar />

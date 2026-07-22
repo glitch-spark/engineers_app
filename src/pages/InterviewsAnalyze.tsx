@@ -12,6 +12,13 @@ import * as api from '../api/endpoints';
 import type { InterviewAnalyzeResult, InterviewAnalyzeStage, InterviewAnalyzeWeakSpot } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import { notify } from '../lib/notify';
+import {
+  DATE_RANGE_PRESET_OPTIONS,
+  currentWeekdayRange,
+  formatDateRangeText,
+  rangeForDatePreset,
+  type DateRangePreset,
+} from '../lib/dateRangePresets';
 
 const STAGE_OPTS = [
   { value: '', label: 'All stages' },
@@ -40,8 +47,17 @@ export default function InterviewsAnalyzePage() {
 
   const [accountId, setAccountId] = useState('');
   const [stage, setStage] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('this_week');
+  const [from, setFrom] = useState(() => currentWeekdayRange().from);
+  const [to, setTo] = useState(() => currentWeekdayRange().to);
+
+  const applyDatePreset = (preset: DateRangePreset) => {
+    setDatePreset(preset);
+    if (preset === 'custom') return;
+    const range = rangeForDatePreset(preset);
+    setFrom(range.from);
+    setTo(range.to);
+  };
 
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<InterviewAnalyzeResult | null>(null);
@@ -78,23 +94,43 @@ export default function InterviewsAnalyzePage() {
       <InterviewTabs />
 
       {/* Filters */}
-      <div className="flex items-end gap-2 flex-wrap text-xs panel p-3">
+      <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
         <div className="w-44">
-          <label className="block mb-1 text-muted">Profile</label>
+          <label className="block text-xs text-muted mb-1">Profile</label>
           <Select value={accountId} onChange={setAccountId} options={accountOptions} />
         </div>
         <div className="w-40">
-          <label className="block mb-1 text-muted">Stage</label>
+          <label className="block text-xs text-muted mb-1">Stage</label>
           <Select value={stage} onChange={setStage} options={STAGE_OPTS} />
         </div>
-        <div className="w-36">
-          <label className="block mb-1 text-muted">From</label>
-          <input className="input w-full" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <div className="w-44">
+          <label className="block text-xs text-muted mb-1">Date range</label>
+          <Select
+            value={datePreset}
+            onChange={(v) => applyDatePreset(v as DateRangePreset)}
+            options={DATE_RANGE_PRESET_OPTIONS}
+          />
         </div>
-        <div className="w-36">
-          <label className="block mb-1 text-muted">To</label>
-          <input className="input w-full" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
+        {datePreset === 'custom' ? (
+          <>
+            <div className="w-40">
+              <label className="block text-xs text-muted mb-1">From</label>
+              <input className="input w-full text-sm" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="w-40">
+              <label className="block text-xs text-muted mb-1">To</label>
+              <input className="input w-full text-sm" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </>
+        ) : (
+          from && to && (
+            <div className="flex items-end pb-2 min-w-0">
+              <span className="text-sm text-muted tabular-nums whitespace-nowrap" title={`${from} → ${to}`}>
+                {formatDateRangeText(from, to)}
+              </span>
+            </div>
+          )
+        )}
         <button
           type="button"
           className="btn px-3 py-2 text-xs"
@@ -106,7 +142,7 @@ export default function InterviewsAnalyzePage() {
           Analyze
         </button>
         {meta && (
-          <span className="text-muted ml-2">
+          <span className="text-muted ml-2 text-xs pb-2">
             {meta.transcriptCount}/{meta.interviewCount} interviews with transcripts
           </span>
         )}

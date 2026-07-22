@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ListChecks, BarChart3 } from 'lucide-react';
+import { ListChecks, BarChart3, Radio } from 'lucide-react';
 
 const TABS = [
+  { to: '/interviews/live', label: 'Live', icon: Radio, exact: true },
   { to: '/interviews', label: 'List', icon: ListChecks, exact: true },
   { to: '/interviews/analyze', label: 'Analyze', icon: BarChart3, exact: false },
 ];
