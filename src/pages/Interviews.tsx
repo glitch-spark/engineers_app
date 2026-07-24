@@ -105,7 +105,7 @@ const BOARD_COLUMNS = [
   { key: 'hiring_manager', label: 'Hiring Manager', tone: 'border-pink-300 dark:border-pink-600', columnClass: 'flex-1 min-w-0' },
   { key: 'panel', label: 'Panel', tone: 'border-purple-300 dark:border-purple-600', columnClass: 'flex-1 min-w-0' },
   { key: 'final', label: 'Final', tone: 'border-amber-300 dark:border-amber-600', columnClass: 'flex-1 min-w-0' },
-  { key: 'rejected', label: 'Rejected', tone: 'border-red-400 dark:border-red-500', columnClass: 'flex-1 min-w-0' },
+  { key: 'canceled', label: 'Canceled', tone: 'border-zinc-400 dark:border-zinc-500', columnClass: 'flex-1 min-w-0' },
 ] as const;
 
 type BoardColumnKey = (typeof BOARD_COLUMNS)[number]['key'];
@@ -141,10 +141,10 @@ const BOARD_CARD_STYLES: Record<BoardColumnKey, { card: string; hover: string; a
     hover: 'hover:border-amber-400 hover:shadow-md hover:shadow-amber-100/80 dark:hover:border-amber-500 dark:hover:shadow-amber-950/40',
     accent: 'bg-amber-400 dark:bg-amber-500',
   },
-  rejected: {
-    card: 'bg-gradient-to-br from-red-50 via-white to-rose-50/80 border-red-200/90 dark:from-red-950/50 dark:via-zinc-950 dark:to-rose-950/30 dark:border-red-800/80',
-    hover: 'hover:border-red-400 hover:shadow-md hover:shadow-red-100/80 dark:hover:border-red-500 dark:hover:shadow-red-950/40',
-    accent: 'bg-red-500 dark:bg-red-500',
+  canceled: {
+    card: 'bg-gradient-to-br from-zinc-100 via-white to-zinc-50 border-zinc-300/90 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900/80 dark:border-zinc-600',
+    hover: 'hover:border-zinc-400 hover:shadow-md hover:shadow-zinc-100/80 dark:hover:border-zinc-500 dark:hover:shadow-black/40',
+    accent: 'bg-zinc-400 dark:bg-zinc-500',
   },
 };
 
@@ -162,11 +162,35 @@ const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
   hiring_manager: 'cultural',
   panel: 'panel',
   final: 'final',
-  rejected: 'rejected',
+  // Canceled = scheduled + rejected (did not sit the interview).
+  canceled: 'rejected',
 };
 
 function columnDroppableId(columnKey: BoardColumnKey): string {
   return `col:${columnKey}`;
+}
+
+function isCanceledInterview(iv: { stage?: string | null; status?: string | null }): boolean {
+  return (iv.status || '') === 'scheduled' && normalizeInterviewStage(iv.stage) === 'rejected';
+}
+
+/** Failed after interviewing — rejected stage, but not the canceled convention. */
+function isRejectedFail(iv: { stage?: string | null; status?: string | null }): boolean {
+  return normalizeInterviewStage(iv.stage) === 'rejected' && !isCanceledInterview(iv);
+}
+
+/** Last non-rejected stage from movement trail (where the process failed). */
+function lastActiveStage(iv: {
+  stage?: string | null;
+  scheduledAt?: string | null;
+  stageHistory?: Array<{ stage: string; scheduledAt?: string | null }>;
+}): string | null {
+  const trail = getInterviewMovementEntries(iv);
+  for (let i = trail.length - 1; i >= 0; i--) {
+    const s = normalizeInterviewStage(trail[i].stage);
+    if (s && s !== 'rejected') return s;
+  }
+  return null;
 }
 
 function resolveInterviewDropColumn(
@@ -180,7 +204,7 @@ function resolveInterviewDropColumn(
     if (BOARD_COLUMNS.some((c) => c.key === key)) return key as BoardColumnKey;
   }
   const overIv = rows.find((i) => i._id === overId);
-  if (overIv) return boardColumnForStage(overIv.stage);
+  if (overIv) return boardColumnForInterview(overIv);
   return undefined;
 }
 
@@ -223,13 +247,25 @@ function boardColumnForStage(stage?: string | null): BoardColumnKey {
     case 'final':
     case 'offer':
       return 'final';
-    case 'rejected':
-      return 'rejected';
     case 'intro':
     case 'others':
     default:
       return 'intro';
   }
+}
+
+/** Board pan for a card — canceled pan, or last active stage when rejected (fail). */
+function boardColumnForInterview(iv: {
+  stage?: string | null;
+  status?: string | null;
+  scheduledAt?: string | null;
+  stageHistory?: Array<{ stage: string; scheduledAt?: string | null }>;
+}): BoardColumnKey {
+  if (isCanceledInterview(iv)) return 'canceled';
+  if (normalizeInterviewStage(iv.stage) === 'rejected') {
+    return boardColumnForStage(lastActiveStage(iv) || 'intro');
+  }
+  return boardColumnForStage(iv.stage);
 }
 
 const STATUSES = [
@@ -614,7 +650,7 @@ export default function InterviewsPage() {
       BOARD_COLUMNS.map((col) => [col.key, [] as Interview[]]),
     ) as Record<BoardColumnKey, Interview[]>;
     for (const iv of interviews) {
-      const key = boardColumnForStage(iv.stage);
+      const key = boardColumnForInterview(iv);
       buckets[key].push(iv);
     }
     for (const col of BOARD_COLUMNS) {
@@ -642,7 +678,9 @@ export default function InterviewsPage() {
 
   useEffect(() => {
     if (!stage) return;
-    const colKey = boardColumnForStage(stage);
+    const colKey = stage === 'rejected'
+      ? 'canceled'
+      : boardColumnForStage(stage);
     if (!colKey) return;
     revealBoardColumn(colKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to stage / width changes
@@ -858,6 +896,7 @@ export default function InterviewsPage() {
     kind: 'tech' | 'stage';
     targetStage: string;
     label: string;
+    asCanceled?: boolean;
   }>(null);
   const [moveSubStage, setMoveSubStage] = useState('');
   const [moveDate, setMoveDate] = useState('');
@@ -880,6 +919,7 @@ export default function InterviewsPage() {
     newStage: string,
     label: string,
     scheduledDate?: string,
+    statusOverride?: string,
   ) => {
     const ivId = iv._id;
     const previousData = data;
@@ -915,6 +955,7 @@ export default function InterviewsPage() {
               ...item,
               stage: newStage,
               stageHistory: nextHistory,
+              ...(statusOverride ? { status: statusOverride } : {}),
               ...(schedulePatch
                 ? { scheduledAt: schedulePatch.scheduledAt, endsAt: schedulePatch.endsAt }
                 : {}),
@@ -927,6 +968,7 @@ export default function InterviewsPage() {
 
     try {
       const body: Record<string, unknown> = { stage: newStage };
+      if (statusOverride) body.status = statusOverride;
       if (schedulePatch) {
         body.scheduledAt = schedulePatch.scheduledAt;
         body.endsAt = schedulePatch.endsAt;
@@ -976,7 +1018,7 @@ export default function InterviewsPage() {
       notify.error('You cannot move this interview');
       return;
     }
-    const sourceCol = boardColumnForStage(iv.stage);
+    const sourceCol = boardColumnForInterview(iv);
 
     // Dropping onto Tech always opens the sub-stage + date picker (including Tech → Tech).
     if (targetCol === 'tech') {
@@ -989,7 +1031,13 @@ export default function InterviewsPage() {
     if (targetCol === sourceCol) return;
     const newStage = BOARD_COLUMN_TO_STAGE[targetCol];
     const colLabel = BOARD_COLUMNS.find((c) => c.key === targetCol)?.label ?? stageLabel(newStage);
-    setMovePrompt({ interview: iv, kind: 'stage', targetStage: newStage, label: colLabel });
+    setMovePrompt({
+      interview: iv,
+      kind: 'stage',
+      targetStage: newStage,
+      label: colLabel,
+      asCanceled: targetCol === 'canceled',
+    });
     setMoveDate(interviewDateInput(iv));
   };
 
@@ -1005,7 +1053,9 @@ export default function InterviewsPage() {
       return;
     }
     const label = movePrompt.kind === 'tech' ? stageLabel(newStage) : movePrompt.label;
-    const sameStage = movePrompt.interview.stage === newStage;
+    const toCanceled = !!movePrompt.asCanceled;
+    const sameStage = movePrompt.interview.stage === newStage
+      && (!toCanceled || isCanceledInterview(movePrompt.interview));
     const sameDate = interviewDateInput(movePrompt.interview) === moveDate;
     if (sameStage && sameDate) {
       closeMovePrompt();
@@ -1013,7 +1063,13 @@ export default function InterviewsPage() {
     }
     setMoveSaving(true);
     try {
-      await applyStageMove(movePrompt.interview, newStage, label, moveDate);
+      await applyStageMove(
+        movePrompt.interview,
+        newStage,
+        label,
+        moveDate,
+        toCanceled ? 'scheduled' : undefined,
+      );
       setMovePrompt(null);
       setMoveSubStage('');
       setMoveDate('');
@@ -1284,7 +1340,7 @@ export default function InterviewsPage() {
                 {activeDragInterview ? (
                   <div className="w-[220px] max-w-full opacity-95">
                     <InterviewBoardCardPreview
-                      columnKey={boardColumnForStage(activeDragInterview.stage)}
+                      columnKey={boardColumnForInterview(activeDragInterview)}
                       interview={activeDragInterview}
                     />
                   </div>
@@ -1692,6 +1748,13 @@ function InterviewBoardCard({
       className={`rounded-[10px] p-3 text-sm shadow-sm border relative overflow-hidden transition-all duration-200 ${panStyle.card} ${panStyle.hover} ${isSelected ? 'ring-2 ring-primary/60 border-primary/40 dark:ring-sky-400/50 dark:border-sky-500/40' : ''} ${isDragging ? 'opacity-40' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
     >
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
+      {isRejectedFail(interview) && (
+        <span
+          className="pointer-events-none absolute bottom-0 right-0 h-0 w-0 border-b-[32px] border-l-[32px] border-b-red-300 border-l-transparent dark:border-b-red-700/80"
+          title="Rejected at this stage"
+          aria-label="Rejected"
+        />
+      )}
       <div className="absolute top-2 right-2 flex items-center gap-0.5">
         <button
           type="button"
