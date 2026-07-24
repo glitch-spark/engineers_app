@@ -75,12 +75,20 @@ function formatCellDate(iso?: string): string {
   return `${month} ${d}`;
 }
 
-function isLiveInterview(iv: Interview): boolean {
+function isCanceledInterview(iv: Interview): boolean {
   const stage = normalizeInterviewStage(iv.stage);
   const status = (iv.status || '').toLowerCase();
-  if (stage === 'rejected') return false;
-  if (status === 'canceled') return false;
-  return true;
+  if (status === 'canceled') return true;
+  // Same convention as List: scheduled + rejected = canceled (never sat interview).
+  return status === 'scheduled' && stage === 'rejected';
+}
+
+function isRejectedFail(iv: Interview): boolean {
+  return normalizeInterviewStage(iv.stage) === 'rejected' && !isCanceledInterview(iv);
+}
+
+function isLiveInterview(iv: Interview): boolean {
+  return !isCanceledInterview(iv);
 }
 
 type LiveProgress = {
@@ -94,10 +102,21 @@ type LiveProgress = {
 function liveProgress(iv: Interview): LiveProgress {
   const trail = getInterviewMovementEntries(iv);
   const status = (iv.status || '').toLowerCase();
-  const currentCol = toLiveCol(iv.stage);
   const tip = trail[trail.length - 1];
   const tipDate = tip?.scheduledAt || dateKey(iv.scheduledAt);
   const prev = trail.length >= 2 ? trail[trail.length - 2] : undefined;
+
+  // Rejected fail — highlight last real stage (where they failed); no scheduled next.
+  if (isRejectedFail(iv)) {
+    const failStage = prev ? toLiveCol(prev.stage) : null;
+    return {
+      completedCol: failStage,
+      completedDate: prev?.scheduledAt || tipDate,
+      scheduledCol: null,
+    };
+  }
+
+  const currentCol = toLiveCol(iv.stage);
 
   if (status === 'completed') {
     return {
@@ -347,7 +366,7 @@ export default function InterviewsLivePage() {
           )
         )}
         <p className="text-xs text-muted pb-2 w-full sm:w-auto">
-          Open processes only — Rejected / canceled are hidden.
+          Open processes only — canceled interviews are hidden. Rejected stages show a red corner mark.
         </p>
       </div>
 
@@ -410,6 +429,7 @@ export default function InterviewsLivePage() {
                     );
                     const companyName = iv.companyName || 'Untitled company';
                     const editable = canEdit(iv);
+                    const rejected = isRejectedFail(iv);
                     return (
                       <tr
                         key={iv._id}
@@ -422,7 +442,8 @@ export default function InterviewsLivePage() {
                         {LIVE_COLUMNS.map((c) => {
                           const isCompleted = progress.completedCol === c.key;
                           const isScheduled = progress.scheduledCol === c.key;
-                          let tdClass = 'px-1.5 py-1.5 text-center align-middle border-r border-zinc-200 dark:border-zinc-700';
+                          const showRejectMark = rejected && isCompleted;
+                          let tdClass = 'px-1.5 py-1.5 text-center align-middle border-r border-zinc-200 dark:border-zinc-700 relative overflow-hidden';
                           let date = '';
                           if (isCompleted) {
                             tdClass += ' bg-emerald-500 text-white';
@@ -436,11 +457,13 @@ export default function InterviewsLivePage() {
                               key={c.key}
                               className={tdClass}
                               title={
-                                isCompleted
-                                  ? `Completed ${stageLabel(c.key)}${date ? ` · ${date}` : ''}`
-                                  : isScheduled
-                                    ? `Scheduled ${stageLabel(c.key)}${date ? ` · ${date}` : ''}`
-                                    : undefined
+                                showRejectMark
+                                  ? `Rejected at ${stageLabel(c.key)}${date ? ` · ${date}` : ''}`
+                                  : isCompleted
+                                    ? `Completed ${stageLabel(c.key)}${date ? ` · ${date}` : ''}`
+                                    : isScheduled
+                                      ? `Scheduled ${stageLabel(c.key)}${date ? ` · ${date}` : ''}`
+                                      : undefined
                               }
                             >
                               {date ? (
@@ -449,6 +472,12 @@ export default function InterviewsLivePage() {
                                 </span>
                               ) : (
                                 <span className="text-[10px] text-transparent select-none">·</span>
+                              )}
+                              {showRejectMark && (
+                                <span
+                                  className="pointer-events-none absolute bottom-0 right-0 h-0 w-0 border-b-[28px] border-l-[28px] border-b-red-300 border-l-transparent dark:border-b-red-700/80"
+                                  aria-hidden
+                                />
                               )}
                             </td>
                           );
