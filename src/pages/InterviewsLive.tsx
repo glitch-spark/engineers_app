@@ -29,8 +29,9 @@ import {
   rangeForDatePreset,
   type DateRangePreset,
 } from '../lib/dateRangePresets';
+import { countryName, formatProfileLabel } from '../lib/countries';
 
-type AccountRef = { _id: string; name?: string; email?: string };
+type AccountRef = { _id: string; name?: string; email?: string; country?: string | null; region?: string | null };
 type CreatorRef = { _id: string; name?: string; email?: string };
 
 /** Live matrix columns — sync with List stage badges (no Offer, no Rejected). */
@@ -87,8 +88,37 @@ function isRejectedFail(iv: Interview): boolean {
   return normalizeInterviewStage(iv.stage) === 'rejected' && !isCanceledInterview(iv);
 }
 
-function isLiveInterview(iv: Interview): boolean {
+/** Open process (not canceled). Includes rejected fails. */
+function isOpenInterview(iv: Interview): boolean {
   return !isCanceledInterview(iv);
+}
+
+/** Active pipeline — open and not a rejected fail. */
+function isActiveLiveInterview(iv: Interview): boolean {
+  return isOpenInterview(iv) && !isRejectedFail(iv);
+}
+
+type StatusFilter = 'all' | 'rejected' | 'live';
+type RegionFilter = 'all' | 'Latam' | 'EU' | 'Canada' | 'US';
+
+const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'live', label: 'Live' },
+];
+
+const REGION_FILTER_OPTIONS: { value: RegionFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'Latam', label: 'Latam' },
+  { value: 'EU', label: 'EU' },
+  { value: 'Canada', label: 'Canada' },
+  { value: 'US', label: 'USA' },
+];
+
+function accountRegion(iv: Interview): string | null {
+  const acc = typeof iv.accountId === 'object' ? iv.accountId : null;
+  const region = (acc?.region || '').trim();
+  return region || null;
 }
 
 type LiveProgress = {
@@ -137,10 +167,41 @@ function liveProgress(iv: Interview): LiveProgress {
   };
 }
 
+function dateInSelectedRange(dateKeyVal: string | undefined, fromDate?: string, toDate?: string): boolean {
+  if (!dateKeyVal) return false;
+  if (fromDate && dateKeyVal < fromDate) return false;
+  if (toDate && dateKeyVal > toDate) return false;
+  return true;
+}
+
+/**
+ * Live matrix should only paint cells whose dates fall in the selected range.
+ * Without this, an interview touched this week still shows last week's completed cell.
+ */
+function liveProgressInRange(iv: Interview, fromDate?: string, toDate?: string): LiveProgress | null {
+  const full = liveProgress(iv);
+  const completedInRange = dateInSelectedRange(full.completedDate, fromDate, toDate);
+  const scheduledInRange = dateInSelectedRange(full.scheduledDate, fromDate, toDate);
+  if (!completedInRange && !scheduledInRange) return null;
+  return {
+    completedCol: completedInRange ? full.completedCol : null,
+    completedDate: completedInRange ? full.completedDate : undefined,
+    scheduledCol: scheduledInRange ? full.scheduledCol : null,
+    scheduledDate: scheduledInRange ? full.scheduledDate : undefined,
+  };
+}
+
 function refName(ref: AccountRef | CreatorRef | string | undefined, fallback = '—'): string {
   if (!ref) return fallback;
   if (typeof ref === 'string') return fallback;
   return ref.name || ref.email || fallback;
+}
+
+function profileLabel(ref: AccountRef | string | undefined, fallback = 'Untitled profile'): string {
+  if (!ref || typeof ref === 'string') return fallback;
+  const name = (ref.name || ref.email || '').trim() || fallback;
+  const country = countryName(ref.country);
+  return country ? `${name} (${country})` : name;
 }
 
 export default function InterviewsLivePage() {
@@ -155,6 +216,8 @@ export default function InterviewsLivePage() {
   const [datePreset, setDatePreset] = useState<DateRangePreset>('this_month');
   const [from, setFrom] = useState(() => rangeForDatePreset('this_month').from);
   const [to, setTo] = useState(() => rangeForDatePreset('this_month').to);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [regionFilter, setRegionFilter] = useState<RegionFilter>('all');
 
   const [panelInterview, setPanelInterview] = useState<Interview | null>(null);
   const [panelForm, setPanelForm] = useState<InterviewFormState>(blankInterviewForm);
@@ -203,12 +266,24 @@ export default function InterviewsLivePage() {
 
   const interviews = useMemo(() => {
     const raw = (data?.interviews as Interview[]) || [];
-    return raw.filter(isLiveInterview);
-  }, [data]);
+    return raw.filter((iv) => {
+      if (isCanceledInterview(iv)) return false;
+      if (statusFilter === 'rejected' && !isRejectedFail(iv)) return false;
+      if (statusFilter === 'live' && !isActiveLiveInterview(iv)) return false;
+      if (regionFilter !== 'all' && accountRegion(iv) !== regionFilter) return false;
+      return true;
+    });
+  }, [data, statusFilter, regionFilter]);
 
   const rows = useMemo(() => {
+    const fromDate = from || undefined;
+    const toDate = to || undefined;
     return interviews
-      .map((iv) => ({ iv, progress: liveProgress(iv) }))
+      .map((iv) => {
+        const progress = liveProgressInRange(iv, fromDate, toDate);
+        return progress ? { iv, progress } : null;
+      })
+      .filter((row): row is { iv: Interview; progress: LiveProgress } => row !== null)
       .sort((a, b) => {
         // Soonest scheduled first, then most recently completed.
         const aSched = a.progress.scheduledDate || '';
@@ -220,7 +295,7 @@ export default function InterviewsLivePage() {
         const bDone = b.progress.completedDate || '';
         return bDone.localeCompare(aDone);
       });
-  }, [interviews]);
+  }, [interviews, from, to]);
 
   const userOptions = useMemo(() => [
     { value: '', label: 'All users' },
@@ -233,12 +308,18 @@ export default function InterviewsLivePage() {
       : accounts;
     return [
       { value: '', label: 'All profiles' },
-      ...filtered.map((a) => ({ value: a._id, label: a.name || a._id })),
+      ...filtered.map((a) => ({
+        value: a._id,
+        label: formatProfileLabel(a.name, a.country, a._id, a.region),
+      })),
     ];
   }, [accounts, creatorId]);
 
   const accountSelectOptions = useMemo(
-    () => ownAccounts.map((a) => ({ value: a._id, label: a.name || a.title || a._id })),
+    () => ownAccounts.map((a) => ({
+      value: a._id,
+      label: formatProfileLabel(a.name, a.country, a._id, a.region),
+    })),
     [ownAccounts],
   );
 
@@ -365,9 +446,54 @@ export default function InterviewsLivePage() {
             </div>
           )
         )}
-        <p className="text-xs text-muted pb-2 w-full sm:w-auto">
-          Open processes only — canceled interviews are hidden. Rejected stages show a red corner mark.
-        </p>
+
+        <div className="flex flex-col gap-1 pb-0.5">
+          <span className="text-xs font-medium text-sky-700 dark:text-sky-400">Status</span>
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 dark:border-sky-800 dark:bg-sky-950/40"
+            role="radiogroup"
+            aria-label="Status filter"
+          >
+            {STATUS_FILTER_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className="inline-flex items-center gap-1.5 text-sm text-sky-900 dark:text-sky-200 cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-sky-600"
+                  checked={statusFilter === opt.value}
+                  onChange={() => setStatusFilter(opt.value)}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1 pb-0.5">
+          <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Region</span>
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 dark:border-amber-800 dark:bg-amber-950/40"
+            role="radiogroup"
+            aria-label="Region filter"
+          >
+            {REGION_FILTER_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className="inline-flex items-center gap-1.5 text-sm text-amber-900 dark:text-amber-200 cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-amber-600"
+                  checked={regionFilter === opt.value}
+                  onChange={() => setRegionFilter(opt.value)}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
 
       {isLoading && (
@@ -391,15 +517,18 @@ export default function InterviewsLivePage() {
                 <span className="inline-block h-3.5 w-5 rounded-sm bg-emerald-50 border border-dashed border-emerald-500 dark:bg-emerald-950/40" />
                 Scheduled next
               </span>
-              <span className="ml-auto tabular-nums">{rows.length} live</span>
+              <span className="ml-auto tabular-nums">{rows.length}</span>
             </div>
           )}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm border-collapse">
               <thead className="table-head">
                 <tr>
-                  <th className="px-3 py-2 text-left sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900 min-w-[200px] border-r border-zinc-200 dark:border-zinc-700">
-                    Profile · Company
+                  <th className="px-3 py-2 text-left sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900 min-w-[160px] border-r border-zinc-200 dark:border-zinc-700">
+                    Company
+                  </th>
+                  <th className="px-3 py-2 text-left sticky left-[160px] z-10 bg-zinc-50 dark:bg-zinc-900 min-w-[140px] border-r border-zinc-200 dark:border-zinc-700">
+                    Profile
                   </th>
                   {LIVE_COLUMNS.map((c) => (
                     <th
@@ -417,13 +546,13 @@ export default function InterviewsLivePage() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={2 + LIVE_COLUMNS.length} className="px-4 py-10 text-center text-muted">
+                    <td colSpan={3 + LIVE_COLUMNS.length} className="px-4 py-10 text-center text-muted">
                       No live interviews. Processes still in play will show here.
                     </td>
                   </tr>
                 ) : (
                   rows.map(({ iv, progress }) => {
-                    const profileName = refName(
+                    const profileName = profileLabel(
                       typeof iv.accountId === 'object' ? iv.accountId : undefined,
                       'Untitled profile',
                     );
@@ -435,9 +564,19 @@ export default function InterviewsLivePage() {
                         key={iv._id}
                         className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40"
                       >
-                        <td className="px-3 py-2 sticky left-0 z-[1] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-700">
-                          <div className="font-medium text-strong truncate" title={profileName}>{profileName}</div>
-                          <div className="mt-0.5 text-sm text-body truncate" title={companyName}>{companyName}</div>
+                        <td
+                          className="px-3 py-2 sticky left-0 z-[1] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-700 min-w-[160px]"
+                          title={companyName}
+                        >
+                          <div className="text-base font-bold text-sky-800 dark:text-sky-300 truncate">
+                            {companyName}
+                          </div>
+                        </td>
+                        <td
+                          className="px-3 py-2 sticky left-[160px] z-[1] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-700 min-w-[140px]"
+                          title={profileName}
+                        >
+                          <div className="text-sm text-muted truncate">{profileName}</div>
                         </td>
                         {LIVE_COLUMNS.map((c) => {
                           const isCompleted = progress.completedCol === c.key;
