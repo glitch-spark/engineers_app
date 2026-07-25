@@ -15,7 +15,7 @@ import {
   type MovementEntry,
 } from '../lib/stageBadge';
 
-export type AccountRef = { _id: string; name?: string; email?: string };
+export type AccountRef = { _id: string; name?: string; email?: string; country?: string | null; region?: string | null };
 export type CreatorRef = { _id: string; name?: string; email?: string };
 
 export type Interview = {

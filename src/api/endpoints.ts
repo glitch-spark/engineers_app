@@ -290,6 +290,8 @@ export const askResumeJobScreening = (jobId: string, questions: string[]) =>
 export interface AccountLookup {
   _id: string;
   name: string;
+  country?: string | null;
+  region?: string | null;
   hasTemplate?: boolean;
   hasPrompt?: boolean;
   createdBy?: string;

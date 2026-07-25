@@ -7,10 +7,13 @@ import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
+import { countryFlag, countryName } from '../lib/countries';
 
 type Acc = {
   _id: string;
   name: string;
+  country?: string | null;
+  region?: string | null;
   title?: string;
   ownerName?: string;
   ownerImage?: string | null;
@@ -170,6 +173,8 @@ export default function AccountsPage() {
           <thead className="table-head">
             <tr>
               <th className="px-4 py-2.5">Name</th>
+              <th className="px-4 py-2.5">Region</th>
+              <th className="px-4 py-2.5">Country</th>
               <th className="px-4 py-2.5">Owner</th>
               <th className="px-4 py-2.5 w-24 text-center" title="Include in Resume Generator profile picker">
                 Generate
@@ -180,7 +185,7 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted">
                   <div className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3"></div>
                     Loading profiles...
@@ -189,7 +194,7 @@ export default function AccountsPage() {
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-muted">
+                <td colSpan={6} className="px-3 py-6 text-center text-muted">
                   {debouncedSearch ? `No profiles found matching "${debouncedSearch}"` : 'No profiles found.'}
                 </td>
               </tr>
@@ -200,6 +205,17 @@ export default function AccountsPage() {
                 onClick={() => navigate(`/accounts/${a._id}`)}
               >
                 <td className="px-4 py-2.5">{a.name}</td>
+                <td className="px-4 py-2.5 text-muted">{a.region || '—'}</td>
+                <td className="px-4 py-2.5">
+                  {a.country ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span aria-hidden>{countryFlag(a.country)}</span>
+                      <span>{countryName(a.country)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-2.5"><NameWithAvatar name={a.ownerName} imageUrl={a.ownerImage} /></td>
                 <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-center">

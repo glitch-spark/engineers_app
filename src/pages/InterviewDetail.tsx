@@ -6,6 +6,7 @@ import * as api from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import { notify } from '../lib/notify';
 import { stageBadgeClass, stageLabel } from '../lib/stageBadge';
+import { formatProfileLabel } from '../lib/countries';
 
 const STATUSES: Record<string, string> = {
   scheduled: 'Scheduled',
@@ -57,7 +58,7 @@ const proseStyles = `
   .prose-block pre, .prose-block code { white-space: pre-wrap; word-break: break-all; }
 `;
 
-type AccountRef = { _id: string; name?: string; email?: string };
+type AccountRef = { _id: string; name?: string; email?: string; country?: string | null; region?: string | null };
 type CreatorRef = { _id: string; name?: string; email?: string };
 
 type Interview = {
@@ -247,7 +248,9 @@ export default function InterviewDetailPage() {
         </div>
         <div>
           <div className="text-muted text-xs">Profile</div>
-          <div className="font-medium">{account?.name || '—'}</div>
+          <div className="font-medium">
+            {formatProfileLabel(account?.name, account?.country, '—', account?.region)}
+          </div>
         </div>
         <div>
           <div className="text-muted text-xs">Creator</div>

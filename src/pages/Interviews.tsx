@@ -62,6 +62,7 @@ import {
   toDateInputValue,
   type DateRangePreset,
 } from '../lib/dateRangePresets';
+import { formatProfileLabel } from '../lib/countries';
 
 const editorStyles = `
   .ql-editor { min-height: 140px; font-size: 14px; line-height: 1.5; }
@@ -1087,12 +1088,18 @@ export default function InterviewsPage() {
 
   const accountOptions = useMemo(() => [
     { value: '', label: 'All' },
-    ...userAccounts.map((a) => ({ value: a._id, label: a.name || a._id })),
+    ...userAccounts.map((a) => ({
+      value: a._id,
+      label: formatProfileLabel(a.name, a.country, a._id, a.region),
+    })),
   ], [userAccounts]);
 
   // Form-only account list — owner-scoped (admin sees all, staff sees own).
   const accountSelectOptions = useMemo(() =>
-    ownAccounts.map((a) => ({ value: a._id, label: a.name || a._id })),
+    ownAccounts.map((a) => ({
+      value: a._id,
+      label: formatProfileLabel(a.name, a.country, a._id, a.region),
+    })),
   [ownAccounts]);
 
   const userOptions = useMemo(() => [
@@ -1398,7 +1405,9 @@ export default function InterviewsPage() {
                   <div className="font-medium">
                     {(() => {
                       const a = accounts.find((x) => x._id === form.accountId);
-                      return a ? (a.name || a._id) : form.accountId || '—';
+                      return a
+                        ? formatProfileLabel(a.name, a.country, a._id, a.region)
+                        : form.accountId || '—';
                     })()}
                   </div>
                 </div>
@@ -1673,7 +1682,12 @@ function InterviewBoardCardPreview({
   interview: Interview;
 }) {
   const account = typeof interview.accountId === 'object' ? interview.accountId : null;
-  const profileName = account?.name || account?.email || 'Untitled profile';
+  const profileName = formatProfileLabel(
+    account?.name || account?.email,
+    account?.country,
+    'Untitled profile',
+    account?.region,
+  );
   const companyName = interview.companyName || 'Untitled';
   const panStyle = BOARD_CARD_STYLES[columnKey];
 
@@ -1718,7 +1732,12 @@ function InterviewBoardCard({
   draggable: boolean;
 }) {
   const account = typeof interview.accountId === 'object' ? interview.accountId : null;
-  const profileName = account?.name || account?.email || 'Untitled profile';
+  const profileName = formatProfileLabel(
+    account?.name || account?.email,
+    account?.country,
+    'Untitled profile',
+    account?.region,
+  );
   const companyName = interview.companyName || 'Untitled';
   const panStyle = BOARD_CARD_STYLES[columnKey];
 

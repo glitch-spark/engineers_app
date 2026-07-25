@@ -5,11 +5,16 @@ import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
 import ResumeStylingEditor from '../components/ResumeStylingEditor';
+import CountrySelect from '../components/CountrySelect';
+import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
+import { PROFILE_REGION_OPTIONS } from '../lib/countries';
 
 type AccShape = {
   _id?: string;
   name?: string;
+  country?: string | null;
+  region?: string | null;
   resumePromptBody?: string;
   screeningPrompt?: string;
   coverLetterPrompt?: string;
@@ -21,12 +26,16 @@ export default function AccountEditPage() {
   const isNew = !id || id === 'new';
 
   const [name, setName] = useState('');
+  const [country, setCountry] = useState('');
+  const [region, setRegion] = useState('');
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isNew) {
       setName('');
+      setCountry('');
+      setRegion('');
       setLoading(false);
       return;
     }
@@ -36,6 +45,8 @@ export default function AccountEditPage() {
         const acc = (await api.getAccount(id!)) as AccShape;
         if (cancelled) return;
         setName(acc.name || '');
+        setCountry((acc.country || '').toUpperCase());
+        setRegion(acc.region || '');
       } catch (err) {
         notify.error(err, 'Could not load profile');
         navigate('/accounts');
@@ -53,7 +64,11 @@ export default function AccountEditPage() {
     }
     setSaving(true);
     try {
-      const created = (await api.createAccount({ name: name.trim() })) as AccShape;
+      const created = (await api.createAccount({
+        name: name.trim(),
+        ...(country ? { country } : {}),
+        ...(region ? { region } : {}),
+      })) as AccShape;
       const newId = created._id;
       notify.success(`Profile "${name.trim()}" created`);
       if (typeof newId === 'string') {
@@ -81,6 +96,28 @@ export default function AccountEditPage() {
     }
   }
 
+  async function saveCountry(code: string) {
+    setCountry(code);
+    if (isNew) return;
+    try {
+      await api.updateAccount(id!, { country: code || '' });
+      notify.success(code ? 'Country updated' : 'Country cleared');
+    } catch (err) {
+      notify.error(err, 'Failed to update country');
+    }
+  }
+
+  async function saveRegion(value: string) {
+    setRegion(value);
+    if (isNew) return;
+    try {
+      await api.updateAccount(id!, { region: value || '' });
+      notify.success(value ? 'Region updated' : 'Region cleared');
+    } catch (err) {
+      notify.error(err, 'Failed to update region');
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-6 flex items-center gap-2 text-sm text-muted">
@@ -91,26 +128,46 @@ export default function AccountEditPage() {
 
   if (isNew) {
     return (
-      <div className="space-y-6 max-w-xl">
+      <div className="space-y-6 max-w-3xl">
         <PageHeader title="New profile" backTo="/accounts" />
 
         <section className="panel p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">
-              Profile name <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="input w-full text-sm"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. AI Full-stack, Backend, QA Engineer"
-              autoFocus
-            />
-            <p className="text-xs text-faint mt-1">
-              A label to distinguish this profile in dropdowns. After creating, upload your HTML
-              resume template and (optionally) customize the prompts.
-            </p>
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_minmax(8rem,10rem)] gap-4">
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Profile name <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="input w-full text-sm"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. AI Full-stack, Backend, QA Engineer"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Country <span className="text-faint font-normal">(optional)</span>
+              </label>
+              <CountrySelect value={country} onChange={setCountry} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Region <span className="text-faint font-normal">(optional)</span>
+              </label>
+              <Select
+                value={region}
+                onChange={setRegion}
+                options={PROFILE_REGION_OPTIONS}
+                className="text-sm"
+              />
+            </div>
           </div>
+          <p className="text-xs text-faint">
+            A label to distinguish this profile in dropdowns. Country and region appear with the
+            profile name on Interviews. After creating, upload your HTML resume template and
+            (optionally) customize the prompts.
+          </p>
 
           <div className="flex justify-end">
             <button
@@ -131,14 +188,39 @@ export default function AccountEditPage() {
     <div className="space-y-6">
       <PageHeader title="Edit profile" backTo="/accounts" />
 
-      <Section title="Profile name" desc="A label to distinguish this profile in dropdowns.">
-        <input
-          className="input w-full text-sm"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={renameProfile}
-          placeholder="e.g. AI Full-stack, Backend, QA Engineer"
-        />
+      <Section
+        title="Profile name"
+        desc="A label to distinguish this profile in dropdowns. Optional country and region show next to the name on Interviews."
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_minmax(8rem,10rem)] gap-4">
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">Profile name</label>
+            <input
+              className="input w-full text-sm"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={renameProfile}
+              placeholder="e.g. AI Full-stack, Backend, QA Engineer"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Country <span className="text-faint font-normal">(optional)</span>
+            </label>
+            <CountrySelect value={country} onChange={saveCountry} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Region <span className="text-faint font-normal">(optional)</span>
+            </label>
+            <Select
+              value={region}
+              onChange={saveRegion}
+              options={PROFILE_REGION_OPTIONS}
+              className="text-sm"
+            />
+          </div>
+        </div>
       </Section>
 
       <Section title="HTML template" desc="Upload your resume as an .html file. The resume LLM rewrites text in place per generation; structure and styles preserved.">
