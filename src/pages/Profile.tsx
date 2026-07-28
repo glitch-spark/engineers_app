@@ -340,6 +340,8 @@ export default function ProfilePage() {
 
       <FreeLlmSettingsCard />
 
+      <SlackAlertsCard />
+
       <div className="card mt-4">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -728,6 +730,204 @@ function FreeLlmSettingsCard() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SlackAlertsCard() {
+  const { data, mutate } = useSWR('profile-slack', () => api.getSlackStatus());
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [hour, setHour] = useState(8);
+  const [minute, setMinute] = useState(0);
+  const [alertsOn, setAlertsOn] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const slack = params.get('slack');
+    if (!slack) return;
+    if (slack === 'connected') {
+      notify.success('Slack connected');
+      mutate();
+    } else if (slack === 'error') {
+      notify.error(params.get('detail') || 'Slack connection failed');
+    }
+    params.delete('slack');
+    params.delete('detail');
+    const next = params.toString();
+    const url = `${window.location.pathname}${next ? `?${next}` : ''}`;
+    window.history.replaceState({}, '', url);
+  }, [mutate]);
+
+  useEffect(() => {
+    if (data && !loaded) {
+      setHour(data.slackDigestHour ?? 8);
+      setMinute(data.slackDigestMinute ?? 0);
+      setAlertsOn(!!data.slackAlertsEnabled);
+      setLoaded(true);
+    }
+  }, [data, loaded]);
+
+  async function handleConnect() {
+    setConnecting(true);
+    try {
+      const { url } = await api.startSlackOAuth();
+      window.location.href = url;
+    } catch (err) {
+      notify.error(err, 'Could not start Slack connect');
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setSaving(true);
+    try {
+      await api.disconnectSlack();
+      setLoaded(false);
+      await mutate();
+      notify.success('Slack disconnected');
+    } catch (err) {
+      notify.error(err, 'Failed to disconnect Slack');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSavePrefs() {
+    setSaving(true);
+    try {
+      await api.updateSlackPrefs({
+        slackAlertsEnabled: alertsOn,
+        slackDigestHour: hour,
+        slackDigestMinute: minute,
+      });
+      await mutate();
+      notify.success('Slack alert preferences saved');
+    } catch (err) {
+      notify.error(err, 'Failed to save Slack preferences');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTestDm() {
+    setTesting(true);
+    try {
+      await api.testSlackDm();
+      notify.success('Test DM sent — check Slack');
+    } catch (err) {
+      notify.error(err, 'Test DM failed — open a chat with the bot once and retry');
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  const connected = !!data?.slackConnected;
+  const oauthReady = !!data?.slackOAuthConfigured;
+  const botReady = !!data?.slackBotConfigured;
+
+  return (
+    <div className="card mt-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="card-header mb-0">Slack interview alerts</h3>
+          <p className="text-muted">
+            Private DMs ~30 minutes before your interviews and a morning digest. Only you see your schedule.
+          </p>
+        </div>
+        {connected ? (
+          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Connected
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+            Not connected
+          </span>
+        )}
+      </div>
+
+      {!oauthReady && (
+        <p className="mb-4 text-sm text-amber-800 dark:text-amber-200">
+          Slack OAuth is not configured on the server (`SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`).
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        {!connected ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={!oauthReady || connecting}
+            onClick={handleConnect}
+          >
+            {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Connect Slack
+          </button>
+        ) : (
+          <>
+            <button type="button" className="btn-outline" disabled={saving} onClick={handleDisconnect}>
+              Disconnect
+            </button>
+            <button
+              type="button"
+              className="btn-accent"
+              disabled={!botReady || testing}
+              onClick={handleTestDm}
+            >
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              Send test DM
+            </button>
+          </>
+        )}
+      </div>
+
+      {connected && (
+        <div className="mt-6 space-y-4 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={alertsOn}
+              onChange={(e) => setAlertsOn(e.target.checked)}
+              className="rounded border-zinc-300"
+            />
+            Enable interview reminders and digests
+          </label>
+          <div className="grid grid-cols-2 gap-4 max-w-xs">
+            <div className="form-group">
+              <label className="form-label" htmlFor="slackDigestHour">Digest hour</label>
+              <input
+                id="slackDigestHour"
+                type="number"
+                min={0}
+                max={23}
+                value={hour}
+                onChange={(e) => setHour(Number(e.target.value))}
+                className="input focus-ring"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="slackDigestMinute">Digest minute</label>
+              <input
+                id="slackDigestMinute"
+                type="number"
+                min={0}
+                max={59}
+                value={minute}
+                onChange={(e) => setMinute(Number(e.target.value))}
+                className="input focus-ring"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted">Digest time uses the server timezone (`APP_TIMEZONE`).</p>
+          <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save preferences
+          </button>
+        </div>
+      )}
     </div>
   );
 }
