@@ -726,6 +726,7 @@ function ScreeningPanel({
   const [text, setText] = useState('');
   const [asking, setAsking] = useState(false);
   const [jdOpen, setJdOpen] = useState(false);
+  const [jdCopied, setJdCopied] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetterCopied, setCoverLetterCopied] = useState(false);
   const pairs = job.screeningPairs || [];
@@ -775,6 +776,19 @@ function ScreeningPanel({
       previouslyFocused.current?.focus();
     };
   }, [onClose]);
+
+  async function copyJobDescription() {
+    const content = job.jobDescription || '';
+    if (!content) return;
+    try {
+      await navigator.clipboard.writeText(content);
+      setJdCopied(true);
+      notify.success('Job description copied');
+      window.setTimeout(() => setJdCopied(false), 1200);
+    } catch {
+      notify.error('Failed to copy');
+    }
+  }
 
   async function copyCoverLetter() {
     const content = job.coverLetterText || '';
@@ -860,7 +874,7 @@ function ScreeningPanel({
             </div>
           )}
 
-          <section>
+          <section className="space-y-2">
             <button
               type="button"
               onClick={() => setJdOpen((v) => !v)}
@@ -868,8 +882,26 @@ function ScreeningPanel({
             >
               {jdOpen ? '▾' : '▸'} Job description
             </button>
+            {job.jobDescription && (
+              <button
+                type="button"
+                onClick={copyJobDescription}
+                className={
+                  'panel w-full text-left px-3 py-2.5 cursor-pointer transition-colors ' +
+                  'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ' +
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ' +
+                  (jdCopied ? 'ring-1 ring-green-400/60 dark:ring-green-600/50' : '')
+                }
+                title="Click to copy job description"
+                aria-label="Copy job description"
+              >
+                <p className="text-sm text-body">
+                  {jdCopied ? 'Copied!' : 'Click to copy job description'}
+                </p>
+              </button>
+            )}
             {jdOpen && (
-              <pre className="mt-2 text-xs text-body bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-72 overflow-y-auto">
+              <pre className="text-xs text-body bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-72 overflow-y-auto">
                 {job.jobDescription || '(no JD stored)'}
               </pre>
             )}
