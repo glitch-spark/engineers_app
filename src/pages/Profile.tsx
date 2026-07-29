@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import { Loader2, Save, Zap, CheckCircle2, KeyRound, AlertCircle } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import type { FreeLlmModelPreset } from '../api/endpoints';
 import { notify } from '../lib/notify';
+import {
+  listTimeZones,
+  partsFromTimeInput,
+  timeInputFromParts,
+} from '../lib/slackDigestPrefs';
 import PageHeader from '../components/PageHeader';
 
 interface ProfileData {
@@ -739,10 +744,11 @@ function SlackAlertsCard() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [hour, setHour] = useState(8);
-  const [minute, setMinute] = useState(0);
+  const [timezone, setTimezone] = useState('America/New_York');
+  const [digestTime, setDigestTime] = useState('08:00');
   const [alertsOn, setAlertsOn] = useState(true);
   const [loaded, setLoaded] = useState(false);
+  const timeZones = useMemo(() => listTimeZones(), []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -763,8 +769,8 @@ function SlackAlertsCard() {
 
   useEffect(() => {
     if (data && !loaded) {
-      setHour(data.slackDigestHour ?? 8);
-      setMinute(data.slackDigestMinute ?? 0);
+      setTimezone(data.slackTimezone || 'America/New_York');
+      setDigestTime(timeInputFromParts(data.slackDigestHour ?? 8, data.slackDigestMinute ?? 0));
       setAlertsOn(!!data.slackAlertsEnabled);
       setLoaded(true);
     }
@@ -798,13 +804,15 @@ function SlackAlertsCard() {
   async function handleSavePrefs() {
     setSaving(true);
     try {
+      const { hour, minute } = partsFromTimeInput(digestTime);
       await api.updateSlackPrefs({
         slackAlertsEnabled: alertsOn,
+        slackTimezone: timezone,
         slackDigestHour: hour,
         slackDigestMinute: minute,
       });
       await mutate();
-      notify.success('Slack alert preferences saved');
+      notify.success('Slack digest preferences saved');
     } catch (err) {
       notify.error(err, 'Failed to save Slack preferences');
     } finally {
@@ -827,14 +835,16 @@ function SlackAlertsCard() {
   const connected = !!data?.slackConnected;
   const oauthReady = !!data?.slackOAuthConfigured;
   const botReady = !!data?.slackBotConfigured;
+  const zoneOptions =
+    timezone && !timeZones.includes(timezone) ? [timezone, ...timeZones] : timeZones;
 
   return (
     <div className="card mt-4">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="card-header mb-0">Slack interview alerts</h3>
+          <h3 className="card-header mb-0">Slack interview digest</h3>
           <p className="text-muted">
-            Private DMs ~30 minutes before your interviews and a morning digest. Only you see your schedule.
+            A private daily DM of your interviews for that day. Only you see your schedule.
           </p>
         </div>
         {connected ? (
@@ -885,43 +895,54 @@ function SlackAlertsCard() {
       </div>
 
       {connected && (
-        <div className="mt-6 space-y-4 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="mt-6 space-y-5 border-t border-zinc-200/80 pt-5 dark:border-zinc-800">
+          <label className="flex items-center gap-2.5 text-sm text-zinc-800 dark:text-zinc-200">
             <input
               type="checkbox"
               checked={alertsOn}
               onChange={(e) => setAlertsOn(e.target.checked)}
-              className="rounded border-zinc-300"
+              className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400 dark:border-zinc-600"
             />
-            Enable interview reminders and digests
+            Enable daily interview digest
           </label>
-          <div className="grid grid-cols-2 gap-4 max-w-xs">
-            <div className="form-group">
-              <label className="form-label" htmlFor="slackDigestHour">Digest hour</label>
-              <input
-                id="slackDigestHour"
-                type="number"
-                min={0}
-                max={23}
-                value={hour}
-                onChange={(e) => setHour(Number(e.target.value))}
+
+          <div className="grid gap-4 sm:grid-cols-2 sm:max-w-xl">
+            <div className="form-group mb-0">
+              <label className="form-label" htmlFor="slackTimezone">
+                Timezone
+              </label>
+              <select
+                id="slackTimezone"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
                 className="input focus-ring"
-              />
+              >
+                {zoneOptions.map((z) => (
+                  <option key={z} value={z}>
+                    {z.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="slackDigestMinute">Digest minute</label>
+            <div className="form-group mb-0">
+              <label className="form-label" htmlFor="slackDigestTime">
+                Digest time
+              </label>
               <input
-                id="slackDigestMinute"
-                type="number"
-                min={0}
-                max={59}
-                value={minute}
-                onChange={(e) => setMinute(Number(e.target.value))}
+                id="slackDigestTime"
+                type="time"
+                value={digestTime}
+                onChange={(e) => setDigestTime(e.target.value)}
                 className="input focus-ring"
               />
             </div>
           </div>
-          <p className="text-xs text-muted">Digest time uses the server timezone (`APP_TIMEZONE`).</p>
+
+          <p className="text-xs text-muted">
+            Digest uses this timezone (default America/New York). Interviews are date-only, so
+            you get one morning (or custom-time) summary — not a 30-minute reminder.
+          </p>
+
           <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save preferences

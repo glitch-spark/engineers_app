@@ -43,6 +43,7 @@ export interface ProfileShape {
   freeLlmKeyVerified?: boolean;
   slackConnected?: boolean;
   slackAlertsEnabled?: boolean;
+  slackTimezone?: string;
   slackDigestHour?: number;
   slackDigestMinute?: number;
   slackOAuthConfigured?: boolean;
@@ -168,6 +169,7 @@ export const testFreeLlm = () =>
 export type SlackStatus = {
   slackConnected: boolean;
   slackAlertsEnabled: boolean;
+  slackTimezone: string;
   slackDigestHour: number;
   slackDigestMinute: number;
   slackOAuthConfigured: boolean;
@@ -183,6 +185,7 @@ export const disconnectSlack = () => del<SlackStatus>('/integrations/slack/disco
 
 export const updateSlackPrefs = (body: {
   slackAlertsEnabled?: boolean;
+  slackTimezone?: string;
   slackDigestHour?: number;
   slackDigestMinute?: number;
 }) =>
