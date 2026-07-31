@@ -1,7 +1,7 @@
 import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Check, Loader2, Pencil, Trash2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
@@ -122,46 +122,78 @@ function accountRegion(iv: Interview): string | null {
 }
 
 type LiveProgress = {
-  completedCol: LiveColKey | null;
-  completedDate?: string;
+  /** Stage column → completed date (YYYY-MM-DD). All passed stages stay visible. */
+  completed: Partial<Record<LiveColKey, string | undefined>>;
+  /** Stage where a rejected-fail mark should appear (usually the last real stage). */
+  rejectCol: LiveColKey | null;
   scheduledCol: LiveColKey | null;
   scheduledDate?: string;
 };
 
-/** At most one completed (last) + one scheduled (upcoming) cell. */
+function latestCompletedDate(completed: LiveProgress['completed']): string {
+  let best = '';
+  for (const d of Object.values(completed)) {
+    if (d && d > best) best = d;
+  }
+  return best;
+}
+
+function recordCompleted(
+  completed: LiveProgress['completed'],
+  stage: string | null | undefined,
+  date?: string,
+) {
+  const col = toLiveCol(stage);
+  if (!col) return;
+  const prev = completed[col];
+  if (!(col in completed)) {
+    completed[col] = date;
+    return;
+  }
+  // Keep the latest date if the same column appears more than once.
+  if (date && (!prev || date > prev)) completed[col] = date;
+}
+
+/** All passed stages + at most one scheduled (upcoming) cell. */
 function liveProgress(iv: Interview): LiveProgress {
   const trail = getInterviewMovementEntries(iv);
   const status = (iv.status || '').toLowerCase();
   const tip = trail[trail.length - 1];
   const tipDate = tip?.scheduledAt || dateKey(iv.scheduledAt);
-  const prev = trail.length >= 2 ? trail[trail.length - 2] : undefined;
+  const completed: LiveProgress['completed'] = {};
 
-  // Rejected fail — highlight last real stage (where they failed); no scheduled next.
+  // Rejected fail — mark every prior real stage completed; reject triangle on last real stage.
   if (isRejectedFail(iv)) {
-    const failStage = prev ? toLiveCol(prev.stage) : null;
-    return {
-      completedCol: failStage,
-      completedDate: prev?.scheduledAt || tipDate,
-      scheduledCol: null,
-    };
+    const prior = trail.slice(0, -1); // drop the rejected tip
+    for (const entry of prior) {
+      recordCompleted(completed, entry.stage, entry.scheduledAt);
+    }
+    const failEntry = prior[prior.length - 1];
+    const rejectCol = failEntry ? toLiveCol(failEntry.stage) : null;
+    return { completed, rejectCol, scheduledCol: null };
   }
 
   const currentCol = toLiveCol(iv.stage);
 
   if (status === 'completed') {
-    return {
-      completedCol: currentCol || toLiveCol(tip?.stage),
-      completedDate: tipDate,
-      scheduledCol: null,
-    };
+    for (const entry of trail) {
+      recordCompleted(completed, entry.stage, entry.scheduledAt || tipDate);
+    }
+    // Ensure current stage is painted even if trail is thin.
+    recordCompleted(completed, iv.stage, tipDate);
+    return { completed, rejectCol: null, scheduledCol: null };
   }
 
-  // Scheduled / rescheduled / unset → current is upcoming; prior trail tip is last completed.
+  // Scheduled / rescheduled / unset → tip is upcoming; everything before it is completed.
   const scheduledCol = currentCol || toLiveCol(tip?.stage);
-  const completedCol = prev ? toLiveCol(prev.stage) : null;
+  for (const entry of trail.slice(0, -1)) {
+    const col = toLiveCol(entry.stage);
+    if (!col || col === scheduledCol) continue;
+    recordCompleted(completed, entry.stage, entry.scheduledAt);
+  }
   return {
-    completedCol: completedCol && completedCol !== scheduledCol ? completedCol : null,
-    completedDate: prev?.scheduledAt,
+    completed,
+    rejectCol: null,
     scheduledCol,
     scheduledDate: tipDate,
   };
@@ -175,17 +207,20 @@ function dateInSelectedRange(dateKeyVal: string | undefined, fromDate?: string, 
 }
 
 /**
- * Live matrix should only paint cells whose dates fall in the selected range.
- * Without this, an interview touched this week still shows last week's completed cell.
+ * Include a row when any completed/scheduled date falls in the selected range.
+ * Once included, keep the full completed trail so earlier passed stages stay visible.
  */
 function liveProgressInRange(iv: Interview, fromDate?: string, toDate?: string): LiveProgress | null {
   const full = liveProgress(iv);
-  const completedInRange = dateInSelectedRange(full.completedDate, fromDate, toDate);
+  const hasRange = Boolean(fromDate || toDate);
+  const completedInRange = Object.values(full.completed).some((date) =>
+    date ? dateInSelectedRange(date, fromDate, toDate) : !hasRange,
+  );
   const scheduledInRange = dateInSelectedRange(full.scheduledDate, fromDate, toDate);
   if (!completedInRange && !scheduledInRange) return null;
   return {
-    completedCol: completedInRange ? full.completedCol : null,
-    completedDate: completedInRange ? full.completedDate : undefined,
+    completed: full.completed,
+    rejectCol: full.rejectCol,
     scheduledCol: scheduledInRange ? full.scheduledCol : null,
     scheduledDate: scheduledInRange ? full.scheduledDate : undefined,
   };
@@ -291,8 +326,8 @@ export default function InterviewsLivePage() {
         if (aSched && bSched && aSched !== bSched) return aSched.localeCompare(bSched);
         if (aSched && !bSched) return -1;
         if (!aSched && bSched) return 1;
-        const aDone = a.progress.completedDate || '';
-        const bDone = b.progress.completedDate || '';
+        const aDone = latestCompletedDate(a.progress.completed);
+        const bDone = latestCompletedDate(b.progress.completed);
         return bDone.localeCompare(aDone);
       });
   }, [interviews, from, to]);
@@ -511,7 +546,7 @@ export default function InterviewsLivePage() {
             <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap gap-4 text-xs text-muted">
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-3.5 w-5 rounded-sm bg-emerald-500 border border-emerald-600" />
-                Last completed
+                Completed
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-3.5 w-5 rounded-sm bg-emerald-50 border border-dashed border-emerald-500 dark:bg-emerald-950/40" />
@@ -579,14 +614,14 @@ export default function InterviewsLivePage() {
                           <div className="text-sm text-muted truncate">{profileName}</div>
                         </td>
                         {LIVE_COLUMNS.map((c) => {
-                          const isCompleted = progress.completedCol === c.key;
-                          const isScheduled = progress.scheduledCol === c.key;
-                          const showRejectMark = rejected && isCompleted;
+                          const isCompleted = c.key in progress.completed;
+                          const isScheduled = progress.scheduledCol === c.key && !isCompleted;
+                          const showRejectMark = rejected && progress.rejectCol === c.key;
                           let tdClass = 'px-1.5 py-1.5 text-center align-middle border-r border-zinc-200 dark:border-zinc-700 relative overflow-hidden';
                           let date = '';
                           if (isCompleted) {
                             tdClass += ' bg-emerald-500 text-white';
-                            date = formatCellDate(progress.completedDate);
+                            date = formatCellDate(progress.completed[c.key]);
                           } else if (isScheduled) {
                             tdClass += ' bg-emerald-50 text-emerald-800 border-dashed border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-400';
                             date = formatCellDate(progress.scheduledDate);
@@ -605,8 +640,9 @@ export default function InterviewsLivePage() {
                                       : undefined
                               }
                             >
-                              {date ? (
-                                <span className={`text-[11px] font-semibold tabular-nums leading-tight ${isCompleted ? 'text-white' : ''}`}>
+                              {isCompleted || isScheduled ? (
+                                <span className={`inline-flex items-center justify-center gap-0.5 text-[11px] font-semibold tabular-nums leading-tight ${isCompleted ? 'text-white' : ''}`}>
+                                  {isCompleted && <Check className="w-3 h-3 shrink-0" strokeWidth={3} aria-hidden />}
                                   {date}
                                 </span>
                               ) : (
