@@ -41,6 +41,13 @@ export interface ProfileShape {
   freeLlmApiKeySet?: boolean;
   freeLlmApiKeyHint?: string;
   freeLlmKeyVerified?: boolean;
+  slackConnected?: boolean;
+  slackAlertsEnabled?: boolean;
+  slackTimezone?: string;
+  slackDigestHour?: number;
+  slackDigestMinute?: number;
+  slackOAuthConfigured?: boolean;
+  slackBotConfigured?: boolean;
 }
 
 export interface FreeLlmModelPreset {
@@ -158,6 +165,36 @@ export const testFreeLlm = () =>
     freeLlmApiKeySet: boolean;
     freeLlmApiKeyHint: string;
   }>('/profile/free-llm-test', {}, { timeoutMs: 60_000 });
+
+export type SlackStatus = {
+  slackConnected: boolean;
+  slackAlertsEnabled: boolean;
+  slackTimezone: string;
+  slackDigestHour: number;
+  slackDigestMinute: number;
+  slackOAuthConfigured: boolean;
+  slackBotConfigured: boolean;
+};
+
+export const getSlackStatus = () => apiFetch<SlackStatus>('/integrations/slack/status');
+
+export const startSlackOAuth = () =>
+  postJSON<{ url: string }>('/integrations/slack/oauth-start', {});
+
+export const disconnectSlack = () => del<SlackStatus>('/integrations/slack/disconnect');
+
+export const updateSlackPrefs = (body: {
+  slackAlertsEnabled?: boolean;
+  slackTimezone?: string;
+  slackDigestHour?: number;
+  slackDigestMinute?: number;
+}) =>
+  apiFetch<SlackStatus>('/integrations/slack/prefs', {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+
+export const testSlackDm = () => postJSON<{ ok: boolean }>('/integrations/slack/test-dm', {});
 
 // ---------- users (admin) ----------
 

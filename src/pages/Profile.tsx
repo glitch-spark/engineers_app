@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import { Loader2, Save, Zap, CheckCircle2, KeyRound, AlertCircle } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import type { FreeLlmModelPreset } from '../api/endpoints';
 import { notify } from '../lib/notify';
+import {
+  listTimeZones,
+  partsFromTimeInput,
+  timeInputFromParts,
+} from '../lib/slackDigestPrefs';
 import PageHeader from '../components/PageHeader';
 
 interface ProfileData {
@@ -339,6 +344,8 @@ export default function ProfilePage() {
       </div>
 
       <FreeLlmSettingsCard />
+
+      <SlackAlertsCard />
 
       <div className="card mt-4">
         <div className="flex items-center justify-between mb-6">
@@ -728,6 +735,220 @@ function FreeLlmSettingsCard() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SlackAlertsCard() {
+  const { data, mutate } = useSWR('profile-slack', () => api.getSlackStatus());
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [timezone, setTimezone] = useState('America/New_York');
+  const [digestTime, setDigestTime] = useState('08:00');
+  const [alertsOn, setAlertsOn] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const timeZones = useMemo(() => listTimeZones(), []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const slack = params.get('slack');
+    if (!slack) return;
+    if (slack === 'connected') {
+      notify.success('Slack connected');
+      mutate();
+    } else if (slack === 'error') {
+      notify.error(params.get('detail') || 'Slack connection failed');
+    }
+    params.delete('slack');
+    params.delete('detail');
+    const next = params.toString();
+    const url = `${window.location.pathname}${next ? `?${next}` : ''}`;
+    window.history.replaceState({}, '', url);
+  }, [mutate]);
+
+  useEffect(() => {
+    if (data && !loaded) {
+      setTimezone(data.slackTimezone || 'America/New_York');
+      setDigestTime(timeInputFromParts(data.slackDigestHour ?? 8, data.slackDigestMinute ?? 0));
+      setAlertsOn(!!data.slackAlertsEnabled);
+      setLoaded(true);
+    }
+  }, [data, loaded]);
+
+  async function handleConnect() {
+    setConnecting(true);
+    try {
+      const { url } = await api.startSlackOAuth();
+      window.location.href = url;
+    } catch (err) {
+      notify.error(err, 'Could not start Slack connect');
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setSaving(true);
+    try {
+      await api.disconnectSlack();
+      setLoaded(false);
+      await mutate();
+      notify.success('Slack disconnected');
+    } catch (err) {
+      notify.error(err, 'Failed to disconnect Slack');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSavePrefs() {
+    setSaving(true);
+    try {
+      const { hour, minute } = partsFromTimeInput(digestTime);
+      await api.updateSlackPrefs({
+        slackAlertsEnabled: alertsOn,
+        slackTimezone: timezone,
+        slackDigestHour: hour,
+        slackDigestMinute: minute,
+      });
+      await mutate();
+      notify.success('Slack digest preferences saved');
+    } catch (err) {
+      notify.error(err, 'Failed to save Slack preferences');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTestDm() {
+    setTesting(true);
+    try {
+      await api.testSlackDm();
+      notify.success('Test DM sent — check Slack');
+    } catch (err) {
+      notify.error(err, 'Test DM failed — open a chat with the bot once and retry');
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  const connected = !!data?.slackConnected;
+  const oauthReady = !!data?.slackOAuthConfigured;
+  const botReady = !!data?.slackBotConfigured;
+  const zoneOptions =
+    timezone && !timeZones.includes(timezone) ? [timezone, ...timeZones] : timeZones;
+
+  return (
+    <div className="card mt-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="card-header mb-0">Slack interview digest</h3>
+          <p className="text-muted">
+            A private daily DM of your interviews for that day. Only you see your schedule.
+          </p>
+        </div>
+        {connected ? (
+          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Connected
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+            Not connected
+          </span>
+        )}
+      </div>
+
+      {!oauthReady && (
+        <p className="mb-4 text-sm text-amber-800 dark:text-amber-200">
+          Slack OAuth is not configured on the server (`SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`).
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        {!connected ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={!oauthReady || connecting}
+            onClick={handleConnect}
+          >
+            {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Connect Slack
+          </button>
+        ) : (
+          <>
+            <button type="button" className="btn-outline" disabled={saving} onClick={handleDisconnect}>
+              Disconnect
+            </button>
+            <button
+              type="button"
+              className="btn-accent"
+              disabled={!botReady || testing}
+              onClick={handleTestDm}
+            >
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              Send test DM
+            </button>
+          </>
+        )}
+      </div>
+
+      {connected && (
+        <div className="mt-6 space-y-5 border-t border-zinc-200/80 pt-5 dark:border-zinc-800">
+          <label className="flex items-center gap-2.5 text-sm text-zinc-800 dark:text-zinc-200">
+            <input
+              type="checkbox"
+              checked={alertsOn}
+              onChange={(e) => setAlertsOn(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400 dark:border-zinc-600"
+            />
+            Enable daily interview digest
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2 sm:max-w-xl">
+            <div className="form-group mb-0">
+              <label className="form-label" htmlFor="slackTimezone">
+                Timezone
+              </label>
+              <select
+                id="slackTimezone"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="input focus-ring"
+              >
+                {zoneOptions.map((z) => (
+                  <option key={z} value={z}>
+                    {z.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group mb-0">
+              <label className="form-label" htmlFor="slackDigestTime">
+                Digest time
+              </label>
+              <input
+                id="slackDigestTime"
+                type="time"
+                value={digestTime}
+                onChange={(e) => setDigestTime(e.target.value)}
+                className="input focus-ring"
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-muted">
+            Digest uses this timezone (default America/New York). Interviews are date-only, so
+            you get one morning (or custom-time) summary — not a 30-minute reminder.
+          </p>
+
+          <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save preferences
+          </button>
+        </div>
+      )}
     </div>
   );
 }
