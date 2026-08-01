@@ -13,6 +13,14 @@ type Metric = { key: string; label: string; target: number; actual: number; unit
 
 const unitSuffix = (u?: string) => (u === 'hours' ? ' hrs' : '');
 
+type InterviewBoardSnap = {
+  thisWeekTotal: number;
+  thisWeekCanceled: number;
+  thisWeekBreakdown?: Array<{ label: string; count: number }>;
+  thisWeekSummary: string;
+  nextWeek: number;
+};
+
 type WeeklyPlan = {
   _id: string;
   userId?: { _id: string; email?: string; name?: string };
@@ -25,6 +33,7 @@ type WeeklyPlan = {
   metrics?: Metric[];
   status?: 'planned' | 'reviewed';
   nextInterviewTarget?: number | null;
+  interviewBoard?: InterviewBoardSnap | null;
 };
 
 // ---------- week math ----------
@@ -439,23 +448,51 @@ export default function WeeklyPlanPage() {
                   )}
                 </div>
 
-                {typeof plan.nextInterviewTarget === 'number' && (
-                  <div className="mb-4 flex items-center gap-4 rounded-xl border-2 border-sky-500/70 bg-gradient-to-r from-sky-50 via-white to-sky-50/80 px-4 py-3 shadow-sm shadow-sky-100/80 dark:border-sky-400/60 dark:from-sky-950/60 dark:via-zinc-900 dark:to-sky-950/40 dark:shadow-none">
-                    <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white shadow-md shadow-sky-600/30 dark:bg-sky-500">
-                      <span className="text-2xl font-bold tabular-nums leading-none">{plan.nextInterviewTarget}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-300">
-                        Next week interviews
+                {(() => {
+                  const board = plan.interviewBoard;
+                  const nextWeek = typeof board?.nextWeek === 'number'
+                    ? board.nextWeek
+                    : (typeof plan.nextInterviewTarget === 'number' ? plan.nextInterviewTarget : null);
+                  const thisSummary = board?.thisWeekSummary
+                    || (typeof board?.thisWeekTotal === 'number'
+                      ? `${board.thisWeekTotal}/ Canceled-${board.thisWeekCanceled ?? 0}`
+                      : null);
+                  if (nextWeek === null && !thisSummary) return null;
+                  return (
+                    <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="flex items-center gap-3 rounded-xl border-2 border-emerald-500/70 bg-gradient-to-r from-emerald-50 via-white to-emerald-50/80 px-4 py-3 shadow-sm shadow-emerald-100/80 dark:border-emerald-400/50 dark:from-emerald-950/50 dark:via-zinc-900 dark:to-emerald-950/30 dark:shadow-none">
+                        <div className="flex h-14 min-w-[3.5rem] flex-shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-2 text-white shadow-md shadow-emerald-600/30 dark:bg-emerald-500">
+                          <span className="text-2xl font-bold tabular-nums leading-none">
+                            {board?.thisWeekTotal ?? 0}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                            This week interviews
+                          </div>
+                          <p className="mt-0.5 text-sm font-medium text-emerald-950/90 dark:text-emerald-100/90 break-words">
+                            {thisSummary || '0/ Canceled-0'}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-0.5 text-sm text-sky-900/80 dark:text-sky-100/80">
-                        {plan.nextInterviewTarget === 1
-                          ? '1 interview round already on the board for next week'
-                          : `${plan.nextInterviewTarget} interview rounds already on the board for next week`}
-                      </p>
+                      <div className="flex items-center gap-3 rounded-xl border-2 border-sky-500/70 bg-gradient-to-r from-sky-50 via-white to-sky-50/80 px-4 py-3 shadow-sm shadow-sky-100/80 dark:border-sky-400/60 dark:from-sky-950/60 dark:via-zinc-900 dark:to-sky-950/40 dark:shadow-none">
+                        <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white shadow-md shadow-sky-600/30 dark:bg-sky-500">
+                          <span className="text-2xl font-bold tabular-nums leading-none">{nextWeek ?? 0}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-300">
+                            Next week interviews
+                          </div>
+                          <p className="mt-0.5 text-sm text-sky-900/80 dark:text-sky-100/80">
+                            {(nextWeek ?? 0) === 1
+                              ? '1 interview round already on the board for next week'
+                              : `${nextWeek ?? 0} interview rounds already on the board for next week`}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {plan.metrics && plan.metrics.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
@@ -474,7 +511,7 @@ export default function WeeklyPlanPage() {
                       </div>
                     ))}
                   </div>
-                ) : typeof plan.nextInterviewTarget !== 'number' ? (
+                ) : !(plan.interviewBoard || typeof plan.nextInterviewTarget === 'number') ? (
                   <div className="text-xs text-faint italic">No metrics on this plan.</div>
                 ) : null}
 
