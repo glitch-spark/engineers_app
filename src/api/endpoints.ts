@@ -246,10 +246,23 @@ export const deleteAccount = (id: string) => del<{ ok: boolean }>(`/accounts/${i
 
 // ---------- transactions ----------
 
+export interface TransactionUserTotal {
+  userId: string;
+  name: string;
+  email?: string | null;
+  image?: string | null;
+  income: number;
+  outcome: number;
+  net: number;
+  count: number;
+}
+
 export const listTransactions = (params?: TransactionListParams) =>
-  apiFetch<{ transactions: Record<string, unknown>[]; pagination: Pagination }>(
-    `/transactions${qs(params)}`
-  );
+  apiFetch<{
+    transactions: Record<string, unknown>[];
+    pagination: Pagination;
+    userTotals?: TransactionUserTotal[];
+  }>(`/transactions${qs(params)}`);
 
 export const createTransaction = (body: Record<string, unknown>) =>
   postJSON<Record<string, unknown>>('/transactions', body);
