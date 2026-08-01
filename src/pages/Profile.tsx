@@ -7,6 +7,7 @@ import type { FreeLlmModelPreset } from '../api/endpoints';
 import { notify } from '../lib/notify';
 import {
   listTimeZones,
+  normalizeSlackTimezone,
   partsFromTimeInput,
   timeInputFromParts,
 } from '../lib/slackDigestPrefs';
@@ -769,7 +770,7 @@ function SlackAlertsCard() {
 
   useEffect(() => {
     if (data && !loaded) {
-      setTimezone(data.slackTimezone || 'America/New_York');
+      setTimezone(normalizeSlackTimezone(data.slackTimezone));
       setDigestTime(timeInputFromParts(data.slackDigestHour ?? 8, data.slackDigestMinute ?? 0));
       setAlertsOn(!!data.slackAlertsEnabled);
       setLoaded(true);
@@ -835,8 +836,7 @@ function SlackAlertsCard() {
   const connected = !!data?.slackConnected;
   const oauthReady = !!data?.slackOAuthConfigured;
   const botReady = !!data?.slackBotConfigured;
-  const zoneOptions =
-    timezone && !timeZones.includes(timezone) ? [timezone, ...timeZones] : timeZones;
+  const zoneOptions = data?.slackTimezones?.length ? data.slackTimezones : timeZones;
 
   return (
     <div className="card mt-4">
@@ -918,8 +918,8 @@ function SlackAlertsCard() {
                 className="input focus-ring"
               >
                 {zoneOptions.map((z) => (
-                  <option key={z} value={z}>
-                    {z.replace(/_/g, ' ')}
+                  <option key={z.value} value={z.value}>
+                    {z.label}
                   </option>
                 ))}
               </select>
@@ -939,8 +939,8 @@ function SlackAlertsCard() {
           </div>
 
           <p className="text-xs text-muted">
-            Digest uses this timezone (default America/New York). Interviews are date-only, so
-            you get one morning (or custom-time) summary — not a 30-minute reminder.
+            Pick one standard GMT offset (UTC−12 through UTC+14). Interviews are date-only, so
+            you get one daily summary — not a 30-minute reminder.
           </p>
 
           <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
