@@ -175,6 +175,19 @@ export default function TransactionsPage() {
 
   const transactions = (data?.transactions as Tx[]) || [];
   const pagination = data?.pagination;
+  const userTotals = (data?.userTotals as Array<{
+    userId: string;
+    name: string;
+    email?: string | null;
+    image?: string | null;
+    income: number;
+    outcome: number;
+    net: number;
+    count: number;
+  }>) || [];
+
+  const formatMoney = (n: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
   const formatPayMethod = (t: Tx): string => {
     if (t.payMethod === 'card') return `**** ${t.cardLast4 || '----'}`;
@@ -241,6 +254,70 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {userTotals.length > 0 && (
+        <div className="panel overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+            <h2 className="card-title uppercase tracking-wide">Per-user totals</h2>
+            <p className="hint">Income = positive amounts · Outcome = absolute value of negative amounts. Respects the filters above.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="table-head">
+                <tr>
+                  <th className="px-4 py-2.5 text-left">User</th>
+                  <th className="px-4 py-2.5 text-right">Income</th>
+                  <th className="px-4 py-2.5 text-right">Outcome</th>
+                  <th className="px-4 py-2.5 text-right">Net</th>
+                  <th className="px-4 py-2.5 text-right">Txns</th>
+                </tr>
+              </thead>
+              <tbody>
+                {userTotals.map((u) => (
+                  <tr key={u.userId} className="table-row">
+                    <td className="px-4 py-2.5">
+                      <NameWithAvatar name={u.name || u.email} imageUrl={u.image} />
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                      {formatMoney(u.income)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400">
+                      {formatMoney(u.outcome)}
+                    </td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${
+                      u.net >= 0
+                        ? 'text-emerald-700 dark:text-emerald-300'
+                        : 'text-red-700 dark:text-red-300'
+                    }`}>
+                      {formatMoney(u.net)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-muted">{u.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {userTotals.length > 1 && (
+                <tfoot>
+                  <tr className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/50 font-medium">
+                    <td className="px-4 py-2.5">Total</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                      {formatMoney(userTotals.reduce((s, u) => s + u.income, 0))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400">
+                      {formatMoney(userTotals.reduce((s, u) => s + u.outcome, 0))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {formatMoney(userTotals.reduce((s, u) => s + u.net, 0))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-muted">
+                      {userTotals.reduce((s, u) => s + u.count, 0)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
+
       {data && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted">
@@ -295,12 +372,21 @@ export default function TransactionsPage() {
             ) : (
               transactions.map((t) => {
                 const isPending = t.status === 'pending';
+                const amt = Number(t.amount || 0);
                 return (
                   <tr key={t._id} className="table-row">
                     <td className="px-4 py-2.5">
                       {t.date ? new Date(t.date).toISOString().split('T')[0] : '—'}
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums">${Number(t.amount || 0).toFixed(2)}</td>
+                    <td className={`px-4 py-2.5 tabular-nums ${
+                      amt > 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : amt < 0
+                          ? 'text-red-600 dark:text-red-400'
+                          : ''
+                    }`}>
+                      {formatMoney(amt)}
+                    </td>
                     <td className="px-4 py-2.5">{t.description || '—'}</td>
                     <td className="px-4 py-2.5">{formatPayMethod(t)}</td>
                     <td className="px-4 py-2.5 capitalize">{t.status}</td>
