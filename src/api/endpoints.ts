@@ -170,6 +170,7 @@ export type SlackStatus = {
   slackConnected: boolean;
   slackAlertsEnabled: boolean;
   slackTimezone: string;
+  slackTimezones?: { value: string; label: string }[];
   slackDigestHour: number;
   slackDigestMinute: number;
   slackOAuthConfigured: boolean;
