@@ -621,6 +621,7 @@ function JobRow({
 
 function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const normalized = normalizeScreeningPairs(pairs);
 
   async function copyAnswer(index: number, answer: string) {
     try {
@@ -635,8 +636,8 @@ function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
 
   return (
     <ol className="space-y-3">
-      {pairs.map((p, i) => {
-        const answer = unwrapScreeningAnswer(p.answer);
+      {normalized.map((p, i) => {
+        const answer = p.answer;
         const copied = copiedIndex === i;
         return (
           <li key={i}>
@@ -671,26 +672,118 @@ function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
   );
 }
 
-/** Unwrap legacy/bad stores where the answer is a stringified object with an `answer` field. */
-function unwrapScreeningAnswer(raw: string): string {
+/** Decode leftover \\n / \\t escape sequences in plain answer text. */
+function decodeAnswerEscapes(text: string): string {
+  if (!text.includes('\\')) return text;
+  return text.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '\r');
+}
+
+/**
+ * Normalize legacy/bad stores where one or more answers are still a stringified
+ * {"answers":[...]} or {"answer":"..."} dump. Redistributes a full answers
+ * array stuffed into pair 0 across all pairs when later answers are empty.
+ */
+function normalizeScreeningPairs(pairs: ScreeningPair[]): ScreeningPair[] {
+  if (pairs.length === 0) return pairs;
+
+  const extracted = tryExtractAnswersArray(pairs[0]?.answer || '');
+  if (extracted && extracted.length > 0) {
+    const restEmpty = pairs.slice(1).every((p) => !(p.answer || '').trim());
+    const enough = extracted.length >= pairs.length;
+    if (restEmpty || enough) {
+      return pairs.map((p, i) => ({
+        question: p.question,
+        answer: unwrapScreeningAnswer(extracted[i] ?? '', i),
+      }));
+    }
+  }
+
+  return pairs.map((p, i) => ({
+    question: p.question,
+    answer: unwrapScreeningAnswer(p.answer, i),
+  }));
+}
+
+/** If raw is (or contains) {"answers":[...]}, return the string list. */
+function tryExtractAnswersArray(raw: string): string[] | null {
+  const text = (raw || '').trim();
+  if (!text) return null;
+
+  const tryObj = (obj: unknown): string[] | null => {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+    const ans = (obj as Record<string, unknown>).answers;
+    if (!Array.isArray(ans) || ans.length === 0) return null;
+    // Nested full payload stuffed into answers[0].
+    if (ans.length === 1 && typeof ans[0] === 'string') {
+      const nested = tryExtractAnswersArray(ans[0]);
+      if (nested && nested.length > 1) return nested;
+    }
+    return ans.map((a) => {
+      if (typeof a === 'string') return a;
+      if (a && typeof a === 'object' && typeof (a as { answer?: unknown }).answer === 'string') {
+        return (a as { answer: string }).answer;
+      }
+      return String(a ?? '');
+    });
+  };
+
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      const fromObj = tryObj(parsed);
+      if (fromObj) return fromObj;
+      if (typeof parsed === 'string') return tryExtractAnswersArray(parsed);
+    } catch {
+      /* fall through */
+    }
+  }
+
+  // Double-encoded JSON string: "\"{...}\""
+  if (text.startsWith('"') && text.endsWith('"')) {
+    try {
+      const inner = JSON.parse(text) as unknown;
+      if (typeof inner === 'string') return tryExtractAnswersArray(inner);
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return null;
+}
+
+/** Unwrap legacy/bad stores where the answer is a stringified object. */
+function unwrapScreeningAnswer(raw: string, index = 0): string {
   const text = (raw || '').trim();
   if (!text) return '';
-  if (!(text.startsWith('{') && text.endsWith('}'))) return text;
+
+  const fromAnswers = tryExtractAnswersArray(text);
+  if (fromAnswers && fromAnswers.length > 0) {
+    const picked = fromAnswers[Math.min(index, fromAnswers.length - 1)] ?? '';
+    // Avoid infinite recursion when the element is still a wrapper.
+    if (picked !== text && (picked.startsWith('{') || picked.startsWith('"'))) {
+      return unwrapScreeningAnswer(picked, index);
+    }
+    return decodeAnswerEscapes(picked);
+  }
+
+  if (!(text.startsWith('{') && text.endsWith('}'))) {
+    return decodeAnswerEscapes(text);
+  }
 
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
     if (parsed && typeof parsed === 'object' && typeof parsed.answer === 'string') {
-      return parsed.answer;
+      return decodeAnswerEscapes(parsed.answer);
     }
   } catch {
     /* continue — often Python-style single-quoted dicts */
   }
 
   const keyMatch = text.match(/['"]answer['"]\s*:\s*/);
-  if (!keyMatch || keyMatch.index == null) return text;
+  if (!keyMatch || keyMatch.index == null) return decodeAnswerEscapes(text);
   const rest = text.slice(keyMatch.index + keyMatch[0].length);
   const quote = rest[0];
-  if (quote !== "'" && quote !== '"') return text;
+  if (quote !== "'" && quote !== '"') return decodeAnswerEscapes(text);
 
   let i = 1;
   let out = '';
@@ -698,7 +791,7 @@ function unwrapScreeningAnswer(raw: string): string {
     const ch = rest[i];
     if (ch === '\\' && i + 1 < rest.length) {
       const next = rest[i + 1];
-      out += next === 'n' ? '\n' : next;
+      out += next === 'n' ? '\n' : next === 't' ? '\t' : next === 'r' ? '\r' : next;
       i += 2;
       continue;
     }
@@ -709,7 +802,7 @@ function unwrapScreeningAnswer(raw: string): string {
     out += ch;
     i += 1;
   }
-  return text;
+  return decodeAnswerEscapes(text);
 }
 
 function ScreeningPanel({
