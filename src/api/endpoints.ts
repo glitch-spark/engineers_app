@@ -358,6 +358,43 @@ export const lookupUsers = (params?: { excludeRole?: string }) =>
     `/users/lookup${qs(params)}`
   );
 
+// ---------- interview prep library (prompts + template answers) ----------
+
+export interface InterviewPrepItem {
+  _id: string;
+  userId?: { _id: string; name?: string | null; email?: string | null };
+  title: string;
+  body: string;
+  ownerName?: string | null;
+  ownerEmail?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const listInterviewPrompts = (params?: { userId?: string }) =>
+  apiFetch<{ prompts: InterviewPrepItem[] }>(`/interview-prep/prompts${qs(params)}`);
+
+export const createInterviewPrompt = (body: { title: string; body?: string }) =>
+  postJSON<InterviewPrepItem>('/interview-prep/prompts', body);
+
+export const updateInterviewPrompt = (id: string, body: { title?: string; body?: string }) =>
+  putJSON<InterviewPrepItem>(`/interview-prep/prompts/${id}`, body);
+
+export const deleteInterviewPrompt = (id: string) =>
+  del<{ ok: boolean }>(`/interview-prep/prompts/${id}`);
+
+export const listInterviewTemplateAnswers = (params?: { userId?: string }) =>
+  apiFetch<{ items: InterviewPrepItem[] }>(`/interview-prep/template-answers${qs(params)}`);
+
+export const createInterviewTemplateAnswer = (body: { title: string; body?: string }) =>
+  postJSON<InterviewPrepItem>('/interview-prep/template-answers', body);
+
+export const updateInterviewTemplateAnswer = (id: string, body: { title?: string; body?: string }) =>
+  putJSON<InterviewPrepItem>(`/interview-prep/template-answers/${id}`, body);
+
+export const deleteInterviewTemplateAnswer = (id: string) =>
+  del<{ ok: boolean }>(`/interview-prep/template-answers/${id}`);
+
 // ---------- interviews ----------
 
 export interface InterviewListParams {
