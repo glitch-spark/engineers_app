@@ -1,0 +1,14 @@
+---
+description: Engineers SPA stack and UI conventions
+alwaysApply: true
+---
+
+# engineers_app
+
+React 18 + Vite + Tailwind. **Not Next.js.** Skip Next-only guidance.
+
+- Data: SWR + typed helpers in `src/api/endpoints.ts`. JWT in localStorage.
+- Toasts: `src/lib/notify.ts` (react-hot-toast).
+- No Radix/shadcn. Reuse `shell-*`, `panel-elevated`, `btn`, `btn-outline`, `input`, `form-label`.
+- Chrome: `Topbar` is global (logo, theme, alerts, account). `PageHeader` is the per-page title row.
+- Roles: `RoleGuard` allowlists; extra admin UI via `user?.role === 'admin'`.

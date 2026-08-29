@@ -1,0 +1,12 @@
+---
+description: React + Vite UI patterns for this SPA
+globs: src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# React UI
+
+- Functional components. Colocate feature UI with the page unless it is shared chrome.
+- Icon-only buttons need `aria-label`. Escape closes popovers. Decorative icons `aria-hidden`.
+- For UI/layout/a11y work: read `ui-skills-root`, then at most 2–3 skills (`interface-design`, `transitions-dev`, `fixing-accessibility`, `baseline-ui`, `polish`). Prefer existing `index.css` over new animation libraries.
+- Prefill create flows from query params (see `/transactions?renew=1`) rather than extra modal routes.

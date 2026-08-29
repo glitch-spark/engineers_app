@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import { useEffect, useId, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Modal from '../components/Modal';
 import { Pencil, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
@@ -10,6 +11,7 @@ import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
 
 type PayMethod = 'coin' | 'card';
+type BillingCycle = 'one_time' | 'monthly';
 
 type Tx = {
   _id: string;
@@ -24,12 +26,15 @@ type Tx = {
   ownerImage?: string | null;
   payMethod?: PayMethod | null;
   cardLast4?: string | null;
+  cardLabel?: string | null;
+  billingCycle?: BillingCycle | null;
 };
 
 export default function TransactionsPage() {
   const formId = useId();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -66,6 +71,8 @@ export default function TransactionsPage() {
     notes: string;
     payMethod: '' | PayMethod;
     cardLast4: string;
+    cardLabel: string;
+    billingCycle: BillingCycle;
   }>({
     date: '',
     amount: 0,
@@ -73,7 +80,12 @@ export default function TransactionsPage() {
     notes: '',
     payMethod: '',
     cardLast4: '',
+    cardLabel: '',
+    billingCycle: 'monthly',
   });
+
+  const { data: hintsData } = useSWR(['tx-card-hints'], api.transactionCardHints);
+  const cardHints = hintsData?.cards ?? [];
 
   useEffect(() => {
     if (editing) {
@@ -84,6 +96,8 @@ export default function TransactionsPage() {
         notes: editing.notes || '',
         payMethod: (editing.payMethod as '' | PayMethod) || '',
         cardLast4: editing.cardLast4 || '',
+        cardLabel: editing.cardLabel || '',
+        billingCycle: editing.billingCycle || 'monthly',
       });
     }
   }, [editing]);
@@ -97,10 +111,32 @@ export default function TransactionsPage() {
       notes: '',
       payMethod: '',
       cardLast4: '',
+      cardLabel: '',
+      billingCycle: 'monthly',
     });
     setError('');
     setOpen(true);
   };
+
+  useEffect(() => {
+    if (searchParams.get('renew') !== '1') return;
+    setEditing(null);
+    setForm({
+      date: new Date().toISOString().split('T')[0],
+      amount: Number(searchParams.get('amount') || 0),
+      description: searchParams.get('description') || '',
+      notes: '',
+      payMethod: 'card',
+      cardLast4: (searchParams.get('last4') || '').replace(/\D/g, '').slice(0, 4),
+      cardLabel: searchParams.get('label') || '',
+      billingCycle: searchParams.get('cycle') === 'one_time' ? 'one_time' : 'monthly',
+    });
+    setError('');
+    setOpen(true);
+    const next = new URLSearchParams(searchParams);
+    ['renew', 'last4', 'description', 'amount', 'cycle', 'label'].forEach((k) => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const save = async () => {
     if (!form.date) {
@@ -129,6 +165,8 @@ export default function TransactionsPage() {
         notes: form.notes,
         payMethod: form.payMethod,
         cardLast4: form.payMethod === 'card' ? form.cardLast4 : null,
+        cardLabel: form.payMethod === 'card' ? form.cardLabel || null : null,
+        billingCycle: form.billingCycle,
         ...(editing ? { userId: editing.userId?._id } : {}),
       };
       if (editing) {
@@ -190,8 +228,14 @@ export default function TransactionsPage() {
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
   const formatPayMethod = (t: Tx): string => {
-    if (t.payMethod === 'card') return `**** ${t.cardLast4 || '----'}`;
-    if (t.payMethod === 'coin') return 'Coin';
+    if (t.payMethod === 'card') {
+      const cycle = t.billingCycle === 'one_time' ? 'one-time' : 'monthly';
+      const label = t.cardLabel ? ` · ${t.cardLabel}` : '';
+      return `**** ${t.cardLast4 || '----'}${label} · ${cycle}`;
+    }
+    if (t.payMethod === 'coin') {
+      return t.billingCycle === 'one_time' ? 'Coin · one-time' : 'Coin · monthly';
+    }
     return '—';
   };
 
@@ -542,7 +586,7 @@ export default function TransactionsPage() {
               value={form.payMethod}
               onChange={(e) => {
                 const v = e.target.value as '' | PayMethod;
-                setForm({ ...form, payMethod: v, cardLast4: v === 'card' ? form.cardLast4 : '' });
+                setForm({ ...form, payMethod: v, cardLast4: v === 'card' ? form.cardLast4 : '', cardLabel: v === 'card' ? form.cardLabel : '' });
               }}
             >
               <option value="">Select method</option>
@@ -550,19 +594,59 @@ export default function TransactionsPage() {
               <option value="card">Card</option>
             </select>
           </div>
+          <div>
+            <label htmlFor={`${formId}-billing-cycle`} className="form-label mb-1 block">Billing</label>
+            <select
+              id={`${formId}-billing-cycle`}
+              className="select focus-ring w-full"
+              value={form.billingCycle}
+              onChange={(e) => setForm({ ...form, billingCycle: e.target.value as BillingCycle })}
+            >
+              <option value="monthly">Monthly (remind before next charge)</option>
+              <option value="one_time">One-time (no reminder)</option>
+            </select>
+          </div>
           {form.payMethod === 'card' && (
-            <div>
-              <label htmlFor={`${formId}-card-last4`} className="form-label mb-1 block">Last 4 digits of card <span className="text-red-500">*</span></label>
-              <input
-                id={`${formId}-card-last4`}
-                className="input"
-                inputMode="numeric"
-                maxLength={4}
-                placeholder="1234"
-                value={form.cardLast4}
-                onChange={(e) => setForm({ ...form, cardLast4: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-              />
-            </div>
+            <>
+              <div>
+                <label htmlFor={`${formId}-card-last4`} className="form-label mb-1 block">Last 4 digits of card <span className="text-red-500">*</span></label>
+                <input
+                  id={`${formId}-card-last4`}
+                  className="input"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="1234"
+                  list={`${formId}-card-hints`}
+                  value={form.cardLast4}
+                  onChange={(e) => {
+                    const last4 = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    const hint = cardHints.find((c) => c.cardLast4 === last4);
+                    setForm({
+                      ...form,
+                      cardLast4: last4,
+                      cardLabel: hint?.cardLabel && !form.cardLabel ? hint.cardLabel : form.cardLabel,
+                    });
+                  }}
+                />
+                <datalist id={`${formId}-card-hints`}>
+                  {cardHints.map((c) => (
+                    <option key={c.cardLast4} value={c.cardLast4}>
+                      {c.cardLabel ? `${c.cardLabel} · **** ${c.cardLast4}` : `**** ${c.cardLast4}`}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <label htmlFor={`${formId}-card-label`} className="form-label mb-1 block">Card nickname</label>
+                <input
+                  id={`${formId}-card-label`}
+                  className="input"
+                  placeholder="Visa personal"
+                  value={form.cardLabel}
+                  onChange={(e) => setForm({ ...form, cardLabel: e.target.value })}
+                />
+              </div>
+            </>
           )}
           <div className="flex gap-2 justify-end pt-1">
             <button
