@@ -4,6 +4,7 @@ import { useAuth } from '../auth/useAuth';
 import { useTheme } from '../theme/ThemeProvider';
 import { LogoWordmark } from './Logo';
 import ThemeToggle from './ThemeToggle';
+import AlertsPopover from './AlertsPopover';
 
 export default function Topbar() {
   const { user, logout } = useAuth();
@@ -39,10 +40,11 @@ export default function Topbar() {
           <LogoWordmark variant={theme === 'dark' ? 'dark' : 'light'} />
         </Link>
 
-        <div className="flex items-center gap-2" ref={ref}>
+        <div className="flex items-center gap-2">
           <ThemeToggle />
+          <AlertsPopover />
 
-          <div className="relative">
+          <div className="relative" ref={ref}>
             <button
               className="group flex items-center gap-3 rounded-xl p-2 transition hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60"
               onClick={() => setOpen((v) => !v)}

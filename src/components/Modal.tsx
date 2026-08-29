@@ -1,15 +1,18 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function Modal({
   open,
   onClose,
   title,
   children,
+  size = 'default',
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
+  size?: 'default' | 'sm';
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -24,21 +27,21 @@ export default function Modal({
       setEntered(false);
       return;
     }
-
     const frame = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(frame);
   }, [open]);
 
-  // Focus the dialog only when it opens — not when parent re-renders (e.g. typing).
   useEffect(() => {
     if (!open) return;
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
     const panel = panelRef.current;
     panel?.focus();
+    document.documentElement.classList.add('dialog-open');
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.stopPropagation();
         onCloseRef.current();
         return;
       }
@@ -62,21 +65,21 @@ export default function Modal({
       }
     };
 
-    document.addEventListener('keydown', onKeyDown);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKeyDown, true);
 
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.documentElement.classList.remove('dialog-open');
       previouslyFocused.current?.focus();
     };
   }, [open]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  const compact = size === 'sm';
+
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 sm:p-6">
       <button
         type="button"
         className={`modal-overlay ${entered ? 'is-open' : ''}`}
@@ -89,18 +92,23 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`t-modal relative panel-elevated flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden outline-none ${entered ? 'is-open' : ''}`}
+        className={`t-modal relative z-[81] flex max-h-[min(90vh,720px)] w-full flex-col overflow-hidden outline-none ${
+          compact ? 'max-w-sm' : 'max-w-xl'
+        } ${entered ? 'is-open' : ''}`}
       >
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-zinc-200/80 px-6 py-4 dark:border-zinc-800">
-          <h2 id={titleId} className="section-title">
+        <div className={`flex shrink-0 items-start justify-between gap-3 border-b border-zinc-200/80 dark:border-zinc-800 ${
+          compact ? 'px-4 py-3' : 'px-5 py-4'
+        }`}>
+          <h2 id={titleId} className={compact ? 'text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50' : 'section-title'}>
             {title}
           </h2>
-          <button type="button" onClick={() => onCloseRef.current()} className="btn-icon text-lg leading-none" aria-label="Close">
+          <button type="button" onClick={() => onCloseRef.current()} className="btn-icon -mr-1 -mt-0.5 text-lg leading-none" aria-label="Close">
             ×
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className={`flex-1 overflow-y-auto ${compact ? 'px-4 py-3' : 'px-5 py-4'}`}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

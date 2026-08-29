@@ -275,6 +275,39 @@ export const deleteTransaction = (id: string) => del<{ ok: boolean }>(`/transact
 export const transactionSummary = (params?: { userId?: string; year?: number }) =>
   apiFetch<TransactionSummary>(`/transactions/summary${qs(params)}`);
 
+export const transactionCardHints = () =>
+  apiFetch<{ cards: { cardLast4: string; cardLabel: string }[] }>('/transactions/card-hints');
+
+export type AlertKind = 'card_renewal' | 'weekly_plan' | 'daily_bids';
+
+export type AlertAction = { key: string; label: string };
+
+export type AlertResolution = 'none' | 'paid' | 'stopped' | 'opened';
+
+export interface AppAlert {
+  _id: string;
+  kind: AlertKind;
+  title: string;
+  body: string;
+  href: string;
+  unread: boolean;
+  periodKey: string;
+  createdAt?: string;
+  resolution?: AlertResolution;
+  resolvedAt?: string | null;
+  actions?: AlertAction[];
+  meta?: Record<string, unknown>;
+}
+
+export const listAlerts = () => apiFetch<{ alerts: AppAlert[] }>('/alerts');
+
+export const alertsUnreadCount = () => apiFetch<{ count: number }>('/alerts/unread-count');
+
+export const markAllAlertsRead = () => postJSON<{ ok: boolean; updated?: number }>('/alerts/read-all', {});
+
+export const runAlertAction = (id: string, action: string) =>
+  postJSON<AppAlert>(`/alerts/${id}/actions/${action}`, {});
+
 // ---------- weekly plans ----------
 
 export const listWeeklyPlans = (params?: {
