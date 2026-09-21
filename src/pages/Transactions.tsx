@@ -220,7 +220,7 @@ export default function TransactionsPage() {
 
   const setStatus = async (tx: Tx, status: 'approved' | 'rejected') => {
     try {
-      await api.updateTransaction(tx._id, { ...tx, status });
+      await api.updateTransaction(tx._id, { status });
       notify.success(`Transaction ${status}`);
       mutate();
     } catch (err) {
@@ -430,6 +430,8 @@ export default function TransactionsPage() {
               transactions.map((t) => {
                 const isPending = t.status === 'pending';
                 const amt = Number(t.amount || 0);
+                const isPayer = txPayerId(t) === user?.id;
+                const canApprove = isPending && (isAdmin || isPayer);
                 return (
                   <tr key={t._id} className="table-row">
                     <td className="px-4 py-2.5">
@@ -471,7 +473,7 @@ export default function TransactionsPage() {
                         >
                           <Trash2 size={16} />
                         </button>
-                        {isAdmin && isPending && (
+                        {canApprove && (
                           <>
                             <button type="button" className="btn-icon" onClick={() => setStatus(t, 'approved')} aria-label="Approve transaction" title="Approve">
                               <CheckCircle size={16} />
@@ -620,10 +622,12 @@ export default function TransactionsPage() {
               {allUsers.map((u) => (
                 <option key={u._id} value={u._id}>
                   {u.name || u.email}
-                  {u.role === 'admin' ? ' (admin)' : ''}
+                  {u._id === user?.id ? ' (you)' : ''}
+                  {u.role === 'admin' && u._id !== user?.id ? ' (admin)' : ''}
                 </option>
               ))}
             </select>
+            <p className="hint mt-1">You can request payment from anyone, including yourself.</p>
           </div>
           <div>
             <label htmlFor={`${formId}-billing-cycle`} className="form-label mb-1 block">Billing</label>
