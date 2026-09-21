@@ -257,11 +257,24 @@ export interface TransactionUserTotal {
   count: number;
 }
 
+export interface TransactionPayerTotal {
+  payerId: string;
+  name: string;
+  email?: string | null;
+  image?: string | null;
+  income: number;
+  outcome: number;
+  net: number;
+  count: number;
+}
+
 export const listTransactions = (params?: TransactionListParams) =>
   apiFetch<{
     transactions: Record<string, unknown>[];
     pagination: Pagination;
     userTotals?: TransactionUserTotal[];
+    payerTotals?: TransactionPayerTotal[];
+    totalOutcome?: number;
   }>(`/transactions${qs(params)}`);
 
 export const createTransaction = (body: Record<string, unknown>) =>
@@ -388,7 +401,7 @@ export const lookupAccounts = () =>
 // ---------- users lookup (filter dropdowns; available to all authed users) ----------
 
 export const lookupUsers = (params?: { excludeRole?: string }) =>
-  apiFetch<{ users: { _id: string; name: string | null; email: string | null }[] }>(
+  apiFetch<{ users: { _id: string; name: string | null; email: string | null; role?: string }[] }>(
     `/users/lookup${qs(params)}`
   );
 
