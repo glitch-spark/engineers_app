@@ -16,6 +16,7 @@ type BillingCycle = 'one_time' | 'monthly';
 type Tx = {
   _id: string;
   userId?: { _id: string; email?: string; name?: string; image?: string };
+  payerId?: { _id: string; email?: string; name?: string; image?: string } | string | null;
   date: string;
   amount: number;
   description?: string;
@@ -24,11 +25,20 @@ type Tx = {
   ownerEmail?: string;
   ownerName?: string;
   ownerImage?: string | null;
+  payerEmail?: string;
+  payerName?: string;
+  payerImage?: string | null;
   payMethod?: PayMethod | null;
   cardLast4?: string | null;
   cardLabel?: string | null;
   billingCycle?: BillingCycle | null;
 };
+
+function txPayerId(t: Tx): string {
+  if (t.payerId && typeof t.payerId === 'object') return t.payerId._id;
+  if (typeof t.payerId === 'string') return t.payerId;
+  return t.userId?._id || '';
+}
 
 export default function TransactionsPage() {
   const formId = useId();
@@ -58,6 +68,8 @@ export default function TransactionsPage() {
 
   const { data: usersData } = useSWR(isAdmin ? ['users-list'] : null, () => api.listUsers());
   const users = (usersData?.users as Array<{ _id: string; name?: string; email?: string }>) || [];
+  const { data: lookupData } = useSWR(['users-lookup'], () => api.lookupUsers());
+  const allUsers = lookupData?.users ?? [];
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Tx | null>(null);
@@ -73,6 +85,7 @@ export default function TransactionsPage() {
     cardLast4: string;
     cardLabel: string;
     billingCycle: BillingCycle;
+    payerId: string;
   }>({
     date: '',
     amount: 0,
@@ -82,6 +95,7 @@ export default function TransactionsPage() {
     cardLast4: '',
     cardLabel: '',
     billingCycle: 'monthly',
+    payerId: '',
   });
 
   const { data: hintsData } = useSWR(['tx-card-hints'], api.transactionCardHints);
@@ -98,6 +112,7 @@ export default function TransactionsPage() {
         cardLast4: editing.cardLast4 || '',
         cardLabel: editing.cardLabel || '',
         billingCycle: editing.billingCycle || 'monthly',
+        payerId: txPayerId(editing),
       });
     }
   }, [editing]);
@@ -113,6 +128,7 @@ export default function TransactionsPage() {
       cardLast4: '',
       cardLabel: '',
       billingCycle: 'monthly',
+      payerId: user?.id || '',
     });
     setError('');
     setOpen(true);
@@ -130,13 +146,14 @@ export default function TransactionsPage() {
       cardLast4: (searchParams.get('last4') || '').replace(/\D/g, '').slice(0, 4),
       cardLabel: searchParams.get('label') || '',
       billingCycle: searchParams.get('cycle') === 'one_time' ? 'one_time' : 'monthly',
+      payerId: user?.id || '',
     });
     setError('');
     setOpen(true);
     const next = new URLSearchParams(searchParams);
     ['renew', 'last4', 'description', 'amount', 'cycle', 'label'].forEach((k) => next.delete(k));
     setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, user?.id]);
 
   const save = async () => {
     if (!form.date) {
@@ -149,6 +166,10 @@ export default function TransactionsPage() {
     }
     if (!form.payMethod) {
       notify.error('Pay method is required');
+      return;
+    }
+    if (!form.payerId) {
+      notify.error('Payer is required');
       return;
     }
     if (form.payMethod === 'card' && !/^\d{4}$/.test(form.cardLast4)) {
@@ -167,6 +188,7 @@ export default function TransactionsPage() {
         cardLast4: form.payMethod === 'card' ? form.cardLast4 : null,
         cardLabel: form.payMethod === 'card' ? form.cardLabel || null : null,
         billingCycle: form.billingCycle,
+        payerId: form.payerId,
         ...(editing ? { userId: editing.userId?._id } : {}),
       };
       if (editing) {
@@ -213,16 +235,8 @@ export default function TransactionsPage() {
 
   const transactions = (data?.transactions as Tx[]) || [];
   const pagination = data?.pagination;
-  const userTotals = (data?.userTotals as Array<{
-    userId: string;
-    name: string;
-    email?: string | null;
-    image?: string | null;
-    income: number;
-    outcome: number;
-    net: number;
-    count: number;
-  }>) || [];
+  const payerTotals = data?.payerTotals ?? [];
+  const totalOutcome = data?.totalOutcome ?? payerTotals.reduce((s, p) => s + p.outcome, 0);
 
   const formatMoney = (n: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -298,17 +312,17 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {userTotals.length > 0 && (
+      {payerTotals.length > 0 && (
         <div className="panel overflow-hidden">
           <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-            <h2 className="card-title uppercase tracking-wide">Per-user totals</h2>
-            <p className="hint">Income = positive amounts · Outcome = absolute value of negative amounts. Respects the filters above.</p>
+            <h2 className="card-title uppercase tracking-wide">Per-payer totals</h2>
+            <p className="hint">Outcome and net are grouped by who paid. Income stays on the payer of each row. Respects the filters above.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="table-head">
                 <tr>
-                  <th className="px-4 py-2.5 text-left">User</th>
+                  <th className="px-4 py-2.5 text-left">Payer</th>
                   <th className="px-4 py-2.5 text-right">Income</th>
                   <th className="px-4 py-2.5 text-right">Outcome</th>
                   <th className="px-4 py-2.5 text-right">Net</th>
@@ -316,47 +330,45 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {userTotals.map((u) => (
-                  <tr key={u.userId} className="table-row">
+                {payerTotals.map((p) => (
+                  <tr key={p.payerId} className="table-row">
                     <td className="px-4 py-2.5">
-                      <NameWithAvatar name={u.name || u.email} imageUrl={u.image} />
+                      <NameWithAvatar name={p.name || p.email} imageUrl={p.image} />
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
-                      {formatMoney(u.income)}
+                      {formatMoney(p.income)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400">
-                      {formatMoney(u.outcome)}
+                      {formatMoney(p.outcome)}
                     </td>
                     <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${
-                      u.net >= 0
+                      p.net >= 0
                         ? 'text-emerald-700 dark:text-emerald-300'
                         : 'text-red-700 dark:text-red-300'
                     }`}>
-                      {formatMoney(u.net)}
+                      {formatMoney(p.net)}
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-muted">{u.count}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-muted">{p.count}</td>
                   </tr>
                 ))}
               </tbody>
-              {userTotals.length > 1 && (
-                <tfoot>
-                  <tr className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/50 font-medium">
-                    <td className="px-4 py-2.5">Total</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
-                      {formatMoney(userTotals.reduce((s, u) => s + u.income, 0))}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400">
-                      {formatMoney(userTotals.reduce((s, u) => s + u.outcome, 0))}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">
-                      {formatMoney(userTotals.reduce((s, u) => s + u.net, 0))}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-muted">
-                      {userTotals.reduce((s, u) => s + u.count, 0)}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
+              <tfoot>
+                <tr className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/50 font-medium">
+                  <td className="px-4 py-2.5">Total outcome</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-muted">
+                    {formatMoney(payerTotals.reduce((s, p) => s + p.income, 0))}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400">
+                    {formatMoney(totalOutcome)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">
+                    {formatMoney(payerTotals.reduce((s, p) => s + p.net, 0))}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-muted">
+                    {payerTotals.reduce((s, p) => s + p.count, 0)}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -396,13 +408,14 @@ export default function TransactionsPage() {
               <th className="px-4 py-2.5">Pay method</th>
               <th className="px-4 py-2.5">Status</th>
               <th className="px-4 py-2.5">Owner</th>
+              <th className="px-4 py-2.5">Payer</th>
               <th className="px-4 py-2.5 w-48">Actions</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted">
+                <td colSpan={8} className="px-4 py-8 text-center text-muted">
                   <div className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3"></div>
                     Loading transactions...
@@ -411,7 +424,7 @@ export default function TransactionsPage() {
               </tr>
             ) : transactions.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-muted">No transactions found.</td>
+                <td colSpan={8} className="px-3 py-6 text-center text-muted">No transactions found.</td>
               </tr>
             ) : (
               transactions.map((t) => {
@@ -435,6 +448,7 @@ export default function TransactionsPage() {
                     <td className="px-4 py-2.5">{formatPayMethod(t)}</td>
                     <td className="px-4 py-2.5 capitalize">{t.status}</td>
                     <td className="px-4 py-2.5"><NameWithAvatar name={t.ownerName || t.userId?.name} imageUrl={t.ownerImage || t.userId?.image} /></td>
+                    <td className="px-4 py-2.5"><NameWithAvatar name={t.payerName || (typeof t.payerId === 'object' ? t.payerId?.name : undefined) || t.ownerName} imageUrl={t.payerImage || (typeof t.payerId === 'object' ? t.payerId?.image : undefined) || t.ownerImage} /></td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1 flex-wrap">
                         <button
@@ -595,6 +609,23 @@ export default function TransactionsPage() {
             </select>
           </div>
           <div>
+            <label htmlFor={`${formId}-payer`} className="form-label mb-1 block">Payer <span className="text-red-500">*</span></label>
+            <select
+              id={`${formId}-payer`}
+              className="select focus-ring w-full"
+              value={form.payerId}
+              onChange={(e) => setForm({ ...form, payerId: e.target.value })}
+            >
+              <option value="">Select payer</option>
+              {allUsers.map((u) => (
+                <option key={u._id} value={u._id}>
+                  {u.name || u.email}
+                  {u.role === 'admin' ? ' (admin)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label htmlFor={`${formId}-billing-cycle`} className="form-label mb-1 block">Billing</label>
             <select
               id={`${formId}-billing-cycle`}
@@ -657,6 +688,7 @@ export default function TransactionsPage() {
                 !form.date ||
                 !form.amount ||
                 !form.payMethod ||
+                !form.payerId ||
                 (form.payMethod === 'card' && !/^\d{4}$/.test(form.cardLast4)) ||
                 saving
               }
