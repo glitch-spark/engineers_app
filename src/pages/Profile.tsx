@@ -641,7 +641,7 @@ function FreeLlmSettingsCard() {
 
         <div>
           <label className="form-label">Model</label>
-          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {models.map((m: FreeLlmModelPreset) => {
               const selected = modelId === m.id;
               const active = selected && connected;
