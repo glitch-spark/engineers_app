@@ -572,7 +572,7 @@ function FreeLlmSettingsCard() {
         });
         applyFreeLlmFields(saveRes);
       }
-      setTestStatus('Contacting NVIDIA — this can take up to 45 seconds…');
+      setTestStatus('Contacting NVIDIA — this can take a few minutes…');
       const res = await api.testFreeLlm();
       applyFreeLlmFields(res);
       setVerified(true);

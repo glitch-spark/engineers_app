@@ -164,7 +164,7 @@ export const testFreeLlm = () =>
     freeLlmKeyVerified: boolean;
     freeLlmApiKeySet: boolean;
     freeLlmApiKeyHint: string;
-  }>('/profile/free-llm-test', {}, { timeoutMs: 60_000 });
+  }>('/profile/free-llm-test', {}, { timeoutMs: 330_000 });
 
 export type SlackStatus = {
   slackConnected: boolean;
