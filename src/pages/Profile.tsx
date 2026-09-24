@@ -844,7 +844,8 @@ function SlackAlertsCard() {
         <div>
           <h3 className="card-header mb-0">Slack interview digest</h3>
           <p className="text-muted">
-            A private daily DM of your interviews for that day. Only you see your schedule.
+            You'll get a DM when you add or reschedule an interview, plus a daily digest
+            of that day's schedule. Only you see it.
           </p>
         </div>
         {connected ? (
