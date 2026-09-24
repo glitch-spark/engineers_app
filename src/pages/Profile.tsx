@@ -940,8 +940,8 @@ function SlackAlertsCard() {
           </div>
 
           <p className="text-xs text-muted">
-            Pick one standard GMT offset (UTC−12 through UTC+14). Interviews are date-only, so
-            you get one daily summary — not a 30-minute reminder.
+            Offsets include daylight time for that city (UTC−12 through UTC+14). Interviews are
+            date-only, so you get one daily summary — not a 30-minute reminder.
           </p>
 
           <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>

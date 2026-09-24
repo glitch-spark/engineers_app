@@ -1,42 +1,69 @@
-/** One IANA zone per UTC hour from −12 to +14 (27 options). Keep in sync with
- * engineers_backend/app/slack_timezones.py
+/** One IANA zone per UTC hour from −12 to +14 (27 options). Keep ids in sync with
+ * engineers_backend/app/slack_timezones.py. GMT labels follow the current offset.
  */
 export type SlackTimezoneOption = { value: string; label: string };
 
-export const SLACK_DIGEST_TIMEZONES: SlackTimezoneOption[] = [
-  { value: 'Etc/GMT+12', label: 'UTC−12:00' },
-  { value: 'Pacific/Pago_Pago', label: 'Pacific/Pago Pago (GMT−11:00)' },
-  { value: 'Pacific/Honolulu', label: 'Pacific/Honolulu (GMT−10:00)' },
-  { value: 'America/Anchorage', label: 'America/Anchorage (GMT−9:00)' },
-  { value: 'America/Los_Angeles', label: 'America/Los Angeles (GMT−8:00)' },
-  { value: 'America/Denver', label: 'America/Denver (GMT−7:00)' },
-  { value: 'America/Chicago', label: 'America/Chicago (GMT−6:00)' },
-  { value: 'America/New_York', label: 'America/New York (GMT−5:00)' },
-  { value: 'America/Halifax', label: 'America/Halifax (GMT−4:00)' },
-  { value: 'America/Sao_Paulo', label: 'America/Sao Paulo (GMT−3:00)' },
-  { value: 'America/Noronha', label: 'America/Noronha (GMT−2:00)' },
-  { value: 'Atlantic/Azores', label: 'Atlantic/Azores (GMT−1:00)' },
-  { value: 'UTC', label: 'UTC (GMT+0:00)' },
-  { value: 'Europe/Paris', label: 'Europe/Paris (GMT+1:00)' },
-  { value: 'Europe/Athens', label: 'Europe/Athens (GMT+2:00)' },
-  { value: 'Europe/Moscow', label: 'Europe/Moscow (GMT+3:00)' },
-  { value: 'Asia/Dubai', label: 'Asia/Dubai (GMT+4:00)' },
-  { value: 'Asia/Karachi', label: 'Asia/Karachi (GMT+5:00)' },
-  { value: 'Asia/Dhaka', label: 'Asia/Dhaka (GMT+6:00)' },
-  { value: 'Asia/Bangkok', label: 'Asia/Bangkok (GMT+7:00)' },
-  { value: 'Asia/Hong_Kong', label: 'Asia/Hong Kong (GMT+8:00)' },
-  { value: 'Asia/Tokyo', label: 'Asia/Tokyo (GMT+9:00)' },
-  { value: 'Australia/Brisbane', label: 'Australia/Brisbane (GMT+10:00)' },
-  { value: 'Pacific/Noumea', label: 'Pacific/Noumea (GMT+11:00)' },
-  { value: 'Pacific/Auckland', label: 'Pacific/Auckland (GMT+12:00)' },
-  { value: 'Pacific/Tongatapu', label: 'Pacific/Tongatapu (GMT+13:00)' },
-  { value: 'Pacific/Kiritimati', label: 'Pacific/Kiritimati (GMT+14:00)' },
+const SLACK_DIGEST_ZONE_PLACES: { value: string; place: string }[] = [
+  { value: 'Etc/GMT+12', place: 'UTC' },
+  { value: 'Pacific/Pago_Pago', place: 'Pacific/Pago Pago' },
+  { value: 'Pacific/Honolulu', place: 'Pacific/Honolulu' },
+  { value: 'America/Anchorage', place: 'America/Anchorage' },
+  { value: 'America/Los_Angeles', place: 'America/Los Angeles' },
+  { value: 'America/Denver', place: 'America/Denver' },
+  { value: 'America/Chicago', place: 'America/Chicago' },
+  { value: 'America/New_York', place: 'America/New York' },
+  { value: 'America/Halifax', place: 'America/Halifax' },
+  { value: 'America/Sao_Paulo', place: 'America/Sao Paulo' },
+  { value: 'America/Noronha', place: 'America/Noronha' },
+  { value: 'Atlantic/Azores', place: 'Atlantic/Azores' },
+  { value: 'UTC', place: 'UTC' },
+  { value: 'Europe/Paris', place: 'Europe/Paris' },
+  { value: 'Europe/Athens', place: 'Europe/Athens' },
+  { value: 'Europe/Moscow', place: 'Europe/Moscow' },
+  { value: 'Asia/Dubai', place: 'Asia/Dubai' },
+  { value: 'Asia/Karachi', place: 'Asia/Karachi' },
+  { value: 'Asia/Dhaka', place: 'Asia/Dhaka' },
+  { value: 'Asia/Bangkok', place: 'Asia/Bangkok' },
+  { value: 'Asia/Hong_Kong', place: 'Asia/Hong Kong' },
+  { value: 'Asia/Tokyo', place: 'Asia/Tokyo' },
+  { value: 'Australia/Brisbane', place: 'Australia/Brisbane' },
+  { value: 'Pacific/Noumea', place: 'Pacific/Noumea' },
+  { value: 'Pacific/Auckland', place: 'Pacific/Auckland' },
+  { value: 'Pacific/Tongatapu', place: 'Pacific/Tongatapu' },
+  { value: 'Pacific/Kiritimati', place: 'Pacific/Kiritimati' },
 ];
 
-const ALLOWED = new Set(SLACK_DIGEST_TIMEZONES.map((z) => z.value));
+const ALLOWED = new Set(SLACK_DIGEST_ZONE_PLACES.map((z) => z.value));
 
-export function listTimeZones(): SlackTimezoneOption[] {
-  return SLACK_DIGEST_TIMEZONES;
+/** Live offset, e.g. GMT−4:00. Unicode minus matches the API catalog. */
+export function formatGmtOffset(iana: string, when: Date = new Date()): string {
+  const raw =
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: iana,
+      timeZoneName: 'longOffset',
+      hour: '2-digit',
+    })
+      .formatToParts(when)
+      .find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+0';
+  const match = raw.match(/^GMT([+-])(\d{1,2})(?::(\d{2}))?$/);
+  if (!match) return raw.replace(/-/g, '−');
+  const sign = match[1] === '-' ? '−' : '+';
+  const hours = String(Number(match[2]));
+  const minutes = match[3] ?? '00';
+  return `GMT${sign}${hours}:${minutes}`;
+}
+
+export function timezoneLabel(iana: string, place: string, when: Date = new Date()): string {
+  const gmt = formatGmtOffset(iana, when);
+  if (iana === 'Etc/GMT+12') return gmt.replace('GMT', 'UTC');
+  return `${place} (${gmt})`;
+}
+
+export function listTimeZones(when: Date = new Date()): SlackTimezoneOption[] {
+  return SLACK_DIGEST_ZONE_PLACES.map((z) => ({
+    value: z.value,
+    label: timezoneLabel(z.value, z.place, when),
+  }));
 }
 
 export function normalizeSlackTimezone(value?: string | null): string {
