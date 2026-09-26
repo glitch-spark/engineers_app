@@ -36,6 +36,16 @@ function planOwnerId(plan: DailyPlan): string | undefined {
   return typeof uid === 'string' ? uid : uid._id;
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** `9/25(Fri)` for the plan date, or the next day when `dayOffset` is 1. */
+function planDayLabel(isoDate: string, dayOffset = 0): string {
+  const [year, month, day] = isoDate.slice(0, 10).split('-').map(Number);
+  if (!year || !month || !day) return dayOffset === 0 ? 'Today' : 'Tomorrow';
+  const date = new Date(year, month - 1, day + dayOffset);
+  return `${date.getMonth() + 1}/${date.getDate()}(${WEEKDAYS[date.getDay()]})`;
+}
+
 export default function DailyPlanPanel({
   year,
   weekNumber,
@@ -179,11 +189,11 @@ export default function DailyPlanPanel({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <div className="text-xs font-medium text-muted mb-1">What did you do today?</div>
+                  <div className="text-xs font-medium text-muted mb-1">{planDayLabel(plan.date)}</div>
                   <p className={plan.today ? 'text-body whitespace-pre-wrap' : 'text-faint'}>{plan.today || '—'}</p>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-muted mb-1">What will you do tomorrow?</div>
+                  <div className="text-xs font-medium text-muted mb-1">{planDayLabel(plan.date, 1)}</div>
                   <p className={plan.tomorrow ? 'text-body whitespace-pre-wrap' : 'text-faint'}>{plan.tomorrow || '—'}</p>
                 </div>
               </div>
@@ -212,8 +222,8 @@ export default function DailyPlanPanel({
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit daily plan' : 'New daily plan'}>
-        <div className="space-y-4">
+      <Modal open={open} onClose={() => setOpen(false)} size="lg" title={editing ? 'Edit daily plan' : 'New daily plan'}>
+        <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <div>
             <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-date">Date</label>
@@ -225,25 +235,25 @@ export default function DailyPlanPanel({
               onChange={(e) => setForm({ ...form, date: e.target.value })}
             />
           </div>
-          <div>
-            <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-today">What did you do today?</label>
-            <textarea
-              id="daily-plan-today"
-              className="input w-full text-sm"
-              rows={5}
-              value={form.today}
-              onChange={(e) => setForm({ ...form, today: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-tomorrow">What will you do tomorrow?</label>
-            <textarea
-              id="daily-plan-tomorrow"
-              className="input w-full text-sm"
-              rows={5}
-              value={form.tomorrow}
-              onChange={(e) => setForm({ ...form, tomorrow: e.target.value })}
-            />
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex min-h-0 flex-col">
+              <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-today">{planDayLabel(form.date)}</label>
+              <textarea
+                id="daily-plan-today"
+                className="input min-h-[28rem] w-full flex-1 text-sm"
+                value={form.today}
+                onChange={(e) => setForm({ ...form, today: e.target.value })}
+              />
+            </div>
+            <div className="flex min-h-0 flex-col">
+              <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-tomorrow">{planDayLabel(form.date, 1)}</label>
+              <textarea
+                id="daily-plan-tomorrow"
+                className="input min-h-[28rem] w-full flex-1 text-sm"
+                value={form.tomorrow}
+                onChange={(e) => setForm({ ...form, tomorrow: e.target.value })}
+              />
+            </div>
           </div>
           <div className="flex gap-2 justify-end">
             <button type="button" className="btn" onClick={save} disabled={saving}>
