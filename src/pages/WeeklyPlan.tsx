@@ -1,13 +1,18 @@
 import useSWR from 'swr';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type MutableRefObject } from 'react';
 import Modal from '../components/Modal';
-import { Pencil, Trash2, Calendar, ClipboardCheck, Sparkles } from 'lucide-react';
+import { Pencil, Trash2, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { notify } from '../lib/notify';
-import PageHeader from '../components/PageHeader';
 import NameWithAvatar from '../components/NameWithAvatar';
+import { formatWeekOptionLabel, getWeekInfo } from '../lib/week';
+
+export type WeeklyPlanActions = {
+  openAdd: () => void;
+  runReport: () => void;
+};
 
 type Metric = { key: string; label: string; target: number; actual: number; unit?: 'count' | 'hours' };
 
@@ -36,44 +41,9 @@ type WeeklyPlan = {
   interviewBoard?: InterviewBoardSnap | null;
 };
 
-// ---------- week math ----------
-function getWeekInfo(date: Date) {
-  const year = date.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const days = Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
-  const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-  const dayOfWeek = date.getDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const startDate = new Date(date);
-  startDate.setDate(date.getDate() + mondayOffset);
-  startDate.setHours(0, 0, 0, 0);
-  const endDate = new Date(startDate);
-  endDate.setDate(startDate.getDate() + 6);
-  endDate.setHours(23, 59, 59, 999);
-  return { weekNumber, year, startDate, endDate };
-}
-
 function formatDateRange(startDate: string, endDate: string) {
   const s = new Date(startDate), e = new Date(endDate);
   return `${s.toLocaleDateString()} - ${e.toLocaleDateString()}`;
-}
-
-function getWeekDateRange(year: number, weekNumber: number) {
-  const jan1 = new Date(year, 0, 1);
-  const jan1Day = jan1.getDay();
-  const mondayOffset = jan1Day === 0 ? -6 : 1 - jan1Day;
-  const firstMonday = new Date(year, 0, 1 + mondayOffset);
-  const start = new Date(firstMonday);
-  start.setDate(firstMonday.getDate() + (weekNumber - 1) * 7);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  return { start, end };
-}
-
-function formatWeekOptionLabel(year: number, weekNumber: number) {
-  const { start, end } = getWeekDateRange(year, weekNumber);
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  return `Week ${weekNumber} (${start.toLocaleDateString(undefined, opts)} - ${end.toLocaleDateString(undefined, opts)})`;
 }
 
 function isWeekOver(endDate: string): boolean {
@@ -128,17 +98,32 @@ function withCurrentUserFirst<T>(
   return [...first, ...rest];
 }
 
-export default function WeeklyPlanPage() {
+export default function WeeklyPlanPanel({
+  year,
+  weekNumber,
+  userId,
+  actionsRef,
+  onReportingChange,
+}: {
+  year: string;
+  weekNumber: string;
+  userId: string;
+  actionsRef: MutableRefObject<WeeklyPlanActions | null>;
+  onReportingChange: (reporting: boolean) => void;
+}) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const canEditPlan = (plan: WeeklyPlan) =>
     isAdmin || planOwnerId(plan) === user?.id;
 
-  const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [weekNumber, setWeekNumber] = useState(getWeekInfo(new Date()).weekNumber.toString());
-  const [userId, setUserId] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [filterKey, setFilterKey] = useState(`${year}|${weekNumber}|${userId}`);
+  const filterNow = `${year}|${weekNumber}|${userId}`;
+  if (filterKey !== filterNow) {
+    setFilterKey(filterNow);
+    setCurrentPage(1);
+  }
 
   const { data, mutate, isLoading } = useSWR(
     ['weekly-plans', year, weekNumber, userId, currentPage, pageSize] as const,
@@ -169,9 +154,6 @@ export default function WeeklyPlanPage() {
     }),
   );
 
-  const { data: usersData } = useSWR(['users-lookup'], () => api.lookupUsers());
-  const users = (usersData?.users as Array<{ _id: string; name?: string; email?: string }>) || [];
-
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<WeeklyPlan | null>(null);
   const [saving, setSaving] = useState(false);
@@ -182,6 +164,10 @@ export default function WeeklyPlanPage() {
     selectedDate: '', weekNumber: 0, year: 0, startDate: '', endDate: '',
     content: '', result: '', status: 'planned',
   });
+
+  useEffect(() => {
+    onReportingChange(reporting);
+  }, [reporting, onReportingChange]);
 
   useEffect(() => {
     if (editing) {
@@ -240,6 +226,8 @@ export default function WeeklyPlanPage() {
     }
   };
 
+  actionsRef.current = { openAdd, runReport };
+
   const save = async () => {
     setSaving(true);
     setError('');
@@ -297,12 +285,6 @@ export default function WeeklyPlanPage() {
     [plans, user?.id],
   );
 
-  const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
-  const weekOptions = Array.from({ length: 52 }, (_, i) => i + 1);
-
-  // Only show the stats cards once real numbers exist (after a progress
-  // report populates metrics).
   const hasMetricData = useMemo(
     () => (summary?.totals ?? []).some((t) => t.target > 0 || t.actual > 0),
     [summary],
@@ -310,44 +292,6 @@ export default function WeeklyPlanPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Weekly Plans"
-        action={
-          <div className="flex items-center gap-2">
-            <button type="button" className="btn-outline" onClick={runReport} disabled={reporting} title="Analyze plans in the current filter into progress metrics. Interview counts come from the interview board; next-week interviews are included.">
-              <Sparkles size={16} className="mr-2" /> {reporting ? 'Analyzing...' : 'Run Progress Report'}
-            </button>
-            <button type="button" className="btn" onClick={openAdd}>
-              <Calendar size={16} className="mr-2" /> Add Plan
-            </button>
-          </div>
-        }
-      />
-
-      {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap toolbar">
-        <div className="w-32">
-          <label className="block text-xs text-muted mb-1">Year</label>
-          <select className="select focus-ring w-full text-sm" value={year} onChange={(e) => { setYear(e.target.value); setCurrentPage(1); }}>
-            {yearOptions.map((y) => (<option key={y} value={y}>{y}</option>))}
-          </select>
-        </div>
-        <div className="w-56">
-          <label className="block text-xs text-muted mb-1">Week</label>
-          <select className="select focus-ring w-full text-sm" value={weekNumber} onChange={(e) => { setWeekNumber(e.target.value); setCurrentPage(1); }}>
-            <option value="">All weeks</option>
-            {weekOptions.map((w) => (<option key={w} value={w}>{formatWeekOptionLabel(Number(year), w)}</option>))}
-          </select>
-        </div>
-        <div className="w-56">
-          <label className="block text-xs text-muted mb-1">User</label>
-          <select className="select focus-ring w-full text-sm" value={userId} onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}>
-            <option value="">All users</option>
-            {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
-          </select>
-        </div>
-      </div>
-
       {/* Stats cards — totals for the current filter (year + optional week) */}
       {summary && hasMetricData && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -559,7 +503,7 @@ export default function WeeklyPlanPage() {
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? `Week ${form.weekNumber} plan` : 'New weekly plan'}>
+      <Modal open={open} onClose={() => setOpen(false)} size="lg" title={editing ? `Week ${form.weekNumber} plan` : 'New weekly plan'}>
         <div className="space-y-4">
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
@@ -571,14 +515,16 @@ export default function WeeklyPlanPage() {
             </div>
           )}
 
-          <div>
-            <label className="block text-xs text-muted mb-1">Plan (start of week)</label>
-            <textarea className="input w-full text-sm" rows={5} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
-            <p className="hint mt-1">Write freely — include target numbers (applies, interviews, outreach). Admin reports trace them automatically.</p>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1">Follow-up (end of week)</label>
-            <textarea className="input w-full text-sm" rows={5} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-muted mb-1">Plan (start of week)</label>
+              <textarea className="input w-full text-sm" rows={5} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
+              <p className="hint mt-1">Write freely — include target numbers (applies, interviews, outreach). Admin reports trace them automatically.</p>
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1">Follow-up (end of week)</label>
+              <textarea className="input w-full text-sm" rows={5} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
+            </div>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-body">

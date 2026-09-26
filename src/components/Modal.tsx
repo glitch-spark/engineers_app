@@ -12,7 +12,7 @@ export default function Modal({
   onClose: () => void;
   title: string;
   children: ReactNode;
-  size?: 'default' | 'sm';
+  size?: 'default' | 'sm' | 'lg';
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -80,6 +80,7 @@ export default function Modal({
   if (!open || typeof document === 'undefined') return null;
 
   const compact = size === 'sm';
+  const widthClass = size === 'lg' ? 'max-w-4xl' : compact ? 'max-w-sm' : 'max-w-xl';
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 sm:p-6">
@@ -95,9 +96,7 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`t-modal relative z-[81] flex max-h-[min(90vh,720px)] w-full flex-col overflow-hidden outline-none ${
-          compact ? 'max-w-sm' : 'max-w-xl'
-        } ${entered ? 'is-open' : ''}`}
+        className={`t-modal relative z-[81] flex max-h-[min(90vh,720px)] w-full flex-col overflow-hidden outline-none ${widthClass} ${entered ? 'is-open' : ''}`}
       >
         <div className={`flex shrink-0 items-start justify-between gap-3 border-b border-zinc-200/80 dark:border-zinc-800 ${
           compact ? 'px-4 py-3' : 'px-5 py-4'

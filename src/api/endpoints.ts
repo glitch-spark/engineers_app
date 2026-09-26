@@ -379,6 +379,27 @@ export interface WeeklyUserRollup {
 export const getWeeklyUserRollup = (params?: { year?: number; weekNumber?: number; userId?: string }) =>
   apiFetch<{ users: WeeklyUserRollup[] }>(`/weekly-plans/user-rollup${qs(params)}`);
 
+// ---------- daily plans ----------
+
+export const listDailyPlans = (params?: {
+  page?: number;
+  limit?: number;
+  year?: number;
+  weekNumber?: number;
+  userId?: string;
+}) =>
+  apiFetch<{ plans: Record<string, unknown>[]; pagination: Pagination }>(
+    `/daily-plans${qs(params)}`
+  );
+
+export const createDailyPlan = (body: { date: string; today?: string; tomorrow?: string }) =>
+  postJSON<Record<string, unknown>>('/daily-plans', body);
+
+export const updateDailyPlan = (id: string, body: { date?: string; today?: string; tomorrow?: string }) =>
+  putJSON<Record<string, unknown>>(`/daily-plans/${id}`, body);
+
+export const deleteDailyPlan = (id: string) => del<{ message: string }>(`/daily-plans/${id}`);
+
 export const askResumeJobScreening = (jobId: string, questions: string[]) =>
   postJSON<{ pairs: { question: string; answer: string }[] }>(`/resume/jobs/${jobId}/ask`, { questions });
 
