@@ -259,6 +259,7 @@ export default function InterviewFocusPage() {
             mode={composer.mode}
             entry={editingEntry}
             defaultStage={suggestNextStage(history)}
+            currentTip={normalizeInterviewStage(history[history.length - 1]?.stage)}
             canDelete={history.length > 1}
             onCancel={() => setComposer(null)}
             onSave={async (body) => {
@@ -463,6 +464,7 @@ function StageComposer({
   mode,
   entry,
   defaultStage,
+  currentTip,
   canDelete,
   onCancel,
   onSave,
@@ -471,6 +473,7 @@ function StageComposer({
   mode: 'add' | 'edit';
   entry?: InterviewStageEntry;
   defaultStage: string;
+  currentTip?: string;
   canDelete: boolean;
   onCancel: () => void;
   onSave: (body: StageFormBody) => Promise<void>;
@@ -492,7 +495,8 @@ function StageComposer({
   }, []);
 
   const resolved = resolveInterviewStage(boardStage, techSubStage);
-  const canSave = !!resolved && !!date && !busy;
+  const sameAsTip = mode === 'add' && !!currentTip && resolved === currentTip;
+  const canSave = !!resolved && !!date && !busy && !sameAsTip;
 
   const run = async (fn: () => Promise<void>, failMsg: string) => {
     setBusy(true);
@@ -585,11 +589,16 @@ function StageComposer({
             </button>
           )}
         </div>
-        <div className="flex gap-2">
-          <button type="button" className="btn-outline" onClick={onCancel} disabled={busy}>Cancel</button>
-          <button type="submit" className="btn" disabled={!canSave}>
-            {busy ? 'Saving…' : mode === 'add' ? 'Add stage' : 'Save'}
-          </button>
+        <div className="flex flex-col items-end gap-1.5">
+          {sameAsTip && (
+            <p className="text-xs text-muted">Pick a different stage — this round is already the latest.</p>
+          )}
+          <div className="flex gap-2">
+            <button type="button" className="btn-outline" onClick={onCancel} disabled={busy}>Cancel</button>
+            <button type="submit" className="btn" disabled={!canSave}>
+              {busy ? 'Saving…' : mode === 'add' ? 'Add stage' : 'Save'}
+            </button>
+          </div>
         </div>
       </div>
     </form>
