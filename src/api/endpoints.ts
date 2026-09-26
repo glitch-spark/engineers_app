@@ -509,6 +509,39 @@ export const updateInterview = (id: string, body: Record<string, unknown>) =>
 
 export const deleteInterview = (id: string) => del<{ ok: boolean }>(`/interviews/${id}`);
 
+/** One round of an interview; each round owns its own script (transcript) and note. */
+export interface InterviewStageEntry {
+  id: string;
+  stage: string;
+  at?: string;
+  source?: string;
+  scheduledAt?: string | null;
+  status?: string | null;
+  transcript?: string;
+  note?: string;
+}
+
+export interface InterviewStageInput {
+  stage?: string;
+  /** ISO datetime or YYYY-MM-DD. */
+  scheduledAt?: string;
+  status?: string;
+  transcript?: string;
+  note?: string;
+}
+
+export const addInterviewStage = (id: string, body: InterviewStageInput & { stage: string }) =>
+  postJSON<Record<string, unknown>>(`/interviews/${id}/stages`, body);
+
+export const updateInterviewStage = (id: string, stageId: string, body: InterviewStageInput) =>
+  apiFetch<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+
+export const deleteInterviewStage = (id: string, stageId: string) =>
+  del<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}`);
+
 // ---------- dashboard metrics ----------
 
 export interface DashboardKpiTotals {
@@ -876,11 +909,11 @@ export interface InterviewQuestion {
   createdAt?: string;
 }
 
-export const listInterviewQuestions = (id: string) =>
-  apiFetch<{ questions: InterviewQuestion[] }>(`/interviews/${id}/questions`);
+export const listInterviewQuestions = (id: string, stageId?: string) =>
+  apiFetch<{ questions: InterviewQuestion[] }>(`/interviews/${id}/questions${qs({ stageId })}`);
 
-export const reextractInterview = (id: string) =>
-  postJSON<{ ok: boolean; message: string }>(`/interviews/${id}/extract`, {});
+export const reextractInterview = (id: string, stageId?: string) =>
+  postJSON<{ ok: boolean; message: string }>(`/interviews/${id}/extract${qs({ stageId })}`, {});
 
 export interface AnalyzeChatRequest {
   accountId?: string;

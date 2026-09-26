@@ -285,7 +285,7 @@ function UpcomingInterviewsCard({ upcoming, loading }: {
           {upcoming.map((iv) => (
             <li key={iv.interviewId} className="py-2 flex items-center justify-between gap-3 text-sm">
               <div className="min-w-0">
-                <Link to={`/interviews/${iv.interviewId}`} className="font-medium text-strong hover:underline truncate">
+                <Link to={`/interview/${iv.interviewId}`} className="font-medium text-strong hover:underline truncate">
                   {iv.company || 'Interview'}
                 </Link>
                 {iv.stage && <span className="ml-2 text-xs text-muted">{iv.stage}</span>}

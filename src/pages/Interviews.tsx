@@ -18,7 +18,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, FileText } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, FileText, Maximize2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
@@ -27,6 +27,7 @@ import {
   FORM_STATUSES,
   InterviewFormFields,
   InterviewSidePanel,
+  openInterviewFullScreen,
   StageMovementTrail,
   blankInterviewForm,
   buildSaveBody,
@@ -740,7 +741,7 @@ export default function InterviewsPage() {
   const openDelete = (iv: Interview) => { setActive(iv); setMode('delete'); };
 
   const openTranscript = (iv: Interview) => {
-    navigate(`/interviews/${iv._id}`);
+    navigate(`/interview/${iv._id}`);
   };
 
   // Honor `?edit=:id` so the detail page can hand off to the edit modal.
@@ -1777,6 +1778,16 @@ function InterviewBoardCard({
       <div className="absolute top-2 right-2 flex items-center gap-0.5">
         <button
           type="button"
+          onClick={(e) => { stop(e); openInterviewFullScreen(interview._id); }}
+          onPointerDown={stop}
+          className="p-1 rounded-[6px] text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
+          title="Open full screen in a new tab"
+          aria-label="Open full screen"
+        >
+          <Maximize2 size={14} aria-hidden />
+        </button>
+        <button
+          type="button"
           onClick={(e) => { stop(e); onOpenTranscript(); }}
           onPointerDown={stop}
           className="p-1 rounded-[6px] text-zinc-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:text-sky-400 dark:hover:bg-sky-950/50"
@@ -1798,7 +1809,7 @@ function InterviewBoardCard({
           </button>
         )}
       </div>
-      <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate pr-14 pl-1" title={profileName}>
+      <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate pr-20 pl-1" title={profileName}>
         {profileName}
       </div>
       <div className="mt-1 text-zinc-700 dark:text-zinc-300 truncate pl-1" title={companyName}>

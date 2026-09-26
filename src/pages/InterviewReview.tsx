@@ -223,7 +223,7 @@ export default function InterviewReviewPage() {
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <Link to={`/interviews/${id}`} className="btn" title="Back to Interview">
+          <Link to={`/interview/${id}`} className="btn" title="Back to Interview">
             <ArrowLeft size={16} />
           </Link>
           <div>
