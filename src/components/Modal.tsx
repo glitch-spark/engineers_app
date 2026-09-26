@@ -41,6 +41,9 @@ export default function Modal({
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // An open combobox inside the dialog closes its own listbox first.
+        const target = e.target as HTMLElement | null;
+        if (target?.closest?.('[role="combobox"][aria-expanded="true"]')) return;
         e.stopPropagation();
         onCloseRef.current();
         return;

@@ -24,7 +24,10 @@ import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
 import PageHeader from '../components/PageHeader';
 import {
+  CALLER_METHOD_OPTIONS,
+  CallerBadge,
   FORM_STATUSES,
+  formatCallerTime,
   InterviewFormFields,
   InterviewSidePanel,
   openInterviewFullScreen,
@@ -1451,6 +1454,31 @@ export default function InterviewsPage() {
                   <div className="text-muted text-xs">Scheduled date</div>
                   <div>{form.date || '—'}</div>
                 </div>
+                {active?.caller?.enabled && (
+                  <>
+                    <div>
+                      <div className="text-muted text-xs">Caller</div>
+                      <div className="font-medium">{active.caller.callerName || 'TBD'}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted text-xs">Call time</div>
+                      <div className="tabular-nums">{formatCallerTime(active.caller)}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted text-xs">Method</div>
+                      <div className="break-words">
+                        {CALLER_METHOD_OPTIONS.find((m) => m.value === active.caller?.method)?.label || 'TBD'}
+                        {active.caller.methodValue ? ` — ${active.caller.methodValue}` : ''}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted text-xs">Coworkers</div>
+                      <div>
+                        {(active.caller.coworkers ?? []).map((c) => c.name || c.email).join(', ') || '—'}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div>
                 <div className="text-muted text-xs mb-1">Interview Transcript</div>
@@ -1697,8 +1725,9 @@ function InterviewBoardCardPreview({
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
       <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate pl-1" title={profileName}>{profileName}</div>
       <div className="mt-1 text-zinc-700 dark:text-zinc-300 truncate pl-1" title={companyName}>{companyName}</div>
-      <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
         {formatScheduledDate(interview.scheduledAt)}
+        <CallerBadge interview={interview} />
       </div>
       <div className="mt-1.5 pl-1">
         {interview.status ? (
@@ -1815,8 +1844,9 @@ function InterviewBoardCard({
       <div className="mt-1 text-zinc-700 dark:text-zinc-300 truncate pl-1" title={companyName}>
         {companyName}
       </div>
-      <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
         {formatScheduledDate(interview.scheduledAt)}
+        <CallerBadge interview={interview} />
       </div>
       <div className="mt-1.5 pl-1">
         {interview.status ? (
