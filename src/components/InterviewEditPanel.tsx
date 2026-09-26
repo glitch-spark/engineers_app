@@ -1,8 +1,14 @@
-import type { Dispatch, SetStateAction } from 'react';
-import { FileText, Maximize2, X } from 'lucide-react';
+import { useMemo, type Dispatch, type SetStateAction } from 'react';
+import useSWR from 'swr';
+import { FileText, Maximize2, PhoneCall, X } from 'lucide-react';
 import Select from './Select';
+import Switch from './Switch';
+import MultiSelect from './MultiSelect';
 import { notify } from '../lib/notify';
+import * as api from '../api/endpoints';
 import type { InterviewStageEntry } from '../api/endpoints';
+import { useAuth } from '../auth/useAuth';
+import { listTimeZones, normalizeSlackTimezone } from '../lib/slackDigestPrefs';
 import {
   BOARD_FORM_STAGES,
   TECH_SUB_STAGES,
@@ -18,6 +24,26 @@ import {
 
 export type AccountRef = { _id: string; name?: string; email?: string; country?: string | null; region?: string | null };
 export type CreatorRef = { _id: string; name?: string; email?: string };
+
+export type CallerMethod = 'video' | 'phone_hushed' | 'phone_slynumber';
+
+export type InterviewCaller = {
+  enabled: boolean;
+  callerName?: string;
+  /** Exact start (UTC ISO); null while the time is TBD. */
+  startsAt?: string | null;
+  timezone?: string | null;
+  method?: CallerMethod | null;
+  methodValue?: string;
+  coworkerIds?: string[];
+  coworkers?: { _id: string; name?: string | null; email?: string | null }[];
+};
+
+export const CALLER_METHOD_OPTIONS: { value: CallerMethod; label: string }[] = [
+  { value: 'video', label: 'Video meeting link' },
+  { value: 'phone_hushed', label: 'Phone (Hushed)' },
+  { value: 'phone_slynumber', label: 'Phone (Slynumber)' },
+];
 
 export type Interview = {
   _id: string;
@@ -35,6 +61,7 @@ export type Interview = {
   transcript?: string;
   note?: string;
   stageHistory?: InterviewStageEntry[];
+  caller?: InterviewCaller | null;
   ownerName?: string | null;
   ownerEmail?: string | null;
   createdAt?: string;
@@ -57,6 +84,16 @@ export type InterviewFormState = {
   jobUrl: string;
   transcript: string;
   note: string;
+  callerEnabled: boolean;
+  /** True when the saved interview already had caller mode on (so turning it off is sent). */
+  callerSaved: boolean;
+  callerName: string;
+  /** "HH:MM" local to `callerTimezone`; empty means TBD. */
+  callerTime: string;
+  callerTimezone: string;
+  callerMethod: CallerMethod | '';
+  callerMethodValue: string;
+  callerCoworkerIds: string[];
 };
 
 export type SelectOption = { value: string; label: string };
@@ -92,6 +129,95 @@ export function blankInterviewForm(): InterviewFormState {
     jobUrl: '',
     transcript: '',
     note: '',
+    ...blankCallerFields(),
+  };
+}
+
+function browserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+}
+
+function blankCallerFields(): Pick<
+  InterviewFormState,
+  | 'callerEnabled'
+  | 'callerSaved'
+  | 'callerName'
+  | 'callerTime'
+  | 'callerTimezone'
+  | 'callerMethod'
+  | 'callerMethodValue'
+  | 'callerCoworkerIds'
+> {
+  return {
+    callerEnabled: false,
+    callerSaved: false,
+    callerName: 'TBD',
+    callerTime: '',
+    callerTimezone: normalizeSlackTimezone(browserTimezone()),
+    callerMethod: '',
+    callerMethodValue: '',
+    callerCoworkerIds: [],
+  };
+}
+
+/** "HH:MM" wall-clock time of `iso` in `timeZone`. */
+export function timeInZone(iso: string, timeZone: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const hh = parts.find((p) => p.type === 'hour')?.value ?? '00';
+  const mm = parts.find((p) => p.type === 'minute')?.value ?? '00';
+  return `${hh}:${mm}`;
+}
+
+/** "10:30 AM EDT" for a caller start in its own timezone. */
+export function formatCallerTime(caller?: InterviewCaller | null): string {
+  if (!caller?.enabled || !caller.startsAt) return 'Time TBD';
+  const d = new Date(caller.startsAt);
+  if (isNaN(d.getTime())) return 'Time TBD';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: normalizeSlackTimezone(caller.timezone),
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(d);
+}
+
+function callerToForm(caller?: InterviewCaller | null) {
+  if (!caller) return blankCallerFields();
+  const tz = normalizeSlackTimezone(caller.timezone);
+  return {
+    callerEnabled: !!caller.enabled,
+    callerSaved: !!caller.enabled,
+    callerName: caller.callerName || 'TBD',
+    callerTime: caller.startsAt ? timeInZone(caller.startsAt, tz) : '',
+    callerTimezone: tz,
+    callerMethod: caller.method || '',
+    callerMethodValue: caller.methodValue || '',
+    callerCoworkerIds: caller.coworkerIds || [],
+  } satisfies ReturnType<typeof blankCallerFields>;
+}
+
+function callerPayload(f: InterviewFormState): Record<string, unknown> | undefined {
+  if (!f.callerEnabled) return f.callerSaved ? { enabled: false } : undefined;
+  return {
+    enabled: true,
+    callerName: f.callerName.trim() || 'TBD',
+    date: f.date,
+    time: f.callerTime,
+    timezone: f.callerTimezone,
+    method: f.callerMethod || null,
+    methodValue: f.callerMethodValue.trim(),
+    coworkerIds: f.callerCoworkerIds,
   };
 }
 
@@ -173,6 +299,7 @@ export function interviewToForm(iv: Interview): InterviewFormState {
     jobUrl: iv.jobUrl || '',
     transcript: tip ? tip.transcript || '' : iv.transcript || '',
     note: tip ? tip.note || '' : iv.note || '',
+    ...callerToForm(iv.caller),
   };
 }
 
@@ -220,7 +347,9 @@ export function buildSaveBody(f: InterviewFormState): Record<string, unknown> {
   const resolvedStage = resolveInterviewStage(f.stage, f.techSubStage);
   const { scheduledAt, endsAt } = schedulePayload(f.date, f.startTime, f.endTime);
   const history = withCurrentStageInHistory(f.stageHistory, resolvedStage, f.date);
+  const caller = callerPayload(f);
   return {
+    ...(caller ? { caller } : {}),
     accountId: f.accountId,
     scheduledAt,
     endsAt,
@@ -253,6 +382,22 @@ export function defaultInterviewFormOptions() {
       ...FORM_STATUSES,
     ] as SelectOption[],
   };
+}
+
+export function CallerBadge({ interview }: { interview: Interview }) {
+  const caller = interview.caller;
+  if (!caller?.enabled) return null;
+  const names = (caller.coworkers ?? []).map((c) => c.name || c.email).filter(Boolean);
+  const title = names.length ? `Caller mode · with ${names.join(', ')}` : 'Caller mode';
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-[6px] border border-accent-600/30 bg-accent-600/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-700 dark:text-accent-300 tabular-nums"
+      title={title}
+    >
+      <PhoneCall size={10} aria-hidden />
+      <span>Caller · {formatCallerTime(caller)}</span>
+    </span>
+  );
 }
 
 export function StageMovementTrail({ interview }: { interview: Interview }) {
@@ -308,6 +453,151 @@ export function TranscriptUploadButton({
         }}
       />
     </label>
+  );
+}
+
+const METHOD_VALUE_PLACEHOLDER: Record<CallerMethod | '', string> = {
+  '': 'Meeting link or phone number',
+  video: 'https://meet.google.com/…',
+  phone_hushed: '+1 555 000 0000',
+  phone_slynumber: '+1 555 000 0000',
+};
+
+function CallerFields({
+  form,
+  setForm,
+  disabled,
+}: {
+  form: InterviewFormState;
+  setForm: Dispatch<SetStateAction<InterviewFormState>>;
+  disabled?: boolean;
+}) {
+  const { user } = useAuth();
+  const { data: usersData } = useSWR(form.callerEnabled ? ['users-lookup'] : null, () => api.lookupUsers());
+  const { data: slack } = useSWR(disabled ? null : 'profile-slack', () => api.getSlackStatus());
+  const coworkerOptions = useMemo(
+    () =>
+      (usersData?.users ?? [])
+        .filter((u) => u._id !== user?.id)
+        .map((u) => ({
+          value: u._id,
+          label: u.name || u.email || 'Unnamed user',
+          hint: u.name && u.email ? u.email : undefined,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [usersData, user?.id],
+  );
+  const zoneOptions = useMemo(() => listTimeZones(), []);
+  const set = <K extends keyof InterviewFormState>(key: K, value: InterviewFormState[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  return (
+    <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+      <Switch
+        id="interview-caller-toggle"
+        label="Caller"
+        description="Ask a coworker to join this call. Posts to the private caller channel on Slack."
+        checked={form.callerEnabled}
+        disabled={disabled}
+        onChange={(on) =>
+          setForm((prev) => ({
+            ...prev,
+            callerEnabled: on,
+            ...(on && !prev.callerSaved && slack?.slackTimezone
+              ? { callerTimezone: normalizeSlackTimezone(slack.slackTimezone) }
+              : {}),
+          }))
+        }
+      />
+
+      {form.callerEnabled && (
+        <div className="mt-3 space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          <div>
+            <label htmlFor="caller-name" className="block text-sm font-medium mb-1">Caller name</label>
+            <input
+              id="caller-name"
+              className="input"
+              type="text"
+              value={form.callerName}
+              disabled={disabled}
+              onChange={(e) => set('callerName', e.target.value)}
+              placeholder="TBD"
+            />
+          </div>
+
+          <div className="grid grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)] gap-3">
+            <div>
+              <label htmlFor="caller-time" className="block text-sm font-medium mb-1">Time</label>
+              <input
+                id="caller-time"
+                className="input tabular-nums"
+                type="time"
+                value={form.callerTime}
+                disabled={disabled}
+                aria-describedby="caller-time-hint"
+                onChange={(e) => set('callerTime', e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="caller-timezone" className="block text-sm font-medium mb-1">Time zone</label>
+              <Select
+                id="caller-timezone"
+                value={form.callerTimezone}
+                onChange={(v) => set('callerTimezone', v)}
+                options={zoneOptions}
+                disabled={disabled}
+              />
+            </div>
+          </div>
+          <p id="caller-time-hint" className="-mt-2 text-xs text-muted">
+            Uses the scheduled date above. Leave the time empty to show it as TBD.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="caller-method" className="block text-sm font-medium mb-1">Method</label>
+              <Select
+                id="caller-method"
+                value={form.callerMethod}
+                onChange={(v) => set('callerMethod', v as CallerMethod | '')}
+                options={[{ value: '', label: 'TBD' }, ...CALLER_METHOD_OPTIONS]}
+                disabled={disabled}
+              />
+            </div>
+            <div>
+              <label htmlFor="caller-method-value" className="block text-sm font-medium mb-1">
+                {form.callerMethod === 'video' ? 'Meeting link' : form.callerMethod ? 'Phone number' : 'Link or number'}
+              </label>
+              <input
+                id="caller-method-value"
+                className="input"
+                type={form.callerMethod === 'video' ? 'url' : form.callerMethod ? 'tel' : 'text'}
+                value={form.callerMethodValue}
+                disabled={disabled}
+                onChange={(e) => set('callerMethodValue', e.target.value)}
+                placeholder={METHOD_VALUE_PLACEHOLDER[form.callerMethod]}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="caller-coworkers" className="block text-sm font-medium mb-1">Coworkers</label>
+            <MultiSelect
+              id="caller-coworkers"
+              value={form.callerCoworkerIds}
+              onChange={(ids) => set('callerCoworkerIds', ids)}
+              options={coworkerOptions}
+              placeholder="Search teammates…"
+              emptyText={usersData ? 'No teammates match' : 'Loading teammates…'}
+              disabled={disabled}
+            />
+            <p className="mt-1 text-xs text-muted">
+              They&apos;ll see this call in their daily Slack digest.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -461,6 +751,8 @@ export function InterviewFormFields({
           </div>
         )}
       </div>
+
+      <CallerFields form={form} setForm={setForm} disabled={disabled} />
 
       {(form.stageHistory.length > 0 || !disabled) && (
         <div>
