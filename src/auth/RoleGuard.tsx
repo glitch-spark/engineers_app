@@ -12,6 +12,7 @@ const STAFF_ALLOWED = [
   '/pipeline',
   '/integrations',
   '/interviews',
+  '/interview',
   '/resume',
   '/interview-prep',
   '/preferences',

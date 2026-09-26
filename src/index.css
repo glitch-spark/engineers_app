@@ -757,3 +757,44 @@ table { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
   .t-badge, .t-badge-dot, .t-dropdown { animation: none !important; transition: none !important; }
 }
+
+/* Interview stage stepper: connector fills toward the new step, then the step pops in. */
+:root {
+  --step-line-dur: 400ms;
+  --step-pop-dur: 420ms;
+  --step-panel-dur: 250ms;
+  --step-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --step-pop-ease: cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+
+@keyframes t-step-line-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes t-step-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+@keyframes t-step-panel-in {
+  from { transform: translateY(-6px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.t-step-line-fill {
+  transform-origin: left center;
+  animation: t-step-line-fill var(--step-line-dur) var(--step-ease) both;
+}
+
+.t-step-pop {
+  animation: t-step-pop var(--step-pop-dur) var(--step-pop-ease) var(--step-line-dur) both;
+}
+
+.t-step-panel {
+  animation: t-step-panel-in var(--step-panel-dur) var(--step-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-step-line-fill, .t-step-pop, .t-step-panel { animation: none !important; }
+}

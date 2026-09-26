@@ -1,7 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { FileText, X } from 'lucide-react';
+import { FileText, Maximize2, X } from 'lucide-react';
 import Select from './Select';
 import { notify } from '../lib/notify';
+import type { InterviewStageEntry } from '../api/endpoints';
 import {
   BOARD_FORM_STAGES,
   TECH_SUB_STAGES,
@@ -30,9 +31,10 @@ export type Interview = {
   interviewerName?: string | null;
   appliedPosition?: string | null;
   jobUrl?: string | null;
+  /** Legacy interview-level text; per-round text lives on `stageHistory` entries. */
   transcript?: string;
   note?: string;
-  stageHistory?: Array<{ stage: string; at?: string; source?: string; scheduledAt?: string | null }>;
+  stageHistory?: InterviewStageEntry[];
   ownerName?: string | null;
   ownerEmail?: string | null;
   createdAt?: string;
@@ -141,10 +143,21 @@ export function formatScheduledDate(iso?: string | null): string {
   return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
 }
 
+/** The current (latest) round; the modal and side panel edit its script and note. */
+export function currentStageEntry(iv: Interview): InterviewStageEntry | undefined {
+  const history = iv.stageHistory ?? [];
+  return history[history.length - 1];
+}
+
+export function openInterviewFullScreen(id: string) {
+  window.open(`/interview/${id}`, '_blank', 'noopener');
+}
+
 export function interviewToForm(iv: Interview): InterviewFormState {
   const start = splitDateTime(iv.scheduledAt);
   const end = splitDateTime(iv.endsAt || '');
   const accId = typeof iv.accountId === 'string' ? iv.accountId : iv.accountId?._id ?? '';
+  const tip = currentStageEntry(iv);
   return {
     accountId: accId,
     date: start.date,
@@ -158,8 +171,8 @@ export function interviewToForm(iv: Interview): InterviewFormState {
     interviewerName: iv.interviewerName || '',
     appliedPosition: iv.appliedPosition || '',
     jobUrl: iv.jobUrl || '',
-    transcript: iv.transcript || '',
-    note: iv.note || '',
+    transcript: tip ? tip.transcript || '' : iv.transcript || '',
+    note: tip ? tip.note || '' : iv.note || '',
   };
 }
 
@@ -220,6 +233,7 @@ export function buildSaveBody(f: InterviewFormState): Record<string, unknown> {
     transcript: f.transcript,
     note: f.note,
     stageHistory: history.map((e) => ({
+      ...(e.id ? { id: e.id } : {}),
       stage: e.stage,
       ...(e.scheduledAt ? { scheduledAt: e.scheduledAt } : {}),
     })),
@@ -257,6 +271,43 @@ export function StageMovementTrail({ interview }: { interview: Interview }) {
         </span>
       ))}
     </div>
+  );
+}
+
+const TRANSCRIPT_ACCEPT = '.txt,.md,.markdown,.doc,.docx,.pdf,text/plain,text/markdown,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf';
+
+/** "Upload file" link that reads a transcript file as text. */
+export function TranscriptUploadButton({
+  hasTranscript,
+  onLoad,
+}: {
+  hasTranscript: boolean;
+  onLoad: (raw: string) => void;
+}) {
+  return (
+    <label className="text-xs text-blue-600 hover:text-blue-700 dark:text-sky-400 dark:hover:text-sky-300 cursor-pointer">
+      {hasTranscript ? 'Replace file' : 'Upload file'}
+      <input
+        type="file"
+        accept={TRANSCRIPT_ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const ext = file.name.toLowerCase().split('.').pop() || '';
+          const isPlain = ext === 'txt' || ext === 'md' || ext === 'markdown';
+          const reader = new FileReader();
+          reader.onload = () => {
+            onLoad(String(reader.result || ''));
+            if (!isPlain) notify.error(`${ext.toUpperCase()} may not parse cleanly — prefer .txt or .md`);
+            else notify.success(`Transcript loaded: ${file.name}`);
+          };
+          reader.onerror = () => notify.error('Could not read the file');
+          reader.readAsText(file);
+          e.target.value = '';
+        }}
+      />
+    </label>
   );
 }
 
@@ -461,30 +512,10 @@ export function InterviewFormFields({
         <div className="flex items-center justify-between mb-1">
           <label className="block text-sm font-medium">Interview Transcript</label>
           {!disabled && (
-            <label className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
-              {form.transcript ? 'Replace file' : 'Upload file'}
-              <input
-                type="file"
-                accept=".txt,.md,.markdown,.doc,.docx,.pdf,text/plain,text/markdown,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const ext = file.name.toLowerCase().split('.').pop() || '';
-                  const isPlain = ext === 'txt' || ext === 'md' || ext === 'markdown';
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    const raw = String(reader.result || '');
-                    setForm((prev) => ({ ...prev, transcript: raw }));
-                    if (!isPlain) notify.error(`${ext.toUpperCase()} may not parse cleanly — prefer .txt or .md`);
-                    else notify.success(`Transcript loaded: ${file.name}`);
-                  };
-                  reader.onerror = () => notify.error('Could not read the file');
-                  reader.readAsText(file);
-                  e.target.value = '';
-                }}
-              />
-            </label>
+            <TranscriptUploadButton
+              hasTranscript={!!form.transcript}
+              onLoad={(raw) => setForm((prev) => ({ ...prev, transcript: raw }))}
+            />
           )}
         </div>
         {form.transcript ? (
@@ -560,9 +591,20 @@ export function InterviewSidePanel({
             <StageMovementTrail interview={interview} />
           </div>
         </div>
-        <button type="button" onClick={onClose} className="btn-icon shrink-0" title="Close panel" aria-label="Close panel">
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => openInterviewFullScreen(interview._id)}
+            className="btn-icon"
+            title="Open full screen in a new tab"
+            aria-label="Open full screen"
+          >
+            <Maximize2 size={16} aria-hidden />
+          </button>
+          <button type="button" onClick={onClose} className="btn-icon" title="Close panel" aria-label="Close panel">
+            <X size={16} aria-hidden />
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">

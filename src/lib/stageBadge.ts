@@ -131,13 +131,13 @@ export function getInterviewMovementTrail(iv: {
   return getInterviewMovementEntries(iv).map((e) => e.stage);
 }
 
-export type MovementEntry = { stage: string; scheduledAt?: string };
+export type MovementEntry = { id?: string; stage: string; scheduledAt?: string };
 
 /** Movement trail with per-round scheduled dates (YYYY-MM-DD when available). */
 export function getInterviewMovementEntries(iv: {
   stage?: string | null;
   scheduledAt?: string | null;
-  stageHistory?: Array<{ stage: string; scheduledAt?: string | null }>;
+  stageHistory?: Array<{ id?: string; stage: string; scheduledAt?: string | null }>;
 }): MovementEntry[] {
   const trail: MovementEntry[] = [];
   const toDate = (raw?: string | null): string | undefined => {
@@ -151,19 +151,20 @@ export function getInterviewMovementEntries(iv: {
     const dd = String(d.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
   };
-  const push = (rawStage?: string | null, rawDate?: string | null) => {
+  const push = (rawStage?: string | null, rawDate?: string | null, id?: string) => {
     const s = normalizeInterviewStage(rawStage);
     if (!s) return;
     const date = toDate(rawDate);
     const tip = trail[trail.length - 1];
     if (tip?.stage === s) {
       if (date && tip.scheduledAt !== date) tip.scheduledAt = date;
+      if (!tip.id && id) tip.id = id;
       return;
     }
-    trail.push({ stage: s, ...(date ? { scheduledAt: date } : {}) });
+    trail.push({ stage: s, ...(id ? { id } : {}), ...(date ? { scheduledAt: date } : {}) });
   };
   for (const h of iv.stageHistory ?? []) {
-    push(h.stage, h.scheduledAt);
+    push(h.stage, h.scheduledAt, h.id);
   }
   push(iv.stage, iv.scheduledAt);
   return trail;

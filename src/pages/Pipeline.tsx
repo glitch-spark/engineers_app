@@ -737,7 +737,7 @@ function DetailDrawer({ app, onClose, onChanged }: { app: ApplicationDoc; onClos
               <ul className="space-y-1 text-xs">
                 {app.interviewIds.map((id) => (
                   <li key={id}>
-                    <Link to={`/interviews/${id}`} className="text-primary hover:underline">Interview {id.slice(-6)}</Link>
+                    <Link to={`/interview/${id}`} className="text-primary hover:underline">Interview {id.slice(-6)}</Link>
                   </li>
                 ))}
               </ul>

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthGuard } from './auth/AuthGuard';
 import { RoleGuard } from './auth/RoleGuard';
@@ -17,7 +17,7 @@ import Accountants from './pages/Accountants';
 import Interviews from './pages/Interviews';
 import InterviewsLive from './pages/InterviewsLive';
 import InterviewsAnalyze from './pages/InterviewsAnalyze';
-import InterviewDetail from './pages/InterviewDetail';
+import InterviewFocus from './pages/InterviewFocus';
 import InterviewReview from './pages/InterviewReview';
 import Resume from './pages/Resume';
 import InterviewPrep from './pages/InterviewPrep';
@@ -35,6 +35,20 @@ function Protected({ children }: { children: React.ReactNode }) {
       </RoleGuard>
     </AuthGuard>
   );
+}
+
+/** Full-screen pages: auth + role checks without the sidebar/topbar chrome. */
+function Standalone({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthGuard>
+      <RoleGuard>{children}</RoleGuard>
+    </AuthGuard>
+  );
+}
+
+function LegacyInterviewRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/interview/${id}`} replace />;
 }
 
 export default function App() {
@@ -64,7 +78,8 @@ export default function App() {
       <Route path="/interviews" element={<Protected><Interviews /></Protected>} />
       <Route path="/interviews/live" element={<Protected><InterviewsLive /></Protected>} />
       <Route path="/interviews/analyze" element={<Protected><InterviewsAnalyze /></Protected>} />
-      <Route path="/interviews/:id" element={<Protected><InterviewDetail /></Protected>} />
+      <Route path="/interviews/:id" element={<LegacyInterviewRedirect />} />
+      <Route path="/interview/:id" element={<Standalone><InterviewFocus /></Standalone>} />
       <Route path="/interviews/:id/review" element={<Protected><InterviewReview /></Protected>} />
       <Route path="/resume" element={<Protected><Resume /></Protected>} />
       <Route path="/resume/generated" element={<Protected><Generated /></Protected>} />

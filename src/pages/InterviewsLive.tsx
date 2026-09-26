@@ -748,7 +748,7 @@ export default function InterviewsLivePage() {
             statusFormOptions={statusFormOptions}
             onClose={closePanel}
             onSave={savePanel}
-            onOpenTranscript={() => navigate(`/interviews/${panelInterview._id}`)}
+            onOpenTranscript={() => navigate(`/interview/${panelInterview._id}`)}
           />
         </>
       )}
