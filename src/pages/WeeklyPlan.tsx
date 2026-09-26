@@ -518,11 +518,11 @@ export default function WeeklyPlanPanel({
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2">
             <div className="flex min-h-0 flex-col">
               <label className="block text-xs text-muted mb-1">Plan (start of week)</label>
-              <textarea className="input min-h-48 w-full flex-1 text-sm" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
+              <textarea className="input min-h-[28rem] w-full flex-1 text-sm" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
             </div>
             <div className="flex min-h-0 flex-col">
               <label className="block text-xs text-muted mb-1">Follow-up (end of week)</label>
-              <textarea className="input min-h-48 w-full flex-1 text-sm" value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
+              <textarea className="input min-h-[28rem] w-full flex-1 text-sm" value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
             </div>
           </div>
           <p className="hint">Write freely — include target numbers (applies, interviews, outreach). Admin reports trace them automatically.</p>

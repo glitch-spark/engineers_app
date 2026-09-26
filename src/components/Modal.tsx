@@ -82,7 +82,7 @@ export default function Modal({
   const compact = size === 'sm';
   const large = size === 'lg';
   const widthClass = large ? 'max-w-4xl' : compact ? 'max-w-sm' : 'max-w-xl';
-  const heightClass = large ? 'h-[min(90vh,960px)]' : 'max-h-[min(90vh,720px)]';
+  const heightClass = large ? 'h-[calc(100vh-1.5rem)]' : 'max-h-[min(90vh,720px)]';
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 sm:p-6">

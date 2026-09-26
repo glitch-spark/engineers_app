@@ -240,7 +240,7 @@ export default function DailyPlanPanel({
               <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-today">{planDayLabel(form.date)}</label>
               <textarea
                 id="daily-plan-today"
-                className="input min-h-48 w-full flex-1 text-sm"
+                className="input min-h-[28rem] w-full flex-1 text-sm"
                 value={form.today}
                 onChange={(e) => setForm({ ...form, today: e.target.value })}
               />
@@ -249,7 +249,7 @@ export default function DailyPlanPanel({
               <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-tomorrow">{planDayLabel(form.date, 1)}</label>
               <textarea
                 id="daily-plan-tomorrow"
-                className="input min-h-48 w-full flex-1 text-sm"
+                className="input min-h-[28rem] w-full flex-1 text-sm"
                 value={form.tomorrow}
                 onChange={(e) => setForm({ ...form, tomorrow: e.target.value })}
               />
