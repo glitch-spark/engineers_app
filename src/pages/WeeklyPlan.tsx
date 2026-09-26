@@ -504,7 +504,7 @@ export default function WeeklyPlanPanel({
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} size="lg" title={editing ? `Week ${form.weekNumber} plan` : 'New weekly plan'}>
-        <div className="space-y-4">
+        <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           {!editing && (
@@ -515,17 +515,17 @@ export default function WeeklyPlanPanel({
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex min-h-0 flex-col">
               <label className="block text-xs text-muted mb-1">Plan (start of week)</label>
-              <textarea className="input w-full text-sm" rows={5} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
-              <p className="hint mt-1">Write freely — include target numbers (applies, interviews, outreach). Admin reports trace them automatically.</p>
+              <textarea className="input min-h-48 w-full flex-1 text-sm" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
             </div>
-            <div>
+            <div className="flex min-h-0 flex-col">
               <label className="block text-xs text-muted mb-1">Follow-up (end of week)</label>
-              <textarea className="input w-full text-sm" rows={5} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
+              <textarea className="input min-h-48 w-full flex-1 text-sm" value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
             </div>
           </div>
+          <p className="hint">Write freely — include target numbers (applies, interviews, outreach). Admin reports trace them automatically.</p>
 
           <label className="flex items-center gap-2 text-sm text-body">
             <input type="checkbox" checked={form.status === 'reviewed'} onChange={(e) => setForm({ ...form, status: e.target.checked ? 'reviewed' : 'planned' })} />

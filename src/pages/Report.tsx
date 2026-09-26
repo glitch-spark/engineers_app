@@ -17,10 +17,11 @@ const REPORT_TABS = [
 export default function ReportPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [tab, setTab] = useState('weekly');
+  const [tab, setTab] = useState('daily');
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [weekNumber, setWeekNumber] = useState(getWeekInfo(new Date()).weekNumber.toString());
-  const [userId, setUserId] = useState('');
+  const [userFilter, setUserFilter] = useState<string | null>(null);
+  const userId = userFilter === null ? (user?.id ?? '') : userFilter;
   const [reporting, setReporting] = useState(false);
   const weeklyActions = useRef<WeeklyPlanActions | null>(null);
   const dailyActions = useRef<DailyPlanActions | null>(null);
@@ -53,7 +54,7 @@ export default function ReportPage() {
     </div>
   ) : !isAdmin ? (
     <button type="button" className="btn" onClick={() => dailyActions.current?.openAdd()}>
-      <Calendar size={16} className="mr-2" /> Add plan
+      <Calendar size={16} className="mr-2" /> Add Plan
     </button>
   ) : null;
 
@@ -77,8 +78,8 @@ export default function ReportPage() {
         </div>
         <div className="w-56">
           <label className="block text-xs text-muted mb-1" htmlFor="report-user">User</label>
-          <select id="report-user" className="select focus-ring w-full text-sm" value={userId} onChange={(e) => setUserId(e.target.value)}>
-            <option value="">All users</option>
+          <select id="report-user" className="select focus-ring w-full text-sm" value={userId} onChange={(e) => setUserFilter(e.target.value)}>
+            {isAdmin && <option value="">All users</option>}
             {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
           </select>
         </div>
