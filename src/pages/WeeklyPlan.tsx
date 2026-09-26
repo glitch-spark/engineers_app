@@ -409,8 +409,10 @@ export default function WeeklyPlanPage() {
       {/* List */}
       {isLoading ? (
         <div className="panel p-8 text-center text-sm text-muted">
-          <div className="spinner spinner-md mx-auto mb-2" />
-          Loading weekly plans...
+          <div className="flex items-center justify-center">
+            <div className="spinner spinner-md mr-3" />
+            Loading weekly plans...
+          </div>
         </div>
       ) : plans.length === 0 ? (
         <div className="panel p-8 text-center text-sm text-muted">
