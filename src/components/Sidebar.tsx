@@ -106,8 +106,8 @@ export default function Sidebar({
           />
 
           <NavLink
-            href="/weekly-plan"
-            label="Weekly Plan"
+            href="/report"
+            label="Report"
             isCollapsed={isCollapsed}
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -10,7 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Leaderboard from './pages/Leaderboard';
 import Accounts from './pages/Accounts';
 import Transactions from './pages/Transactions';
-import WeeklyPlan from './pages/WeeklyPlan';
+import Report from './pages/Report';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
 import Accountants from './pages/Accountants';
@@ -74,7 +74,8 @@ export default function App() {
       <Route path="/accounts/new" element={<Protected><AccountEdit /></Protected>} />
       <Route path="/accounts/:id" element={<Protected><AccountEdit /></Protected>} />
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
-      <Route path="/weekly-plan" element={<Protected><WeeklyPlan /></Protected>} />
+      <Route path="/report" element={<Protected><Report /></Protected>} />
+      <Route path="/weekly-plan" element={<Navigate to="/report" replace />} />
       <Route path="/interviews" element={<Protected><Interviews /></Protected>} />
       <Route path="/interviews/live" element={<Protected><InterviewsLive /></Protected>} />
       <Route path="/interviews/analyze" element={<Protected><InterviewsAnalyze /></Protected>} />
