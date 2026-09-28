@@ -48,7 +48,7 @@ export default function ReportPage() {
   }, []);
 
   const headerAction = tab === 'weekly' ? (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         className="btn-outline"

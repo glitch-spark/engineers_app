@@ -288,11 +288,11 @@ function UpcomingInterviewsCard({ upcoming, loading }: {
         <ul className="row-divider">
           {upcoming.map((iv) => (
             <li key={iv.interviewId} className="py-2 flex items-center justify-between gap-3 text-sm">
-              <div className="min-w-0">
-                <Link to={`/interview/${iv.interviewId}`} className="font-medium text-strong hover:underline truncate">
+              <div className="flex min-w-0 items-baseline">
+                <Link to={`/interview/${iv.interviewId}`} className="truncate font-medium text-strong hover:underline">
                   {iv.company || 'Interview'}
                 </Link>
-                {iv.stage && <span className="ml-2 text-xs text-muted">{iv.stage}</span>}
+                {iv.stage && <span className="ml-2 shrink-0 text-xs text-muted">{iv.stage}</span>}
               </div>
               <span className="text-xs text-muted whitespace-nowrap">{formatWhen(iv.scheduledAt)}</span>
             </li>

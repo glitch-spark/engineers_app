@@ -48,29 +48,11 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`shell-surface fixed bottom-0 left-0 top-16 z-30 overflow-y-auto border-r transition-all duration-300 ${
+      className={`shell-surface fixed bottom-0 left-0 top-16 z-30 flex flex-col border-r transition-all duration-300 ${
         isCollapsed ? 'w-[4.75rem]' : 'w-64'
       }`}
     >
-      {onToggle && (
-        <div className={`flex px-3 pt-3 pb-1 ${isCollapsed ? 'justify-center' : 'justify-end'}`}>
-          <button
-            type="button"
-            onClick={onToggle}
-            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="shell-icon-btn"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {isCollapsed ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-              )}
-            </svg>
-          </button>
-        </div>
-      )}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
 
           <NavLink
             href="/leaderboard"
@@ -191,6 +173,27 @@ export default function Sidebar({
             />
           </div>
         )}
+      </nav>
+
+      {onToggle && (
+        <div className={`flex shrink-0 border-t border-zinc-200/80 px-3 py-2 dark:border-zinc-800 ${isCollapsed ? 'justify-center' : 'justify-end'}`}>
+          <button
+            type="button"
+            onClick={onToggle}
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="shell-icon-btn"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {isCollapsed ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
+              )}
+            </svg>
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

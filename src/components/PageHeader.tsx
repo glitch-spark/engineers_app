@@ -17,7 +17,7 @@ export default function PageHeader({
   backTo?: string;
 }) {
   return (
-    <header className="mb-6 flex items-center justify-between gap-4">
+    <header className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
       <div className="flex min-w-0 items-center gap-3">
         {backTo && (
           <Link to={backTo} className="shell-icon-btn flex-shrink-0" aria-label="Go back">
@@ -26,7 +26,7 @@ export default function PageHeader({
         )}
         <h1 className="page-title truncate">{title}</h1>
       </div>
-      {action && <div className="flex-shrink-0">{action}</div>}
+      {action && <div className="flex max-w-full shrink-0 flex-wrap gap-2">{action}</div>}
     </header>
   );
 }

@@ -171,7 +171,7 @@ export default function UsersPage() {
 
       <div className="card">
         <div className="flex items-end gap-4 flex-wrap">
-          <div className="flex-1 min-w-64">
+          <div className="w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-64">
             <label className="block text-xs mb-1 text-muted">Search Users</label>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-faint" />

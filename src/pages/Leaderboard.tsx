@@ -538,7 +538,7 @@ function YourStats({ stats, range, showPlanTailor, breakdown }: {
   return (
     <div className="banner-info">
       <div className="text-xs font-medium text-sky-800 dark:text-sky-300 mb-2">Your numbers — {range}</div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatBlock
           label="Bids"
           value={stats.bids}
@@ -609,7 +609,7 @@ function StatBlock({
           </>
         )}
       </div>
-      <div className="flex items-center gap-2 text-[11px] text-muted mt-0.5">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted mt-0.5">
         {rank && <span className="font-semibold text-body">#{rank}</span>}
         {!isConversion && !showPlanTailor && target && target > 0 && <TargetCell value={value} target={target} />}
         {showPlanTailor && (bidsPlan ?? 0) > 0 && (
