@@ -5,6 +5,7 @@ import { Mail, Loader2, RefreshCw, Unplug, CheckCircle2, AlertCircle, Clock } fr
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import PageHeader from '../components/PageHeader';
+import Modal from '../components/Modal';
 
 /**
  * Integrations / Gmail connect.
@@ -40,6 +41,9 @@ export default function IntegrationsPage() {
   const { data, mutate, isLoading } = useSWR(accountsKey, () => api.listEmailAccounts());
   const [connecting, setConnecting] = useState<'gmail' | 'outlook' | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  // Reset asks which kind of reset to run in a dialog with explicit choices
+  // (a native confirm() made "Cancel" silently perform a soft reset).
+  const [resetTarget, setResetTarget] = useState<{ id: string; email: string } | null>(null);
 
   // 1. If this page renders inside the OAuth popup, forward the status to
   //    the opener and close. The parent tab handles the toast + refresh.
@@ -111,12 +115,8 @@ export default function IntegrationsPage() {
     }
   }
 
-  async function onReset(id: string, email: string) {
-    const fullReSync = confirm(
-      `Reset sync state for ${email}?\n\n` +
-      `OK = full re-sync (wipes history cursor, next sync pulls the whole window again)\n` +
-      `Cancel = just unstick the status (keeps cursor, next sync only fetches new mail)`
-    );
+  async function onReset(id: string, fullReSync: boolean) {
+    setResetTarget(null);
     try {
       const res = await api.resetEmailAccountSync(id, fullReSync);
       notify.success(`Reset — status=${res.syncStatus}${fullReSync ? ', cursor cleared' : ''}`);
@@ -147,7 +147,7 @@ export default function IntegrationsPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-start gap-3 min-w-[260px]">
             <div className="p-2 rounded-md bg-red-50 dark:bg-red-950/40">
-              <Mail className="w-5 h-5 text-red-500 dark:text-red-400" />
+              <Mail className="w-5 h-5 text-red-500 dark:text-red-400" aria-hidden />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-strong">Email (Gmail · Outlook)</h2>
@@ -165,7 +165,7 @@ export default function IntegrationsPage() {
               disabled={connecting !== null}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-[6px] bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
             >
-              {connecting === 'gmail' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              {connecting === 'gmail' ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Mail className="w-4 h-4" aria-hidden />}
               Connect Gmail
             </button>
             <button
@@ -174,7 +174,7 @@ export default function IntegrationsPage() {
               disabled={connecting !== null}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-[6px] bg-blue-600 text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
             >
-              {connecting === 'outlook' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              {connecting === 'outlook' ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Mail className="w-4 h-4" aria-hidden />}
               Connect Outlook
             </button>
           </div>
@@ -182,7 +182,7 @@ export default function IntegrationsPage() {
 
         <div className="mt-6 border-t border-zinc-200 dark:border-zinc-800 pt-4">
           {isLoading ? (
-            <div className="text-sm text-muted flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+            <div role="status" className="text-sm text-muted flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading…</div>
           ) : accounts.length === 0 ? (
             <p className="text-sm text-muted">No accounts connected yet.</p>
           ) : (
@@ -198,10 +198,10 @@ export default function IntegrationsPage() {
                       <StatusBadge status={a.syncStatus} error={a.lastSyncError} />
                     </div>
                     <div className="text-xs text-muted mt-0.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
+                      <Clock className="w-3 h-3" aria-hidden />
                       Last sync: {formatTime(a.lastSyncAt)}
                       {a.lastSyncError && (
-                        <span className="ml-2 text-red-600 truncate max-w-xs" title={a.lastSyncError}>
+                        <span className="ml-2 min-w-0 break-words text-red-600">
                           {a.lastSyncError}
                         </span>
                       )}
@@ -215,15 +215,15 @@ export default function IntegrationsPage() {
                       className="btn-outline btn-sm"
                     >
                       {syncingId === a.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
                       ) : (
-                        <RefreshCw className="w-3.5 h-3.5" />
+                        <RefreshCw className="w-3.5 h-3.5" aria-hidden />
                       )}
                       Sync now
                     </button>
                     <button
                       type="button"
-                      onClick={() => onReset(a.id, a.email)}
+                      onClick={() => setResetTarget({ id: a.id, email: a.email })}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-zinc-200 text-body hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 dark:border-zinc-700 dark:hover:bg-amber-950/40 dark:hover:text-amber-300 dark:hover:border-amber-800"
                       title="Unstick a stuck sync, optionally clear the history cursor"
                     >
@@ -234,7 +234,7 @@ export default function IntegrationsPage() {
                       onClick={() => onDisconnect(a.id, a.email)}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-zinc-200 text-body hover:bg-red-50 hover:text-red-700 hover:border-red-200 dark:border-zinc-700 dark:hover:bg-red-950/40 dark:hover:text-red-300 dark:hover:border-red-800"
                     >
-                      <Unplug className="w-3.5 h-3.5" />
+                      <Unplug className="w-3.5 h-3.5" aria-hidden />
                       Disconnect
                     </button>
                   </div>
@@ -246,7 +246,7 @@ export default function IntegrationsPage() {
       </section>
 
       <section className="panel p-4 text-sm text-body">
-        <p className="font-medium text-strong mb-1">How it works</p>
+        <h2 className="font-medium text-strong mb-1">How it works</h2>
         <ul className="list-disc pl-5 space-y-1">
           <li>Only headers + snippets are stored. Email bodies are fetched on demand and never persisted.</li>
           <li>High-confidence labels (≥80%) auto-advance the matching Application stage.</li>
@@ -254,6 +254,43 @@ export default function IntegrationsPage() {
           <li>Disconnect at any time — we revoke our token with Google and wipe the stored credential.</li>
         </ul>
       </section>
+
+      <Modal
+        open={resetTarget !== null}
+        size="sm"
+        onClose={() => setResetTarget(null)}
+        title={`Reset sync state for ${resetTarget?.email ?? ''}?`}
+      >
+        <div className="space-y-3 text-sm text-body">
+          <p>
+            <span className="font-medium text-strong">Full re-sync</span> wipes the history cursor, so the next
+            sync pulls the whole window again.
+          </p>
+          <p>
+            <span className="font-medium text-strong">Unstick only</span> resets the status but keeps the cursor,
+            so the next sync only fetches new mail.
+          </p>
+        </div>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <button type="button" className="btn-outline btn-sm" onClick={() => setResetTarget(null)}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-outline btn-sm"
+            onClick={() => resetTarget && void onReset(resetTarget.id, false)}
+          >
+            Unstick only
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => resetTarget && void onReset(resetTarget.id, true)}
+          >
+            Full re-sync
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -262,18 +299,18 @@ function StatusBadge({ status, error }: { status: 'idle' | 'running' | 'error'; 
   if (status === 'running')
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-        <Loader2 className="w-3 h-3 animate-spin" /> syncing
+        <Loader2 className="w-3 h-3 animate-spin" aria-hidden /> syncing
       </span>
     );
   if (status === 'error' || error)
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300">
-        <AlertCircle className="w-3 h-3" /> error
+        <AlertCircle className="w-3 h-3" aria-hidden /> error
       </span>
     );
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-      <CheckCircle2 className="w-3 h-3" /> connected
+      <CheckCircle2 className="w-3 h-3" aria-hidden /> connected
     </span>
   );
 }

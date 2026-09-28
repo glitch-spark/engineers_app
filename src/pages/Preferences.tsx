@@ -114,7 +114,7 @@ function GlobalPromptsCard() {
           disabled={saving || !data}
           className="btn disabled:opacity-50"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
           Save prompts
         </button>
       </div>

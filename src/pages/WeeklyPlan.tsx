@@ -4,8 +4,7 @@ import Modal from '../components/Modal';
 import { Pencil, Trash2, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
-import { ApiError } from '../api/client';
-import { notify } from '../lib/notify';
+import { notify, messageOf } from '../lib/notify';
 import NameWithAvatar from '../components/NameWithAvatar';
 import { formatWeekOptionLabel, getWeekInfo } from '../lib/week';
 
@@ -252,7 +251,7 @@ export default function WeeklyPlanPanel({
       mutate();
       mutateSummary();
     } catch (err) {
-      notify.error(err instanceof ApiError ? err : 'Failed to save plan');
+      setError(messageOf(err, 'Failed to save plan'));
     } finally {
       setSaving(false);
     }
@@ -301,7 +300,7 @@ export default function WeeklyPlanPanel({
               <div className="text-2xl font-bold text-strong mt-1">
                 {t.target}<span className="text-sm font-medium text-faint"> / {t.actual}</span>
               </div>
-              <ProgressBar value={pct(t.actual, t.target)} />
+              <ProgressBar value={pct(t.actual, t.target)} label={t.label} />
             </div>
           ))}
         </div>
@@ -335,7 +334,7 @@ export default function WeeklyPlanPanel({
                       return (
                         <td key={c.key} className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                           {target} / {actual}{unitSuffix((m as { unit?: string } | undefined)?.unit)}
-                          <span className={'ml-2 ' + (target > 0 && p >= 100 ? 'text-green-600' : 'text-faint')}>
+                          <span className={'ml-2 ' + (target > 0 && p >= 100 ? 'text-green-700 dark:text-green-400' : 'text-faint')}>
                             {target > 0 ? `${p}%` : '—'}
                           </span>
                         </td>
@@ -352,9 +351,9 @@ export default function WeeklyPlanPanel({
 
       {/* List */}
       {isLoading ? (
-        <div className="panel p-8 text-center text-sm text-muted">
+        <div role="status" className="panel p-8 text-center text-sm text-muted">
           <div className="flex items-center justify-center">
-            <div className="spinner spinner-md mr-3" />
+            <div className="spinner spinner-md mr-3" aria-hidden />
             Loading weekly plans...
           </div>
         </div>
@@ -372,7 +371,7 @@ export default function WeeklyPlanPanel({
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-strong">Week {plan.weekNumber}, {plan.year}</span>
+                      <h2 className="font-semibold text-strong">Week {plan.weekNumber}, {plan.year}</h2>
                       <span className="text-xs text-faint">{formatDateRange(plan.startDate, plan.endDate)}</span>
                       {reviewed ? (
                         <span className="badge-success">Reviewed</span>
@@ -386,10 +385,24 @@ export default function WeeklyPlanPanel({
                   </div>
                   {canEditPlan(plan) && (
                     <div className="flex gap-1 flex-shrink-0">
-                      <button type="button" className="btn-icon" onClick={() => { setEditing(plan); setError(''); setOpen(true); }} title={needsReview ? 'Add follow-up' : 'Edit'}>
-                        {needsReview ? <ClipboardCheck size={16} /> : <Pencil size={16} />}
+                      <button
+                        type="button"
+                        className="btn-icon"
+                        onClick={() => { setEditing(plan); setError(''); setOpen(true); }}
+                        title={needsReview ? 'Add follow-up' : 'Edit'}
+                        aria-label={`${needsReview ? 'Add follow-up to' : 'Edit'} week ${plan.weekNumber}, ${plan.year} plan`}
+                      >
+                        {needsReview ? <ClipboardCheck size={16} aria-hidden /> : <Pencil size={16} aria-hidden />}
                       </button>
-                      <button type="button" className="btn-icon" onClick={() => remove(plan)} title="Delete"><Trash2 size={16} /></button>
+                      <button
+                        type="button"
+                        className="btn-icon"
+                        onClick={() => remove(plan)}
+                        title="Delete"
+                        aria-label={`Delete week ${plan.weekNumber}, ${plan.year} plan`}
+                      >
+                        <Trash2 size={16} aria-hidden />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -448,12 +461,12 @@ export default function WeeklyPlanPanel({
                           <span className="text-body">{m.label}</span>
                           <span className="text-muted tabular-nums">
                             {m.target} / {m.actual}{unitSuffix(m.unit)}
-                            <span className={'ml-2 ' + (m.target > 0 && pct(m.actual, m.target) >= 100 ? 'text-green-600' : 'text-faint')}>
+                            <span className={'ml-2 ' + (m.target > 0 && pct(m.actual, m.target) >= 100 ? 'text-green-700 dark:text-green-400' : 'text-faint')}>
                               {m.target > 0 ? `${pct(m.actual, m.target)}%` : '—'}
                             </span>
                           </span>
                         </div>
-                        <ProgressBar value={pct(m.actual, m.target)} />
+                        <ProgressBar value={pct(m.actual, m.target)} label={m.label} />
                       </div>
                     ))}
                   </div>
@@ -494,7 +507,7 @@ export default function WeeklyPlanPanel({
               className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">Previous</button>
             <button onClick={() => setCurrentPage(pagination.page + 1)} disabled={!pagination.hasNext}
               className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">Next</button>
-            <select value={pageSize} onChange={(e) => handlePageSizeChange(Number(e.target.value))} className="select focus-ring text-sm">
+            <select aria-label="Plans per page" value={pageSize} onChange={(e) => handlePageSizeChange(Number(e.target.value))} className="select focus-ring text-sm">
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={50}>50</option>
@@ -505,24 +518,24 @@ export default function WeeklyPlanPanel({
 
       <Modal open={open} onClose={() => setOpen(false)} size="lg" title={editing ? `Week ${form.weekNumber} plan` : 'New weekly plan'}>
         <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p role="alert" className="text-red-700 dark:text-red-400 text-sm">{error}</p>}
 
           {!editing && (
             <div>
-              <label className="block text-xs text-muted mb-1">Pick any date in the week</label>
-              <input className="input w-full text-sm" type="date" value={form.selectedDate} onChange={(e) => handleDateChange(e.target.value)} />
-              <p className="hint mt-1">{formatWeekOptionLabel(form.year, form.weekNumber)}</p>
+              <label className="block text-xs text-muted mb-1" htmlFor="weekly-plan-date">Pick any date in the week</label>
+              <input id="weekly-plan-date" aria-describedby="weekly-plan-week" className="input w-full text-sm" type="date" value={form.selectedDate} onChange={(e) => handleDateChange(e.target.value)} />
+              <p id="weekly-plan-week" className="hint mt-1">{formatWeekOptionLabel(form.year, form.weekNumber)}</p>
             </div>
           )}
 
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2">
             <div className="flex min-h-0 flex-col">
-              <label className="block text-xs text-muted mb-1">Plan (start of week)</label>
-              <textarea className="input min-h-[28rem] w-full flex-1 text-sm" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
+              <label className="block text-xs text-muted mb-1" htmlFor="weekly-plan-content">Plan (start of week)</label>
+              <textarea id="weekly-plan-content" className="input min-h-[28rem] w-full flex-1 text-sm" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="What's the plan? e.g. 'Apply to 50 jobs, land 5 interviews, refresh resume, reach out to 20 founders.'" />
             </div>
             <div className="flex min-h-0 flex-col">
-              <label className="block text-xs text-muted mb-1">Follow-up (end of week)</label>
-              <textarea className="input min-h-[28rem] w-full flex-1 text-sm" value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
+              <label className="block text-xs text-muted mb-1" htmlFor="weekly-plan-result">Follow-up (end of week)</label>
+              <textarea id="weekly-plan-result" className="input min-h-[28rem] w-full flex-1 text-sm" value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="What actually got done? e.g. 'Applied to 42, 6 interviews, updated resume, 18 outreaches.'" />
             </div>
           </div>
           <p className="hint">Write freely — include target numbers (applies, interviews, outreach). Admin reports trace them automatically.</p>
@@ -543,11 +556,19 @@ export default function WeeklyPlanPanel({
   );
 }
 
-function ProgressBar({ value }: { value: number }) {
+function ProgressBar({ value, label }: { value: number; label: string }) {
   const clamped = Math.max(0, Math.min(100, value));
   const color = value >= 100 ? 'bg-green-500' : value >= 60 ? 'bg-blue-500' : 'bg-amber-500';
   return (
-    <div className="mt-1 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+    <div
+      role="progressbar"
+      aria-label={`${label} progress`}
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuetext={`${value}% of target`}
+      className="mt-1 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden"
+    >
       <div className={`h-full ${color}`} style={{ width: `${clamped}%` }} />
     </div>
   );

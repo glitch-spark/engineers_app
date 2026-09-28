@@ -4,7 +4,7 @@ import { Loader2, Save, Zap, CheckCircle2, KeyRound, AlertCircle } from 'lucide-
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import type { FreeLlmModelPreset } from '../api/endpoints';
-import { notify } from '../lib/notify';
+import { messageOf, notify } from '../lib/notify';
 import {
   listTimeZones,
   normalizeSlackTimezone,
@@ -68,6 +68,10 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState<ProfileData>(EMPTY_PROFILE);
   const [passwordData, setPasswordData] = useState<PasswordData>({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [originalData, setOriginalData] = useState<ProfileData>(EMPTY_PROFILE);
+  const [passwordError, setPasswordError] = useState<{
+    field: 'newPassword' | 'confirmPassword' | 'form';
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,6 +113,7 @@ export default function ProfilePage() {
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setPasswordData(prev => ({ ...prev, [name]: value }));
+    setPasswordError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,13 +139,18 @@ export default function ProfilePage() {
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       notify.error('New passwords do not match');
+      setPasswordError({ field: 'confirmPassword', message: 'New passwords do not match' });
+      document.getElementById('confirmPassword')?.focus();
       return;
     }
 
     if (passwordData.newPassword.length < 6) {
       notify.error('New password must be at least 6 characters long');
+      setPasswordError({ field: 'newPassword', message: 'New password must be at least 6 characters long' });
+      document.getElementById('newPassword')?.focus();
       return;
     }
+    setPasswordError(null);
 
     setIsLoading(true);
     try {
@@ -153,6 +163,7 @@ export default function ProfilePage() {
       setIsChangingPassword(false);
     } catch (error) {
       notify.error(error, 'Failed to change password');
+      setPasswordError({ field: 'form', message: messageOf(error, 'Failed to change password') });
     } finally {
       setIsLoading(false);
     }
@@ -165,6 +176,7 @@ export default function ProfilePage() {
 
   const handlePasswordCancel = () => {
     setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setPasswordError(null);
     setIsChangingPassword(false);
   };
 
@@ -176,7 +188,10 @@ export default function ProfilePage() {
         <PageHeader title="Profile" />
         <div className="card">
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <div role="status" className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" aria-hidden></div>
+              <span className="sr-only">Loading profile…</span>
+            </div>
           </div>
         </div>
       </div>
@@ -188,6 +203,7 @@ export default function ProfilePage() {
       <PageHeader title="Profile" />
 
       <div className="card">
+        <h2 className="sr-only">Profile details</h2>
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex flex-col items-center lg:items-start space-y-4">
             <div className="relative group">
@@ -195,7 +211,7 @@ export default function ProfilePage() {
                 {formData.image ? (
                   <img
                     src={formData.image}
-                    alt="Profile"
+                    alt={formData.username ? `${formData.username}'s profile photo` : 'Profile photo'}
                     width={128}
                     height={128}
                     className="w-full h-full object-cover"
@@ -213,7 +229,7 @@ export default function ProfilePage() {
 
               {isEditing && (
                 <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </div>
@@ -222,8 +238,9 @@ export default function ProfilePage() {
 
             {isEditing && (
               <div className="form-group w-full max-w-xs space-y-2">
-                <label className="form-label">Profile image</label>
+                <label htmlFor="imageFile" className="form-label">Profile image</label>
                 <input
+                  id="imageFile"
                   type="file"
                   accept="image/*"
                   onChange={async (e) => {
@@ -243,7 +260,7 @@ export default function ProfilePage() {
                   }}
                   className="block text-xs text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-primary file:text-white file:font-medium file:cursor-pointer hover:file:bg-primary-dark"
                 />
-                <div className="text-[11px] text-faint">or paste a URL</div>
+                <label htmlFor="image" className="block text-[11px] text-faint">or paste a URL</label>
                 <input
                   id="image"
                   name="image"
@@ -307,7 +324,7 @@ export default function ProfilePage() {
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 {!isEditing ? (
                   <button type="button" onClick={() => setIsEditing(true)} className="btn">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                     Edit Profile
@@ -317,7 +334,7 @@ export default function ProfilePage() {
                     <button type="submit" className="btn" disabled={isLoading || !hasChanges}>
                       {isLoading ? (
                         <>
-                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
@@ -325,7 +342,7 @@ export default function ProfilePage() {
                         </>
                       ) : (
                         <>
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
                           Save Changes
@@ -351,12 +368,12 @@ export default function ProfilePage() {
       <div className="card mt-4">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="card-header mb-0">Change Password</h3>
+            <h2 className="card-header mb-0">Change Password</h2>
             <p className="text-muted">Update your account password for enhanced security</p>
           </div>
           {!isChangingPassword && (
             <button type="button" onClick={() => setIsChangingPassword(true)} className="btn-outline">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
               </svg>
               Change Password
@@ -395,8 +412,13 @@ export default function ProfilePage() {
                   placeholder="Enter your new password"
                   minLength={6}
                   required
+                  aria-invalid={passwordError?.field === 'newPassword' || undefined}
+                  aria-describedby={`newPassword-hint${passwordError?.field === 'newPassword' ? ' password-error' : ''}`}
                 />
-                <p className="text-xs text-muted mt-1">Minimum 6 characters</p>
+                <p id="newPassword-hint" className="text-xs text-muted mt-1">Minimum 6 characters</p>
+                {passwordError?.field === 'newPassword' && (
+                  <p id="password-error" className="text-xs text-red-700 dark:text-red-400 mt-1">{passwordError.message}</p>
+                )}
               </div>
 
               <div className="form-group">
@@ -411,15 +433,23 @@ export default function ProfilePage() {
                   placeholder="Confirm your new password"
                   minLength={6}
                   required
+                  aria-invalid={passwordError?.field === 'confirmPassword' || undefined}
+                  aria-describedby={passwordError?.field === 'confirmPassword' ? 'password-error' : undefined}
                 />
+                {passwordError?.field === 'confirmPassword' && (
+                  <p id="password-error" className="text-xs text-red-700 dark:text-red-400 mt-1">{passwordError.message}</p>
+                )}
               </div>
             </div>
 
+            {passwordError?.field === 'form' && (
+              <p role="alert" className="text-sm text-red-700 dark:text-red-400">{passwordError.message}</p>
+            )}
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
               <button type="submit" className="btn" disabled={isLoading}>
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -427,7 +457,7 @@ export default function ProfilePage() {
                   </>
                 ) : (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     Change Password
@@ -444,7 +474,7 @@ export default function ProfilePage() {
       </div>
 
       <div className="card mt-4">
-        <h3 className="card-header">Account Information</h3>
+        <h2 className="card-header">Account Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted">Account Type</p>
@@ -594,10 +624,10 @@ function FreeLlmSettingsCard() {
       <div className="border-b border-zinc-200/80 px-5 py-4 dark:border-zinc-800">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="section-title flex items-center gap-2">
-              <Zap className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+            <h2 className="section-title flex items-center gap-2">
+              <Zap className="h-5 w-5 text-sky-600 dark:text-sky-400" aria-hidden />
               Resume LLM (free tier)
-            </h3>
+            </h2>
             <p className="section-desc mt-1 max-w-2xl">
               NVIDIA Integrate models for resume generation and screening. OpenAI is used when the free tier is unavailable.
             </p>
@@ -632,16 +662,18 @@ function FreeLlmSettingsCard() {
             Key saved as <span className="font-mono">{keyHint}</span>. Run <strong>Test connection</strong> to verify and enable the free tier.
           </div>
         )}
+        {/* Persistent live region so progress of the (slow) test is announced. */}
+        <div role="status" className="sr-only">{testing ? testStatus : ''}</div>
         {testing && testStatus && (
-          <div className="banner-info flex items-center gap-2 text-sm text-body">
+          <div className="banner-info flex items-center gap-2 text-sm text-body" aria-hidden>
             <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-600 dark:text-sky-400" aria-hidden />
             {testStatus}
           </div>
         )}
 
         <div>
-          <label className="form-label">Model</label>
-          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <span id="freeLlmModel-label" className="form-label">Model</span>
+          <div role="radiogroup" aria-labelledby="freeLlmModel-label" className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {models.map((m: FreeLlmModelPreset) => {
               const selected = modelId === m.id;
               const active = selected && connected;
@@ -653,9 +685,7 @@ function FreeLlmSettingsCard() {
                       ? 'choice-card-selected ring-2 ring-emerald-500/25 dark:ring-emerald-400/30'
                       : selected
                         ? 'choice-card-selected'
-                        : connected
-                          ? 'opacity-80'
-                          : ''
+                        : ''
                   }`}
                 >
                   <input
@@ -691,8 +721,9 @@ function FreeLlmSettingsCard() {
               className="input focus-ring font-mono text-sm"
               placeholder={keySet ? `${keyHint} (leave blank to keep)` : 'nvapi-...'}
               autoComplete="off"
+              aria-describedby="freeLlmApiKey-hint"
             />
-            <p className="mt-1 text-xs text-muted">
+            <p id="freeLlmApiKey-hint" className="mt-1 text-xs text-muted">
               Saved securely on your profile. Only the last four characters are shown after saving.
             </p>
           </div>
@@ -706,14 +737,15 @@ function FreeLlmSettingsCard() {
               value={maxTokens}
               onChange={(e) => setMaxTokens(Number(e.target.value))}
               className="input focus-ring"
+              aria-describedby="freeLlmMaxTokens-hint"
             />
-            <p className="mt-1 text-xs text-muted">Higher values allow longer resumes; the free lane also caps output length.</p>
+            <p id="freeLlmMaxTokens-hint" className="mt-1 text-xs text-muted">Higher values allow longer resumes; the free lane also caps output length.</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-3 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
           <button type="button" onClick={handleSave} disabled={saving || !modelId} className="btn">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
             Save settings
           </button>
           <button
@@ -724,12 +756,12 @@ function FreeLlmSettingsCard() {
           >
             {testing ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 Testing…
               </>
             ) : (
               <>
-                <Zap className="h-4 w-4" />
+                <Zap className="h-4 w-4" aria-hidden />
                 Test connection
               </>
             )}
@@ -842,7 +874,7 @@ function SlackAlertsCard() {
     <div className="card mt-4">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="card-header mb-0">Slack interview digest</h3>
+          <h2 className="card-header mb-0">Slack interview digest</h2>
           <p className="text-muted">
             You'll get a DM when you add or reschedule an interview, plus a daily digest
             of that day's schedule. Only you see it.
@@ -850,7 +882,7 @@ function SlackAlertsCard() {
         </div>
         {connected ? (
           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
-            <CheckCircle2 className="h-3.5 w-3.5" />
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
             Connected
           </span>
         ) : (
@@ -874,7 +906,7 @@ function SlackAlertsCard() {
             disabled={!oauthReady || connecting}
             onClick={handleConnect}
           >
-            {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
             Connect Slack
           </button>
         ) : (
@@ -888,7 +920,7 @@ function SlackAlertsCard() {
               disabled={!botReady || testing}
               onClick={handleTestDm}
             >
-              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Zap className="h-4 w-4" aria-hidden />}
               Send test DM
             </button>
           </>
@@ -945,7 +977,7 @@ function SlackAlertsCard() {
           </p>
 
           <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
             Save preferences
           </button>
         </div>

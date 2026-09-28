@@ -52,8 +52,8 @@ export default function ResumeStylingEditor({
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center gap-2 text-sm text-muted">
-        <Loader2 className="w-4 h-4 animate-spin" /> Loading...
+      <div role="status" className="p-6 flex items-center gap-2 text-sm text-muted">
+        <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading...
       </div>
     );
   }
@@ -71,11 +71,12 @@ export default function ResumeStylingEditor({
             </p>
           </div>
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
             className="btn disabled:opacity-50"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
             Save
           </button>
         </header>
@@ -97,11 +98,12 @@ export default function ResumeStylingEditor({
         {!showHeader && (
           <div className="flex justify-end pt-3">
             <button
+              type="button"
               onClick={handleSave}
               disabled={saving}
               className="btn disabled:opacity-50"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
               Save template
             </button>
           </div>
@@ -118,6 +120,8 @@ function HtmlTemplatePane({
   name: string;
   onChange: (html: string, name: string) => void;
 }) {
+  const [status, setStatus] = useState('');
+
   async function handleFile(file: File) {
     const fileName = file.name;
     if (!fileName.toLowerCase().endsWith('.html')) {
@@ -126,18 +130,20 @@ function HtmlTemplatePane({
     }
     const text = await file.text();
     onChange(text, fileName);
+    setStatus(`${fileName} loaded. Save to keep it.`);
   }
 
   function clear() {
     if (!html) return;
     if (!window.confirm('Remove the current template?')) return;
     onChange('', '');
+    setStatus('Template removed. Save to keep the change.');
   }
 
   return (
     <div className="space-y-3">
       <label
-        className="block border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl p-6 text-center cursor-pointer hover:border-primary hover:bg-sky-50/40 dark:hover:bg-sky-950/20 transition"
+        className="relative block border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl p-6 text-center cursor-pointer hover:border-primary hover:bg-sky-50/40 dark:hover:bg-sky-950/20 transition [&:has(:focus-visible)]:ring-2 [&:has(:focus-visible)]:ring-sky-600 dark:[&:has(:focus-visible)]:ring-sky-400"
         onDragOver={(e) => { e.preventDefault(); }}
         onDrop={(e) => {
           e.preventDefault();
@@ -148,7 +154,7 @@ function HtmlTemplatePane({
         <input
           type="file"
           accept=".html,text/html"
-          className="hidden"
+          className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) handleFile(f);
@@ -160,6 +166,7 @@ function HtmlTemplatePane({
         </div>
       </label>
 
+      <div role="status" className="sr-only">{status}</div>
       {html ? (
         <div className="panel p-3 flex items-center justify-between gap-3">
           <div className="text-sm text-body truncate">

@@ -11,6 +11,7 @@ import {
 import * as api from '../api/endpoints';
 import type { ResumeJob, ResumeJobStatus, ResumeJobStep, ScreeningPair } from '../api/endpoints';
 import { notify } from '../lib/notify';
+import { useDialog } from '../lib/useDialog';
 import ResumeTabs from '../components/ResumeTabs';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
@@ -85,7 +86,7 @@ function LlmProviderBadge({
     <div className="flex flex-col items-start gap-0.5" title={model || providerLabel}>
       <span className={badgeClass}>{providerLabel}</span>
       {short && (
-        <span className="max-w-[140px] truncate font-mono text-[11px] text-muted">
+        <span className="max-w-[140px] truncate reveal-on-focus font-mono text-[11px] text-muted">
           {short}
         </span>
       )}
@@ -100,6 +101,8 @@ export default function GeneratedResumesPage() {
   const [panelJob, setPanelJob] = useState<ResumeJob | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+  const filterId = useId();
 
   // Filters
   const [filterAccountId, setFilterAccountId] = useState('');
@@ -165,18 +168,23 @@ export default function GeneratedResumesPage() {
       initRef.current = true;
       return;
     }
+    const messages: string[] = [];
     for (const j of data.jobs) {
       if (j.status === 'completed' && !seen.has(j._id)) {
         seen.add(j._id);
+        messages.push(`${j.companyName} resume completed${j.hasPdf ? ', downloading' : ''}.`);
         if (j.hasPdf) {
           api.downloadResumeJob(j).catch((err) =>
             notify.error(err, `Auto-download failed for ${j.companyName}`)
           );
         }
       } else if (j.status === 'failed') {
+        if (!seen.has(j._id)) messages.push(`${j.companyName} resume failed.`);
         seen.add(j._id);
       }
     }
+    // Polite live region: background job transitions are otherwise silent.
+    if (messages.length) setAnnouncement(messages.join(' '));
   }, [data]);
 
   // Selection helpers — only completed-with-pdf rows are selectable.
@@ -235,7 +243,7 @@ export default function GeneratedResumesPage() {
           <div className="flex items-center gap-3">
             {polling && (
               <span className="inline-flex items-center gap-1 text-xs text-blue-600">
-                <Loader2 className="w-3 h-3 animate-spin" /> Live
+                <Loader2 className="w-3 h-3 animate-spin" aria-hidden /> Live
               </span>
             )}
             <button
@@ -243,27 +251,30 @@ export default function GeneratedResumesPage() {
               onClick={() => mutate()}
               className="link-inline text-xs text-muted hover:text-sky-600 dark:hover:text-sky-400"
             >
-              <RefreshCw className="w-3 h-3" /> Refresh
+              <RefreshCw className="w-3 h-3" aria-hidden /> Refresh
             </button>
           </div>
         }
       />
       <ResumeTabs />
+      <div role="status" aria-live="polite" className="sr-only">{announcement}</div>
 
       {/* Filters + bulk actions — merged toolbar */}
       <div className="flex flex-wrap items-end justify-between gap-3 toolbar">
         <div className="flex items-end gap-3 flex-wrap">
           <div className="w-56">
-            <label className="block text-xs text-muted mb-1">Profile</label>
+            <label htmlFor={`${filterId}-profile`} className="block text-xs text-muted mb-1">Profile</label>
             <Select
+              id={`${filterId}-profile`}
               value={filterAccountId}
               onChange={(v) => { setFilterAccountId(v); setPage(1); }}
               options={profileOptions}
             />
           </div>
           <div className="w-56">
-            <label className="block text-xs text-muted mb-1">Company</label>
+            <label htmlFor={`${filterId}-company`} className="block text-xs text-muted mb-1">Company</label>
             <input
+              id={`${filterId}-company`}
               className="input w-full text-sm"
               placeholder="Filter by company name"
               value={companyInput}
@@ -271,13 +282,16 @@ export default function GeneratedResumesPage() {
             />
           </div>
           <div className="w-full sm:w-72">
-            <label className="block text-xs text-muted mb-1">Search JD</label>
+            <label htmlFor={`${filterId}-q`} className="block text-xs text-muted mb-1">Search JD</label>
             <input
+              id={`${filterId}-q`}
               className="input w-full text-sm"
               placeholder="skills, tech, anything (space = AND)"
+              aria-describedby={`${filterId}-q-hint`}
               value={qInput}
               onChange={(e) => setQInput(e.target.value)}
             />
+            <span id={`${filterId}-q-hint`} className="sr-only">Separate words with spaces; every word must match.</span>
           </div>
           {(filterAccountId || companyFilter || qFilter) && (
             <button
@@ -296,7 +310,7 @@ export default function GeneratedResumesPage() {
         </div>
         <div className="flex items-center gap-3 pb-1">
           <SaveFolderStatus />
-          <span className="text-xs text-muted">
+          <span className="text-xs text-muted" aria-live="polite">
             {someChecked ? `${selected.size} selected` : 'Select rows for bulk actions'}
           </span>
           <button
@@ -305,7 +319,7 @@ export default function GeneratedResumesPage() {
             disabled={!someChecked || bulkDownloading}
             className="btn btn-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Download className="w-4 h-4" aria-hidden />}
             Download {someChecked ? `(${selected.size})` : 'selected'}
           </button>
         </div>
@@ -313,8 +327,8 @@ export default function GeneratedResumesPage() {
 
       <div className="table-wrap">
         {isLoading && jobs.length === 0 ? (
-          <p className="p-6 text-sm text-muted flex items-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading...
+          <p role="status" className="p-6 text-sm text-muted flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading...
           </p>
         ) : jobs.length === 0 ? (
           <p className="p-6 text-sm text-muted">
@@ -381,7 +395,7 @@ export default function GeneratedResumesPage() {
                   setLimit(Number(e.target.value));
                   setPage(1);
                 }}
-                className="border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1 text-sm"
+                className="border border-field dark:border-zinc-600 rounded-md px-2 py-1 text-sm"
               >
                 {PAGE_SIZE_OPTIONS.map((n) => (
                   <option key={n} value={n}>{n}</option>
@@ -489,7 +503,7 @@ function JobRow({
 
   return (
     <>
-      <tr className="table-row cursor-pointer" onClick={onOpen}>
+      <tr className="table-row reveal-scope cursor-pointer" onClick={onOpen}>
         <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
@@ -503,11 +517,11 @@ function JobRow({
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
           {created ? created.toLocaleString() : '—'}
         </td>
-        <td className="px-3 py-2 text-strong truncate max-w-[160px]" title={job.profileName}>
+        <td className="px-3 py-2 text-strong truncate reveal-on-focus max-w-[160px]" title={job.profileName}>
           {job.profileName}
         </td>
         <td className="px-3 py-2 text-strong max-w-[280px]" title={job.jobUrl || job.companyName}>
-          <div className="truncate">
+          <div className="truncate reveal-on-focus">
             {job.jobUrl ? (
               <a href={job.jobUrl} target="_blank" rel="noreferrer" className="link">
                 {job.companyName}
@@ -517,14 +531,14 @@ function JobRow({
             )}
           </div>
           {job.matchSnippet && (
-            <div className="text-[11px] text-muted italic mt-0.5 line-clamp-2" title={job.matchSnippet}>
+            <div className="text-[11px] text-muted italic mt-0.5 line-clamp-2 reveal-on-focus" title={job.matchSnippet}>
               {job.matchSnippet}
             </div>
           )}
         </td>
         <td className="px-3 py-2">
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_BADGE[job.status]}`}>
-            {inFlight && <Loader2 className="w-3 h-3 animate-spin" />}
+            {inFlight && <Loader2 className="w-3 h-3 animate-spin" aria-hidden />}
             {STATUS_LABEL[job.status]}
           </span>
           {inFlight && (
@@ -532,7 +546,7 @@ function JobRow({
           )}
           {isFailed && job.errorMessage && (
             <div
-              className="text-[11px] text-red-600 dark:text-red-400 mt-0.5 line-clamp-2 max-w-[220px]"
+              className="text-[11px] text-red-600 dark:text-red-400 mt-0.5 line-clamp-2 reveal-on-focus max-w-[220px]"
               title={job.errorMessage}
             >
               {job.errorMessage}
@@ -576,7 +590,7 @@ function JobRow({
                 title={retryTitle}
                 aria-label={retryTitle}
               >
-                {retrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {retrying ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <RefreshCw className="w-4 h-4" aria-hidden />}
               </button>
             )}
             <button
@@ -587,18 +601,22 @@ function JobRow({
                 job.status === 'completed' ? '' : 'invisible'
               }`}
               title={job.hasPdf ? 'Download PDF' : 'PDF missing — try anyway'}
+              aria-label={`Download PDF for ${job.companyName}${job.hasPdf ? '' : ' (PDF missing, try anyway)'}`}
             >
-              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Download className="w-4 h-4" aria-hidden />}
             </button>
             <button
               type="button"
               onClick={onOpen}
               className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted relative"
               title="Open screening Q&A panel"
+              aria-label={`Open screening Q&A for ${job.companyName}${
+                hasAnswers ? ` (${job.screeningPairs!.length} answer${job.screeningPairs!.length === 1 ? '' : 's'})` : ''
+              }`}
             >
-              <MessageSquare className="w-4 h-4" />
+              <MessageSquare className="w-4 h-4" aria-hidden />
               {hasAnswers && (
-                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center text-[9px] font-semibold text-white bg-primary rounded-full w-3.5 h-3.5">
+                <span aria-hidden className="absolute -top-1 -right-1 inline-flex items-center justify-center text-[9px] font-semibold text-white bg-primary rounded-full w-3.5 h-3.5">
                   {job.screeningPairs!.length}
                 </span>
               )}
@@ -609,8 +627,9 @@ function JobRow({
               disabled={deleting || inFlight}
               className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted disabled:opacity-50"
               title={inFlight ? 'Cannot delete while running' : 'Delete'}
+              aria-label={`Delete build for ${job.companyName}${inFlight ? ' (cannot delete while running)' : ''}`}
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" aria-hidden />
             </button>
           </div>
         </td>
@@ -653,12 +672,13 @@ function ScreeningPairsBlock({ pairs }: { pairs: ScreeningPair[] }) {
               className={
                 'panel w-full text-left p-3 cursor-pointer transition-colors ' +
                 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ' +
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ' +
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-600 dark:focus-visible:ring-sky-400 ' +
                 (copied ? 'ring-1 ring-green-400/60 dark:ring-green-600/50' : '')
               }
               title="Click to copy answer"
-              aria-label={`Copy answer ${i + 1}`}
             >
+              {/* No aria-label: it would replace the question/answer text as the button's name. */}
+              <span className="sr-only">Copy answer. </span>
               <p className="text-sm font-medium text-strong whitespace-pre-wrap mb-1.5">
                 <span className="text-faint mr-2">{i + 1}.</span>
                 {p.question}
@@ -814,7 +834,6 @@ function ScreeningPanel({
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLElement>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
   const [entered, setEntered] = useState(false);
   const [text, setText] = useState('');
   const [asking, setAsking] = useState(false);
@@ -829,46 +848,7 @@ function ScreeningPanel({
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  useEffect(() => {
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
-    const panel = panelRef.current;
-    panel?.focus();
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-        return;
-      }
-      if (e.key !== 'Tab' || !panel) return;
-
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable.length === 0) {
-        e.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', onKeyDown);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = prevOverflow;
-      previouslyFocused.current?.focus();
-    };
-  }, [onClose]);
+  useDialog(true, panelRef, onClose);
 
   async function copyJobDescription() {
     const content = job.jobDescription || '';
@@ -934,7 +914,7 @@ function ScreeningPanel({
         <header className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs text-muted">Screening Q&amp;A</div>
-            <div id={titleId} className="font-semibold text-strong truncate">{job.companyName}</div>
+            <h2 id={titleId} className="font-semibold text-strong truncate">{job.companyName}</h2>
             <div className="text-xs text-muted truncate">{job.profileName}</div>
             {job.screeningLlmProvider && (
               <div className="mt-1">
@@ -947,7 +927,7 @@ function ScreeningPanel({
               </div>
             )}
           </div>
-          <button type="button" onClick={onClose} className="btn-icon" aria-label="Close"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={onClose} className="btn-icon" aria-label="Close"><X className="w-4 h-4" aria-hidden /></button>
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
@@ -972,8 +952,10 @@ function ScreeningPanel({
               type="button"
               onClick={() => setJdOpen((v) => !v)}
               className="link-inline text-xs text-muted hover:text-sky-600 dark:hover:text-sky-400"
+              aria-expanded={jdOpen}
+              aria-controls={`${titleId}-jd`}
             >
-              {jdOpen ? '▾' : '▸'} Job description
+              <span aria-hidden>{jdOpen ? '▾' : '▸'}</span> Job description
             </button>
             {job.jobDescription && (
               <button
@@ -982,11 +964,10 @@ function ScreeningPanel({
                 className={
                   'panel w-full text-left px-3 py-2.5 cursor-pointer transition-colors ' +
                   'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ' +
-                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ' +
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-600 dark:focus-visible:ring-sky-400 ' +
                   (jdCopied ? 'ring-1 ring-green-400/60 dark:ring-green-600/50' : '')
                 }
                 title="Click to copy job description"
-                aria-label="Copy job description"
               >
                 <p className="text-sm text-body">
                   {jdCopied ? 'Copied!' : 'Click to copy job description'}
@@ -994,7 +975,7 @@ function ScreeningPanel({
               </button>
             )}
             {jdOpen && (
-              <pre className="text-xs text-body bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-72 overflow-y-auto">
+              <pre id={`${titleId}-jd`} className="text-xs text-body bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-72 overflow-y-auto">
                 {job.jobDescription || '(no JD stored)'}
               </pre>
             )}
@@ -1006,8 +987,10 @@ function ScreeningPanel({
                 type="button"
                 onClick={() => setCoverLetterOpen((v) => !v)}
                 className="link-inline text-xs text-muted hover:text-sky-600 dark:hover:text-sky-400"
+                aria-expanded={coverLetterOpen}
+                aria-controls={`${titleId}-cover`}
               >
-                {coverLetterOpen ? '▾' : '▸'} Cover letter
+                <span aria-hidden>{coverLetterOpen ? '▾' : '▸'}</span> Cover letter
               </button>
               <button
                 type="button"
@@ -1015,18 +998,17 @@ function ScreeningPanel({
                 className={
                   'panel w-full text-left px-3 py-2.5 cursor-pointer transition-colors ' +
                   'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ' +
-                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ' +
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-600 dark:focus-visible:ring-sky-400 ' +
                   (coverLetterCopied ? 'ring-1 ring-green-400/60 dark:ring-green-600/50' : '')
                 }
                 title="Click to copy cover letter"
-                aria-label="Copy cover letter"
               >
                 <p className="text-sm text-body">
                   {coverLetterCopied ? 'Copied!' : 'Click to copy cover letter'}
                 </p>
               </button>
               {coverLetterOpen && (
-                <pre className="text-sm text-strong bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                <pre id={`${titleId}-cover`} className="text-sm text-strong bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
                   {job.coverLetterText}
                 </pre>
               )}
@@ -1044,8 +1026,9 @@ function ScreeningPanel({
         </div>
 
         <footer className="px-6 py-5 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
-          <label className="block text-xs text-muted">Ask screening questions — number them (<code>1.</code>, <code>2.</code>) for multiple. Unnumbered = one question.</label>
+          <label htmlFor={`${titleId}-ask`} className="block text-xs text-muted">Ask screening questions — number them (<code>1.</code>, <code>2.</code>) for multiple. Unnumbered = one question.</label>
           <textarea
+            id={`${titleId}-ask`}
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={3}
@@ -1054,7 +1037,7 @@ function ScreeningPanel({
           />
           <div className="flex justify-end">
             <button type="button" className="btn" onClick={ask} disabled={asking || !text.trim()}>
-              {asking ? <><Loader2 className="w-4 h-4 animate-spin" /> Asking...</> : 'Ask'}
+              {asking ? <><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Asking...</> : 'Ask'}
             </button>
           </div>
         </footer>
@@ -1087,6 +1070,7 @@ function SaveFolderStatus() {
               setDirName(null);
             }}
             className="link text-faint underline"
+            aria-label="Change download folder"
           >
             change
           </button>

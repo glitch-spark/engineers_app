@@ -45,6 +45,7 @@ export default function AlertsPopover() {
   const [saving, setSaving] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const confirmOpen = pending !== null;
 
   const { data: unreadData } = useSWR(UNREAD_KEY, api.alertsUnreadCount, {
@@ -55,20 +56,28 @@ export default function AlertsPopover() {
   const { data, isLoading, mutate } = useSWR(open ? LIST_KEY : null, api.listAlerts);
   const alerts = data?.alerts ?? [];
 
-  const closeInbox = () => {
+  /** `returnFocus` is false when focus has already moved elsewhere (outside click, Tab away, confirm dialog). */
+  const closeInbox = (returnFocus = true) => {
     if (!open) return;
     setOpen(false);
     setClosing(true);
     window.setTimeout(() => {
       setClosing(false);
-      btnRef.current?.focus();
+      if (returnFocus) btnRef.current?.focus();
     }, 150);
   };
+
+  // Move focus into the popover when it opens so keyboard/SR users land in it (WCAG 2.4.3).
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => panelRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
 
   useEffect(() => {
     if (!open || confirmOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) closeInbox();
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) closeInbox(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeInbox();
@@ -102,7 +111,7 @@ export default function AlertsPopover() {
   const onAction = (alert: AppAlert, key: string) => {
     if (key === 'paid' || key === 'stop') {
       setPending({ alert, key });
-      closeInbox();
+      closeInbox(false);
       return;
     }
     void runAction(alert, key);
@@ -146,7 +155,15 @@ export default function AlertsPopover() {
   const confirmCta = pending?.key === 'paid' ? 'Skip month' : 'Stop reminders';
 
   return (
-    <div className="relative" ref={wrapRef}>
+    <div
+      className="relative"
+      ref={wrapRef}
+      onBlur={(e) => {
+        // Tabbing out of the popover closes it without pulling focus back.
+        const next = e.relatedTarget as Node | null;
+        if (open && next && !wrapRef.current?.contains(next)) closeInbox(false);
+      }}
+    >
       <button
         ref={btnRef}
         type="button"
@@ -165,9 +182,15 @@ export default function AlertsPopover() {
           <span className="t-badge-dot">{unread > 9 ? '9+' : unread || ''}</span>
         </span>
       </button>
+      {/* Announces changes to the polled unread count (WCAG 4.1.3). */}
+      <span role="status" className="sr-only">
+        {unread > 0 ? `${unread} unread alert${unread === 1 ? '' : 's'}` : ''}
+      </span>
 
       {(open || closing) && (
         <div
+          ref={panelRef}
+          tabIndex={-1}
           id={panelId}
           role="dialog"
           aria-label="Alerts"
@@ -185,7 +208,7 @@ export default function AlertsPopover() {
 
           <ul className="max-h-[24rem] overflow-y-auto border-t border-zinc-100 dark:border-zinc-800">
             {isLoading && (
-              <li className="px-3 py-6 text-sm text-zinc-500">Loading…</li>
+              <li className="px-3 py-6 text-sm text-zinc-500"><span role="status">Loading…</span></li>
             )}
             {!isLoading && alerts.length === 0 && (
               <li className="px-3 py-8 text-center text-sm text-zinc-500">Caught up.</li>
@@ -213,7 +236,10 @@ export default function AlertsPopover() {
                           {last4 ? <span className="ml-1.5 font-mono text-[11px] font-normal text-zinc-500">****{last4}</span> : null}
                         </p>
                         {alert.unread && (
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" aria-label="Unread" />
+                          <>
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" aria-hidden />
+                            <span className="sr-only">Unread</span>
+                          </>
                         )}
                       </div>
                       {status && (

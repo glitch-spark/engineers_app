@@ -267,9 +267,9 @@ export default function DailyPlanPanel({
   return (
     <div className="space-y-6">
       {isLoading ? (
-        <div className="panel p-8 text-center text-sm text-muted">
+        <div role="status" className="panel p-8 text-center text-sm text-muted">
           <div className="flex items-center justify-center">
-            <div className="spinner spinner-md mr-3" />
+            <div className="spinner spinner-md mr-3" aria-hidden />
             Loading daily plans...
           </div>
         </div>
@@ -284,7 +284,7 @@ export default function DailyPlanPanel({
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-strong">{formatCalendarDate(plan.date)}</span>
+                    <h2 className="font-semibold text-strong">{formatCalendarDate(plan.date)}</h2>
                     <span className="text-xs text-faint">Week {plan.weekNumber}, {plan.year}</span>
                     {plan.planType === 'regular' && <span className="badge-info">Regular</span>}
                   </div>
@@ -297,11 +297,11 @@ export default function DailyPlanPanel({
                 </div>
                 {canEditPlan(plan) && (
                   <div className="flex gap-1 flex-shrink-0">
-                    <button type="button" className="btn-icon" onClick={() => openEdit(plan)} title="Edit">
-                      <Pencil size={16} />
+                    <button type="button" className="btn-icon" onClick={() => openEdit(plan)} title="Edit" aria-label={`Edit daily plan for ${formatCalendarDate(plan.date)}`}>
+                      <Pencil size={16} aria-hidden />
                     </button>
-                    <button type="button" className="btn-icon" onClick={() => remove(plan)} title="Delete">
-                      <Trash2 size={16} />
+                    <button type="button" className="btn-icon" onClick={() => remove(plan)} title="Delete" aria-label={`Delete daily plan for ${formatCalendarDate(plan.date)}`}>
+                      <Trash2 size={16} aria-hidden />
                     </button>
                   </div>
                 )}
@@ -336,7 +336,7 @@ export default function DailyPlanPanel({
               className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">Previous</button>
             <button onClick={() => setCurrentPage(pagination.page + 1)} disabled={!pagination.hasNext}
               className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">Next</button>
-            <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="select focus-ring text-sm">
+            <select aria-label="Plans per page" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="select focus-ring text-sm">
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={50}>50</option>
@@ -347,12 +347,15 @@ export default function DailyPlanPanel({
 
       <Modal open={open} onClose={() => setOpen(false)} size="lg" title={editing ? 'Edit daily plan' : 'New daily plan'}>
         <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p id="daily-plan-error" role="alert" className="text-red-700 dark:text-red-400 text-sm">{error}</p>}
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-date">Date</label>
               <input
                 id="daily-plan-date"
+                aria-required
+                aria-invalid={!!error && !form.date}
+                aria-describedby={error ? 'daily-plan-error' : undefined}
                 className="input w-full text-sm"
                 type="date"
                 value={form.date}

@@ -56,15 +56,15 @@ export default function ReportPage() {
         disabled={reporting}
         title="Analyze plans in the current filter into progress metrics. Interview counts come from the interview board; next-week interviews are included."
       >
-        <Sparkles size={16} className="mr-2" /> {reporting ? 'Analyzing...' : 'Run Progress Report'}
+        <Sparkles size={16} className="mr-2" aria-hidden /> {reporting ? 'Analyzing...' : 'Run Progress Report'}
       </button>
       <button type="button" className="btn" onClick={() => weeklyActions.current?.openAdd()}>
-        <Calendar size={16} className="mr-2" /> Add Plan
+        <Calendar size={16} className="mr-2" aria-hidden /> Add Plan
       </button>
     </div>
   ) : !isAdmin ? (
     <button type="button" className="btn" onClick={() => dailyActions.current?.openAdd()}>
-      <Calendar size={16} className="mr-2" /> Add Plan
+      <Calendar size={16} className="mr-2" aria-hidden /> Add Plan
     </button>
   ) : null;
 

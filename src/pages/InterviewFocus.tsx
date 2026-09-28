@@ -17,6 +17,7 @@ import * as api from '../api/endpoints';
 import type { InterviewStageEntry } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import { notify } from '../lib/notify';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { formatProfileLabel } from '../lib/countries';
 import {
   BOARD_FORM_STAGES,
@@ -32,6 +33,7 @@ import {
 import Select from '../components/Select';
 import ThemeToggle from '../components/ThemeToggle';
 import {
+  MissingFieldsHint,
   TranscriptUploadButton,
   formatScheduledDate,
   type Interview,
@@ -75,11 +77,17 @@ function stepTone(e: InterviewStageEntry): StepTone {
 }
 
 const STEP_CIRCLE: Record<StepTone, string> = {
-  done: 'bg-emerald-500 text-white border-emerald-500 dark:bg-emerald-500 dark:border-emerald-500',
+  done: 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 dark:border-emerald-500',
   failed: 'bg-red-500 text-white border-red-500',
   muted: 'bg-zinc-200 text-zinc-500 border-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:border-zinc-700',
   pending: 'bg-white text-sky-700 border-sky-500 dark:bg-zinc-950 dark:text-sky-300 dark:border-sky-400',
 };
+
+/** Screen-reader text for a step's outcome (the circle shows it by colour + icon). */
+function stepStatusText(e: InterviewStageEntry, tone: StepTone): string {
+  if (tone === 'failed') return normalizeInterviewStage(e.stage) === 'rejected' ? 'Rejected' : 'Failed';
+  return e.status ? statusLabel(e.status) : 'No status';
+}
 
 /** YYYY-MM-DD for a date input; calendar-date prefix wins so UTC noon never shifts the day. */
 function toDateInput(raw?: string | null): string {
@@ -135,9 +143,7 @@ export default function InterviewFocusPage() {
     [searchParams, setSearchParams],
   );
 
-  useEffect(() => {
-    if (iv?.companyName) document.title = `${iv.companyName} · Interview`;
-  }, [iv?.companyName]);
+  useDocumentTitle(iv?.companyName ? `${iv.companyName} · Interview` : 'Interview');
 
   useEffect(() => {
     if (!animatingId) return;
@@ -148,8 +154,8 @@ export default function InterviewFocusPage() {
   if (!id) return <div className="p-6 text-muted">Missing interview id.</div>;
   if (isLoading) {
     return (
-      <div className="shell-content min-h-screen flex items-center justify-center text-muted">
-        <div className="spinner spinner-md mr-3" />
+      <div className="shell-content min-h-screen flex items-center justify-center text-muted" role="status">
+        <div className="spinner spinner-md mr-3" aria-hidden />
         Loading interview...
       </div>
     );
@@ -162,7 +168,7 @@ export default function InterviewFocusPage() {
       : 'Couldn\'t load this interview.';
     return (
       <div className="shell-content min-h-screen p-6 space-y-3">
-        <div className="text-red-600 dark:text-red-400 font-medium">{friendly}</div>
+        <div className="text-red-600 dark:text-red-400 font-medium" role="alert">{friendly}</div>
         <Link to="/interviews" className="btn-outline"><ArrowLeft size={16} aria-hidden /> Back to Interviews</Link>
       </div>
     );
@@ -409,7 +415,7 @@ function StageStepper({
                     isSelected
                       ? 'ring-4 ring-zinc-900/10 dark:ring-white/15'
                       : 'group-hover:ring-4 group-hover:ring-zinc-900/5 dark:group-hover:ring-white/10'
-                  } group-focus-visible:ring-4 group-focus-visible:ring-sky-500/40 ${isNew ? 't-step-pop' : ''}`}
+                  } group-focus-visible:ring-2 group-focus-visible:ring-sky-600 group-focus-visible:ring-offset-2 dark:group-focus-visible:ring-sky-400 dark:group-focus-visible:ring-offset-zinc-950 ${isNew ? 't-step-pop' : ''}`}
                 >
                   {tone === 'done' ? <Check size={14} strokeWidth={3} aria-hidden />
                     : tone === 'failed' ? <X size={14} strokeWidth={3} aria-hidden />
@@ -423,6 +429,7 @@ function StageStepper({
                   <span className="text-[11px] tabular-nums text-faint">
                     {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : '—'}
                   </span>
+                  <span className="sr-only">, {stepStatusText(entry, tone)}</span>
                 </span>
               </button>
             </li>
@@ -439,7 +446,7 @@ function StageStepper({
               className="group flex flex-col items-center gap-1.5 rounded-lg px-2 focus-visible:outline-none"
             >
               <span
-                className={`relative z-[1] flex h-7 w-7 items-center justify-center rounded-full border-2 border-dashed transition-all duration-200 group-focus-visible:ring-4 group-focus-visible:ring-sky-500/40 ${
+                className={`relative z-[1] flex h-7 w-7 items-center justify-center rounded-full border-2 border-dashed transition-all duration-200 group-focus-visible:ring-2 group-focus-visible:ring-sky-600 group-focus-visible:ring-offset-2 dark:group-focus-visible:ring-sky-400 dark:group-focus-visible:ring-offset-zinc-950 ${
                   adding
                     ? 'rotate-45 border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
                     : 'border-zinc-300 bg-white text-zinc-500 group-hover:border-zinc-500 group-hover:text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-400 dark:group-hover:border-zinc-400 dark:group-hover:text-zinc-100'
@@ -488,15 +495,26 @@ function StageComposer({
   const rootRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     const root = rootRef.current;
     if (!root) return;
     root.querySelector<HTMLElement>('select, input')?.focus({ preventScroll: true });
     root.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    return () => {
+      // Closing the composer removes the focused field; put focus back on the "+" / "Edit details" button.
+      const lost = !document.activeElement || document.activeElement === document.body;
+      if (lost && opener?.isConnected) opener.focus({ preventScroll: true });
+    };
   }, []);
 
   const resolved = resolveInterviewStage(boardStage, techSubStage);
   const sameAsTip = mode === 'add' && !!currentTip && resolved === currentTip;
   const canSave = !!resolved && !!date && !busy && !sameAsTip;
+  const missing = [
+    ...(!boardStage ? ['Stage'] : []),
+    ...(boardStage === 'tech' && !techSubStage ? ['Tech round'] : []),
+    ...(!date ? ['Scheduled date'] : []),
+  ];
 
   const run = async (fn: () => Promise<void>, failMsg: string) => {
     setBusy(true);
@@ -591,11 +609,17 @@ function StageComposer({
         </div>
         <div className="flex flex-col items-end gap-1.5">
           {sameAsTip && (
-            <p className="text-xs text-muted">Pick a different stage — this round is already the latest.</p>
+            <p id="stage-composer-hint" className="text-xs text-muted">Pick a different stage — this round is already the latest.</p>
           )}
+          {!sameAsTip && <MissingFieldsHint id="stage-composer-hint" missing={missing} />}
           <div className="flex gap-2">
             <button type="button" className="btn-outline" onClick={onCancel} disabled={busy}>Cancel</button>
-            <button type="submit" className="btn" disabled={!canSave}>
+            <button
+              type="submit"
+              className="btn"
+              disabled={!canSave}
+              aria-describedby={!busy && !canSave && (sameAsTip || missing.length) ? 'stage-composer-hint' : undefined}
+            >
               {busy ? 'Saving…' : mode === 'add' ? 'Add stage' : 'Save'}
             </button>
           </div>
@@ -670,6 +694,20 @@ function StageWorkspace({
     { key: 'notes', label: 'Notes' },
     { key: 'questions', label: 'Questions' },
   ];
+  const contentTabRefs = useRef<Partial<Record<WorkspaceTab, HTMLButtonElement | null>>>({});
+
+  const onContentTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    const key = tabs[next].key;
+    setTab(key);
+    contentTabRefs.current[key]?.focus();
+  };
 
   return (
     <section
@@ -679,6 +717,7 @@ function StageWorkspace({
       className="panel-elevated overflow-hidden"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 px-5 py-4 dark:border-zinc-800">
+        <h2 className="sr-only">{stageLabel(entry.stage)} stage</h2>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-xs font-medium tabular-nums text-faint">Stage {index + 1}</span>
           <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${stageBadgeClass(normalizeInterviewStage(entry.stage))}`}>
@@ -702,13 +741,18 @@ function StageWorkspace({
 
       <div className="flex items-center justify-between gap-3 px-5 pt-4">
         <div className="segmented" role="tablist" aria-label="Stage content">
-          {tabs.map((t) => (
+          {tabs.map((t, i) => (
             <button
               key={t.key}
+              ref={(el) => { contentTabRefs.current[t.key] = el; }}
               type="button"
               role="tab"
+              id={`stage-content-tab-${t.key}`}
               aria-selected={tab === t.key}
+              aria-controls="stage-content-panel"
+              tabIndex={tab === t.key ? 0 : -1}
               onClick={() => setTab(t.key)}
+              onKeyDown={(e) => onContentTabKeyDown(e, i)}
               className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
                 tab === t.key
                   ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
@@ -724,7 +768,12 @@ function StageWorkspace({
         </span>
       </div>
 
-      <div className="p-5">
+      <div
+        className="p-5"
+        role="tabpanel"
+        id="stage-content-panel"
+        aria-labelledby={`stage-content-tab-${tab}`}
+      >
         {tab === 'script' && (
           <div>
             <div className="mb-2 flex items-center justify-between">
@@ -810,6 +859,11 @@ function ExtractedQuestions({
 
   return (
     <div>
+      <p className="sr-only" role="status">
+        {hasTranscript && questions.length > 0
+          ? `${questions.length} extracted ${questions.length === 1 ? 'question' : 'questions'}`
+          : ''}
+      </p>
       <div className="mb-2 flex items-center justify-between">
         <span className="form-label">Extracted questions</span>
         {hasTranscript && canEdit && (
@@ -821,7 +875,7 @@ function ExtractedQuestions({
       {!hasTranscript ? (
         <div className="text-xs italic text-faint">Add a script for this round to enable extraction.</div>
       ) : isLoading && questions.length === 0 ? (
-        <div className="text-xs text-faint">Loading…</div>
+        <div className="text-xs text-faint" role="status">Loading…</div>
       ) : questions.length === 0 ? (
         <div className="text-xs italic text-faint">
           No extracted questions yet. Extraction runs automatically when a script is saved (~30-60s).

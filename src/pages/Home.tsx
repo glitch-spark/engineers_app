@@ -4,10 +4,12 @@ import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import PublicPageLayout from '../components/auth/PublicPageLayout';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 export default function Home() {
   const { user, ready } = useAuth();
   const navigate = useNavigate();
+  useDocumentTitle('Welcome');
 
   useEffect(() => {
     if (!ready) return;

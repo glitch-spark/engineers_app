@@ -5,6 +5,7 @@ import { marked } from 'marked';
 import { ArrowLeft, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
 
@@ -82,6 +83,9 @@ export default function InterviewReviewPage() {
   const [input, setInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+
+  useDocumentTitle('AI Review');
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -136,10 +140,12 @@ export default function InterviewReviewPage() {
     if (!id) return;
     setBriefLoading(true);
     setBriefError('');
+    setAnnouncement('');
     try {
       const res = await api.interviewChat(id, { messages: [], rubric: includeRubric });
       setBrief(res.reply);
       setChat([{ role: 'assistant', content: res.reply }]);
+      setAnnouncement('Brief review ready.');
     } catch (err) {
       setBriefError(err instanceof Error ? err.message : 'Failed to generate review');
       notify.error(err, 'Failed to generate review');
@@ -185,9 +191,11 @@ export default function InterviewReviewPage() {
     setChat(next);
     setInput('');
     setChatLoading(true);
+    setAnnouncement('');
     try {
       const res = await api.interviewChat(id, { messages: next, rubric: false });
       setChat([...next, { role: 'assistant', content: res.reply }]);
+      setAnnouncement('Assistant replied. The reply is at the end of the follow-ups.');
     } catch (err) {
       notify.error(err, 'Follow-up failed');
       setChat(next.slice(0, -1));
@@ -223,12 +231,12 @@ export default function InterviewReviewPage() {
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <Link to={`/interview/${id}`} className="btn" title="Back to Interview">
-            <ArrowLeft size={16} />
+          <Link to={`/interview/${id}`} className="btn" title="Back to Interview" aria-label="Back to interview">
+            <ArrowLeft size={16} aria-hidden />
           </Link>
           <div>
             <h1 className="page-title flex items-center gap-2">
-              <Sparkles size={20} /> AI Review
+              <Sparkles size={20} aria-hidden /> AI Review
             </h1>
             <div className="text-sm text-muted">
               {headerTitle}
@@ -247,7 +255,7 @@ export default function InterviewReviewPage() {
             Include rubric
           </label>
           <button type="button" className="btn" onClick={runBrief} disabled={briefLoading}>
-            <RefreshCw size={16} className={`mr-1 ${briefLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw size={16} className={`mr-1 ${briefLoading ? 'animate-spin' : ''}`} aria-hidden />
             {brief ? 'Regenerate' : 'Generate'}
           </button>
           <button type="button" className="btn" onClick={copyBrief} disabled={!brief}>Copy</button>
@@ -258,21 +266,22 @@ export default function InterviewReviewPage() {
             disabled={clearing || briefLoading || chatLoading || (!brief && chat.length === 0)}
             title="Clear review and follow-up history"
           >
-            <Trash2 size={16} className="mr-1" /> Clear
+            <Trash2 size={16} className="mr-1" aria-hidden /> Clear
           </button>
         </div>
       </div>
 
       {/* Brief review panel */}
       <div className="card p-5">
-        <div className="text-xs text-muted uppercase tracking-wide mb-2">Brief Review</div>
+        <h2 className="text-xs text-muted uppercase tracking-wide mb-2">Brief Review</h2>
+        <p className="sr-only" role="status">{briefLoading ? 'Generating review…' : chatLoading ? 'Waiting for a reply…' : announcement}</p>
         {briefLoading && !brief ? (
           <div className="flex items-center text-muted py-4">
-            <div className="spinner spinner-md mr-3"></div>
+            <div className="spinner spinner-md mr-3" aria-hidden></div>
             Reading transcript and generating review…
           </div>
         ) : briefError ? (
-          <div className="text-red-600 text-sm">{briefError}</div>
+          <div className="text-red-600 dark:text-red-400 text-sm" role="alert">{briefError}</div>
         ) : brief ? (
           <MdBlock text={brief} />
         ) : (
@@ -283,7 +292,7 @@ export default function InterviewReviewPage() {
       {/* Chat */}
       <div className="card p-0 overflow-hidden">
         <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-          <div className="text-sm font-medium">Follow-ups</div>
+          <h2 className="text-sm font-medium">Follow-ups</h2>
           <div className="text-xs text-muted">{chat.length} message{chat.length !== 1 ? 's' : ''}</div>
         </div>
 
@@ -307,7 +316,8 @@ export default function InterviewReviewPage() {
           {chatLoading && (
             <div className="flex justify-start">
               <div className="bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm text-muted">
-                <span className="inline-flex gap-1">
+                <span className="sr-only">Assistant is typing…</span>
+                <span className="inline-flex gap-1" aria-hidden>
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse"></span>
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" style={{ animationDelay: '120ms' }}></span>
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" style={{ animationDelay: '240ms' }}></span>
@@ -348,6 +358,7 @@ export default function InterviewReviewPage() {
               }
             }}
             placeholder="Ask a follow-up… (Cmd/Ctrl+Enter to send)"
+            aria-label="Follow-up question"
             disabled={chatLoading || briefLoading}
           />
           <button
@@ -357,7 +368,7 @@ export default function InterviewReviewPage() {
             disabled={!input.trim() || chatLoading || briefLoading}
             title="Send (Cmd/Ctrl+Enter)"
           >
-            <Send size={16} className="mr-1" /> Send
+            <Send size={16} className="mr-1" aria-hidden /> Send
           </button>
         </div>
       </div>

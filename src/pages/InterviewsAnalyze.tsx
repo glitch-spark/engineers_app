@@ -96,16 +96,17 @@ export default function InterviewsAnalyzePage() {
       {/* Filters */}
       <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Profile</label>
-          <Select value={accountId} onChange={setAccountId} options={accountOptions} />
+          <label htmlFor="analyze-filter-profile" className="block text-xs text-muted mb-1">Profile</label>
+          <Select id="analyze-filter-profile" value={accountId} onChange={setAccountId} options={accountOptions} />
         </div>
         <div className="w-40">
-          <label className="block text-xs text-muted mb-1">Stage</label>
-          <Select value={stage} onChange={setStage} options={STAGE_OPTS} />
+          <label htmlFor="analyze-filter-stage" className="block text-xs text-muted mb-1">Stage</label>
+          <Select id="analyze-filter-stage" value={stage} onChange={setStage} options={STAGE_OPTS} />
         </div>
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Date range</label>
+          <label htmlFor="analyze-filter-range" className="block text-xs text-muted mb-1">Date range</label>
           <Select
+            id="analyze-filter-range"
             value={datePreset}
             onChange={(v) => applyDatePreset(v as DateRangePreset)}
             options={DATE_RANGE_PRESET_OPTIONS}
@@ -114,12 +115,12 @@ export default function InterviewsAnalyzePage() {
         {datePreset === 'custom' ? (
           <>
             <div className="w-40">
-              <label className="block text-xs text-muted mb-1">From</label>
-              <input className="input w-full text-sm" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <label htmlFor="analyze-filter-from" className="block text-xs text-muted mb-1">From</label>
+              <input id="analyze-filter-from" className="input w-full text-sm" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div className="w-40">
-              <label className="block text-xs text-muted mb-1">To</label>
-              <input className="input w-full text-sm" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              <label htmlFor="analyze-filter-to" className="block text-xs text-muted mb-1">To</label>
+              <input id="analyze-filter-to" className="input w-full text-sm" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
           </>
         ) : (
@@ -137,16 +138,22 @@ export default function InterviewsAnalyzePage() {
           onClick={run}
           disabled={running || !accountId}
           title={accountId ? 'Run analysis' : 'Pick a profile first'}
+          aria-describedby={accountId ? undefined : 'analyze-needs-profile'}
         >
-          {running ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Sparkles size={14} className="mr-1" />}
+          {running ? <Loader2 className="w-4 h-4 animate-spin mr-1" aria-hidden /> : <Sparkles size={14} className="mr-1" aria-hidden />}
           Analyze
         </button>
+        {!accountId && <span id="analyze-needs-profile" className="sr-only">Pick a profile first.</span>}
         {meta && (
           <span className="text-muted ml-2 text-xs pb-2">
             {meta.transcriptCount}/{meta.interviewCount} interviews with transcripts
           </span>
         )}
       </div>
+
+      <p className="sr-only" role="status">
+        {running ? 'Analyzing transcripts. This takes 30 to 60 seconds.' : result ? 'Analysis complete. Results are below.' : ''}
+      </p>
 
       {!result && !running && (
         <div className="panel p-8 text-center text-sm text-muted">
@@ -156,7 +163,7 @@ export default function InterviewsAnalyzePage() {
 
       {running && (
         <div className="panel p-8 text-center text-sm text-muted">
-          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" aria-hidden />
           Analyzing transcripts… 30-60s.
         </div>
       )}
@@ -195,14 +202,14 @@ function StageScoreboard({ stages }: { stages: InterviewAnalyzeStage[] }) {
   return (
     <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <BarChart3 className="w-4 h-4 text-muted" />
+        <BarChart3 className="w-4 h-4 text-muted" aria-hidden />
         <h2 className="card-title uppercase tracking-wide">Score per stage</h2>
       </header>
       <div className="space-y-2">
         {stages.map((s) => (
           <div key={s.stage} className="flex items-center gap-3">
             <div className="w-32 text-sm text-body">{s.stageLabel}</div>
-            <div className="flex-1 h-3 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div className="flex-1 h-3 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden" aria-hidden>
               <div
                 className={`h-full ${scoreColor(s.overallScore)}`}
                 style={{ width: `${Math.max(0, Math.min(100, (s.overallScore / 10) * 100))}%` }}
@@ -212,7 +219,7 @@ function StageScoreboard({ stages }: { stages: InterviewAnalyzeStage[] }) {
               {s.overallScore.toFixed(1)}/10
             </div>
             <div className="w-16 text-right text-xs text-faint">
-              n={s.interviewCount}
+              <span className="sr-only">Interviews: </span>n={s.interviewCount}
             </div>
           </div>
         ))}
@@ -227,7 +234,7 @@ function TopQuestions({ stages }: { stages: InterviewAnalyzeStage[] }) {
   return (
     <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <TrendingUp className="w-4 h-4 text-muted" />
+        <TrendingUp className="w-4 h-4 text-muted" aria-hidden />
         <h2 className="card-title uppercase tracking-wide">Most-asked questions per stage</h2>
       </header>
       <div className="space-y-6">
@@ -239,7 +246,10 @@ function TopQuestions({ stages }: { stages: InterviewAnalyzeStage[] }) {
                 <li key={i} className="flex items-start gap-2 text-sm text-body">
                   <span className="text-faint mt-0.5">{i + 1}.</span>
                   <span className="flex-1">{q.question}</span>
-                  <span className="text-xs text-faint whitespace-nowrap">×{q.frequency}</span>
+                  <span className="text-xs text-faint whitespace-nowrap">
+                    <span aria-hidden>×{q.frequency}</span>
+                    <span className="sr-only">Asked {q.frequency} times, example score</span>
+                  </span>
                   <span className={`text-xs font-semibold ${scoreTextColor(q.exampleScore)}`}>
                     {q.exampleScore}/10
                   </span>
@@ -258,7 +268,7 @@ function WeakSpots({ weakSpots }: { weakSpots: InterviewAnalyzeWeakSpot[] }) {
   return (
     <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <AlertTriangle className="w-4 h-4 text-amber-600" />
+        <AlertTriangle className="w-4 h-4 text-amber-600" aria-hidden />
         <h2 className="card-title uppercase tracking-wide">Weak spots</h2>
       </header>
       <ul className="space-y-3">
@@ -287,7 +297,7 @@ function PrepTips({ stages, overall }: { stages: InterviewAnalyzeStage[]; overal
   return (
     <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <Lightbulb className="w-4 h-4 text-yellow-600" />
+        <Lightbulb className="w-4 h-4 text-yellow-600" aria-hidden />
         <h2 className="card-title uppercase tracking-wide">Prep tips</h2>
       </header>
       {overall.length > 0 && (
@@ -333,7 +343,7 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
   return (
     <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <Mic className="w-4 h-4 text-indigo-600" />
+        <Mic className="w-4 h-4 text-indigo-600" aria-hidden />
         <h2 className="card-title uppercase tracking-wide">Your interview style</h2>
       </header>
       {styleProfile && (
@@ -343,7 +353,7 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
         {signatureStrengths.length > 0 && (
           <div>
             <div className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1.5 flex items-center gap-1">
-              <Star size={12} /> Signature strengths
+              <Star size={12} aria-hidden /> Signature strengths
             </div>
             <ul className="space-y-1 list-disc pl-5 text-sm text-body">
               {signatureStrengths.map((t, i) => <li key={i}>{t}</li>)}
@@ -353,7 +363,7 @@ function StyleProfile({ result }: { result: InterviewAnalyzeResult }) {
         {blindSpots.length > 0 && (
           <div>
             <div className="text-xs font-semibold text-red-700 dark:text-red-400 mb-1.5 flex items-center gap-1">
-              <AlertTriangle size={12} /> Blind spots
+              <AlertTriangle size={12} aria-hidden /> Blind spots
             </div>
             <ul className="space-y-1 list-disc pl-5 text-sm text-body">
               {blindSpots.map((t, i) => <li key={i}>{t}</li>)}
@@ -371,7 +381,7 @@ function HowToShine({ result }: { result: InterviewAnalyzeResult }) {
   return (
     <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <Target className="w-4 h-4 text-blue-600" />
+        <Target className="w-4 h-4 text-blue-600" aria-hidden />
         <h2 className="card-title uppercase tracking-wide">How to shine next time</h2>
       </header>
       {howToShine.length > 0 && (
@@ -408,7 +418,7 @@ function StagePatterns({ stages }: { stages: InterviewAnalyzeStage[] }) {
   return (
     <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <MessageCircle className="w-4 h-4 text-muted" />
+        <MessageCircle className="w-4 h-4 text-muted" aria-hidden />
         <h2 className="card-title uppercase tracking-wide">Per-stage patterns</h2>
       </header>
       <div className="space-y-6">
@@ -490,13 +500,13 @@ function RedFlagsCard({
   return (
     <section className="panel p-5">
       <header className="flex items-center gap-2 mb-3">
-        <Flame className="w-4 h-4 text-rose-600" />
+        <Flame className="w-4 h-4 text-rose-600" aria-hidden />
         <h2 className="card-title uppercase tracking-wide">Watch list</h2>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {redFlags.length > 0 && (
           <div>
-            <div className="text-xs font-medium text-rose-700 mb-1.5">Recurring red flags</div>
+            <div className="text-xs font-medium text-rose-700 dark:text-rose-400 mb-1.5">Recurring red flags</div>
             <ul className="space-y-1 list-disc pl-5 text-sm text-body">
               {redFlags.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
@@ -544,6 +554,7 @@ function FollowUpChat({
   });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
 
   // Reset on filter change
@@ -575,6 +586,7 @@ function FollowUpChat({
     setChat(next);
     setInput('');
     setLoading(true);
+    setAnnouncement('');
     try {
       const res = await api.analyzeChat({
         accountId: accountId || undefined,
@@ -586,6 +598,7 @@ function FollowUpChat({
         messages: next,
       });
       setChat([...next, { role: 'assistant', content: res.reply }]);
+      setAnnouncement('Assistant replied. The reply is at the end of the conversation.');
     } catch (err) {
       notify.error(err, 'Follow-up failed');
       setChat(next.slice(0, -1));
@@ -606,7 +619,7 @@ function FollowUpChat({
     <section className="panel p-5">
       <header className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-primary" />
+          <Sparkles className="w-4 h-4 text-primary" aria-hidden />
           <h2 className="card-title uppercase tracking-wide">Follow up</h2>
         </div>
         <button
@@ -616,9 +629,11 @@ function FollowUpChat({
           disabled={loading || !chat.length}
           title="Clear conversation"
         >
-          <Trash2 size={12} className="mr-1" /> Clear
+          <Trash2 size={12} className="mr-1" aria-hidden /> Clear
         </button>
       </header>
+
+      <p className="sr-only" role="status">{loading ? 'Waiting for a reply…' : announcement}</p>
 
       {chat.length === 0 && (
         <p className="text-xs text-muted mb-3">
@@ -644,7 +659,8 @@ function FollowUpChat({
           {loading && (
             <div className="flex justify-start">
               <div className="bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm text-muted">
-                <span className="inline-flex gap-1">
+                <span className="sr-only">Assistant is typing…</span>
+                <span className="inline-flex gap-1" aria-hidden>
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" />
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" style={{ animationDelay: '120ms' }} />
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" style={{ animationDelay: '240ms' }} />
@@ -685,6 +701,7 @@ function FollowUpChat({
             }
           }}
           placeholder="Ask a follow-up… (Cmd/Ctrl+Enter to send)"
+          aria-label="Follow-up question"
           disabled={loading}
         />
         <button
@@ -694,7 +711,7 @@ function FollowUpChat({
           disabled={!input.trim() || loading}
           title="Send (Cmd/Ctrl+Enter)"
         >
-          <Send size={14} className="mr-1" /> Send
+          <Send size={14} className="mr-1" aria-hidden /> Send
         </button>
       </div>
     </section>
