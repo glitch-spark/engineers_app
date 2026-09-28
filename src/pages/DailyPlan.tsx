@@ -13,7 +13,7 @@ export type DailyPlanActions = {
   openAdd: () => void;
 };
 
-type DailyPlan = Partial<api.DailyPlanCounts> & {
+type DailyPlan = Partial<api.DailyPlanCounts & api.DailyPlanPlanCounts> & {
   _id: string;
   userId?: { _id: string; email?: string; name?: string; image?: string };
   date: string;
@@ -22,29 +22,65 @@ type DailyPlan = Partial<api.DailyPlanCounts> & {
   planType?: api.DailyPlanType;
   today: string;
   tomorrow: string;
-  customItems?: api.DailyPlanItem[];
+  todayItems?: string[];
+  tomorrowItems?: string[];
   createdAt?: string;
 };
 
-type CountKey = keyof api.DailyPlanCounts;
+type CountKey = keyof api.DailyPlanCounts | keyof api.DailyPlanPlanCounts;
+type ItemsKey = 'todayItems' | 'tomorrowItems';
 
-/** Regular plan defaults, in the order the form shows them. */
-const COUNT_GROUPS: { title: string; fields: { key: CountKey; label: string }[] }[] = [
+type DaySection = {
+  dayOffset: 0 | 1;
+  heading: string;
+  itemsKey: ItemsKey;
+  groups: { title: string; fields: { key: CountKey; label: string }[] }[];
+};
+
+/** A regular plan covers the plan date (what was done) and the next day (the plan). */
+const DAY_SECTIONS: DaySection[] = [
   {
-    title: 'Bid',
-    fields: [
-      { key: 'bidsHandsOn', label: 'Bids (hands-on)' },
-      { key: 'bidsByBidder', label: 'Bids (by bidder)' },
+    dayOffset: 0,
+    heading: 'Done',
+    itemsKey: 'todayItems',
+    groups: [
+      {
+        title: 'Bid',
+        fields: [
+          { key: 'bidsHandsOn', label: 'Bids (hands-on)' },
+          { key: 'bidsByBidder', label: 'Bids (by bidder)' },
+        ],
+      },
+      {
+        title: 'Interview',
+        fields: [
+          { key: 'interviewsDone', label: 'Done today' },
+          { key: 'interviewsNew', label: 'New invitations' },
+        ],
+      },
     ],
   },
   {
-    title: 'Interview',
-    fields: [
-      { key: 'interviewsDone', label: 'Done today' },
-      { key: 'interviewsNew', label: 'New invitations' },
+    dayOffset: 1,
+    heading: 'Plan',
+    itemsKey: 'tomorrowItems',
+    groups: [
+      {
+        title: 'Bid',
+        fields: [
+          { key: 'planBidsHandsOn', label: 'Bids (hands-on)' },
+          { key: 'planBidsByBidder', label: 'Bids (by bidder)' },
+        ],
+      },
+      {
+        title: 'Interview',
+        fields: [{ key: 'planInterviewsScheduled', label: 'Scheduled' }],
+      },
     ],
   },
 ];
+
+const COUNT_KEYS: CountKey[] = DAY_SECTIONS.flatMap((s) => s.groups.flatMap((g) => g.fields.map((f) => f.key)));
 
 const PLAN_TYPES: { value: api.DailyPlanType; label: string }[] = [
   { value: 'custom', label: 'Custom plan' },
@@ -57,15 +93,27 @@ type FormState = {
   today: string;
   tomorrow: string;
   counts: Record<CountKey, string>;
-  customItems: { label: string; value: string }[];
+  todayItems: string[];
+  tomorrowItems: string[];
 };
 
-const EMPTY_COUNTS: Record<CountKey, string> = {
-  bidsHandsOn: '',
-  bidsByBidder: '',
-  interviewsDone: '',
-  interviewsNew: '',
-};
+const EMPTY_COUNTS = Object.fromEntries(COUNT_KEYS.map((k) => [k, ''])) as Record<CountKey, string>;
+
+function emptyForm(date: string): FormState {
+  return {
+    date,
+    planType: 'custom',
+    today: '',
+    tomorrow: '',
+    counts: EMPTY_COUNTS,
+    todayItems: [],
+    tomorrowItems: [],
+  };
+}
+
+function cleanItems(items: string[]): string[] {
+  return items.map((item) => item.trim()).filter(Boolean);
+}
 
 function toCount(value: string): number {
   const n = Math.floor(Number(value));
@@ -118,14 +166,7 @@ export default function DailyPlanPanel({
   const [editing, setEditing] = useState<DailyPlan | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState<FormState>({
-    date: '',
-    planType: 'regular',
-    today: '',
-    tomorrow: '',
-    counts: EMPTY_COUNTS,
-    customItems: [],
-  });
+  const [form, setForm] = useState<FormState>(() => emptyForm(''));
 
   const { data, mutate, isLoading } = useSWR(
     ['daily-plans', year, weekNumber, userId, currentPage, pageSize, user?.role] as const,
@@ -140,14 +181,7 @@ export default function DailyPlanPanel({
 
   const openAdd = () => {
     setEditing(null);
-    setForm({
-      date: todayInputValue(),
-      planType: 'regular',
-      today: '',
-      tomorrow: '',
-      counts: EMPTY_COUNTS,
-      customItems: [],
-    });
+    setForm(emptyForm(todayInputValue()));
     setError('');
     setOpen(true);
   };
@@ -159,16 +193,9 @@ export default function DailyPlanPanel({
       planType: plan.planType ?? 'custom',
       today: plan.today || '',
       tomorrow: plan.tomorrow || '',
-      counts: {
-        bidsHandsOn: countInput(plan.bidsHandsOn),
-        bidsByBidder: countInput(plan.bidsByBidder),
-        interviewsDone: countInput(plan.interviewsDone),
-        interviewsNew: countInput(plan.interviewsNew),
-      },
-      customItems: (plan.customItems ?? []).map((item) => ({
-        label: item.label,
-        value: countInput(item.value),
-      })),
+      counts: Object.fromEntries(COUNT_KEYS.map((k) => [k, countInput(plan[k])])) as Record<CountKey, string>,
+      todayItems: plan.todayItems ?? [],
+      tomorrowItems: plan.tomorrowItems ?? [],
     });
     setError('');
     setOpen(true);
@@ -179,25 +206,17 @@ export default function DailyPlanPanel({
   const setCount = (key: CountKey, value: string) =>
     setForm({ ...form, counts: { ...form.counts, [key]: value } });
 
-  const setItem = (index: number, patch: Partial<FormState['customItems'][number]>) =>
-    setForm({
-      ...form,
-      customItems: form.customItems.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    });
+  const setItem = (key: ItemsKey, index: number, value: string) =>
+    setForm({ ...form, [key]: form[key].map((item, i) => (i === index ? value : item)) });
 
-  const addItem = () => setForm({ ...form, customItems: [...form.customItems, { label: '', value: '' }] });
+  const addItem = (key: ItemsKey) => setForm({ ...form, [key]: [...form[key], ''] });
 
-  const removeItem = (index: number) =>
-    setForm({ ...form, customItems: form.customItems.filter((_, i) => i !== index) });
+  const removeItem = (key: ItemsKey, index: number) =>
+    setForm({ ...form, [key]: form[key].filter((_, i) => i !== index) });
 
   const save = async () => {
     if (!form.date) {
       setError('Date is required');
-      return;
-    }
-    const items = form.customItems.filter((item) => item.label.trim() || item.value.trim());
-    if (form.planType === 'regular' && items.some((item) => !item.label.trim())) {
-      setError('Give each custom item a name');
       return;
     }
     setSaving(true);
@@ -208,11 +227,9 @@ export default function DailyPlanPanel({
           ? {
               date: form.date,
               planType: 'regular',
-              bidsHandsOn: toCount(form.counts.bidsHandsOn),
-              bidsByBidder: toCount(form.counts.bidsByBidder),
-              interviewsDone: toCount(form.counts.interviewsDone),
-              interviewsNew: toCount(form.counts.interviewsNew),
-              customItems: items.map((item) => ({ label: item.label.trim(), value: toCount(item.value) })),
+              ...(Object.fromEntries(COUNT_KEYS.map((k) => [k, toCount(form.counts[k])])) as Record<CountKey, number>),
+              todayItems: cleanItems(form.todayItems),
+              tomorrowItems: cleanItems(form.tomorrowItems),
             }
           : { date: form.date, planType: 'custom', today: form.today, tomorrow: form.tomorrow };
       if (editing) {
@@ -357,75 +374,72 @@ export default function DailyPlanPanel({
             </div>
           </div>
           {form.planType === 'regular' ? (
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {COUNT_GROUPS.map((group) => (
-                  <fieldset key={group.title} className="panel p-4">
-                    <legend className="card-title px-1">{group.title}</legend>
-                    <div className="grid grid-cols-2 gap-3">
-                      {group.fields.map((f) => (
-                        <div key={f.key}>
-                          <label className="block text-xs text-muted mb-1" htmlFor={`daily-plan-${f.key}`}>{f.label}</label>
-                          <input
-                            id={`daily-plan-${f.key}`}
-                            className="input w-full text-sm tabular-nums"
-                            type="number"
-                            min={0}
-                            step={1}
-                            inputMode="numeric"
-                            placeholder="0"
-                            value={form.counts[f.key]}
-                            onChange={(e) => setCount(f.key, e.target.value)}
-                          />
+            <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+              {DAY_SECTIONS.map((section) => {
+                const day = planDayLabel(form.date, section.dayOffset);
+                const items = form[section.itemsKey];
+                return (
+                  <section key={section.itemsKey} className="panel flex flex-col gap-4 p-4" aria-label={`${day} ${section.heading}`}>
+                    <h3 className="card-title">
+                      {day} <span className="font-normal text-muted">— {section.heading}</span>
+                    </h3>
+                    {section.groups.map((group) => (
+                      <fieldset key={group.title}>
+                        <legend className="form-label mb-2">{group.title}</legend>
+                        <div className="grid grid-cols-2 gap-3">
+                          {group.fields.map((f) => (
+                            <div key={f.key}>
+                              <label className="block text-xs text-muted mb-1" htmlFor={`daily-plan-${f.key}`}>{f.label}</label>
+                              <input
+                                id={`daily-plan-${f.key}`}
+                                className="input w-full text-sm tabular-nums"
+                                type="number"
+                                min={0}
+                                step={1}
+                                inputMode="numeric"
+                                placeholder="0"
+                                value={form.counts[f.key]}
+                                onChange={(e) => setCount(f.key, e.target.value)}
+                              />
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </fieldset>
-                ))}
-              </div>
-              <fieldset className="panel p-4">
-                <legend className="card-title px-1">Custom items</legend>
-                {form.customItems.length === 0 ? (
-                  <p className="text-xs text-faint mb-3">Track anything else you count each day, like cold emails or calls.</p>
-                ) : (
-                  <div className="space-y-2 mb-3">
-                    {form.customItems.map((item, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input
-                          className="input flex-1 text-sm"
-                          aria-label={`Custom item ${i + 1} name`}
-                          placeholder="Item name"
-                          value={item.label}
-                          onChange={(e) => setItem(i, { label: e.target.value })}
-                        />
-                        <input
-                          className="input w-28 text-sm tabular-nums"
-                          aria-label={`Custom item ${i + 1} count`}
-                          type="number"
-                          min={0}
-                          step={1}
-                          inputMode="numeric"
-                          placeholder="0"
-                          value={item.value}
-                          onChange={(e) => setItem(i, { value: e.target.value })}
-                        />
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          onClick={() => removeItem(i)}
-                          aria-label={`Remove custom item ${i + 1}`}
-                          title="Remove"
-                        >
-                          <Trash2 size={16} aria-hidden />
-                        </button>
-                      </div>
+                      </fieldset>
                     ))}
-                  </div>
-                )}
-                <button type="button" className="btn-outline text-sm" onClick={addItem}>
-                  <Plus size={16} aria-hidden /> Add item
-                </button>
-              </fieldset>
+                    <fieldset>
+                      <legend className="form-label mb-2">Custom items</legend>
+                      {items.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          {items.map((item, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <input
+                                className="input flex-1 text-sm"
+                                aria-label={`${day} custom item ${i + 1}`}
+                                placeholder="e.g. Update resume"
+                                maxLength={200}
+                                value={item}
+                                onChange={(e) => setItem(section.itemsKey, i, e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                className="btn-icon"
+                                onClick={() => removeItem(section.itemsKey, i)}
+                                aria-label={`Remove ${day} custom item ${i + 1}`}
+                                title="Remove"
+                              >
+                                <Trash2 size={16} aria-hidden />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button type="button" className="btn-outline text-sm" onClick={() => addItem(section.itemsKey)}>
+                        <Plus size={16} aria-hidden /> Add item
+                      </button>
+                    </fieldset>
+                  </section>
+                );
+              })}
             </div>
           ) : (
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2">
@@ -460,30 +474,36 @@ export default function DailyPlanPanel({
   );
 }
 
+/** Same numbered layout as the Slack post: Bid, Interview, then the day's items. */
 function RegularPlanSummary({ plan }: { plan: DailyPlan }) {
-  const items = plan.customItems ?? [];
   return (
-    <div className="space-y-3 text-sm">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {COUNT_GROUPS.flatMap((group) =>
-          group.fields.map((f) => (
-            <div key={f.key}>
-              <div className="text-xs font-medium text-muted">{group.title} · {f.label}</div>
-              <div className="text-lg font-semibold text-strong tabular-nums">{plan[f.key] ?? 0}</div>
-            </div>
-          )),
-        )}
-      </div>
-      {items.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {items.map((item, i) => (
-            <span key={i} className="badge-neutral">
-              {item.label}
-              <span className="ml-1.5 font-semibold tabular-nums">{item.value}</span>
-            </span>
-          ))}
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+      {DAY_SECTIONS.map((section) => (
+        <div key={section.itemsKey}>
+          <div className="text-xs font-medium text-muted mb-1">
+            {planDayLabel(plan.date, section.dayOffset)} · {section.heading}
+          </div>
+          <ol className="list-decimal space-y-1 pl-5 text-body marker:text-faint">
+            {section.groups.map((group) => (
+              <li key={group.title}>
+                <span className="font-medium text-strong">{group.title}</span>
+                <span className="text-muted">
+                  {' — '}
+                  {group.fields.map((f, i) => (
+                    <span key={f.key}>
+                      {i > 0 && ', '}
+                      {f.label} <span className="font-semibold text-strong tabular-nums">{plan[f.key] ?? 0}</span>
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+            {(plan[section.itemsKey] ?? []).map((item, i) => (
+              <li key={i} className="whitespace-pre-wrap">{item}</li>
+            ))}
+          </ol>
         </div>
-      )}
+      ))}
     </div>
   );
 }

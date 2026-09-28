@@ -394,11 +394,7 @@ export const listDailyPlans = (params?: {
 
 export type DailyPlanType = 'custom' | 'regular';
 
-export interface DailyPlanItem {
-  label: string;
-  value: number;
-}
-
+/** What was done on the plan's date. */
 export interface DailyPlanCounts {
   bidsHandsOn: number;
   bidsByBidder: number;
@@ -406,15 +402,24 @@ export interface DailyPlanCounts {
   interviewsNew: number;
 }
 
-export interface DailyPlanBody extends Partial<DailyPlanCounts> {
+/** What is planned for the day after the plan's date. */
+export interface DailyPlanPlanCounts {
+  planBidsHandsOn: number;
+  planBidsByBidder: number;
+  planInterviewsScheduled: number;
+}
+
+export interface DailyPlanBody extends Partial<DailyPlanCounts & DailyPlanPlanCounts> {
   date?: string;
   planType?: DailyPlanType;
   today?: string;
   tomorrow?: string;
-  customItems?: DailyPlanItem[];
+  todayItems?: string[];
+  tomorrowItems?: string[];
 }
 
-export interface DailyPlanStatsRow extends DailyPlanCounts {
+/** Planned counts sit in the bucket of the day they were planned for. */
+export interface DailyPlanStatsRow extends DailyPlanCounts, DailyPlanPlanCounts {
   key: string;
   bucketStart: string;
   bucketEnd: string;
@@ -425,7 +430,7 @@ export interface DailyPlanStats {
   bucket: 'day' | 'week' | 'month';
   window: { from: string; to: string };
   series: DailyPlanStatsRow[];
-  totals: DailyPlanCounts & { planCount: number; customItems: DailyPlanItem[] };
+  totals: DailyPlanCounts & DailyPlanPlanCounts & { planCount: number };
 }
 
 export const createDailyPlan = (body: DailyPlanBody & { date: string }) =>
