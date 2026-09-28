@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import { useCallback, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Calendar, Sparkles } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Tabs from '../components/Tabs';
@@ -17,7 +18,16 @@ const REPORT_TABS = [
 export default function ReportPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [tab, setTab] = useState('daily');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // `?tab=weekly` deep-links (e.g. the weekly-plan alert); default is Daily.
+  const tab = searchParams.get('tab') === 'weekly' ? 'weekly' : 'daily';
+  const setTab = useCallback((next: string) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.set('tab', next);
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [weekNumber, setWeekNumber] = useState(getWeekInfo(new Date()).weekNumber.toString());
   const [userFilter, setUserFilter] = useState<string | null>(null);
