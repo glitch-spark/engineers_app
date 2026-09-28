@@ -3,7 +3,8 @@ import { ApiError } from '../api/client';
 
 const baseStyle = { fontSize: '0.875rem' };
 
-function messageOf(input: unknown, fallback: string): string {
+/** Human-readable message for an unknown error — use it for inline (non-toast) error text too. */
+export function messageOf(input: unknown, fallback: string): string {
   if (!input) return fallback;
   if (typeof input === 'string') return input;
   if (input instanceof ApiError) return input.message;

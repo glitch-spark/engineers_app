@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import PublicPageLayout from './PublicPageLayout';
+import { useDocumentTitle } from '../../lib/useDocumentTitle';
 
 type AuthShellProps = {
   mode: 'login' | 'register';
@@ -15,11 +16,12 @@ const KICKER = {
 } as const;
 
 export default function AuthShell({ mode, title, subtitle, children, footer }: AuthShellProps) {
+  useDocumentTitle(mode === 'login' ? 'Sign in' : 'Create account');
   return (
     <PublicPageLayout kicker={KICKER[mode]}>
       <div className="auth-card auth-card-glass">
         <header className="auth-card-header">
-          <h2 className="auth-card-title">{title}</h2>
+          <h1 className="auth-card-title">{title}</h1>
           <p className="auth-card-subtitle">{subtitle}</p>
         </header>
         {children}

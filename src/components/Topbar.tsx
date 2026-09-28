@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useTheme } from '../theme/ThemeProvider';
 import { LogoWordmark } from './Logo';
@@ -12,6 +12,8 @@ export default function Topbar() {
   const [open, setOpen] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuId = useId();
 
   useEffect(() => { setImgFailed(false); }, [user?.image]);
 
@@ -22,6 +24,17 @@ export default function Topbar() {
     document.addEventListener('click', onDocClick);
     return () => document.removeEventListener('click', onDocClick);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
 
   const initials = (user?.name || user?.email || 'U')
     .split('@')[0]
@@ -44,18 +57,28 @@ export default function Topbar() {
           <ThemeToggle />
           <AlertsPopover />
 
-          <div className="relative" ref={ref}>
+          <div
+            className="relative"
+            ref={ref}
+            onBlur={(e) => {
+              if (!ref.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+            }}
+          >
             <button
+              ref={buttonRef}
+              type="button"
               className="group flex items-center gap-3 rounded-xl p-2 transition hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60"
               onClick={() => setOpen((v) => !v)}
-              aria-haspopup="menu"
               aria-expanded={open}
+              aria-controls={menuId}
             >
-              <div className="relative">
+              <span className="sr-only">Account menu for </span>
+              <span className="sr-only md:hidden">{user?.name || 'User'}</span>
+              <div className="relative" aria-hidden="true">
                 {user?.image && !imgFailed ? (
                   <img
                     src={user.image}
-                    alt="Avatar"
+                    alt=""
                     width={36}
                     height={36}
                     onError={() => setImgFailed(true)}
@@ -71,11 +94,12 @@ export default function Topbar() {
 
               <div className="hidden max-w-[12rem] text-left md:block">
                 <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{user?.name || 'User'}</p>
-                <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user?.email}</p>
+                <p className="truncate text-xs text-zinc-600 dark:text-zinc-400">{user?.email}</p>
               </div>
 
               <svg
-                className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+                className={`h-4 w-4 text-zinc-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -85,13 +109,18 @@ export default function Topbar() {
             </button>
 
             {open && (
-              <div className="panel-elevated absolute right-0 z-50 mt-2 w-64 animate-fade-in-up overflow-hidden dark:bg-zinc-900">
-                <div className="border-b border-zinc-200/80 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
+              <div
+                id={menuId}
+                // Keep focus where it is on mouse clicks so the blur-to-close above doesn't
+                // fire before the click lands (Safari doesn't focus links on click).
+                onMouseDown={(e) => e.preventDefault()}
+                className="panel-elevated absolute right-0 z-50 mt-2 w-64 animate-fade-in-up overflow-hidden dark:bg-zinc-900">
+                <div aria-hidden="true" className="border-b border-zinc-200/80 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
                   <div className="flex items-center gap-3">
                     {user?.image && !imgFailed ? (
                       <img
                         src={user.image}
-                        alt="Avatar"
+                        alt=""
                         width={40}
                         height={40}
                         onError={() => setImgFailed(true)}
@@ -115,7 +144,7 @@ export default function Topbar() {
                     className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     onClick={() => setOpen(false)}
                   >
-                    <svg className="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg aria-hidden="true" className="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     Account settings
@@ -124,10 +153,11 @@ export default function Topbar() {
                   <div className="my-2 border-t border-zinc-100 dark:border-zinc-800" />
 
                   <button
+                    type="button"
                     onClick={() => { setOpen(false); logout(); }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                   >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
                     Sign out

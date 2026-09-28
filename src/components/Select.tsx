@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 interface SelectOption {
   value: string;
   label: string;
@@ -15,6 +17,9 @@ interface SelectProps {
   required?: boolean;
   name?: string;
   id?: string;
+  /** Accessible name when there is no visible `label` (and no external <label htmlFor>). */
+  ariaLabel?: string;
+  ariaDescribedBy?: string;
 }
 
 export default function Select({
@@ -28,20 +33,26 @@ export default function Select({
   disabled = false,
   required = false,
   name,
-  id
+  id,
+  ariaLabel,
+  ariaDescribedBy,
 }: SelectProps) {
+  const autoId = useId();
+  const selectId = id ?? autoId;
   return (
     <div className="w-full">
       {label && (
-        <label className={labelClassName}>
+        <label htmlFor={selectId} className={labelClassName}>
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-600 ml-1" aria-hidden>*</span>}
         </label>
       )}
       <div className="select-wrapper">
         <select
-          id={id}
+          id={selectId}
           name={name}
+          aria-label={label ? undefined : ariaLabel}
+          aria-describedby={ariaDescribedBy}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={`select focus-ring ${className}`}

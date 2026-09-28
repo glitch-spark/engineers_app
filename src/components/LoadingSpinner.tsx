@@ -18,14 +18,15 @@ export default function LoadingSpinner({
   };
 
   const colorClasses = {
-    primary: 'text-sky-600 dark:text-sky-400',
+    primary: 'text-sky-700 dark:text-sky-400',
     white: 'text-white',
     gray: 'text-zinc-500 dark:text-zinc-400',
   };
 
   return (
-    <div className={`flex items-center justify-center gap-3 ${className}`}>
+    <div role="status" className={`flex items-center justify-center gap-3 ${className}`}>
       <svg
+        aria-hidden="true"
         className={`animate-spin ${sizeClasses[size]} ${colorClasses[color]}`}
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
@@ -45,10 +46,12 @@ export default function LoadingSpinner({
           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
         />
       </svg>
-      {text && (
+      {text ? (
         <span className={`text-sm ${colorClasses[color]} font-medium`}>
           {text}
         </span>
+      ) : (
+        <span className="sr-only">Loading…</span>
       )}
     </div>
   );
@@ -56,13 +59,13 @@ export default function LoadingSpinner({
 
 export function SkeletonCard({ className = '' }: { className?: string }) {
   return (
-    <div className={`animate-pulse skeleton h-32 ${className}`} />
+    <div aria-hidden="true" className={`animate-pulse skeleton h-32 ${className}`} />
   );
 }
 
 export function SkeletonText({ lines = 1, className = '' }: { lines?: number; className?: string }) {
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div aria-hidden="true" className={`space-y-2 ${className}`}>
       {Array.from({ length: lines }).map((_, i) => (
         <div
           key={i}
@@ -76,7 +79,7 @@ export function SkeletonText({ lines = 1, className = '' }: { lines?: number; cl
 
 export function SkeletonTable({ rows = 5, className = '' }: { rows?: number; className?: string }) {
   return (
-    <div className={`space-y-3 ${className}`}>
+    <div aria-hidden="true" className={`space-y-3 ${className}`}>
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center space-x-4">
           <div className="h-4 skeleton animate-pulse w-1/4" />

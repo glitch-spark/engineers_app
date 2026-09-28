@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
+import { useDialog } from '../lib/useDialog';
 
 export default function Modal({
   open,
@@ -16,7 +18,6 @@ export default function Modal({
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const [entered, setEntered] = useState(false);
 
@@ -31,51 +32,7 @@ export default function Modal({
     return () => cancelAnimationFrame(frame);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
-    const panel = panelRef.current;
-    panel?.focus();
-    document.documentElement.classList.add('dialog-open');
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        // An open combobox inside the dialog closes its own listbox first.
-        const target = e.target as HTMLElement | null;
-        if (target?.closest?.('[role="combobox"][aria-expanded="true"]')) return;
-        e.stopPropagation();
-        onCloseRef.current();
-        return;
-      }
-      if (e.key !== 'Tab' || !panel) return;
-
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable.length === 0) {
-        e.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', onKeyDown, true);
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true);
-      document.documentElement.classList.remove('dialog-open');
-      previouslyFocused.current?.focus();
-    };
-  }, [open]);
+  useDialog(open, panelRef, () => onCloseRef.current());
 
   if (!open || typeof document === 'undefined') return null;
 
@@ -91,6 +48,7 @@ export default function Modal({
         className={`modal-overlay ${entered ? 'is-open' : ''}`}
         onClick={() => onCloseRef.current()}
         aria-label="Close dialog"
+        tabIndex={-1}
       />
       <div
         ref={panelRef}
@@ -106,8 +64,8 @@ export default function Modal({
           <h2 id={titleId} className={compact ? 'text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50' : 'section-title'}>
             {title}
           </h2>
-          <button type="button" onClick={() => onCloseRef.current()} className="btn-icon -mr-1 -mt-0.5 text-lg leading-none" aria-label="Close">
-            ×
+          <button type="button" onClick={() => onCloseRef.current()} className="btn-icon -mr-1.5 -mt-1 h-9 w-9" aria-label="Close">
+            <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
         <div className={`min-h-0 flex-1 overflow-y-auto ${large ? 'flex flex-col' : ''} ${compact ? 'px-4 py-3' : 'px-5 py-4'}`}>{children}</div>

@@ -3,13 +3,14 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import { ApiError } from '../api/client';
-import { notify } from '../lib/notify';
+import { messageOf, notify } from '../lib/notify';
 import AuthShell from '../components/auth/AuthShell';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -25,10 +26,11 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!username.trim() || !password.trim()) {
-      notify.error('Please enter both username and password');
+      setError('Enter both your username and password.');
       return;
     }
 
+    setError('');
     setIsLoading(true);
     try {
       await login(username, password);
@@ -36,9 +38,9 @@ export default function LoginPage() {
       navigate('/dashboard', { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        notify.error('Invalid username or password. Please try again.');
+        setError('Invalid username or password. Please try again.');
       } else {
-        notify.error(err, 'An unexpected error occurred. Please try again.');
+        setError(messageOf(err, 'An unexpected error occurred. Please try again.'));
       }
     } finally {
       setIsLoading(false);
@@ -59,7 +61,12 @@ export default function LoginPage() {
         </p>
       }
     >
-      <form onSubmit={submit} className="space-y-5">
+      <form onSubmit={submit} className="space-y-5" noValidate>
+        {error && (
+          <p id="login-error" role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+            {error}
+          </p>
+        )}
         <div className="space-y-1.5">
           <label htmlFor="username" className="auth-label">Username or email</label>
           <input
@@ -71,22 +78,14 @@ export default function LoginPage() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'login-error' : undefined}
             disabled={isLoading}
           />
         </div>
 
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <label htmlFor="password" className="auth-label">Password</label>
-            {/* Out of tab order so Tab goes username -> password. */}
-            <button
-              type="button"
-              tabIndex={-1}
-              className="auth-link-muted text-xs font-medium transition-colors"
-            >
-              Forgot password?
-            </button>
-          </div>
+          <label htmlFor="password" className="auth-label">Password</label>
           <input
             id="password"
             className="auth-input"
@@ -96,6 +95,8 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'login-error' : undefined}
             disabled={isLoading}
           />
         </div>

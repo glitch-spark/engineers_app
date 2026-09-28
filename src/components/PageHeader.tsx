@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 /**
  * Standard page header — single source of truth for the page title plus an
@@ -16,12 +17,13 @@ export default function PageHeader({
   action?: ReactNode;
   backTo?: string;
 }) {
+  useDocumentTitle(title);
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
       <div className="flex min-w-0 items-center gap-3">
         {backTo && (
           <Link to={backTo} className="shell-icon-btn flex-shrink-0" aria-label="Go back">
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" aria-hidden />
           </Link>
         )}
         <h1 className="page-title truncate">{title}</h1>

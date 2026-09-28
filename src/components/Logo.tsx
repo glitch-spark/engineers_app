@@ -3,13 +3,13 @@
  * Reads "focused on the target, shipping in progress." Inherits text color
  * via `currentColor`, so wrap in a Tailwind text-* class to tint.
  */
-export function LogoIcon({ className = '' }: { className?: string }) {
+export function LogoIcon({ className = '', decorative = false }: { className?: string; decorative?: boolean }) {
   return (
     <svg
       className={className}
       viewBox="0 0 64 64"
       fill="none"
-      aria-label="engineer"
+      {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': 'Engineer' })}
     >
       <path
         d="M44 12 A24 24 0 1 0 56 28"
@@ -43,7 +43,7 @@ export function LogoWordmark({ className = '', variant = 'light' }: { className?
   const isDark = variant === 'dark';
   return (
     <div className={`inline-flex items-center gap-2 ${className}`}>
-      <LogoIcon className={`h-7 w-7 ${isDark ? 'text-sky-400' : 'text-accent'}`} />
+      <LogoIcon decorative className={`h-7 w-7 ${isDark ? 'text-sky-400' : 'text-accent'}`} />
       <span className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
         engineer<span className={isDark ? 'text-sky-400' : 'text-accent'}>.</span>
       </span>
