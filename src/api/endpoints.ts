@@ -8,6 +8,9 @@ export interface User {
   email: string | null;
   role: 'admin' | 'staff' | 'accountant';
   image?: string | null;
+  /** ISO timestamps (UTC). Missing from older backends and cached sessions. */
+  createdAt?: string | null;
+  lastLoginAt?: string | null;
 }
 
 export interface LoginResponse {

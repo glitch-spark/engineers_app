@@ -55,6 +55,13 @@ async function readResizedDataURL(file: File, maxDim = 256): Promise<string> {
   }
 }
 
+/** Account timestamps come from /auth/me; show "—" when the backend hasn't recorded one yet. */
+function formatAccountDate(iso: string | null | undefined, opts: Intl.DateTimeFormatOptions): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US', opts);
+}
+
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
@@ -483,22 +490,14 @@ export default function ProfilePage() {
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted">Member Since</p>
             <p className="text-strong">
-              {user?.email ? new Date().toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              }) : 'N/A'}
+              {formatAccountDate(user?.createdAt, { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted">Last Login</p>
             <p className="text-strong">
-              {new Date().toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
+              {formatAccountDate(user?.lastLoginAt, {
+                year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
               })}
             </p>
           </div>
