@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Loader2, ArrowRight, Calendar, ClipboardCheck, FileText, Sparkles } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import MotivationHero from '../components/MotivationHero';
+import DailyPlanChart from '../components/dashboard/DailyPlanChart';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import { useChartTheme } from '../theme/useChartTheme';
@@ -106,6 +107,9 @@ export default function DashboardPage() {
 
       {/* Trend chart — 12 weeks bids vs interviews */}
       <TrendSection data={meTrend} />
+
+      {/* Regular daily plan counts — bidder over hands-on, per day/week/month */}
+      <DailyPlanChart />
 
       {/* Upcoming interviews + recent activity */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
