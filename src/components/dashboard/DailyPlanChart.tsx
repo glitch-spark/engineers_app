@@ -217,18 +217,6 @@ export default function DailyPlanChart() {
           ) : (
             <StatsTable rows={rows} />
           )}
-
-          {totals.customItems.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-muted">Custom items — {windowLabel}</span>
-              {totals.customItems.map((item) => (
-                <span key={item.label} className="badge-neutral">
-                  {item.label}
-                  <span className="ml-1.5 font-semibold tabular-nums">{item.value}</span>
-                </span>
-              ))}
-            </div>
-          )}
         </>
       )}
     </section>
@@ -250,13 +238,17 @@ function StatsTooltip({ active, payload }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
   const row = payload[0].payload as ChartRow;
   const bids = row.bidsHandsOn + row.bidsByBidder;
-  const lines: { label: string; value: string | number; sub?: boolean }[] = [
+  const lines: { label: string; value: string | number; sub?: boolean; gap?: boolean }[] = [
     { label: 'Bids', value: bids },
     { label: 'by bidder', value: row.bidsByBidder, sub: true },
     { label: 'hands-on', value: row.bidsHandsOn, sub: true },
     { label: 'Interviews · new', value: row.interviewsNew },
     { label: 'Interviews · done', value: row.interviewsDone },
     { label: 'Bid : Interview', value: fmtRatio(bids, row.interviewsNew) },
+    { label: 'Planned bids', value: row.planBidsHandsOn + row.planBidsByBidder, gap: true },
+    { label: 'by bidder', value: row.planBidsByBidder, sub: true },
+    { label: 'hands-on', value: row.planBidsHandsOn, sub: true },
+    { label: 'Scheduled interviews', value: row.planInterviewsScheduled },
   ];
   return (
     <div
@@ -266,10 +258,10 @@ function StatsTooltip({ active, payload }: TooltipProps<number, string>) {
       <div className="font-semibold mb-1">{row.title}</div>
       <table>
         <tbody>
-          {lines.map((line) => (
-            <tr key={line.label}>
-              <td className={'pr-4 ' + (line.sub ? 'pl-3 text-muted' : '')}>{line.label}</td>
-              <td className="text-right tabular-nums font-medium">{line.value}</td>
+          {lines.map((line, i) => (
+            <tr key={i} className={line.gap ? 'border-t' : ''} style={line.gap ? { borderColor: chart.tooltipBorder } : undefined}>
+              <td className={'pr-4 ' + (line.sub ? 'pl-3 text-muted' : '') + (line.gap ? ' pt-1' : '')}>{line.label}</td>
+              <td className={'text-right tabular-nums font-medium' + (line.gap ? ' pt-1' : '')}>{line.value}</td>
             </tr>
           ))}
         </tbody>
@@ -292,6 +284,8 @@ function StatsTable({ rows }: { rows: ChartRow[] }) {
               <th className="px-3 py-2 text-right">New invitations</th>
               <th className="px-3 py-2 text-right">Done</th>
               <th className="px-3 py-2 text-right">Bid : Interview</th>
+              <th className="px-3 py-2 text-right">Planned bids</th>
+              <th className="px-3 py-2 text-right">Scheduled</th>
             </tr>
           </thead>
           <tbody>
@@ -306,6 +300,13 @@ function StatsTable({ rows }: { rows: ChartRow[] }) {
                   <td className="px-3 py-2 text-right tabular-nums">{r.interviewsNew}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{r.interviewsDone}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtRatio(bids, r.interviewsNew)}</td>
+                  <td
+                    className="px-3 py-2 text-right tabular-nums"
+                    title={`By bidder ${r.planBidsByBidder} · Hands-on ${r.planBidsHandsOn}`}
+                  >
+                    {r.planBidsHandsOn + r.planBidsByBidder}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{r.planInterviewsScheduled}</td>
                 </tr>
               );
             })}
