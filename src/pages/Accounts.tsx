@@ -89,7 +89,7 @@ export default function AccountsPage() {
       />
 
       <div className="flex items-end gap-3 flex-wrap toolbar">
-        <div className="flex-1 min-w-64 max-w-md">
+        <div className="w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-64 sm:max-w-md">
           <label className="block text-xs text-muted mb-1">Search</label>
           <div className="relative">
             <svg className="h-4 w-4 text-faint absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">

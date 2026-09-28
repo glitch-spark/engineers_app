@@ -239,7 +239,7 @@ export default function PipelinePage() {
       <PageHeader
         title="Pipeline"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               className="btn-outline"
@@ -273,7 +273,7 @@ export default function PipelinePage() {
 
       {/* Filters */}
       <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
-        <div className="w-64">
+        <div className="w-full sm:w-64">
           <label className="block text-xs text-muted mb-1">Search company</label>
           <input
             className="input w-full text-sm"

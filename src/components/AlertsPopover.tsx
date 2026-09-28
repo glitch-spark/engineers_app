@@ -132,7 +132,7 @@ export default function AlertsPopover() {
   };
 
   const panelClass = [
-    't-dropdown absolute right-0 z-50 mt-2 w-[22.5rem] overflow-hidden rounded-lg border border-zinc-200/80 bg-white shadow-modal dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none',
+    't-dropdown fixed inset-x-2 top-16 z-50 overflow-hidden sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[22.5rem] rounded-lg border border-zinc-200/80 bg-white shadow-modal dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none',
     open ? 'is-open' : '',
     closing ? 'is-closing' : '',
   ].filter(Boolean).join(' ');

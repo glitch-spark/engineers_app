@@ -145,7 +145,7 @@ export default function ReviewIdeasPanel() {
           </button>
         </div>
 
-        <div className="card p-0 overflow-hidden">
+        <div className="card p-0 overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-100 dark:bg-zinc-800 text-left">
               <tr>

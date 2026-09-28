@@ -158,6 +158,14 @@ const BOARD_VISIBLE_WIDE = 5;   // window width > 1440px
 const BOARD_VISIBLE_NARROW = 4;
 const BOARD_WIDE_MIN_PX = 1441; // >1440px
 
+/** Columns that fit the viewport: 1 on phones, 2 on tablets, 4-5 on desktop. */
+function boardVisibleCount(width: number): number {
+  if (width >= BOARD_WIDE_MIN_PX) return BOARD_VISIBLE_WIDE;
+  if (width >= 1024) return BOARD_VISIBLE_NARROW;
+  if (width >= 640) return 2;
+  return 1;
+}
+
 /** API stage written when a card is dropped on a board column. */
 const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
   ai_interview: 'ai_interview',
@@ -581,21 +589,18 @@ export default function InterviewsPage() {
   const sort: 'desc' = 'desc';
   const [boardOffset, setBoardOffset] = useState(0);
   const [visibleColumnCount, setVisibleColumnCount] = useState(
-    () => (typeof window !== 'undefined' && window.innerWidth >= BOARD_WIDE_MIN_PX
-      ? BOARD_VISIBLE_WIDE
-      : BOARD_VISIBLE_NARROW),
+    () => (typeof window !== 'undefined' ? boardVisibleCount(window.innerWidth) : BOARD_VISIBLE_NARROW),
   );
 
   useEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${BOARD_WIDE_MIN_PX}px)`);
     const onChange = () => {
-      const count = mq.matches ? BOARD_VISIBLE_WIDE : BOARD_VISIBLE_NARROW;
+      const count = boardVisibleCount(window.innerWidth);
       setVisibleColumnCount(count);
       setBoardOffset((prev) => Math.min(prev, Math.max(0, BOARD_COLUMNS.length - count)));
     };
     onChange();
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    window.addEventListener('resize', onChange);
+    return () => window.removeEventListener('resize', onChange);
   }, []);
   const boardPageSize = 500;
 
@@ -1256,7 +1261,7 @@ export default function InterviewsPage() {
                 </button>
 
                 <nav
-                  className="relative w-1/2 min-w-0 select-none"
+                  className="relative w-full min-w-0 select-none sm:w-3/4 lg:w-1/2"
                   aria-label="Interview stages"
                 >
                   <div

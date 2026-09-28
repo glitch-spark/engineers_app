@@ -270,7 +270,7 @@ export default function GeneratedResumesPage() {
               onChange={(e) => setCompanyInput(e.target.value)}
             />
           </div>
-          <div className="w-72">
+          <div className="w-full sm:w-72">
             <label className="block text-xs text-muted mb-1">Search JD</label>
             <input
               className="input w-full text-sm"

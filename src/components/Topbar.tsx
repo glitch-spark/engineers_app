@@ -69,9 +69,9 @@ export default function Topbar() {
                 <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-zinc-100 bg-emerald-500 dark:border-zinc-950" />
               </div>
 
-              <div className="hidden text-left md:block">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{user?.name || 'User'}</p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">{user?.email}</p>
+              <div className="hidden max-w-[12rem] text-left md:block">
+                <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{user?.name || 'User'}</p>
+                <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user?.email}</p>
               </div>
 
               <svg
@@ -102,9 +102,9 @@ export default function Topbar() {
                         {initials || 'U'}
                       </div>
                     )}
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{user?.name || 'User'}</p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{user?.email}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{user?.name || 'User'}</p>
+                      <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user?.email}</p>
                     </div>
                   </div>
                 </div>
