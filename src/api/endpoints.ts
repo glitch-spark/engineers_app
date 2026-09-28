@@ -392,11 +392,50 @@ export const listDailyPlans = (params?: {
     `/daily-plans${qs(params)}`
   );
 
-export const createDailyPlan = (body: { date: string; today?: string; tomorrow?: string }) =>
+export type DailyPlanType = 'custom' | 'regular';
+
+export interface DailyPlanItem {
+  label: string;
+  value: number;
+}
+
+export interface DailyPlanCounts {
+  bidsHandsOn: number;
+  bidsByBidder: number;
+  interviewsDone: number;
+  interviewsNew: number;
+}
+
+export interface DailyPlanBody extends Partial<DailyPlanCounts> {
+  date?: string;
+  planType?: DailyPlanType;
+  today?: string;
+  tomorrow?: string;
+  customItems?: DailyPlanItem[];
+}
+
+export interface DailyPlanStatsRow extends DailyPlanCounts {
+  key: string;
+  bucketStart: string;
+  bucketEnd: string;
+  planCount: number;
+}
+
+export interface DailyPlanStats {
+  bucket: 'day' | 'week' | 'month';
+  window: { from: string; to: string };
+  series: DailyPlanStatsRow[];
+  totals: DailyPlanCounts & { planCount: number; customItems: DailyPlanItem[] };
+}
+
+export const createDailyPlan = (body: DailyPlanBody & { date: string }) =>
   postJSON<Record<string, unknown>>('/daily-plans', body);
 
-export const updateDailyPlan = (id: string, body: { date?: string; today?: string; tomorrow?: string }) =>
+export const updateDailyPlan = (id: string, body: DailyPlanBody) =>
   putJSON<Record<string, unknown>>(`/daily-plans/${id}`, body);
+
+export const getDailyPlanStats = (params: { bucket: 'day' | 'week' | 'month'; userId?: string; to?: string }) =>
+  apiFetch<DailyPlanStats>(`/daily-plans/stats${qs(params)}`);
 
 export const deleteDailyPlan = (id: string) => del<{ message: string }>(`/daily-plans/${id}`);
 
