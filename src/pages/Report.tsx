@@ -79,7 +79,7 @@ export default function ReportPage() {
         <div className="w-56">
           <label className="block text-xs text-muted mb-1" htmlFor="report-user">User</label>
           <select id="report-user" className="select focus-ring w-full text-sm" value={userId} onChange={(e) => setUserFilter(e.target.value)}>
-            {isAdmin && <option value="">All users</option>}
+            <option value="">All users</option>
             {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
           </select>
         </div>
