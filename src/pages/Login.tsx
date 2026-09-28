@@ -78,8 +78,10 @@ export default function LoginPage() {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-3">
             <label htmlFor="password" className="auth-label">Password</label>
+            {/* Out of tab order so Tab goes username -> password. */}
             <button
               type="button"
+              tabIndex={-1}
               className="auth-link-muted text-xs font-medium transition-colors"
             >
               Forgot password?

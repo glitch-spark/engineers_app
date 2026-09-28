@@ -193,6 +193,8 @@ export default function AlertsPopover() {
             {alerts.map((alert) => {
               const status = resolutionLabel(alert.resolution);
               const last4 = typeof alert.meta?.cardLast4 === 'string' ? alert.meta.cardLast4 : null;
+              // A lone action (e.g. weekly plan) sizes to its label; the 3-col grid clips it.
+              const singleAction = alert.actions?.length === 1;
               return (
                 <li
                   key={alert._id}
@@ -221,14 +223,17 @@ export default function AlertsPopover() {
                         <p className="mt-0.5 text-[12px] leading-snug text-zinc-500 dark:text-zinc-400">{alert.body}</p>
                       )}
                       {alert.actions && alert.actions.length > 0 && (
-                        <div className="mt-2 grid grid-cols-3 gap-1">
+                        <div className={singleAction ? 'mt-2 flex' : 'mt-2 grid grid-cols-3 gap-1'}>
                           {alert.actions.map((action) => (
                             <button
                               key={action.key}
                               type="button"
-                              title={ACTION_HINT[action.key] || action.label}
-                              aria-label={ACTION_HINT[action.key] || action.label}
-                              className={action.key === 'go' ? 'alert-action alert-action-primary' : 'alert-action'}
+                              title={(alert.kind === 'card_renewal' && ACTION_HINT[action.key]) || action.label}
+                              aria-label={(alert.kind === 'card_renewal' && ACTION_HINT[action.key]) || action.label}
+                              className={[
+                                action.key === 'go' ? 'alert-action alert-action-primary' : 'alert-action',
+                                singleAction ? '!px-3' : '',
+                              ].filter(Boolean).join(' ')}
                               onClick={() => onAction(alert, action.key)}
                             >
                               {action.label}
