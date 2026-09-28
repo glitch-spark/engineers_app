@@ -1,6 +1,6 @@
 import useSWR from 'swr';
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
@@ -90,12 +90,13 @@ export default function AccountsPage() {
 
       <div className="flex items-end gap-3 flex-wrap toolbar">
         <div className="w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-64 sm:max-w-md">
-          <label className="block text-xs text-muted mb-1">Search</label>
+          <label className="block text-xs text-muted mb-1" htmlFor="accounts-search">Search</label>
           <div className="relative">
-            <svg className="h-4 w-4 text-faint absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden className="h-4 w-4 text-faint absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
+              id="accounts-search"
               type="text"
               placeholder="Search profiles..."
               value={searchTerm}
@@ -109,7 +110,7 @@ export default function AccountsPage() {
                 className="absolute inset-y-0 right-2 flex items-center text-faint hover:text-muted"
                 aria-label="Clear search"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -119,8 +120,9 @@ export default function AccountsPage() {
 
         {isAdmin && (
           <div className="w-56">
-            <label className="block text-xs text-muted mb-1">User</label>
+            <label className="block text-xs text-muted mb-1" htmlFor="accounts-user">User</label>
             <select
+              id="accounts-user"
               className="select focus-ring w-full text-sm"
               value={userId}
               onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}
@@ -136,8 +138,9 @@ export default function AccountsPage() {
         )}
 
         <div className="w-28">
-          <label className="block text-xs text-muted mb-1">Show</label>
+          <label className="block text-xs text-muted mb-1" htmlFor="accounts-page-size">Show</label>
           <select
+            id="accounts-page-size"
             value={pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
             className="select focus-ring w-full text-sm"
@@ -151,7 +154,7 @@ export default function AccountsPage() {
       </div>
 
       {debouncedSearch && (
-        <div className="text-sm text-muted">
+        <div role="status" className="text-sm text-muted">
           {pagination ? (
             <>
               Found {pagination.total} result{pagination.total !== 1 ? 's' : ''} for "{debouncedSearch}"
@@ -186,8 +189,8 @@ export default function AccountsPage() {
             {isLoading ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                  <div className="flex items-center justify-center">
-                    <div className="spinner spinner-md mr-3"></div>
+                  <div role="status" className="flex items-center justify-center">
+                    <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading profiles...
                   </div>
                 </td>
@@ -204,7 +207,15 @@ export default function AccountsPage() {
                 className="table-row cursor-pointer transition-colors"
                 onClick={() => navigate(`/accounts/${a._id}`)}
               >
-                <td className="px-4 py-2.5">{a.name}</td>
+                <td className="px-4 py-2.5">
+                  <Link
+                    to={`/accounts/${a._id}`}
+                    className="rounded hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {a.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-2.5 text-muted">{a.region || '—'}</td>
                 <td className="px-4 py-2.5">
                   {a.country ? (
@@ -230,7 +241,7 @@ export default function AccountsPage() {
                   </div>
                 </td>
                 <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <button type="button" className="btn-icon" onClick={() => remove(a)} aria-label={`Delete profile ${a.name}`} title="Delete"><Trash2 size={16} /></button>
+                  <button type="button" className="btn-icon" onClick={() => remove(a)} aria-label={`Delete profile ${a.name}`} title="Delete"><Trash2 size={16} aria-hidden /></button>
                 </td>
               </tr>
             ))}
@@ -250,7 +261,7 @@ export default function AccountsPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <nav className="flex items-center gap-2" aria-label="Pagination">
             <button
               onClick={() => setCurrentPage(pagination.page - 1)}
               disabled={!pagination.hasPrev}
@@ -271,9 +282,11 @@ export default function AccountsPage() {
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
+                    aria-label={`Page ${pageNum}`}
+                    aria-current={pageNum === pagination.page ? 'page' : undefined}
                     className={`px-3 py-1 border rounded text-sm ${
                       pageNum === pagination.page
-                        ? 'bg-blue-500 text-white border-blue-500'
+                        ? 'bg-blue-600 text-white border-blue-600'
                         : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
                     }`}
                   >
@@ -290,7 +303,7 @@ export default function AccountsPage() {
             >
               Next
             </button>
-          </div>
+          </nav>
         </div>
       )}
     </div>

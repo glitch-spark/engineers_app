@@ -54,11 +54,12 @@ export default function LeaderboardPage() {
       <PageHeader
         title="Leaderboard"
         action={
-          <div className="segmented">
+          <div className="segmented" role="group" aria-label="Date range">
             {RANGES.map((r) => (
               <button
                 key={r.value}
                 type="button"
+                aria-pressed={range === r.value}
                 onClick={() => setRange(r.value)}
                 className={
                   'segmented-btn ' +
@@ -73,14 +74,14 @@ export default function LeaderboardPage() {
       />
 
       {error && (
-        <div className="alert-error text-sm text-red-700">
+        <div role="alert" className="alert-error text-sm text-red-700">
           Failed to load leaderboard.
         </div>
       )}
 
       {(isLoading || !data) && !error && (
-        <div className="panel p-4 flex items-center gap-2 text-sm text-muted">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+        <div role="status" className="panel p-4 flex items-center gap-2 text-sm text-muted">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading…
         </div>
       )}
 
@@ -110,14 +111,17 @@ export default function LeaderboardPage() {
           <div className="table-wrap">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
+                <caption className="sr-only">
+                  Leaderboard, {data.label}. Column headers for Bids, Interviews and Conversion are buttons that sort the table.
+                </caption>
                 <thead className="table-head">
                   <tr>
-                    <th className="px-4 py-2 text-left w-12">#</th>
-                    <th className="px-4 py-2 text-left">User</th>
+                    <th scope="col" className="px-4 py-2 text-left w-12">#</th>
+                    <th scope="col" className="px-4 py-2 text-left">User</th>
                     <ColHeader label="Bids" active={sortKey === 'bids'} onClick={() => setSortKey('bids')} />
                     <ColHeader label="Interviews" active={sortKey === 'interviews'} onClick={() => setSortKey('interviews')} />
                     <ColHeader label="Conversion" active={sortKey === 'conversion'} onClick={() => setSortKey('conversion')} />
-                    <th className="px-4 py-2 text-center text-xs uppercase tracking-wide">Trend (8w)</th>
+                    <th scope="col" className="px-4 py-2 text-center text-xs uppercase tracking-wide">Trend (8w)</th>
                   </tr>
                 </thead>
                 <tbody className="row-divider">
@@ -150,7 +154,7 @@ export default function LeaderboardPage() {
                           showTarget={range === 'week'}
                           canceled={u.interviewsCanceled}
                           breakdown={u.interviewBreakdown}
-                          valueClassName="text-emerald-600 dark:text-emerald-400"
+                          valueClassName="text-emerald-700 dark:text-emerald-400"
                         />
                         <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
                           {u.qualifiesConversion ? (
@@ -185,9 +189,18 @@ export default function LeaderboardPage() {
 
 function ColHeader({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <th className={`px-4 py-2 text-right cursor-pointer select-none uppercase tracking-wide ${active ? 'text-sky-600 dark:text-sky-400' : 'text-muted'}`}
-        onClick={onClick}>
-      {label} {active && '▾'}
+    <th
+      scope="col"
+      aria-sort={active ? 'descending' : 'none'}
+      className={`px-4 py-2 text-right uppercase tracking-wide ${active ? 'text-sky-700 dark:text-sky-400' : 'text-muted'}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className="cursor-pointer select-none rounded uppercase tracking-wide"
+      >
+        {label} {active && <span aria-hidden>▾</span>}
+      </button>
     </th>
   );
 }
@@ -275,8 +288,8 @@ function TailorBidderChampionCard({
   if (tied.length === 0) {
     return (
       <div className="panel p-4">
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <Trophy size={12} className="text-amber-500" /> Top Tailor Bidder
+        <div role="heading" aria-level={2} className="flex items-center gap-2 text-xs text-muted">
+          <Trophy size={12} className="text-amber-500" aria-hidden /> Top Tailor Bidder
         </div>
         <div className="mt-2 text-sm text-faint italic">No qualifying user yet</div>
       </div>
@@ -295,8 +308,8 @@ function TailorBidderChampionCard({
 
   return (
     <div className="panel p-4">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Trophy size={12} className="text-amber-500" /> Top Tailor Bidder
+      <div role="heading" aria-level={2} className="flex items-center gap-2 text-xs text-muted">
+        <Trophy size={12} className="text-amber-500" aria-hidden /> Top Tailor Bidder
         {tied.length > 1 && (
           <span className="text-[10px] text-faint">· click total to switch</span>
         )}
@@ -334,6 +347,7 @@ function TailorBidderChampionCard({
                   ? 'ring-1 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
                   : 'opacity-60 hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
               }`}
+              aria-pressed={focused}
               title={focused ? u.name : `Show ${u.name}`}
             >
               <NameWithAvatar name={u.name} imageUrl={u.image} size="sm" />
@@ -364,8 +378,8 @@ function InterviewChampionCard({ users }: { users: ConsolidatedLeaderboardUser[]
   if (tied.length === 0) {
     return (
       <div className="panel p-4">
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <Trophy size={12} className="text-amber-500" /> Top interviewer
+        <div role="heading" aria-level={2} className="flex items-center gap-2 text-xs text-muted">
+          <Trophy size={12} className="text-amber-500" aria-hidden /> Top interviewer
         </div>
         <div className="mt-2 text-sm text-faint italic">No qualifying user yet</div>
       </div>
@@ -384,8 +398,8 @@ function InterviewChampionCard({ users }: { users: ConsolidatedLeaderboardUser[]
 
   return (
     <div className="panel p-4">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Trophy size={12} className="text-amber-500" /> Top interviewer
+      <div role="heading" aria-level={2} className="flex items-center gap-2 text-xs text-muted">
+        <Trophy size={12} className="text-amber-500" aria-hidden /> Top interviewer
         {tied.length > 1 && (
           <span className="text-[10px] text-faint">· click total to switch</span>
         )}
@@ -426,6 +440,7 @@ function InterviewChampionCard({ users }: { users: ConsolidatedLeaderboardUser[]
                   ? 'ring-1 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
                   : 'opacity-60 hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
               }`}
+              aria-pressed={focused}
               title={focused ? u.name : `Show ${u.name}`}
             >
               <NameWithAvatar name={u.name} imageUrl={u.image} size="sm" />
@@ -463,8 +478,8 @@ function ConversionChampionCard({
   if (tied.length === 0) {
     return (
       <div className="panel p-4">
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <Trophy size={12} className="text-amber-500" /> Top conversion
+        <div role="heading" aria-level={2} className="flex items-center gap-2 text-xs text-muted">
+          <Trophy size={12} className="text-amber-500" aria-hidden /> Top conversion
         </div>
         <div className="mt-2 text-sm text-faint italic">
           No qualifying user yet ({minBids}+ bids needed)
@@ -483,8 +498,8 @@ function ConversionChampionCard({
 
   return (
     <div className="panel p-4">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Trophy size={12} className="text-amber-500" /> Top conversion
+      <div role="heading" aria-level={2} className="flex items-center gap-2 text-xs text-muted">
+        <Trophy size={12} className="text-amber-500" aria-hidden /> Top conversion
         {tied.length > 1 && (
           <span className="text-[10px] text-faint">· click total to switch</span>
         )}
@@ -518,6 +533,7 @@ function ConversionChampionCard({
                   ? 'ring-1 ring-sky-500 bg-sky-50 dark:bg-sky-950/40'
                   : 'opacity-60 hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
               }`}
+              aria-pressed={focused}
               title={focused ? u.name : `Show ${u.name}`}
             >
               <NameWithAvatar name={u.name} imageUrl={u.image} size="sm" />
@@ -537,7 +553,7 @@ function YourStats({ stats, range, showPlanTailor, breakdown }: {
 }) {
   return (
     <div className="banner-info">
-      <div className="text-xs font-medium text-sky-800 dark:text-sky-300 mb-2">Your numbers — {range}</div>
+      <div role="heading" aria-level={2} className="text-xs font-medium text-sky-800 dark:text-sky-300 mb-2">Your numbers — {range}</div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatBlock
           label="Bids"
@@ -588,7 +604,7 @@ function StatBlock({
   const breakdownText = formatInterviewBreakdown(breakdown);
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-sky-700/70 dark:text-sky-400/80">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-sky-700 dark:text-sky-400/80">{label}</div>
       <div className="text-xl font-bold tabular-nums">
         {showPlanTailor ? (
           <span className="text-strong">
@@ -597,7 +613,7 @@ function StatBlock({
           </span>
         ) : (
           <>
-            <span className={isConversion ? 'text-strong' : 'text-emerald-600 dark:text-emerald-400'}>{display}</span>
+            <span className={isConversion ? 'text-strong' : 'text-emerald-700 dark:text-emerald-400'}>{display}</span>
             {!isConversion && breakdownText && (
               <span className="text-sm font-medium text-muted">({breakdownText})</span>
             )}

@@ -1,10 +1,11 @@
-import { useMemo, type Dispatch, type SetStateAction } from 'react';
+import { useId, useMemo, useRef, type Dispatch, type SetStateAction } from 'react';
 import useSWR from 'swr';
 import { FileText, Maximize2, PhoneCall, X } from 'lucide-react';
 import Select from './Select';
 import Switch from './Switch';
 import MultiSelect from './MultiSelect';
 import { notify } from '../lib/notify';
+import { useDialog } from '../lib/useDialog';
 import * as api from '../api/endpoints';
 import type { InterviewStageEntry } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
@@ -67,6 +68,30 @@ export type Interview = {
   createdAt?: string;
   updatedAt?: string;
 };
+
+/** Required interview fields that are still empty, as field labels ("Profile", "Scheduled date"…). */
+export function missingInterviewFields(
+  form: Pick<InterviewFormState, 'accountId' | 'date' | 'stage' | 'techSubStage'>,
+  { requireProfile = true }: { requireProfile?: boolean } = {},
+): string[] {
+  const missing: string[] = [];
+  if (requireProfile && !form.accountId) missing.push('Profile');
+  if (!form.date) missing.push('Scheduled date');
+  if (form.stage === 'tech' && !form.techSubStage) missing.push('Tech sub-stage');
+  return missing;
+}
+
+/**
+ * Explains why a Save button is disabled. Link it from the button with `aria-describedby={id}`
+ * so screen readers hear the reason too; renders nothing once every field is filled.
+ */
+export function MissingFieldsHint({ id, missing }: { id: string; missing: string[] }) {
+  if (missing.length === 0) return null;
+  const list = missing.length === 1
+    ? missing[0]
+    : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`;
+  return <p id={id} className="text-xs text-muted">Fill in {list} to continue.</p>;
+}
 
 export type InterviewFormState = {
   accountId: string;
@@ -409,7 +434,7 @@ export function StageMovementTrail({ interview }: { interview: Interview }) {
     <div className="mt-1.5 pl-1 flex flex-wrap items-center gap-1">
       {shown.map((s, i) => (
         <span key={`${s}-${i}`} className="inline-flex items-center gap-1">
-          {i > 0 && <span className="text-[10px] text-zinc-400 dark:text-zinc-500">→</span>}
+          {i > 0 && <span className="text-[10px] text-faint" aria-hidden>→</span>}
           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-[6px] text-[10px] font-medium border ${stageBadgeClass(s)}`}>
             {stageLabel(s)}
           </span>
@@ -430,12 +455,12 @@ export function TranscriptUploadButton({
   onLoad: (raw: string) => void;
 }) {
   return (
-    <label className="text-xs text-blue-600 hover:text-blue-700 dark:text-sky-400 dark:hover:text-sky-300 cursor-pointer">
+    <label className="rounded-sm text-xs text-blue-600 hover:text-blue-700 dark:text-sky-400 dark:hover:text-sky-300 cursor-pointer [&:has(:focus-visible)]:ring-2 [&:has(:focus-visible)]:ring-sky-600 dark:[&:has(:focus-visible)]:ring-sky-400">
       {hasTranscript ? 'Replace file' : 'Upload file'}
       <input
         type="file"
         accept={TRANSCRIPT_ACCEPT}
-        className="hidden"
+        className="sr-only"
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (!file) return;
@@ -622,13 +647,18 @@ export function InterviewFormFields({
   datalistId: string;
   disabled?: boolean;
 }) {
+  const uid = useId();
+  const fid = (name: string) => `${uid}-${name}`;
+  const requiredMark = <span className="text-red-700 dark:text-red-400" aria-hidden>*</span>;
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">
-          Profile <span className="text-red-500">*</span>
+        <label htmlFor={fid('profile')} className="block text-sm font-medium mb-1">
+          Profile {requiredMark}
         </label>
         <Select
+          id={fid('profile')}
+          required
           value={form.accountId}
           onChange={(v) => setForm({ ...form, accountId: v })}
           options={accountSelectOptions}
@@ -639,18 +669,18 @@ export function InterviewFormFields({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium mb-1">Company Name</label>
-          <input className="input" type="text" value={form.companyName} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))} placeholder="e.g. Acme Corp" />
+          <label htmlFor={fid('company')} className="block text-sm font-medium mb-1">Company Name</label>
+          <input id={fid('company')} className="input" type="text" value={form.companyName} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))} placeholder="e.g. Acme Corp" />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Interviewer Name</label>
-          <input className="input" type="text" value={form.interviewerName} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, interviewerName: e.target.value }))} placeholder="e.g. Jane Smith" />
+          <label htmlFor={fid('interviewer')} className="block text-sm font-medium mb-1">Interviewer Name</label>
+          <input id={fid('interviewer')} className="input" type="text" value={form.interviewerName} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, interviewerName: e.target.value }))} placeholder="e.g. Jane Smith" />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Applied Position</label>
-        <input className="input" type="text" value={form.appliedPosition} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, appliedPosition: e.target.value }))} placeholder="e.g. Backend, Frontend…" list={datalistId} />
+        <label htmlFor={fid('position')} className="block text-sm font-medium mb-1">Applied Position</label>
+        <input id={fid('position')} className="input" type="text" value={form.appliedPosition} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, appliedPosition: e.target.value }))} placeholder="e.g. Backend, Frontend…" list={datalistId} />
         <datalist id={datalistId}>
           <option value="Backend" /><option value="Frontend" /><option value="Fullstack" />
           <option value="AI / ML" /><option value="Mobile" /><option value="DevOps" />
@@ -659,14 +689,15 @@ export function InterviewFormFields({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-faint font-normal">(optional)</span></label>
-        <input className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, jobUrl: e.target.value }))} placeholder="https://..." />
+        <label htmlFor={fid('job-url')} className="block text-sm font-medium mb-1">Job URL <span className="text-xs text-faint font-normal">(optional)</span></label>
+        <input id={fid('job-url')} className="input" type="url" value={form.jobUrl} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, jobUrl: e.target.value }))} placeholder="https://..." />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium mb-1">Interview Stage</label>
+          <label htmlFor={fid('stage')} className="block text-sm font-medium mb-1">Interview Stage</label>
           <Select
+            id={fid('stage')}
             value={form.stage}
             onChange={(v) => {
               setForm((prev) => {
@@ -699,12 +730,14 @@ export function InterviewFormFields({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">
-            Scheduled date <span className="text-red-500">*</span>
+          <label htmlFor={fid('date')} className="block text-sm font-medium mb-1">
+            Scheduled date {requiredMark}
           </label>
           <input
+            id={fid('date')}
             className="input"
             type="date"
+            required
             value={form.date}
             disabled={disabled}
             onChange={(e) => {
@@ -721,15 +754,17 @@ export function InterviewFormFields({
 
       <div className={`grid gap-3 ${form.stage === 'tech' ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div>
-          <label className="block text-sm font-medium mb-1">Status</label>
-          <Select value={form.status} onChange={(v) => setForm((prev) => ({ ...prev, status: v }))} options={statusFormOptions} placeholder="Select a status" disabled={disabled} />
+          <label htmlFor={fid('status')} className="block text-sm font-medium mb-1">Status</label>
+          <Select id={fid('status')} value={form.status} onChange={(v) => setForm((prev) => ({ ...prev, status: v }))} options={statusFormOptions} placeholder="Select a status" disabled={disabled} />
         </div>
         {form.stage === 'tech' && (
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Tech sub-stage <span className="text-red-500">*</span>
+            <label htmlFor={fid('tech-sub')} className="block text-sm font-medium mb-1">
+              Tech sub-stage {requiredMark}
             </label>
             <Select
+              id={fid('tech-sub')}
+              required
               value={form.techSubStage}
               onChange={(v) => {
                 setForm((prev) => ({
@@ -756,17 +791,17 @@ export function InterviewFormFields({
 
       {(form.stageHistory.length > 0 || !disabled) && (
         <div>
-          <label className="block text-sm font-medium mb-1">Stage movement</label>
+          <p id={fid('movement')} className="block text-sm font-medium mb-1">Stage movement</p>
           <p className="text-xs text-muted mb-2">
             Path used for pass-rate analysis. Each badge shows that round&apos;s interview date.
           </p>
           {form.stageHistory.length === 0 ? (
             <div className="text-xs text-faint italic">No stage moves yet.</div>
           ) : (
-            <div className="flex flex-wrap items-end gap-1.5">
+            <div className="flex flex-wrap items-end gap-1.5" role="group" aria-labelledby={fid('movement')}>
               {form.stageHistory.map((entry, i) => (
                 <span key={`${entry.stage}-${i}`} className="inline-flex items-end gap-1">
-                  {i > 0 && <span className="text-[10px] text-faint pb-4">→</span>}
+                  {i > 0 && <span className="text-[10px] text-faint pb-4" aria-hidden>→</span>}
                   <span className="inline-flex flex-col items-center gap-0.5">
                     <span className={`inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-[6px] text-[11px] font-medium border ${stageBadgeClass(entry.stage)}`}>
                       {stageLabel(entry.stage)}
@@ -785,7 +820,7 @@ export function InterviewFormFields({
                             });
                           }}
                         >
-                          <X size={12} />
+                          <X size={12} aria-hidden />
                         </button>
                       )}
                     </span>
@@ -802,7 +837,7 @@ export function InterviewFormFields({
 
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="block text-sm font-medium">Interview Transcript</label>
+          <p className="block text-sm font-medium">Interview Transcript</p>
           {!disabled && (
             <TranscriptUploadButton
               hasTranscript={!!form.transcript}
@@ -825,8 +860,8 @@ export function InterviewFormFields({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Note</label>
-        <textarea className="input w-full" rows={4} value={form.note} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))} placeholder="Internal notes…" />
+        <label htmlFor={fid('note')} className="block text-sm font-medium mb-1">Note</label>
+        <textarea id={fid('note')} className="input w-full" rows={4} value={form.note} disabled={disabled} onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))} placeholder="Internal notes…" />
       </div>
     </div>
   );
@@ -863,17 +898,26 @@ export function InterviewSidePanel({
 }) {
   const account = typeof interview.accountId === 'object' ? interview.accountId : null;
   const title = interview.companyName || account?.name || 'Interview';
-  const saveDisabled = saving
-    || !form.date
-    || !form.accountId
-    || (form.stage === 'tech' && !form.techSubStage);
+  const panelRef = useRef<HTMLElement>(null);
+  const titleId = useId();
+  useDialog(true, panelRef, onClose);
+  const missing = missingInterviewFields(form);
+  const saveDisabled = saving || missing.length > 0;
+  const hintId = `${titleId}-missing`;
 
   return (
-    <aside className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white dark:bg-zinc-950 shadow-strong border-l border-zinc-200 dark:border-zinc-800 z-50 flex flex-col">
+    <aside
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
+      className="fixed top-16 right-0 bottom-0 w-1/3 min-w-[320px] max-w-[520px] bg-white dark:bg-zinc-950 shadow-strong border-l border-zinc-200 dark:border-zinc-800 z-50 flex flex-col"
+    >
       <header className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2 shrink-0">
         <div className="min-w-0">
           <div className="text-xs text-muted">Interview details</div>
-          <div className="font-semibold text-strong truncate">{title}</div>
+          <h2 id={titleId} className="font-semibold text-strong truncate">{title}</h2>
           {interview.stage && (
             <span className={`inline-flex mt-1 items-center px-2 py-0.5 rounded-[8px] text-[10px] font-medium border ${stageBadgeClass(interview.stage)}`}>
               {stageLabel(interview.stage)}
@@ -900,7 +944,7 @@ export function InterviewSidePanel({
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {error && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{error}</p>}
+        {error && <p className="text-red-600 dark:text-red-400 text-sm mb-3" role="alert">{error}</p>}
         <InterviewFormFields
           form={form}
           setForm={setForm}
@@ -914,15 +958,24 @@ export function InterviewSidePanel({
         />
       </div>
 
-      <footer className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap gap-2 justify-end shrink-0 bg-zinc-50/80 dark:bg-zinc-900/80">
+      <footer className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center gap-2 justify-end shrink-0 bg-zinc-50/80 dark:bg-zinc-900/80">
         <button type="button" className="btn-outline text-sm" onClick={onOpenTranscript}>
-          <FileText size={14} className="mr-1" /> Transcript
+          <FileText size={14} className="mr-1" aria-hidden /> Transcript
         </button>
         <button type="button" className="btn-outline text-sm" onClick={onClose}>Close</button>
         {editable && (
-          <button type="button" className="btn text-sm" onClick={onSave} disabled={saveDisabled}>
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
+          <>
+            <MissingFieldsHint id={hintId} missing={missing} />
+            <button
+              type="button"
+              className="btn text-sm"
+              onClick={onSave}
+              disabled={saveDisabled}
+              aria-describedby={missing.length ? hintId : undefined}
+            >
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </>
         )}
       </footer>
     </aside>

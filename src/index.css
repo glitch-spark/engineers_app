@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-html { font-size: 14px; scrollbar-gutter: stable; }
+/* 87.5% = 14px at the browser default, but still honours the user's font-size setting. */
+html { font-size: 87.5%; scrollbar-gutter: stable; }
 html.dialog-open {
   overflow: hidden;
   scrollbar-gutter: auto;
@@ -16,7 +17,7 @@ body, h1, h2, h3, h4, h5, h6, p, label, input, textarea, select, button { font-s
 .section-title { @apply text-lg font-semibold text-zinc-900 dark:text-zinc-50 tracking-tight; }
 .section-desc  { @apply text-xs text-zinc-500 dark:text-zinc-400; }
 .card-title    { @apply text-sm font-semibold text-zinc-800 dark:text-zinc-100; }
-.hint          { @apply text-xs text-zinc-400 dark:text-zinc-500; }
+.hint          { @apply text-xs text-zinc-500 dark:text-zinc-400; }
 thead          { @apply text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400; }
 td             { @apply text-sm text-zinc-700 dark:text-zinc-300; }
 
@@ -33,7 +34,39 @@ html.dark body {
   background: #09090b;
 }
 input, textarea, select, button { font-family: inherit; }
-input::placeholder, textarea::placeholder { font-family: inherit; color: theme('colors.zinc.400'); }
+input::placeholder, textarea::placeholder { font-family: inherit; color: theme('colors.zinc.500'); }
+html.dark input::placeholder, html.dark textarea::placeholder { color: theme('colors.zinc.400'); }
+
+/* Keyboard focus — one visible indicator for every control that doesn't style its own.
+   sky-600 is 4.1:1 on white, sky-400 is 9.3:1 on zinc-950 (WCAG 2.4.7 / 1.4.11).
+   In @layer base so a component's own focus utilities still win. */
+@layer base {
+  :focus-visible { outline: 2px solid theme('colors.sky.600'); outline-offset: 2px; }
+  html.dark :focus-visible { outline-color: theme('colors.sky.400'); }
+  /* Programmatic focus targets (main landmark, dialog panels, headings) don't need a ring. */
+  [tabindex="-1"]:focus-visible { outline: none; }
+}
+
+.skip-link { @apply sr-only; }
+
+/* Truncated text (with a title tooltip for mouse users) shows in full while its row or card
+   holds keyboard focus — tooltips never appear on focus or touch (WCAG 1.4.13 / 2.1.1). */
+.reveal-scope:focus-within .reveal-on-focus {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: unset;
+}
+.reveal-scope:focus-within .reveal-on-focus[class*="line-clamp"] { display: block; }
+.skip-link:focus {
+  @apply not-sr-only fixed left-3 top-3 z-[100] rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-900 shadow-modal;
+  @apply dark:bg-zinc-900 dark:text-zinc-100;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in, .animate-fade-in-up, .animate-slide-in, .animate-bounce-gentle { animation: none !important; }
+}
 
 table { font-variant-numeric: tabular-nums; }
 
@@ -101,6 +134,7 @@ table { font-variant-numeric: tabular-nums; }
   @apply rounded-lg border cursor-pointer transition-colors;
   @apply border-zinc-200 hover:border-zinc-300;
   @apply dark:border-zinc-700 dark:hover:border-zinc-600;
+  @apply [&:has(:focus-visible)]:ring-2 [&:has(:focus-visible)]:ring-sky-600 dark:[&:has(:focus-visible)]:ring-sky-400;
 }
 
 .choice-card-selected {
@@ -111,7 +145,7 @@ table { font-variant-numeric: tabular-nums; }
 .text-muted { @apply text-zinc-500 dark:text-zinc-400; }
 .text-body { @apply text-zinc-700 dark:text-zinc-300; }
 .text-strong { @apply text-zinc-900 dark:text-zinc-100; }
-.text-faint { @apply text-zinc-400 dark:text-zinc-500; }
+.text-faint { @apply text-zinc-500 dark:text-zinc-400; }
 
 .segmented {
   @apply flex items-center gap-0.5 rounded-md border border-zinc-200/80 bg-white p-0.5;
@@ -124,8 +158,8 @@ table { font-variant-numeric: tabular-nums; }
 }
 
 .segmented-btn-active {
-  @apply bg-sky-600 text-white hover:bg-sky-600 hover:text-white;
-  @apply dark:bg-sky-500 dark:text-white dark:hover:bg-sky-500 dark:hover:text-white;
+  @apply bg-sky-700 text-white hover:bg-sky-700 hover:text-white;
+  @apply dark:bg-sky-700 dark:text-white dark:hover:bg-sky-700 dark:hover:text-white;
 }
 
 .segmented-btn-active-neutral {
@@ -236,42 +270,43 @@ table { font-variant-numeric: tabular-nums; }
 
 .pill-up { @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300; }
 .pill-down { @apply bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300; }
-.pill-flat { @apply bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400; }
+.pill-flat { @apply bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400; }
 
 .progress-track { @apply h-6 overflow-hidden rounded-md bg-zinc-100 dark:bg-zinc-800; }
 
 /* Action links — primary token is zinc/black; use sky accent so links read on dark panels */
 .link {
-  @apply text-sky-600 underline-offset-2 hover:text-sky-700 hover:underline;
+  @apply text-sky-700 underline-offset-2 hover:text-sky-800 hover:underline;
   @apply dark:text-sky-400 dark:hover:text-sky-300;
 }
 
 .link-inline {
-  @apply inline-flex items-center gap-1 text-sky-600 underline-offset-2 hover:text-sky-700 hover:underline;
+  @apply inline-flex items-center gap-1 text-sky-700 underline-offset-2 hover:text-sky-800 hover:underline;
   @apply dark:text-sky-400 dark:hover:text-sky-300;
 }
 
 .select option { @apply bg-white py-2 px-3 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200; }
 
 .input {
-  @apply w-full rounded-xl border border-zinc-200 bg-zinc-50/80 px-3.5 py-2 text-sm text-zinc-900 shadow-sm transition;
-  @apply hover:border-zinc-300;
-  @apply focus:border-accent-600 focus:bg-white focus:outline-none focus:ring-4 focus:ring-accent-600/10;
+  @apply w-full rounded-xl border border-field bg-zinc-50/80 px-3.5 py-2 text-sm text-zinc-900 shadow-sm transition;
+  @apply hover:border-zinc-500;
+  @apply focus:border-sky-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-600;
   @apply disabled:cursor-not-allowed disabled:opacity-60;
-  @apply dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:bg-zinc-900;
+  @apply dark:border-zinc-500 dark:bg-zinc-900/80 dark:text-zinc-100 dark:hover:border-zinc-400;
+  @apply dark:focus:border-sky-400 dark:focus:bg-zinc-900 dark:focus:ring-sky-400;
 }
 
 .btn {
   @apply inline-flex items-center justify-center gap-2 rounded-xl border-none px-4 py-2 text-sm font-semibold text-white transition;
   @apply bg-primary hover:bg-primary-light active:scale-[0.99];
-  @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20;
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-zinc-950;
   @apply disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .btn-outline {
   @apply inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 transition;
   @apply hover:border-zinc-300 hover:bg-zinc-50;
-  @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-900/10;
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-zinc-950;
   @apply dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600 dark:hover:bg-zinc-800;
 }
 
@@ -289,7 +324,7 @@ table { font-variant-numeric: tabular-nums; }
 .alert-action {
   @apply inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-md border border-zinc-200 bg-white px-1.5 py-1.5 text-[11px] font-medium text-zinc-700;
   @apply hover:bg-zinc-50;
-  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/15;
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-zinc-950;
   @apply dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800;
 }
 
@@ -302,15 +337,15 @@ table { font-variant-numeric: tabular-nums; }
 
 .btn-accent {
   @apply inline-flex items-center justify-center gap-2 rounded-xl border-none px-4 py-2 text-sm font-semibold text-white transition;
-  @apply bg-sky-600 hover:bg-sky-500 active:scale-[0.99];
-  @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/25;
+  @apply bg-sky-700 hover:bg-sky-800 active:scale-[0.99];
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-zinc-950;
   @apply disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .btn-success {
   @apply inline-flex items-center justify-center gap-2 rounded-xl border-none px-4 py-2 text-sm font-semibold text-white transition;
-  @apply bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99];
-  @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/25;
+  @apply bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99];
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-zinc-950;
   @apply disabled:cursor-not-allowed disabled:opacity-60;
 }
 
@@ -430,11 +465,12 @@ table { font-variant-numeric: tabular-nums; }
 }
 
 .select {
-  @apply w-full cursor-pointer appearance-none rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition;
+  @apply w-full cursor-pointer appearance-none rounded-xl border border-field bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition;
   @apply hover:border-zinc-300;
-  @apply focus:border-accent-600 focus:outline-none focus:ring-4 focus:ring-accent-600/10;
+  @apply focus:border-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-600;
   @apply disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500;
-  @apply dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600 dark:disabled:bg-zinc-800;
+  @apply dark:border-zinc-500 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-400;
+  @apply dark:focus:border-sky-400 dark:focus:ring-sky-400 dark:disabled:bg-zinc-800;
 }
 
 .select-wrapper { @apply relative inline-block w-full; }
@@ -443,14 +479,14 @@ table { font-variant-numeric: tabular-nums; }
   content: '';
   @apply pointer-events-none absolute right-3 top-1/2 -translate-y-1/2;
   @apply h-0 w-0 border-l-4 border-r-4 border-t-4;
-  @apply border-l-transparent border-r-transparent border-t-zinc-400;
+  @apply border-l-transparent border-r-transparent border-t-zinc-500;
   @apply transition-transform duration-200;
 }
 
 .select-wrapper:hover::after { @apply border-t-zinc-600 dark:border-t-zinc-400; }
 
 .focus-ring {
-  @apply focus:outline-none focus:ring-4 focus:ring-accent-600/10 focus:ring-offset-0;
+  @apply focus:outline-none focus:ring-2 focus:ring-sky-600 focus:ring-offset-0 dark:focus:ring-sky-400;
 }
 
 /* Public pages — simple centered auth (home, login, register) */
@@ -563,14 +599,13 @@ table { font-variant-numeric: tabular-nums; }
 }
 
 .auth-shell .auth-card-glass .auth-input {
-  @apply border-zinc-200/90 bg-white text-zinc-900 shadow-sm;
-  @apply placeholder:text-zinc-400 hover:border-zinc-300;
-  @apply focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-sky-500/10;
+  @apply border-field bg-white text-zinc-900 shadow-sm;
+  @apply placeholder:text-zinc-500 hover:border-zinc-500;
+  @apply focus:border-sky-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-600;
 }
 
 .auth-shell .auth-card-glass .auth-btn-secondary {
   @apply border-zinc-200/90 bg-zinc-50 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-100;
-  @apply focus-visible:ring-zinc-900/5;
 }
 
 .auth-label {
@@ -584,15 +619,15 @@ table { font-variant-numeric: tabular-nums; }
 
 .auth-btn-primary {
   @apply inline-flex w-full items-center justify-center gap-2 rounded-xl border-none px-4 py-2.5 text-sm font-semibold text-white transition;
-  @apply bg-sky-600 hover:bg-sky-500 active:scale-[0.99];
-  @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/25;
+  @apply bg-sky-700 hover:bg-sky-800 active:scale-[0.99];
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-zinc-950;
   @apply disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .auth-btn-secondary {
   @apply inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition;
   @apply border-zinc-200/90 bg-zinc-50 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-100;
-  @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-900/5;
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-zinc-950;
 }
 
 .auth-card {
@@ -616,7 +651,7 @@ table { font-variant-numeric: tabular-nums; }
 }
 
 .auth-footer {
-  @apply text-center text-xs leading-relaxed text-zinc-400;
+  @apply text-center text-xs leading-relaxed text-zinc-500;
 }
 
 .auth-footer-link {
@@ -642,7 +677,7 @@ table { font-variant-numeric: tabular-nums; }
 }
 
 .tab-nav-link-active {
-  @apply border-sky-600 text-sky-600 dark:border-sky-400 dark:text-sky-400;
+  @apply border-sky-700 text-sky-700 dark:border-sky-400 dark:text-sky-400;
 }
 
 .tab-nav-link-inactive {

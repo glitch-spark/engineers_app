@@ -4,8 +4,7 @@ import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { Pencil, Trash2, Search, Plus, Users, UserCheck, UserX, Shield, Check } from 'lucide-react';
 import * as api from '../api/endpoints';
-import { ApiError } from '../api/client';
-import { notify } from '../lib/notify';
+import { notify, messageOf } from '../lib/notify';
 import PageHeader from '../components/PageHeader';
 
 interface User {
@@ -97,7 +96,7 @@ export default function UsersPage() {
       await mutate();
       setOpen(false);
     } catch (e) {
-      notify.error(e instanceof ApiError ? e : 'Failed to save user');
+      setError(messageOf(e, 'Failed to save user'));
     } finally {
       setSaving(false);
     }
@@ -148,10 +147,10 @@ export default function UsersPage() {
 
   const getRoleIcon = (role: string) => {
     switch (role) {
-      case 'admin': return <Shield size={16} />;
-      case 'accountant': return <UserCheck size={16} />;
-      case 'staff': return <Users size={16} />;
-      default: return <Users size={16} />;
+      case 'admin': return <Shield size={16} aria-hidden />;
+      case 'accountant': return <UserCheck size={16} aria-hidden />;
+      case 'staff': return <Users size={16} aria-hidden />;
+      default: return <Users size={16} aria-hidden />;
     }
   };
 
@@ -164,7 +163,7 @@ export default function UsersPage() {
         title="Users"
         action={
           <button type="button" className="btn" onClick={openAdd}>
-            <Plus size={16} className="mr-2" /> Add User
+            <Plus size={16} className="mr-2" aria-hidden /> Add User
           </button>
         }
       />
@@ -172,10 +171,11 @@ export default function UsersPage() {
       <div className="card">
         <div className="flex items-end gap-4 flex-wrap">
           <div className="w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-64">
-            <label className="block text-xs mb-1 text-muted">Search Users</label>
+            <label className="block text-xs mb-1 text-muted" htmlFor="users-search">Search Users</label>
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-faint" />
+              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-faint" aria-hidden />
               <input
+                id="users-search"
                 className="input pl-10 w-full"
                 type="text"
                 placeholder="Search by name, email, or phone..."
@@ -220,7 +220,7 @@ export default function UsersPage() {
 
           {isSearching && (
             <div className="text-sm text-muted flex items-center">
-              <div className="spinner spinner-sm mr-2"></div>
+              <div className="spinner spinner-sm mr-2" aria-hidden></div>
               Searching...
             </div>
           )}
@@ -229,7 +229,7 @@ export default function UsersPage() {
 
       {pagination && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-muted">
+          <div className="text-sm text-muted" role="status">
             {searchTerm || roleFilter || statusFilter ? (
               <span>Found {pagination.total} user{pagination.total !== 1 ? 's' : ''} matching your criteria</span>
             ) : (
@@ -238,8 +238,9 @@ export default function UsersPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Show:</label>
+            <label className="text-sm font-medium" htmlFor="users-page-size">Show:</label>
             <Select
+              id="users-page-size"
               value={pageSize.toString()}
               onChange={(value) => handlePageSizeChange(Number(value))}
               options={[
@@ -269,8 +270,8 @@ export default function UsersPage() {
             {isLoading ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                  <div className="flex items-center justify-center">
-                    <div className="spinner spinner-md mr-3"></div>
+                  <div role="status" className="flex items-center justify-center">
+                    <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading users...
                   </div>
                 </td>
@@ -298,7 +299,7 @@ export default function UsersPage() {
                     <div className="flex items-center">
                       <div className="h-10 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center mr-3">
                         {user.image ? (
-                          <img src={user.image} alt={user.name || 'User'} className="h-10 w-10 rounded-full object-cover" />
+                          <img src={user.image} alt="" className="h-10 w-10 rounded-full object-cover" />
                         ) : (
                           <span className="text-muted font-medium">
                             {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
@@ -324,12 +325,12 @@ export default function UsersPage() {
                   <td className="px-4 py-4">
                     {user.isActive === false ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
-                        <UserX size={12} />
+                        <UserX size={12} aria-hidden />
                         Pending approval
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800">
-                        <UserCheck size={12} />
+                        <UserCheck size={12} aria-hidden />
                         Active
                       </span>
                     )}
@@ -346,15 +347,16 @@ export default function UsersPage() {
                           className="btn-success btn-sm"
                           onClick={() => approve(user)}
                           title="Approve user — allow login"
+                          aria-label={`Approve ${user.name || user.email} — allow login`}
                         >
-                          <Check size={14} />
+                          <Check size={14} aria-hidden />
                         </button>
                       )}
-                      <button className="btn-icon" onClick={() => openEdit(user)} title="Edit User">
-                        <Pencil size={14} />
+                      <button className="btn-icon" onClick={() => openEdit(user)} title="Edit User" aria-label={`Edit ${user.name || user.email}`}>
+                        <Pencil size={14} aria-hidden />
                       </button>
-                      <button className="btn-icon hover:text-red-600" onClick={() => remove(user._id)} title="Delete User">
-                        <Trash2 size={14} />
+                      <button className="btn-icon hover:text-red-600" onClick={() => remove(user._id)} title="Delete User" aria-label={`Delete ${user.name || user.email}`}>
+                        <Trash2 size={14} aria-hidden />
                       </button>
                     </div>
                   </td>
@@ -392,14 +394,15 @@ export default function UsersPage() {
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit User' : 'Add New User'}>
         <div className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm dark:bg-red-950/40 dark:border-red-900/50 dark:text-red-400">
+            <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm dark:bg-red-950/40 dark:border-red-900/50 dark:text-red-400">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-body">Full Name</label>
+            <label className="block text-sm font-medium mb-2 text-body" htmlFor="user-name">Full Name</label>
             <input
+              id="user-name"
               className="input w-full"
               type="text"
               placeholder="Enter full name"
@@ -409,8 +412,10 @@ export default function UsersPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-body">Email Address</label>
+            <label className="block text-sm font-medium mb-2 text-body" htmlFor="user-email">Email Address</label>
             <input
+              id="user-email"
+              aria-describedby={editing ? 'user-email-note' : undefined}
               className="input w-full"
               type="email"
               placeholder="Enter email address"
@@ -419,7 +424,7 @@ export default function UsersPage() {
               disabled={!!editing}
             />
             {editing && (
-              <p className="text-xs text-muted mt-1">Email address cannot be changed for existing users</p>
+              <p id="user-email-note" className="text-xs text-muted mt-1">Email address cannot be changed for existing users</p>
             )}
           </div>
 
@@ -437,8 +442,9 @@ export default function UsersPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-body">Phone Number</label>
+            <label className="block text-sm font-medium mb-2 text-body" htmlFor="user-phone">Phone Number</label>
             <input
+              id="user-phone"
               className="input w-full"
               type="tel"
               placeholder="Enter phone number"
@@ -448,8 +454,9 @@ export default function UsersPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-body">Birthday</label>
+            <label className="block text-sm font-medium mb-2 text-body" htmlFor="user-birthday">Birthday</label>
             <input
+              id="user-birthday"
               className="input w-full"
               type="date"
               value={form.birthday}

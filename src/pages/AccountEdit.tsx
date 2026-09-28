@@ -120,8 +120,8 @@ export default function AccountEditPage() {
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center gap-2 text-sm text-muted">
-        <Loader2 className="w-4 h-4 animate-spin" /> Loading...
+      <div role="status" className="p-6 flex items-center gap-2 text-sm text-muted">
+        <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading...
       </div>
     );
   }
@@ -134,10 +134,14 @@ export default function AccountEditPage() {
         <section className="panel p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_minmax(8rem,10rem)] gap-4">
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">
-                Profile name <span className="text-red-500">*</span>
+              <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-name">
+                Profile name <span className="text-red-700 dark:text-red-400" aria-hidden>*</span>
               </label>
               <input
+                id="profile-name"
+                required
+                aria-required
+                aria-describedby="profile-name-hint"
                 className="input w-full text-sm"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -146,16 +150,17 @@ export default function AccountEditPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">
+              <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-country">
                 Country <span className="text-faint font-normal">(optional)</span>
               </label>
-              <CountrySelect value={country} onChange={setCountry} />
+              <CountrySelect id="profile-country" value={country} onChange={setCountry} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">
+              <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-region">
                 Region <span className="text-faint font-normal">(optional)</span>
               </label>
               <Select
+                id="profile-region"
                 value={region}
                 onChange={setRegion}
                 options={PROFILE_REGION_OPTIONS}
@@ -163,7 +168,7 @@ export default function AccountEditPage() {
               />
             </div>
           </div>
-          <p className="text-xs text-faint">
+          <p id="profile-name-hint" className="text-xs text-faint">
             A label to distinguish this profile in dropdowns. Country and region appear with the
             profile name on Interviews. After creating, upload your HTML resume template and
             (optionally) customize the prompts.
@@ -175,7 +180,7 @@ export default function AccountEditPage() {
               disabled={saving || !name.trim()}
               className="btn disabled:opacity-50"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
               Create profile
             </button>
           </div>
@@ -194,8 +199,9 @@ export default function AccountEditPage() {
       >
         <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_minmax(8rem,10rem)] gap-4">
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">Profile name</label>
+            <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-name">Profile name</label>
             <input
+              id="profile-name"
               className="input w-full text-sm"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -204,16 +210,17 @@ export default function AccountEditPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">
+            <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-country">
               Country <span className="text-faint font-normal">(optional)</span>
             </label>
-            <CountrySelect value={country} onChange={saveCountry} />
+            <CountrySelect id="profile-country" value={country} onChange={saveCountry} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">
+            <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-region">
               Region <span className="text-faint font-normal">(optional)</span>
             </label>
             <Select
+              id="profile-region"
               value={region}
               onChange={saveRegion}
               options={PROFILE_REGION_OPTIONS}
@@ -276,8 +283,8 @@ function PromptsBlock({ accountId }: { accountId: string }) {
   if (loading) {
     return (
       <Section title="Prompts" desc="">
-        <div className="flex items-center gap-2 text-sm text-muted">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading prompts...
+        <div role="status" className="flex items-center gap-2 text-sm text-muted">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading prompts...
         </div>
       </Section>
     );
@@ -332,7 +339,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
           disabled={saving}
           className="btn disabled:opacity-50"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
           Save prompts
         </button>
       </div>

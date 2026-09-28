@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Loader2, FileDown } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -31,6 +31,8 @@ export default function ResumePromptField({
   defaultSource?: 'none' | 'global';
 }) {
   const [loadingDefault, setLoadingDefault] = useState(false);
+  // Self-labelling so every caller (Preferences, AccountEdit) gets a linked label + hint.
+  const id = useId();
 
   async function loadDefault() {
     if (value.trim() && !window.confirm('Replace the current text with your global prompt?')) {
@@ -57,9 +59,11 @@ export default function ResumePromptField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs font-medium text-muted">{label}</label>
+        <label htmlFor={id} className="block text-xs font-medium text-muted">{label}</label>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-faint">{value.length}/{MAX}</span>
+          <span id={`${id}-count`} className="text-[11px] text-faint">
+            {value.length}/{MAX}<span className="sr-only"> characters used</span>
+          </span>
           {defaultSource === 'global' && (
             <button
               type="button"
@@ -67,13 +71,15 @@ export default function ResumePromptField({
               disabled={loadingDefault}
               className="link-inline text-[11px] disabled:opacity-50"
             >
-              {loadingDefault ? <Loader2 size={11} className="animate-spin" /> : <FileDown size={11} />}
+              {loadingDefault ? <Loader2 size={11} className="animate-spin" aria-hidden /> : <FileDown size={11} aria-hidden />}
               Load global
             </button>
           )}
         </div>
       </div>
       <textarea
+        id={id}
+        aria-describedby={`${id}-hint ${id}-count`}
         className="input w-full text-sm"
         rows={12}
         value={value}
@@ -81,7 +87,9 @@ export default function ResumePromptField({
         onChange={(e) => onChange(e.target.value)}
         placeholder="Leave empty to inherit."
       />
-      <p className="text-xs text-faint mt-1">{hint}</p>
+      <p id={`${id}-hint`} className="text-xs text-faint mt-1">
+        {hint}<span className="sr-only"> Leave empty to inherit.</span>
+      </p>
     </div>
   );
 }

@@ -199,8 +199,9 @@ function ConversionHeroCard({
 function SkeletonHero() {
   return (
     <>
+      <span role="status" className="sr-only">Loading your stats…</span>
       {[0, 1, 2].map((i) => (
-        <div key={i} className="panel p-4">
+        <div key={i} className="panel p-4" aria-hidden>
           <div className="h-3 w-24 bg-zinc-100 dark:bg-zinc-800 rounded mb-3" />
           <div className="h-8 w-32 bg-zinc-100 dark:bg-zinc-800 rounded" />
           <div className="mt-2 h-3 w-20 bg-zinc-100 dark:bg-zinc-800 rounded" />
@@ -232,7 +233,7 @@ function FunnelCard({
         {stages.map((s) => (
           <div key={s.label} className="flex items-center gap-3">
             <div className="w-24 text-sm text-body">{s.label}</div>
-            <div className="flex-1 h-6 bg-zinc-100 dark:bg-zinc-800 rounded-[6px] overflow-hidden">
+            <div aria-hidden className="flex-1 h-6 bg-zinc-100 dark:bg-zinc-800 rounded-[6px] overflow-hidden">
               <div className={`h-full ${s.color}`} style={{ width: `${Math.max(2, (s.value / top) * 100)}%` }} />
             </div>
             <div className="w-12 text-right text-sm font-semibold text-strong tabular-nums">{s.value}</div>
@@ -252,13 +253,13 @@ function WeeklyPlanCTA() {
       className="panel-hover p-4 flex flex-col justify-between min-h-[140px]"
     >
       <div className="flex items-center gap-2 text-xs text-muted">
-        <ClipboardCheck size={14} /> Weekly plan
+        <ClipboardCheck size={14} aria-hidden /> Weekly plan
       </div>
       <div className="text-sm text-strong mt-2">
         Set this week's targets, log results at Friday EOD.
       </div>
       <span className="mt-3 link-inline text-xs">
-        Open weekly plan <ArrowRight size={12} />
+        Open weekly plan <ArrowRight size={12} aria-hidden />
       </span>
     </Link>
   );
@@ -274,14 +275,14 @@ function UpcomingInterviewsCard({ upcoming, loading }: {
     <div className="panel p-4">
       <header className="flex items-center justify-between mb-3">
         <h2 className="card-title uppercase tracking-wide flex items-center gap-2">
-          <Calendar size={14} className="text-muted" /> Upcoming interviews
+          <Calendar size={14} className="text-muted" aria-hidden /> Upcoming interviews
         </h2>
-        <Link to="/interviews" className="link-inline text-xs">
-          All <ArrowRight size={12} />
+        <Link to="/interviews" className="link-inline text-xs" aria-label="All interviews">
+          All <ArrowRight size={12} aria-hidden />
         </Link>
       </header>
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+        <div role="status" className="flex items-center gap-2 text-sm text-muted"><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading…</div>
       ) : upcoming.length === 0 ? (
         <div className="text-sm text-faint italic">Nothing scheduled.</div>
       ) : (
@@ -313,11 +314,11 @@ function RecentActivityCard({ recent, loading }: {
     <div className="panel p-4">
       <header className="flex items-center justify-between mb-3">
         <h2 className="card-title uppercase tracking-wide flex items-center gap-2">
-          <Sparkles size={14} className="text-muted" /> Recent activity
+          <Sparkles size={14} className="text-muted" aria-hidden /> Recent activity
         </h2>
       </header>
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+        <div role="status" className="flex items-center gap-2 text-sm text-muted"><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading…</div>
       ) : recent.length === 0 ? (
         <div className="text-sm text-faint italic">No activity yet.</div>
       ) : (
@@ -326,9 +327,9 @@ function RecentActivityCard({ recent, loading }: {
             <li key={i} className="py-2 flex items-center justify-between gap-3 text-sm">
               <div className="flex items-center gap-2 min-w-0">
                 {ev.kind === 'bid' ? (
-                  <FileText size={14} className="text-blue-500 flex-shrink-0" />
+                  <FileText size={14} className="text-blue-500 flex-shrink-0" aria-hidden />
                 ) : (
-                  <Calendar size={14} className="text-amber-500 flex-shrink-0" />
+                  <Calendar size={14} className="text-amber-500 flex-shrink-0" aria-hidden />
                 )}
                 <span className="text-body truncate">
                   {ev.kind === 'bid' ? (
@@ -354,31 +355,47 @@ function TrendSection({ data }: { data: { label: string; bids: number; interview
       <header className="flex items-center justify-between mb-3">
         <h2 className="card-title uppercase tracking-wide">Trend — last 12 weeks</h2>
         <Link to="/leaderboard" className="link-inline text-xs">
-          See leaderboard <ArrowRight size={12} />
+          See leaderboard <ArrowRight size={12} aria-hidden />
         </Link>
       </header>
       {data.length === 0 ? (
         <div className="text-sm text-faint italic">No activity in the last 12 weeks yet.</div>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
-            <XAxis dataKey="label" stroke={chart.axis} fontSize={12} tick={{ fill: chart.axis }} />
-            <YAxis stroke={chart.axis} fontSize={12} allowDecimals={false} tick={{ fill: chart.axis }} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: chart.tooltipBg,
-                borderColor: chart.tooltipBorder,
-                color: chart.tooltipText,
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-            />
-            <Legend wrapperStyle={{ color: chart.axis, fontSize: 12 }} />
-            <Line type="monotone" dataKey="bids" name="Bids" stroke="#2563eb" strokeWidth={2} dot />
-            <Line type="monotone" dataKey="interviews" name="Interviews" stroke="#f59e0b" strokeWidth={2} dot />
-          </LineChart>
-        </ResponsiveContainer>
+        <>
+          {/* Text alternative for the chart (WCAG 1.1.1); the SVG itself is hidden from AT. */}
+          <table className="sr-only">
+            <caption>Bids and interviews per week, last 12 weeks</caption>
+            <thead>
+              <tr><th scope="col">Week</th><th scope="col">Bids</th><th scope="col">Interviews</th></tr>
+            </thead>
+            <tbody>
+              {data.map((p) => (
+                <tr key={p.label}><th scope="row">{p.label}</th><td>{p.bids}</td><td>{p.interviews}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <div aria-hidden>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+                <XAxis dataKey="label" stroke={chart.axis} fontSize={12} tick={{ fill: chart.axis }} />
+                <YAxis stroke={chart.axis} fontSize={12} allowDecimals={false} tick={{ fill: chart.axis }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: chart.tooltipBg,
+                    borderColor: chart.tooltipBorder,
+                    color: chart.tooltipText,
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Legend wrapperStyle={{ color: chart.axis, fontSize: 12 }} />
+                <Line type="monotone" dataKey="bids" name="Bids" stroke="#2563eb" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="interviews" name="Interviews" stroke="#d97706" strokeWidth={2} dot />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
       )}
     </section>
   );

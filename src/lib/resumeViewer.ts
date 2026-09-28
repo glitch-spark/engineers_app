@@ -70,11 +70,14 @@ export function openResumeInNewTab(filename: string, markdown: string): void {
 </html>`;
   const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const win = window.open(url, '_blank', 'noopener,noreferrer');
-  // Free the blob after the new tab has had time to load (browsers hold a ref while the page lives).
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  // No 'noopener' feature: with it, window.open() always returns null, so a real
+  // popup block can't be told apart from success. Detach the opener by hand instead.
+  const win = window.open(url, '_blank');
   if (!win) {
     URL.revokeObjectURL(url);
     throw new Error('Popup blocked. Allow popups for this site to view resumes.');
   }
+  win.opener = null;
+  // Free the blob after the new tab has had time to load (browsers hold a ref while the page lives).
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

@@ -72,6 +72,8 @@ module.exports = {
           800: '#991b1b',
           900: '#7f1d1d',
         },
+        // Form-control border: 3.6:1 on white, 3.3:1 on zinc-100 (WCAG 1.4.11 needs 3:1).
+        field: '#86868f',
         background: {
           DEFAULT: '#fafafa',
           card: '#ffffff',

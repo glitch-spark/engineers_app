@@ -95,9 +95,16 @@ export default function MultiSelect({
   const optionId = (i: number) => `${listId}-opt-${i}`;
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      ref={rootRef}
+      className="relative"
+      onBlur={(e) => {
+        // Tabbing out of the widget closes the listbox.
+        if (!rootRef.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <div
-        className={`input flex flex-wrap items-center gap-1.5 !py-1.5 cursor-text ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+        className={`input flex flex-wrap items-center gap-1.5 !py-1.5 cursor-text focus-within:border-sky-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-600 dark:focus-within:border-sky-400 dark:focus-within:bg-zinc-900 dark:focus-within:ring-sky-400 ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         onClick={() => {
           if (disabled) return;
           inputRef.current?.focus();
@@ -109,13 +116,13 @@ export default function MultiSelect({
           return (
             <span
               key={v}
-              className="inline-flex max-w-full items-center gap-1 rounded-lg bg-zinc-200/70 pl-2 pr-0.5 py-0.5 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100"
+              className="inline-flex max-w-full items-center gap-1 rounded-lg bg-zinc-200/70 pl-2 pr-0.5 py-0 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100"
             >
               <span className="truncate">{label}</span>
               {!disabled && (
                 <button
                   type="button"
-                  className="rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10"
                   aria-label={`Remove ${label}`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -139,7 +146,7 @@ export default function MultiSelect({
           aria-activedescendant={open && filtered.length ? optionId(activeIndex) : undefined}
           aria-label={ariaLabel}
           aria-labelledby={ariaLabelledBy}
-          className="min-w-[8rem] flex-1 bg-transparent py-0.5 text-sm outline-none placeholder:text-zinc-400"
+          className="min-w-[8rem] flex-1 bg-transparent py-0.5 text-sm outline-none focus-visible:outline-none"
           placeholder={value.length ? '' : placeholder}
           value={query}
           disabled={disabled}
@@ -183,7 +190,7 @@ export default function MultiSelect({
                     className={`inline-flex size-4 shrink-0 items-center justify-center rounded border ${
                       isSelected
                         ? 'border-accent-600 bg-accent-600 text-white'
-                        : 'border-zinc-300 dark:border-zinc-600'
+                        : 'border-field dark:border-zinc-500'
                     }`}
                   >
                     {isSelected && <Check size={12} />}

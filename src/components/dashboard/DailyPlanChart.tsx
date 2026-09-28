@@ -153,10 +153,10 @@ export default function DailyPlanChart() {
       </header>
 
       {error ? (
-        <div className="alert-error">Failed to load daily plan numbers.</div>
+        <div role="alert" className="alert-error">Failed to load daily plan numbers.</div>
       ) : isLoading || !data || !totals ? (
-        <div className="flex items-center gap-2 text-sm text-muted">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+        <div role="status" className="flex items-center gap-2 text-sm text-muted">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading…
         </div>
       ) : (
         <>
@@ -186,34 +186,36 @@ export default function DailyPlanChart() {
               </Link>
             </div>
           ) : view === 'chart' ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={rows} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} barGap={2} barCategoryGap="20%">
-                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
-                <XAxis dataKey="label" stroke={chart.axis} fontSize={12} tick={{ fill: chart.axis }} />
-                <YAxis stroke={chart.axis} fontSize={12} allowDecimals={false} tick={{ fill: chart.axis }} />
-                <Tooltip
-                  cursor={{ fill: chart.grid, opacity: 0.6 }}
-                  content={<StatsTooltip />}
-                />
-                <Legend wrapperStyle={{ color: chart.axis, fontSize: 12 }} />
-                {SERIES.map((s, i) => {
-                  const isTop = i % 2 === 1;
-                  return (
-                    <Bar
-                      key={s.key}
-                      dataKey={s.key}
-                      name={s.label}
-                      stackId={s.stack}
-                      fill={colors[s.key]}
-                      stroke={chart.tooltipBg}
-                      strokeWidth={1}
-                      maxBarSize={28}
-                      radius={isTop ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                    />
-                  );
-                })}
-              </BarChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label={`Stacked bar chart of bids (hands-on, by bidder) and interviews (done, new invitations), ${windowLabel}. Switch to the Table view for exact numbers.`}>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={rows} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} barGap={2} barCategoryGap="20%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
+                  <XAxis dataKey="label" stroke={chart.axis} fontSize={12} tick={{ fill: chart.axis }} />
+                  <YAxis stroke={chart.axis} fontSize={12} allowDecimals={false} tick={{ fill: chart.axis }} />
+                  <Tooltip
+                    cursor={{ fill: chart.grid, opacity: 0.6 }}
+                    content={<StatsTooltip />}
+                  />
+                  <Legend wrapperStyle={{ color: chart.axis, fontSize: 12 }} />
+                  {SERIES.map((s, i) => {
+                    const isTop = i % 2 === 1;
+                    return (
+                      <Bar
+                        key={s.key}
+                        dataKey={s.key}
+                        name={s.label}
+                        stackId={s.stack}
+                        fill={colors[s.key]}
+                        stroke={chart.tooltipBg}
+                        strokeWidth={1}
+                        maxBarSize={28}
+                        radius={isTop ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                      />
+                    );
+                  })}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           ) : (
             <StatsTable rows={rows} />
           )}
@@ -305,6 +307,7 @@ function StatsTable({ rows }: { rows: ChartRow[] }) {
                     title={`By bidder ${r.planBidsByBidder} · Hands-on ${r.planBidsHandsOn}`}
                   >
                     {r.planBidsHandsOn + r.planBidsByBidder}
+                    <span className="sr-only"> (by bidder {r.planBidsByBidder}, hands-on {r.planBidsHandsOn})</span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{r.planInterviewsScheduled}</td>
                 </tr>

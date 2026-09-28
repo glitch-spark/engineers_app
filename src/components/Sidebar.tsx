@@ -15,22 +15,23 @@ const NavLink = ({ href, label, isCollapsed, icon, badge }: {
       to={href}
       className={`${active ? 'nav-item-active group' : 'nav-item-inactive group'} ${isCollapsed ? 'justify-center' : ''}`}
       title={isCollapsed ? label : undefined}
+      aria-current={active ? 'page' : undefined}
     >
       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 w-full'}`}>
-        <div className={`flex-shrink-0 transition-colors duration-200 ${
+        <div aria-hidden="true" className={`flex-shrink-0 transition-colors duration-200 ${
           active ? 'nav-item-icon-active' : 'nav-item-icon-inactive'
         }`}>
           {icon}
         </div>
-        {!isCollapsed && <span className="flex-1 text-sm">{label}</span>}
+        <span className={isCollapsed ? 'sr-only' : 'flex-1 text-sm'}>{label}</span>
         {!isCollapsed && badge ? (
-          <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-sky-500 px-2 py-0.5 text-xs font-medium text-white">
+          <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-sky-700 px-2 py-0.5 text-xs font-medium text-white">
             {badge}
           </span>
         ) : null}
       </div>
       {active && !isCollapsed && (
-        <div className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full bg-sky-500 dark:bg-sky-400" />
+        <div aria-hidden="true" className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full bg-sky-500 dark:bg-sky-400" />
       )}
     </Link>
   );
@@ -52,7 +53,7 @@ export default function Sidebar({
         isCollapsed ? 'w-[4.75rem]' : 'w-64'
       }`}
     >
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
+      <nav aria-label="Main" className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
 
           <NavLink
             href="/leaderboard"
@@ -157,7 +158,7 @@ export default function Sidebar({
         {role === 'admin' && (
           <div className="mt-4 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
             {!isCollapsed && (
-              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-500">
+              <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
                 Admin
               </p>
             )}
@@ -182,9 +183,9 @@ export default function Sidebar({
             onClick={onToggle}
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="shell-icon-btn"
+            className="shell-icon-btn h-9 w-9"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               {isCollapsed ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
               ) : (

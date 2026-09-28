@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import { FileDown, Loader2, AlertTriangle } from 'lucide-react';
@@ -56,6 +56,7 @@ export default function ResumeGeneratorPage() {
 
   function toggle(id: string) {
     setAccountIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+    setErrors((e) => (e.profiles ? { ...e, profiles: undefined } : e));
   }
 
   const selectableIds = useMemo(
@@ -81,6 +82,8 @@ export default function ResumeGeneratorPage() {
   const [jobDescription, setJobDescription] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<{ profiles?: string; company?: string; jd?: string }>({});
+  const fid = useId();
   const [generateCoverLetter, setGenerateCoverLetter] = useState(false);
   // Collapsed by default after picking — long list eats vertical space.
   const [profilesOpen, setProfilesOpen] = useState<boolean>(() => {
@@ -96,12 +99,20 @@ export default function ResumeGeneratorPage() {
     const eligible = accountIds.filter((id) => accounts.find((a) => a._id === id)?.hasTemplate);
     if (eligible.length === 0) {
       notify.warn('Pick at least one profile with an uploaded HTML template');
+      setErrors({ profiles: 'Pick at least one profile with an uploaded HTML template.' });
+      setProfilesOpen(true);
       return;
     }
     if (!company.trim() || !jobDescription.trim()) {
       notify.warn('Company and job description are required');
+      setErrors({
+        company: company.trim() ? undefined : 'Company is required.',
+        jd: jobDescription.trim() ? undefined : 'Job description is required.',
+      });
+      document.getElementById(company.trim() ? `${fid}-jd` : `${fid}-company`)?.focus();
       return;
     }
+    setErrors({});
 
     const trimmedCompany = company.trim();
     const lcCompany = trimmedCompany.toLowerCase();
@@ -185,7 +196,7 @@ export default function ResumeGeneratorPage() {
 
       <div className="panel p-4">
         {accountsLoading ? (
-          <p className="text-sm text-muted">Loading profiles...</p>
+          <p role="status" className="text-sm text-muted">Loading profiles...</p>
         ) : ownedAccounts.length === 0 ? (
           <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 dark:text-amber-300 dark:bg-amber-950/30 dark:border-amber-800">
             You don't own any profiles yet.{' '}
@@ -202,12 +213,14 @@ export default function ResumeGeneratorPage() {
             <div className="flex items-center justify-between mb-2">
               <button
                 type="button"
+                id={`${fid}-profiles-label`}
                 onClick={() => setProfilesOpen((v) => !v)}
                 className="inline-flex items-center gap-1 text-xs font-medium text-body hover:text-primary"
                 aria-expanded={profilesOpen}
+                aria-controls={`${fid}-profiles`}
               >
-                <span className="text-faint">{profilesOpen ? '▾' : '▸'}</span>
-                Profiles <span className="text-red-500">*</span>
+                <span className="text-faint" aria-hidden>{profilesOpen ? '▾' : '▸'}</span>
+                Profiles <span className="text-red-700 dark:text-red-400" aria-hidden>*</span><span className="sr-only">(required)</span>
                 <span className="ml-2 text-faint font-normal">
                   ({accountIds.length} selected)
                 </span>
@@ -223,13 +236,19 @@ export default function ResumeGeneratorPage() {
               )}
             </div>
             {profilesOpen && (
+            <div
+              id={`${fid}-profiles`}
+              role="group"
+              aria-labelledby={`${fid}-profiles-label`}
+              aria-describedby={errors.profiles ? `${fid}-profiles-error` : undefined}
+            >
             <ul className="row-divider border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
               {accounts.map((a) => {
                 const checked = accountIds.includes(a._id);
                 const disabled = !a.hasTemplate;
                 const promptMissing = !a.hasPrompt && !globalPromptSet;
                 return (
-                  <li key={a._id} className={disabled ? 'opacity-60' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}>
+                  <li key={a._id} className={disabled ? undefined : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}>
                     <label
                       htmlFor={`acc-${a._id}`}
                       className={'flex items-center gap-3 px-3 py-2 ' + (disabled ? '' : 'cursor-pointer')}
@@ -240,18 +259,18 @@ export default function ResumeGeneratorPage() {
                         checked={checked}
                         disabled={disabled}
                         onChange={() => toggle(a._id)}
-                        className="h-4 w-4 m-0 flex-shrink-0"
+                        className={'h-4 w-4 m-0 flex-shrink-0' + (disabled ? ' opacity-60' : '')}
                       />
-                      <span className="flex-1 text-sm text-strong leading-none">{a.name}</span>
+                      <span className={'flex-1 text-sm text-strong leading-none' + (disabled ? ' opacity-60' : '')}>{a.name}</span>
                       {disabled && (
                         <span className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                          <AlertTriangle size={12} /> No template —{' '}
+                          <AlertTriangle size={12} aria-hidden /> No template —{' '}
                           <Link to={`/accounts/${a._id}`} className="underline">upload</Link>
                         </span>
                       )}
                       {!disabled && checked && promptMissing && (
                         <span className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1" title="No profile prompt and no global prompt set">
-                          <AlertTriangle size={12} /> No prompt
+                          <AlertTriangle size={12} aria-hidden /> No prompt
                         </span>
                       )}
                     </label>
@@ -259,12 +278,16 @@ export default function ResumeGeneratorPage() {
                 );
               })}
             </ul>
+            </div>
+            )}
+            {errors.profiles && (
+              <p id={`${fid}-profiles-error`} role="alert" className="mt-2 text-xs text-red-700 dark:text-red-400">{errors.profiles}</p>
             )}
           </div>
         )}
         {missingPromptCount > 0 && (
           <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3 dark:text-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
-            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden />
             <div>
               {missingPromptCount} selected profile{missingPromptCount === 1 ? '' : 's'} have no
               resume prompt, and you don't have a <Link to="/preferences" className="font-medium underline">global Prompts</Link> set
@@ -277,23 +300,30 @@ export default function ResumeGeneratorPage() {
       <form onSubmit={handleSubmit} className="panel p-6 space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium mb-1 text-muted">
-              Company<span className="text-red-500 ml-1">*</span>
+            <label htmlFor={`${fid}-company`} className="block text-xs font-medium mb-1 text-muted">
+              Company<span className="text-red-700 dark:text-red-400 ml-1" aria-hidden>*</span>
             </label>
             <input
+              id={`${fid}-company`}
+              aria-invalid={errors.company ? true : undefined}
+              aria-describedby={errors.company ? `${fid}-company-error` : undefined}
               type="text"
               value={company}
-              onChange={(e) => setCompany(e.target.value)}
+              onChange={(e) => { setCompany(e.target.value); setErrors((er) => ({ ...er, company: undefined })); }}
               placeholder="Acme Corp"
               className="input focus-ring w-full text-sm"
               required
             />
+            {errors.company && (
+              <p id={`${fid}-company-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.company}</p>
+            )}
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1 text-muted">
+            <label htmlFor={`${fid}-url`} className="block text-xs font-medium mb-1 text-muted">
               Job posting URL <span className="text-xs text-faint font-normal">(optional)</span>
             </label>
             <input
+              id={`${fid}-url`}
               type="url"
               value={jobUrl}
               onChange={(e) => setJobUrl(e.target.value)}
@@ -304,18 +334,24 @@ export default function ResumeGeneratorPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1 text-muted">
-            Job description<span className="text-red-500 ml-1">*</span>
+          <label htmlFor={`${fid}-jd`} className="block text-xs font-medium mb-1 text-muted">
+            Job description<span className="text-red-700 dark:text-red-400 ml-1" aria-hidden>*</span>
           </label>
           <textarea
+            id={`${fid}-jd`}
+            aria-invalid={errors.jd ? true : undefined}
+            aria-describedby={`${errors.jd ? `${fid}-jd-error ` : ''}${fid}-jd-count`}
             value={jobDescription}
-            onChange={(e) => setJobDescription(e.target.value)}
+            onChange={(e) => { setJobDescription(e.target.value); setErrors((er) => ({ ...er, jd: undefined })); }}
             placeholder="Paste the full job description here..."
             rows={10}
             className="input focus-ring w-full text-sm"
             required
           />
-          <p className="text-xs text-faint mt-1">{jobDescription.length.toLocaleString()} characters</p>
+          {errors.jd && (
+            <p id={`${fid}-jd-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.jd}</p>
+          )}
+          <p id={`${fid}-jd-count`} className="text-xs text-faint mt-1">{jobDescription.length.toLocaleString()} characters</p>
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -335,10 +371,10 @@ export default function ResumeGeneratorPage() {
             className="btn disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Queueing...</>
+              <><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Queueing...</>
             ) : (
               <>
-                <FileDown className="w-4 h-4" /> Generate
+                <FileDown className="w-4 h-4" aria-hidden /> Generate
                 {accountIds.length > 0 && ` (${accountIds.length})`}
               </>
             )}

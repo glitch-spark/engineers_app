@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   closestCorners,
   pointerWithin,
@@ -12,13 +13,16 @@ import {
   useSensors,
   useDraggable,
   useDroppable,
+  type Announcements,
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type KeyboardCoordinateGetter,
+  type UniqueIdentifier,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, FileText, Maximize2 } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, FileText, Maximize2, GripVertical } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
@@ -36,6 +40,8 @@ import {
   buildSaveBody,
   formatScheduledDate,
   interviewToForm,
+  MissingFieldsHint,
+  missingInterviewFields,
   schedulePayload,
   splitDateTime,
   withCurrentStageInHistory,
@@ -44,7 +50,7 @@ import {
 } from '../components/InterviewEditPanel';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
-import { notify } from '../lib/notify';
+import { messageOf, notify } from '../lib/notify';
 import {
   BOARD_FORM_STAGES,
   TECH_SUB_STAGES,
@@ -238,6 +244,38 @@ const interviewBoardCollisionDetection: CollisionDetection = (args) => {
 
   return pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
 };
+
+/** Keyboard drag: Left / Right arrows jump the card to the neighbouring visible pan. */
+const boardKeyboardCoordinates: KeyboardCoordinateGetter = (event, { context, currentCoordinates }) => {
+  if (event.code !== 'ArrowRight' && event.code !== 'ArrowLeft') return undefined;
+  const { collisionRect, droppableRects } = context;
+  if (!collisionRect) return undefined;
+  const columns = Array.from(droppableRects.entries())
+    .filter(([id]) => String(id).startsWith('col:'))
+    .map(([, rect]) => rect)
+    .sort((a, b) => a.left - b.left);
+  if (columns.length === 0) return undefined;
+  event.preventDefault();
+  const centerX = collisionRect.left + collisionRect.width / 2;
+  let idx = 0;
+  columns.forEach((rect, i) => {
+    const best = columns[idx];
+    if (Math.abs(rect.left + rect.width / 2 - centerX) < Math.abs(best.left + best.width / 2 - centerX)) idx = i;
+  });
+  const next = columns[event.code === 'ArrowRight' ? Math.min(idx + 1, columns.length - 1) : Math.max(idx - 1, 0)];
+  if (next === columns[idx]) return currentCoordinates;
+  return {
+    x: next.left + next.width / 2 - collisionRect.width / 2,
+    y: Math.max(next.top + 4, Math.min(currentCoordinates.y, next.top + next.height - collisionRect.height)),
+  };
+};
+
+/** Human-readable card name for drag announcements and control labels. */
+function interviewA11yName(iv: Interview): string {
+  const account = typeof iv.accountId === 'object' ? iv.accountId : null;
+  const profile = formatProfileLabel(account?.name || account?.email, account?.country, 'Untitled profile', account?.region);
+  return `${profile} at ${iv.companyName || 'Untitled company'}`;
+}
 
 function boardColumnForStage(stage?: string | null): BoardColumnKey {
   switch (stage) {
@@ -808,16 +846,17 @@ export default function InterviewsPage() {
   }, [editParam, data]);
 
   const save = async () => {
+    const invalid = (msg: string) => { setError(msg); notify.error(msg); };
     if (mode === 'create' && !form.accountId) {
-      notify.error('Select a profile (account)');
+      invalid('Select a profile (account)');
       return;
     }
     if (!form.date) {
-      notify.error('Select a scheduled date');
+      invalid('Select a scheduled date');
       return;
     }
     if (form.stage === 'tech' && !form.techSubStage) {
-      notify.error('Select a Tech sub-stage');
+      invalid('Select a Tech sub-stage');
       return;
     }
     setSaving(true);
@@ -838,6 +877,7 @@ export default function InterviewsPage() {
       closeModal();
       mutate();
     } catch (err) {
+      setError(messageOf(err, 'Failed to save interview'));
       notify.error(err, 'Failed to save interview');
     } finally {
       setSaving(false);
@@ -854,6 +894,7 @@ export default function InterviewsPage() {
       closeModal();
       mutate();
     } catch (err) {
+      setError(messageOf(err, 'Failed to delete interview'));
       notify.error(err, 'Failed to delete interview');
     } finally {
       setSaving(false);
@@ -862,16 +903,17 @@ export default function InterviewsPage() {
 
   const savePanel = async () => {
     if (!panelInterview) return;
+    const invalid = (msg: string) => { setPanelError(msg); notify.error(msg); };
     if (!panelForm.date) {
-      notify.error('Select a scheduled date');
+      invalid('Select a scheduled date');
       return;
     }
     if (panelForm.stage === 'tech' && !panelForm.techSubStage) {
-      notify.error('Select a Tech sub-stage');
+      invalid('Select a Tech sub-stage');
       return;
     }
     if (!canEdit(panelInterview)) {
-      notify.error('You cannot edit this interview');
+      invalid('You cannot edit this interview');
       return;
     }
     setPanelSaving(true);
@@ -883,6 +925,7 @@ export default function InterviewsPage() {
       setPanelForm(interviewToForm(updated as unknown as Interview));
       mutate();
     } catch (err) {
+      setPanelError(messageOf(err, 'Failed to save interview'));
       notify.error(err, 'Failed to save interview');
     } finally {
       setPanelSaving(false);
@@ -910,8 +953,43 @@ export default function InterviewsPage() {
   }>(null);
   const [moveSubStage, setMoveSubStage] = useState('');
   const [moveDate, setMoveDate] = useState('');
+
+  // Why Save / Confirm is disabled — shown next to the button instead of failing silently.
+  const formMissing = missingInterviewFields(form, { requireProfile: mode === 'create' });
+  const moveMissing = [
+    ...(movePrompt?.kind === 'tech' && !moveSubStage ? ['Tech sub-stage'] : []),
+    ...(!moveDate ? ['Scheduled date'] : []),
+  ];
   const [moveSaving, setMoveSaving] = useState(false);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: boardKeyboardCoordinates }),
+  );
+
+  const dragName = (id: UniqueIdentifier) => {
+    const iv = interviews.find((i) => i._id === String(id));
+    return iv ? interviewA11yName(iv) : 'interview';
+  };
+  const dropColumnLabel = (overId: UniqueIdentifier, activeId: UniqueIdentifier) => {
+    const col = resolveInterviewDropColumn(String(overId), String(activeId), interviews);
+    return col ? BOARD_COLUMNS.find((c) => c.key === col)?.label : undefined;
+  };
+  const dragAnnouncements: Announcements = {
+    onDragStart: ({ active: a }) => {
+      const iv = interviews.find((i) => i._id === String(a.id));
+      const from = iv ? BOARD_COLUMNS.find((c) => c.key === boardColumnForInterview(iv))?.label : undefined;
+      return `Picked up ${dragName(a.id)}${from ? ` in ${from}` : ''}.`;
+    },
+    onDragOver: ({ active: a, over }) => {
+      const label = over ? dropColumnLabel(over.id, a.id) : undefined;
+      return label ? `${dragName(a.id)} is over ${label}.` : `${dragName(a.id)} is not over a stage.`;
+    },
+    onDragEnd: ({ active: a, over }) => {
+      const label = over ? dropColumnLabel(over.id, a.id) : undefined;
+      return label ? `${dragName(a.id)} dropped on ${label}.` : `${dragName(a.id)} dropped. Stage not changed.`;
+    },
+    onDragCancel: ({ active: a }) => `Moving ${dragName(a.id)} was cancelled. Stage not changed.`,
+  };
 
   const syncInterviewForms = (ivId: string, updated: Interview) => {
     if (panelInterview?._id === ivId) {
@@ -1146,7 +1224,7 @@ export default function InterviewsPage() {
         title="Interviews"
         action={
           <button type="button" className="btn" onClick={openCreate}>
-            <Plus size={16} className="mr-2" /> Create
+            <Plus size={16} className="mr-2" aria-hidden /> Create
           </button>
         }
       />
@@ -1157,8 +1235,9 @@ export default function InterviewsPage() {
       {/* Filters */}
       <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">User</label>
+          <label htmlFor="iv-filter-user" className="block text-xs text-muted mb-1">User</label>
           <Select
+            id="iv-filter-user"
             value={creatorId}
             onChange={(v) => {
               setCreatorId(v);
@@ -1169,20 +1248,21 @@ export default function InterviewsPage() {
           />
         </div>
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Profile</label>
-          <Select value={accountId} onChange={(v) => { setAccountId(v); resetFiltersPage(); }} options={accountOptions} />
+          <label htmlFor="iv-filter-profile" className="block text-xs text-muted mb-1">Profile</label>
+          <Select id="iv-filter-profile" value={accountId} onChange={(v) => { setAccountId(v); resetFiltersPage(); }} options={accountOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-muted mb-1">Stage</label>
-          <Select value={stage} onChange={(v) => { setStage(v); resetFiltersPage(); }} options={stageOptions} />
+          <label htmlFor="iv-filter-stage" className="block text-xs text-muted mb-1">Stage</label>
+          <Select id="iv-filter-stage" value={stage} onChange={(v) => { setStage(v); resetFiltersPage(); }} options={stageOptions} />
         </div>
         <div className="w-36">
-          <label className="block text-xs text-muted mb-1">Status</label>
-          <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); resetFiltersPage(); }} options={statusOptions} />
+          <label htmlFor="iv-filter-status" className="block text-xs text-muted mb-1">Status</label>
+          <Select id="iv-filter-status" value={statusFilter} onChange={(v) => { setStatusFilter(v); resetFiltersPage(); }} options={statusOptions} />
         </div>
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Date range</label>
+          <label htmlFor="iv-filter-range" className="block text-xs text-muted mb-1">Date range</label>
           <Select
+            id="iv-filter-range"
             value={datePreset}
             onChange={(v) => applyDatePreset(v as DateRangePreset)}
             options={DATE_RANGE_PRESET_OPTIONS}
@@ -1191,12 +1271,12 @@ export default function InterviewsPage() {
         {datePreset === 'custom' ? (
           <>
             <div className="w-40">
-              <label className="block text-xs text-muted mb-1">From</label>
-              <input className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetFiltersPage(); }} />
+              <label htmlFor="iv-filter-from" className="block text-xs text-muted mb-1">From</label>
+              <input id="iv-filter-from" className="input w-full text-sm" type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetFiltersPage(); }} />
             </div>
             <div className="w-40">
-              <label className="block text-xs text-muted mb-1">To</label>
-              <input className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); resetFiltersPage(); }} />
+              <label htmlFor="iv-filter-to" className="block text-xs text-muted mb-1">To</label>
+              <input id="iv-filter-to" className="input w-full text-sm" type="date" value={to} onChange={(e) => { setTo(e.target.value); resetFiltersPage(); }} />
             </div>
           </>
         ) : (
@@ -1212,10 +1292,10 @@ export default function InterviewsPage() {
 
       {/* Total — counts stage rounds in the date range (not cards). Excludes AI / Home Assessment / Rejected. */}
       {data && (
-        <div className="text-sm text-body">
+        <div className="text-sm text-body" role="status">
           <span>
             Showing{' '}
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{interviewRoundTotal}</span>
+            <span className="font-semibold text-emerald-700 dark:text-emerald-400">{interviewRoundTotal}</span>
             {' '}interview{interviewRoundTotal !== 1 ? 's' : ''} total
             {interviewRoundBreakdown.length > 0 && (
               <span className="text-muted">
@@ -1239,11 +1319,11 @@ export default function InterviewsPage() {
 
       {/* Board — Pipeline-style kanban */}
       {isLoading && !data ? (
-        <div className="panel p-6 flex items-center gap-2 text-sm text-muted">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading interviews…
+        <div className="panel p-6 flex items-center gap-2 text-sm text-muted" role="status">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading interviews…
         </div>
       ) : loadError ? (
-        <div className="panel border-red-200 dark:border-red-900/50 p-6 text-sm text-red-600 dark:text-red-400">
+        <div className="panel border-red-200 dark:border-red-900/50 p-6 text-sm text-red-600 dark:text-red-400" role="alert">
           Failed to load interviews. Try refreshing the page.
         </div>
       ) : (
@@ -1257,7 +1337,7 @@ export default function InterviewsPage() {
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   aria-label="Show previous columns"
                 >
-                  <ChevronLeft size={16} />
+                  <ChevronLeft size={16} aria-hidden />
                 </button>
 
                 <nav
@@ -1278,7 +1358,7 @@ export default function InterviewsPage() {
                           className={`relative z-[1] truncate px-1 pb-3 pt-1 text-center text-[11px] sm:text-xs transition-colors duration-200 ${
                             isVisible
                               ? 'font-semibold text-zinc-900 dark:text-zinc-100'
-                              : 'font-medium text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300'
+                              : 'font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
                           }`}
                           title={isVisible ? `${c.label} (showing)` : `Show ${c.label}`}
                           aria-current={isVisible ? 'true' : undefined}
@@ -1311,12 +1391,12 @@ export default function InterviewsPage() {
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   aria-label="Show next columns"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronRight size={16} aria-hidden />
                 </button>
               </div>
 
             {interviews.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300">
+              <div className="bg-amber-50 border border-amber-200 rounded-[12px] px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300" role="status">
                 No interviews match the current filters.
                 {creatorId && ' Try setting User to All, or pick a different profile.'}
               </div>
@@ -1331,6 +1411,16 @@ export default function InterviewsPage() {
               onDragCancel={() => {
                 setActiveDragInterview(null);
                 setDropTargetColumn(null);
+              }}
+              accessibility={{
+                announcements: dragAnnouncements,
+                screenReaderInstructions: {
+                  draggable:
+                    'To move this interview to another stage, press Space or Enter to pick it up. '
+                    + 'Use the Left and Right arrow keys to choose a stage column, then press Space or Enter to drop it, '
+                    + 'or Escape to cancel. Only the columns currently shown can be targeted; use Show next columns to reach others. '
+                    + 'You can also change the stage from the interview details panel.',
+                },
               }}
             >
               <div className="flex gap-4 pb-2 w-full">
@@ -1404,7 +1494,7 @@ export default function InterviewsPage() {
         }
       >
         <div className="space-y-6">
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-red-600 dark:text-red-400 text-sm" role="alert">{error}</p>}
 
           {mode === 'read' ? (
             <>
@@ -1516,18 +1606,15 @@ export default function InterviewsPage() {
                 datalistId="applied-position-suggestions-modal"
               />
 
-              <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
+              <div className="flex flex-wrap items-center gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
+                <MissingFieldsHint id="iv-form-missing" missing={formMissing} />
                 <button type="button" className="btn" onClick={closeModal} disabled={saving}>Cancel</button>
                 <button
                   type="button"
                   className="btn"
                   onClick={save}
-                  disabled={
-                    saving
-                    || !form.date
-                    || (mode === 'create' && !form.accountId)
-                    || (form.stage === 'tech' && !form.techSubStage)
-                  }
+                  disabled={saving || formMissing.length > 0}
+                  aria-describedby={formMissing.length ? 'iv-form-missing' : undefined}
                 >
                   {saving ? 'Saving…' : mode === 'update' ? 'Save changes' : 'Create'}
                 </button>
@@ -1540,7 +1627,7 @@ export default function InterviewsPage() {
       {/* Delete confirm modal */}
       <Modal open={mode === 'delete'} onClose={closeModal} title="Delete Interview">
         <div className="space-y-6">
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-red-600 dark:text-red-400 text-sm" role="alert">{error}</p>}
           <p className="text-sm text-body">
             Are you sure you want to delete this interview? This action cannot be undone.
           </p>
@@ -1577,7 +1664,8 @@ export default function InterviewsPage() {
               <p className="text-sm text-muted">
                 Choose which Tech round this interview is in, and the scheduled date for that round.
               </p>
-              <div className="space-y-2">
+              <fieldset className="space-y-2">
+                <legend className="sr-only">Tech sub-stage</legend>
                 {TECH_SUB_STAGES.map((opt) => (
                   <label
                     key={opt.value}
@@ -1598,7 +1686,7 @@ export default function InterviewsPage() {
                     <span className="text-sm font-medium text-strong">{opt.label}</span>
                   </label>
                 ))}
-              </div>
+              </fieldset>
             </>
           ) : (
             <p className="text-sm text-muted">
@@ -1607,19 +1695,22 @@ export default function InterviewsPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Scheduled date <span className="text-red-500">*</span>
+            <label htmlFor="iv-move-date" className="block text-sm font-medium mb-1">
+              Scheduled date <span className="text-red-700 dark:text-red-400" aria-hidden>*</span>
             </label>
             <input
+              id="iv-move-date"
               className="input"
               type="date"
+              required
               value={moveDate}
               disabled={moveSaving}
               onChange={(e) => setMoveDate(e.target.value)}
             />
           </div>
 
-          <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="flex flex-wrap items-center gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <MissingFieldsHint id="iv-move-missing" missing={moveMissing} />
             <button
               type="button"
               className="btn-outline"
@@ -1632,7 +1723,8 @@ export default function InterviewsPage() {
               type="button"
               className="btn"
               onClick={confirmMovePrompt}
-              disabled={moveSaving || !moveDate || (movePrompt?.kind === 'tech' && !moveSubStage)}
+              disabled={moveSaving || moveMissing.length > 0}
+              aria-describedby={moveMissing.length ? 'iv-move-missing' : undefined}
             >
               {moveSaving ? 'Moving…' : 'Confirm'}
             </button>
@@ -1677,9 +1769,10 @@ function InterviewBoardColumn({
   return (
     <div className={`${columnClass} bg-zinc-50 dark:bg-zinc-900/60 rounded-[12px] border-t-4 ${tone} border-x border-b border-zinc-100 dark:border-zinc-800`}>
       <header className="px-3 py-2 flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-wide font-medium">
-        <span className="truncate">{label}</span>
+        <h2 className="truncate">{label}</h2>
         <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-0.5 text-[10px] tabular-nums ml-2 shrink-0 text-zinc-700 dark:text-zinc-300">
           {cards.length}
+          <span className="sr-only"> {cards.length === 1 ? 'interview' : 'interviews'}</span>
         </span>
       </header>
       <div
@@ -1687,7 +1780,7 @@ function InterviewBoardColumn({
         className={`p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto transition-colors ${highlight ? 'bg-primary/5 ring-1 ring-inset ring-primary/20 rounded-b-[12px] dark:bg-sky-500/5 dark:ring-sky-400/20' : ''}`}
       >
         {cards.length === 0 ? (
-          <div className="text-xs text-zinc-400 dark:text-zinc-500 text-center py-8">Drop here</div>
+          <div className="text-xs text-faint text-center py-8">Drop here</div>
         ) : (
           cards.map((iv) => (
             <InterviewBoardCard
@@ -1730,7 +1823,7 @@ function InterviewBoardCardPreview({
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
       <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate pl-1" title={profileName}>{profileName}</div>
       <div className="mt-1 text-zinc-700 dark:text-zinc-300 truncate pl-1" title={companyName}>{companyName}</div>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400 pl-1">
         {formatScheduledDate(interview.scheduledAt)}
         <CallerBadge interview={interview} />
       </div>
@@ -1740,7 +1833,7 @@ function InterviewBoardCardPreview({
             {boardStatusLabel(interview.status)}
           </span>
         ) : (
-          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">No status</span>
+          <span className="text-[11px] text-zinc-600 dark:text-zinc-400">No status</span>
         )}
       </div>
     </div>
@@ -1776,7 +1869,14 @@ function InterviewBoardCard({
   const companyName = interview.companyName || 'Untitled';
   const panStyle = BOARD_CARD_STYLES[columnKey];
 
-  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    setActivatorNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
     id: interview._id,
     disabled: !draggable,
   });
@@ -1791,32 +1891,48 @@ function InterviewBoardCard({
     setDropRef(node);
   };
 
+  const cardName = `${profileName} at ${companyName}`;
+
+  // Mouse: drag from anywhere on the card and click to open. Keyboard / screen readers:
+  // the name button opens the panel and the grip button picks the card up (KeyboardSensor).
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...(draggable ? listeners : {})}
-      {...(draggable ? attributes : { role: 'button', tabIndex: 0 })}
+      onPointerDown={draggable ? (listeners?.onPointerDown as React.PointerEventHandler | undefined) : undefined}
       onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
-      className={`rounded-[10px] p-3 text-sm shadow-sm border relative overflow-hidden transition-all duration-200 ${panStyle.card} ${panStyle.hover} ${isSelected ? 'ring-2 ring-primary/60 border-primary/40 dark:ring-sky-400/50 dark:border-sky-500/40' : ''} ${isDragging ? 'opacity-40' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+      className={`reveal-scope rounded-[10px] p-3 text-sm shadow-sm border relative overflow-hidden transition-all duration-200 ${panStyle.card} ${panStyle.hover} ${isSelected ? 'ring-2 ring-primary/60 border-primary/40 dark:ring-sky-400/50 dark:border-sky-500/40' : ''} ${isDragging ? 'opacity-40' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
     >
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${panStyle.accent}`} aria-hidden />
       {isRejectedFail(interview) && (
         <span
-          className="pointer-events-none absolute bottom-0 right-0 h-0 w-0 border-b-[32px] border-l-[32px] border-b-red-300 border-l-transparent dark:border-b-red-700/80"
+          className="pointer-events-none absolute bottom-0 right-0 h-0 w-0 border-b-[32px] border-l-[32px] border-b-red-500 border-l-transparent dark:border-b-red-600"
           title="Rejected at this stage"
-          aria-label="Rejected"
+          aria-hidden
         />
       )}
       <div className="absolute top-2 right-2 flex items-center gap-0.5">
+        {draggable && (
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            onKeyDown={listeners?.onKeyDown as React.KeyboardEventHandler | undefined}
+            onClick={stop}
+            className="p-1 rounded-[6px] text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800 cursor-grab"
+            title="Drag to another stage"
+            aria-label={`Move ${cardName} to another stage`}
+          >
+            <GripVertical size={14} aria-hidden />
+          </button>
+        )}
         <button
           type="button"
           onClick={(e) => { stop(e); openInterviewFullScreen(interview._id); }}
           onPointerDown={stop}
-          className="p-1 rounded-[6px] text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
+          className="p-1 rounded-[6px] text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
           title="Open full screen in a new tab"
-          aria-label="Open full screen"
+          aria-label={`Open ${cardName} full screen in a new tab`}
         >
           <Maximize2 size={14} aria-hidden />
         </button>
@@ -1824,32 +1940,39 @@ function InterviewBoardCard({
           type="button"
           onClick={(e) => { stop(e); onOpenTranscript(); }}
           onPointerDown={stop}
-          className="p-1 rounded-[6px] text-zinc-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:text-sky-400 dark:hover:bg-sky-950/50"
+          className="p-1 rounded-[6px] text-zinc-500 hover:text-sky-700 hover:bg-sky-50 dark:text-zinc-400 dark:hover:text-sky-400 dark:hover:bg-sky-950/50"
           title="Open transcript"
-          aria-label="Open transcript"
+          aria-label={`Open transcript for ${cardName}`}
         >
-          <FileText size={14} />
+          <FileText size={14} aria-hidden />
         </button>
         {deletable && (
           <button
             type="button"
             onClick={(e) => { stop(e); onDelete(); }}
             onPointerDown={stop}
-            className="p-1 rounded-[6px] text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/40"
+            className="p-1 rounded-[6px] text-zinc-500 hover:text-red-600 hover:bg-red-50 dark:text-zinc-400 dark:hover:text-red-400 dark:hover:bg-red-950/40"
             title="Delete interview"
-            aria-label="Delete interview"
+            aria-label={`Delete interview for ${cardName}`}
           >
-            <Trash2 size={14} />
+            <Trash2 size={14} aria-hidden />
           </button>
         )}
       </div>
-      <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate pr-20 pl-1" title={profileName}>
+      <button
+        type="button"
+        onClick={(e) => { stop(e); onClick(); }}
+        className={`block w-full text-left rounded-sm font-medium text-zinc-900 dark:text-zinc-100 truncate reveal-on-focus pl-1 ${draggable ? 'pr-24' : 'pr-20'}`}
+        title={profileName}
+      >
         {profileName}
-      </div>
-      <div className="mt-1 text-zinc-700 dark:text-zinc-300 truncate pl-1" title={companyName}>
+        <span className="sr-only"> at {companyName}. Open details</span>
+      </button>
+      {isRejectedFail(interview) && <span className="sr-only">Rejected at this stage.</span>}
+      <div className="mt-1 text-zinc-700 dark:text-zinc-300 truncate reveal-on-focus pl-1" title={companyName}>
         {companyName}
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400 pl-1">
         {formatScheduledDate(interview.scheduledAt)}
         <CallerBadge interview={interview} />
       </div>
@@ -1859,7 +1982,7 @@ function InterviewBoardCard({
             {boardStatusLabel(interview.status)}
           </span>
         ) : (
-          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">No status</span>
+          <span className="text-[11px] text-zinc-600 dark:text-zinc-400">No status</span>
         )}
       </div>
       <StageMovementTrail interview={interview} />

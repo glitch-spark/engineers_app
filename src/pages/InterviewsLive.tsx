@@ -1,7 +1,7 @@
 import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Check, Loader2, Pencil, Trash2, X } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
@@ -17,7 +17,7 @@ import {
 } from '../components/InterviewEditPanel';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
-import { notify } from '../lib/notify';
+import { messageOf, notify } from '../lib/notify';
 import {
   getInterviewMovementEntries,
   normalizeInterviewStage,
@@ -405,16 +405,17 @@ export default function InterviewsLivePage() {
 
   const savePanel = async () => {
     if (!panelInterview) return;
+    const invalid = (msg: string) => { setPanelError(msg); notify.error(msg); };
     if (!panelForm.date) {
-      notify.error('Select a scheduled date');
+      invalid('Select a scheduled date');
       return;
     }
     if (panelForm.stage === 'tech' && !panelForm.techSubStage) {
-      notify.error('Select a Tech sub-stage');
+      invalid('Select a Tech sub-stage');
       return;
     }
     if (!canEdit(panelInterview)) {
-      notify.error('You cannot edit this interview');
+      invalid('You cannot edit this interview');
       return;
     }
     setPanelSaving(true);
@@ -426,6 +427,7 @@ export default function InterviewsLivePage() {
       setPanelForm(interviewToForm(updated as unknown as Interview));
       mutate();
     } catch (err) {
+      setPanelError(messageOf(err, 'Failed to save interview'));
       notify.error(err, 'Failed to save interview');
     } finally {
       setPanelSaving(false);
@@ -439,8 +441,9 @@ export default function InterviewsLivePage() {
 
       <div className="flex items-end gap-3 flex-wrap panel px-4 py-3">
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">User</label>
+          <label htmlFor="live-filter-user" className="block text-xs text-muted mb-1">User</label>
           <Select
+            id="live-filter-user"
             value={creatorId}
             onChange={(v) => {
               setCreatorId(v);
@@ -450,12 +453,13 @@ export default function InterviewsLivePage() {
           />
         </div>
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Profile</label>
-          <Select value={accountId} onChange={setAccountId} options={accountOptions} />
+          <label htmlFor="live-filter-profile" className="block text-xs text-muted mb-1">Profile</label>
+          <Select id="live-filter-profile" value={accountId} onChange={setAccountId} options={accountOptions} />
         </div>
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Date range</label>
+          <label htmlFor="live-filter-range" className="block text-xs text-muted mb-1">Date range</label>
           <Select
+            id="live-filter-range"
             value={datePreset}
             onChange={(v) => applyDatePreset(v as DateRangePreset)}
             options={DATE_RANGE_PRESET_OPTIONS}
@@ -464,12 +468,12 @@ export default function InterviewsLivePage() {
         {datePreset === 'custom' ? (
           <>
             <div className="w-40">
-              <label className="block text-xs text-muted mb-1">From</label>
-              <input className="input w-full text-sm" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <label htmlFor="live-filter-from" className="block text-xs text-muted mb-1">From</label>
+              <input id="live-filter-from" className="input w-full text-sm" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div className="w-40">
-              <label className="block text-xs text-muted mb-1">To</label>
-              <input className="input w-full text-sm" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              <label htmlFor="live-filter-to" className="block text-xs text-muted mb-1">To</label>
+              <input id="live-filter-to" className="input w-full text-sm" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
           </>
         ) : (
@@ -482,20 +486,18 @@ export default function InterviewsLivePage() {
           )
         )}
 
-        <div className="flex flex-col gap-1 pb-0.5">
-          <span className="text-xs font-medium text-sky-700 dark:text-sky-400">Status</span>
-          <div
-            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 dark:border-sky-800 dark:bg-sky-950/40"
-            role="radiogroup"
-            aria-label="Status filter"
-          >
+        <fieldset className="pb-0.5">
+          <legend className="mb-1 text-xs font-medium text-sky-700 dark:text-sky-400">Status</legend>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 dark:border-sky-800 dark:bg-sky-950/40">
             {STATUS_FILTER_OPTIONS.map((opt) => (
               <label
                 key={opt.value}
                 className="inline-flex items-center gap-1.5 text-sm text-sky-900 dark:text-sky-200 cursor-pointer select-none"
               >
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="live-status-filter"
+                  value={opt.value}
                   className="h-3.5 w-3.5 accent-sky-600"
                   checked={statusFilter === opt.value}
                   onChange={() => setStatusFilter(opt.value)}
@@ -504,22 +506,20 @@ export default function InterviewsLivePage() {
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
 
-        <div className="flex flex-col gap-1 pb-0.5">
-          <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Region</span>
-          <div
-            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 dark:border-amber-800 dark:bg-amber-950/40"
-            role="radiogroup"
-            aria-label="Region filter"
-          >
+        <fieldset className="pb-0.5">
+          <legend className="mb-1 text-xs font-medium text-amber-700 dark:text-amber-400">Region</legend>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 dark:border-amber-800 dark:bg-amber-950/40">
             {REGION_FILTER_OPTIONS.map((opt) => (
               <label
                 key={opt.value}
                 className="inline-flex items-center gap-1.5 text-sm text-amber-900 dark:text-amber-200 cursor-pointer select-none"
               >
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="live-region-filter"
+                  value={opt.value}
                   className="h-3.5 w-3.5 accent-amber-600"
                   checked={regionFilter === opt.value}
                   onChange={() => setRegionFilter(opt.value)}
@@ -528,16 +528,16 @@ export default function InterviewsLivePage() {
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
       </div>
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading live interviews…
+        <div className="flex items-center gap-2 text-sm text-muted" role="status">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading live interviews…
         </div>
       )}
       {loadError && (
-        <div className="text-sm text-red-600">Failed to load interviews. Try refreshing.</div>
+        <div className="text-sm text-red-600 dark:text-red-400" role="alert">Failed to load interviews. Try refreshing.</div>
       )}
 
       {!isLoading && !loadError && (
@@ -545,35 +545,39 @@ export default function InterviewsLivePage() {
           {rows.length > 0 && (
             <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap gap-4 text-xs text-muted">
               <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block h-3.5 w-5 rounded-sm bg-emerald-500 border border-emerald-600" />
+                <span className="inline-block h-3.5 w-5 rounded-sm bg-emerald-700 border border-emerald-800" aria-hidden />
                 Completed
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block h-3.5 w-5 rounded-sm bg-emerald-50 border border-dashed border-emerald-500 dark:bg-emerald-950/40" />
+                <span className="inline-block h-3.5 w-5 rounded-sm bg-emerald-50 border border-dashed border-emerald-500 dark:bg-emerald-950/40" aria-hidden />
                 Scheduled next
               </span>
-              <span className="ml-auto tabular-nums">{rows.length}</span>
+              <span className="ml-auto tabular-nums">
+                {rows.length}
+                <span className="sr-only"> {rows.length === 1 ? 'interview' : 'interviews'}</span>
+              </span>
             </div>
           )}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm border-collapse">
               <thead className="table-head">
                 <tr>
-                  <th className="px-3 py-2 text-left sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900 min-w-[160px] border-r border-zinc-200 dark:border-zinc-700">
+                  <th scope="col" className="px-3 py-2 text-left sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900 min-w-[160px] border-r border-zinc-200 dark:border-zinc-700">
                     Company
                   </th>
-                  <th className="px-3 py-2 text-left sticky left-[160px] z-10 bg-zinc-50 dark:bg-zinc-900 min-w-[140px] border-r border-zinc-200 dark:border-zinc-700">
+                  <th scope="col" className="px-3 py-2 text-left sticky left-[160px] z-10 bg-zinc-50 dark:bg-zinc-900 min-w-[140px] border-r border-zinc-200 dark:border-zinc-700">
                     Profile
                   </th>
                   {LIVE_COLUMNS.map((c) => (
                     <th
                       key={c.key}
+                      scope="col"
                       className="px-2 py-2 text-center whitespace-nowrap min-w-[88px] border-r border-zinc-200 dark:border-zinc-700"
                     >
                       {c.label}
                     </th>
                   ))}
-                  <th className="px-2 py-2 text-center whitespace-nowrap min-w-[88px]">
+                  <th scope="col" className="px-2 py-2 text-center whitespace-nowrap min-w-[88px]">
                     Actions
                   </th>
                 </tr>
@@ -597,21 +601,22 @@ export default function InterviewsLivePage() {
                     return (
                       <tr
                         key={iv._id}
-                        className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40"
+                        className="reveal-scope border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40"
                       >
-                        <td
-                          className="px-3 py-2 sticky left-0 z-[1] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-700 min-w-[160px]"
+                        <th
+                          scope="row"
+                          className="px-3 py-2 text-left font-normal sticky left-0 z-[1] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-700 min-w-[160px]"
                           title={companyName}
                         >
-                          <div className="text-base font-bold text-sky-800 dark:text-sky-300 truncate">
+                          <div className="text-base font-bold text-sky-800 dark:text-sky-300 truncate reveal-on-focus">
                             {companyName}
                           </div>
-                        </td>
+                        </th>
                         <td
                           className="px-3 py-2 sticky left-[160px] z-[1] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-700 min-w-[140px]"
                           title={profileName}
                         >
-                          <div className="text-sm text-muted truncate">{profileName}</div>
+                          <div className="text-sm text-muted truncate reveal-on-focus">{profileName}</div>
                         </td>
                         {LIVE_COLUMNS.map((c) => {
                           const isCompleted = c.key in progress.completed;
@@ -620,7 +625,7 @@ export default function InterviewsLivePage() {
                           let tdClass = 'px-1.5 py-1.5 text-center align-middle border-r border-zinc-200 dark:border-zinc-700 relative overflow-hidden';
                           let date = '';
                           if (isCompleted) {
-                            tdClass += ' bg-emerald-500 text-white';
+                            tdClass += ' bg-emerald-700 text-white';
                             date = formatCellDate(progress.completed[c.key]);
                           } else if (isScheduled) {
                             tdClass += ' bg-emerald-50 text-emerald-800 border-dashed border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-400';
@@ -643,16 +648,25 @@ export default function InterviewsLivePage() {
                               {isCompleted || isScheduled ? (
                                 <span className={`inline-flex items-center justify-center gap-0.5 text-[11px] font-semibold tabular-nums leading-tight ${isCompleted ? 'text-white' : ''}`}>
                                   {isCompleted && <Check className="w-3 h-3 shrink-0" strokeWidth={3} aria-hidden />}
+                                  <span className="sr-only">{isCompleted ? 'Completed' : 'Scheduled'}{date ? ' ' : ''}</span>
                                   {date}
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-transparent select-none">·</span>
+                                <span className="text-[10px] text-transparent select-none" aria-hidden>·</span>
                               )}
                               {showRejectMark && (
-                                <span
-                                  className="pointer-events-none absolute bottom-0 right-0 h-0 w-0 border-b-[28px] border-l-[28px] border-b-red-300 border-l-transparent dark:border-b-red-700/80"
-                                  aria-hidden
-                                />
+                                <>
+                                  <span
+                                    className="pointer-events-none absolute bottom-0 right-0 h-0 w-0 border-b-[28px] border-l-[28px] border-b-red-600 border-l-transparent dark:border-b-red-700/80"
+                                    aria-hidden
+                                  />
+                                  <X
+                                    className="pointer-events-none absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-white"
+                                    strokeWidth={3}
+                                    aria-hidden
+                                  />
+                                  <span className="sr-only">, rejected at this stage</span>
+                                </>
                               )}
                             </td>
                           );
@@ -663,20 +677,20 @@ export default function InterviewsLivePage() {
                               type="button"
                               className="btn-icon"
                               title={editable ? 'Edit' : 'View'}
-                              aria-label={editable ? 'Edit interview' : 'View interview'}
+                              aria-label={`${editable ? 'Edit' : 'View'} interview: ${companyName}`}
                               onClick={() => openPanel(iv)}
                             >
-                              <Pencil size={14} />
+                              <Pencil size={14} aria-hidden />
                             </button>
                             {editable && (
                               <button
                                 type="button"
                                 className="btn-icon text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                 title="Delete"
-                                aria-label="Delete interview"
+                                aria-label={`Delete interview: ${companyName}`}
                                 onClick={() => setDeleteTarget(iv)}
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={14} aria-hidden />
                               </button>
                             )}
                           </div>

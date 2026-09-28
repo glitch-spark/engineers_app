@@ -15,7 +15,7 @@ import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import Modal from './Modal';
 import NameWithAvatar from './NameWithAvatar';
-import type { InterviewPrepTab } from './InterviewPrepTabs';
+import { INTERVIEW_PREP_PANEL_ID, interviewPrepTabId, type InterviewPrepTab } from './InterviewPrepTabs';
 
 type PrepItem = api.InterviewPrepItem;
 
@@ -205,7 +205,12 @@ export default function InterviewPrepLibrary({
   const TabIcon = tab === 'prompts' ? MessageSquareText : FileText;
 
   return (
-    <section className="panel-elevated overflow-hidden">
+    <section
+      className="panel-elevated overflow-hidden"
+      {...(embedded
+        ? { role: 'tabpanel', id: INTERVIEW_PREP_PANEL_ID, 'aria-labelledby': interviewPrepTabId(tab) }
+        : {})}
+    >
       {!embedded && (
         <div className="relative px-6 py-5 border-b border-zinc-200/80 dark:border-zinc-800 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-sky-50/80 via-white to-violet-50/40 dark:from-sky-950/20 dark:via-zinc-950 dark:to-violet-950/10 pointer-events-none" />
@@ -221,8 +226,9 @@ export default function InterviewPrepLibrary({
       <div className="px-4 sm:px-5 py-3 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-44">
-            <label className="block text-xs text-muted mb-1">User</label>
+            <label htmlFor="prep-user" className="block text-xs text-muted mb-1">User</label>
             <select
+              id="prep-user"
               className="select focus-ring text-sm w-full bg-white dark:bg-zinc-950"
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
@@ -246,7 +252,7 @@ export default function InterviewPrepLibrary({
               onClick={openCreateModal}
               disabled={saving}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4" aria-hidden />
               New {tabSingular}
             </button>
           )}
@@ -257,15 +263,19 @@ export default function InterviewPrepLibrary({
         <aside className="border-b lg:border-b-0 lg:border-r border-zinc-200/80 dark:border-zinc-800 flex flex-col bg-zinc-50/30 dark:bg-zinc-900/20">
           <div className="p-3 border-b border-zinc-200/60 dark:border-zinc-800/80 space-y-2">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" aria-hidden />
               <input
                 type="search"
+                aria-label={`Search ${tab === 'prompts' ? 'prompts' : 'templates'}`}
                 className="input w-full pl-8 py-1.5 text-sm bg-white dark:bg-zinc-950"
                 placeholder={`Search ${tab === 'prompts' ? 'prompts' : 'templates'}…`}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <p className="sr-only" role="status">
+              {search.trim() ? `${filteredItems.length} ${filteredItems.length === 1 ? 'match' : 'matches'}` : ''}
+            </p>
             {!isOwn && selectedUser && (
               <p className="text-[11px] text-muted px-0.5">
                 Viewing <span className="font-medium text-body">{selectedUser.name || selectedUser.email}</span>&apos;s library
@@ -275,14 +285,14 @@ export default function InterviewPrepLibrary({
 
           <div className="flex-1 overflow-y-auto max-h-[520px] p-2">
             {isLoading ? (
-              <div className="p-8 text-sm text-muted flex flex-col items-center justify-center gap-2">
-                <Loader2 className="w-5 h-5 animate-spin text-sky-500" />
+              <div className="p-8 text-sm text-muted flex flex-col items-center justify-center gap-2" role="status">
+                <Loader2 className="w-5 h-5 animate-spin text-sky-600" aria-hidden />
                 Loading…
               </div>
             ) : filteredItems.length === 0 ? (
               <div className="p-8 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700 text-muted shadow-sm">
-                  {search ? <Search className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
+                  {search ? <Search className="h-5 w-5" aria-hidden /> : <BookOpen className="h-5 w-5" aria-hidden />}
                 </div>
                 <p className="text-sm font-medium text-body">
                   {search
@@ -300,7 +310,7 @@ export default function InterviewPrepLibrary({
                 </p>
                 {isOwn && !search && (
                   <button type="button" className="btn text-sm mt-4" onClick={openCreateModal}>
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-4 h-4" aria-hidden />
                     New {tabSingular}
                   </button>
                 )}
@@ -313,6 +323,7 @@ export default function InterviewPrepLibrary({
                     <li key={item._id}>
                       <button
                         type="button"
+                        aria-current={active ? 'true' : undefined}
                         onClick={() => setSelectedId(item._id)}
                         className={`group w-full text-left rounded-xl px-3 py-2.5 transition-all relative overflow-hidden ${
                           active
@@ -321,7 +332,7 @@ export default function InterviewPrepLibrary({
                         }`}
                       >
                         {active && (
-                          <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-sky-500 dark:bg-sky-400" />
+                          <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-sky-500 dark:bg-sky-400" aria-hidden />
                         )}
                         <div className={`text-sm font-medium truncate pl-1 ${active ? 'text-sky-900 dark:text-sky-100' : 'text-strong'}`}>
                           {item.title}
@@ -332,7 +343,7 @@ export default function InterviewPrepLibrary({
                           </div>
                         )}
                         {item.updatedAt && (
-                          <div className="text-[10px] text-faint mt-1.5 pl-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="text-[10px] text-faint mt-1.5 pl-1 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
                             {formatRelative(item.updatedAt)}
                           </div>
                         )}
@@ -349,7 +360,7 @@ export default function InterviewPrepLibrary({
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center p-10 text-center">
               <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 border border-zinc-200/80 dark:border-zinc-800 text-muted shadow-inner">
-                <TabIcon className="h-7 w-7" />
+                <TabIcon className="h-7 w-7" aria-hidden />
               </div>
               <p className="text-sm font-semibold text-strong">Select a {tabSingular}</p>
               <p className="text-xs text-faint mt-1.5 max-w-sm leading-relaxed">
@@ -384,7 +395,7 @@ export default function InterviewPrepLibrary({
                       onClick={saveItem}
                       disabled={saving}
                     >
-                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
                       Save
                     </button>
                     <button
@@ -393,7 +404,7 @@ export default function InterviewPrepLibrary({
                       onClick={() => setDeleteOpen(true)}
                       disabled={saving}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" aria-hidden />
                       Delete
                     </button>
                   </div>
@@ -453,10 +464,12 @@ export default function InterviewPrepLibrary({
       >
         <div className="space-y-4">
           <div>
-            <label className="form-label mb-1 block">
-              Title <span className="text-red-500">*</span>
+            <label htmlFor="prep-create-title" className="form-label mb-1 block">
+              Title <span className="text-red-700 dark:text-red-400" aria-hidden>*</span>
             </label>
             <input
+              id="prep-create-title"
+              required
               className="input w-full text-sm"
               value={createTitle}
               onChange={(e) => setCreateTitle(e.target.value)}
@@ -465,8 +478,9 @@ export default function InterviewPrepLibrary({
             />
           </div>
           <div>
-            <label className="form-label mb-1 block">Content</label>
+            <label htmlFor="prep-create-content" className="form-label mb-1 block">Content</label>
             <textarea
+              id="prep-create-content"
               className="input w-full text-sm min-h-[200px] leading-relaxed resize-y font-mono"
               value={createBody}
               onChange={(e) => setCreateBody(e.target.value)}
@@ -485,7 +499,7 @@ export default function InterviewPrepLibrary({
             >
               {saving ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Creating…
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Creating…
                 </>
               ) : (
                 'Create'
@@ -516,11 +530,11 @@ export default function InterviewPrepLibrary({
             >
               {saving ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Deleting…
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Deleting…
                 </>
               ) : (
                 <>
-                  <Trash2 className="w-4 h-4" /> Delete
+                  <Trash2 className="w-4 h-4" aria-hidden /> Delete
                 </>
               )}
             </button>

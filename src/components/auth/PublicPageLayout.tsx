@@ -16,13 +16,13 @@ export default function PublicPageLayout({ kicker, children }: PublicPageLayoutP
         <div className="auth-bg-grid" />
       </div>
 
-      <div className="auth-simple-inner auth-fade-up">
+      <main className="auth-simple-inner auth-fade-up">
         <Link to="/" className="auth-simple-logo group" aria-label="Engineer home">
-          <LogoIcon className="h-9 w-9 text-sky-600 transition-opacity group-hover:opacity-80" />
+          <LogoIcon decorative className="h-9 w-9 text-sky-600 transition-opacity group-hover:opacity-80" />
         </Link>
         {kicker && <p className="auth-simple-kicker">{kicker}</p>}
         {children}
-      </div>
+      </main>
     </div>
   );
 }

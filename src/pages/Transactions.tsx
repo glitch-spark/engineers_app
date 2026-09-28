@@ -6,7 +6,7 @@ import { Pencil, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
-import { notify } from '../lib/notify';
+import { messageOf, notify } from '../lib/notify';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
 
@@ -75,6 +75,8 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<Tx | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  type FormField = 'date' | 'amount' | 'payMethod' | 'payerId' | 'cardLast4';
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FormField, string>>>({});
 
   const [form, setForm] = useState<{
     date: string;
@@ -131,6 +133,7 @@ export default function TransactionsPage() {
       payerId: user?.id || '',
     });
     setError('');
+    setFieldErrors({});
     setOpen(true);
   };
 
@@ -149,31 +152,45 @@ export default function TransactionsPage() {
       payerId: user?.id || '',
     });
     setError('');
+    setFieldErrors({});
     setOpen(true);
     const next = new URLSearchParams(searchParams);
     ['renew', 'last4', 'description', 'amount', 'cycle', 'label'].forEach((k) => next.delete(k));
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, user?.id]);
 
-  const save = async () => {
-    if (!form.date) {
-      notify.error('Date is required');
-      return;
-    }
-    if (form.amount === 0) {
-      notify.error('Amount is required');
-      return;
-    }
-    if (!form.payMethod) {
-      notify.error('Pay method is required');
-      return;
-    }
-    if (!form.payerId) {
-      notify.error('Payer is required');
-      return;
-    }
+  const validate = (): Partial<Record<FormField, string>> => {
+    const errs: Partial<Record<FormField, string>> = {};
+    if (!form.date) errs.date = 'Date is required';
+    if (form.amount === 0) errs.amount = 'Amount is required';
+    if (!form.payMethod) errs.payMethod = 'Pay method is required';
+    if (!form.payerId) errs.payerId = 'Payer is required';
     if (form.payMethod === 'card' && !/^\d{4}$/.test(form.cardLast4)) {
-      notify.error('Last 4 digits of the card are required (exactly 4 digits)');
+      errs.cardLast4 = 'Last 4 digits of the card are required (exactly 4 digits)';
+    }
+    return errs;
+  };
+
+  /** aria props tying a field to its inline error message. */
+  const errProps = (field: FormField) => ({
+    'aria-invalid': fieldErrors[field] ? true : undefined,
+    'aria-describedby': fieldErrors[field] ? `${formId}-${field}-error` : undefined,
+    'aria-required': true,
+  });
+  const errText = (field: FormField) => (fieldErrors[field] ? (
+    <p id={`${formId}-${field}-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">{fieldErrors[field]}</p>
+  ) : null);
+
+  const save = async () => {
+    const errs = validate();
+    setFieldErrors(errs);
+    const firstInvalid = (Object.keys(errs) as FormField[])[0];
+    if (firstInvalid) {
+      notify.error(errs[firstInvalid]!);
+      const idFor: Record<FormField, string> = {
+        date: 'date', amount: 'amount', payMethod: 'pay-method', payerId: 'payer', cardLast4: 'card-last4',
+      };
+      document.getElementById(`${formId}-${idFor[firstInvalid]}`)?.focus();
       return;
     }
     setSaving(true);
@@ -202,6 +219,7 @@ export default function TransactionsPage() {
       mutate();
     } catch (err) {
       notify.error(err instanceof ApiError ? err : 'Failed to save transaction');
+      setError(err instanceof ApiError ? messageOf(err, 'Failed to save transaction') : 'Failed to save transaction');
     } finally {
       setSaving(false);
     }
@@ -264,8 +282,9 @@ export default function TransactionsPage() {
         {isAdmin && (
           <>
             <div className="w-44">
-              <label className="block text-xs text-muted mb-1">From</label>
+              <label htmlFor={`${formId}-filter-from`} className="block text-xs text-muted mb-1">From</label>
               <input
+                id={`${formId}-filter-from`}
                 className="input w-full text-sm"
                 type="date"
                 value={from}
@@ -273,8 +292,9 @@ export default function TransactionsPage() {
               />
             </div>
             <div className="w-44">
-              <label className="block text-xs text-muted mb-1">To</label>
+              <label htmlFor={`${formId}-filter-to`} className="block text-xs text-muted mb-1">To</label>
               <input
+                id={`${formId}-filter-to`}
                 className="input w-full text-sm"
                 type="date"
                 value={to}
@@ -282,8 +302,9 @@ export default function TransactionsPage() {
               />
             </div>
             <div className="w-56">
-              <label className="block text-xs text-muted mb-1">User</label>
+              <label htmlFor={`${formId}-filter-user`} className="block text-xs text-muted mb-1">User</label>
               <select
+                id={`${formId}-filter-user`}
                 className="select focus-ring w-full text-sm"
                 value={userId}
                 onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}
@@ -299,8 +320,9 @@ export default function TransactionsPage() {
           </>
         )}
         <div className="w-44">
-          <label className="block text-xs text-muted mb-1">Pay method</label>
+          <label htmlFor={`${formId}-filter-method`} className="block text-xs text-muted mb-1">Pay method</label>
           <select
+            id={`${formId}-filter-method`}
             className="select focus-ring w-full text-sm"
             value={payMethodFilter}
             onChange={(e) => { setPayMethodFilter(e.target.value as '' | PayMethod); setCurrentPage(1); }}
@@ -322,11 +344,11 @@ export default function TransactionsPage() {
             <table className="min-w-full text-sm">
               <thead className="table-head">
                 <tr>
-                  <th className="px-4 py-2.5 text-left">Payer</th>
-                  <th className="px-4 py-2.5 text-right">Income</th>
-                  <th className="px-4 py-2.5 text-right">Outcome</th>
-                  <th className="px-4 py-2.5 text-right">Net</th>
-                  <th className="px-4 py-2.5 text-right">Txns</th>
+                  <th scope="col" className="px-4 py-2.5 text-left">Payer</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">Income</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">Outcome</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">Net</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">Txns</th>
                 </tr>
               </thead>
               <tbody>
@@ -335,7 +357,7 @@ export default function TransactionsPage() {
                     <td className="px-4 py-2.5">
                       <NameWithAvatar name={p.name || p.email} imageUrl={p.image} />
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">
                       {formatMoney(p.income)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400">
@@ -354,7 +376,7 @@ export default function TransactionsPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/50 font-medium">
-                  <td className="px-4 py-2.5">Total outcome</td>
+                  <th scope="row" className="px-4 py-2.5 text-left font-medium text-sm text-zinc-700 dark:text-zinc-300">Total outcome</th>
                   <td className="px-4 py-2.5 text-right tabular-nums text-muted">
                     {formatMoney(payerTotals.reduce((s, p) => s + p.income, 0))}
                   </td>
@@ -383,8 +405,9 @@ export default function TransactionsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Show:</label>
+            <label htmlFor={`${formId}-page-size`} className="text-sm font-medium">Show:</label>
             <select
+              id={`${formId}-page-size`}
               value={pageSize}
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
               className="select focus-ring text-sm"
@@ -400,24 +423,25 @@ export default function TransactionsPage() {
 
       <div className="table-wrap">
         <table className="min-w-full text-sm">
+          <caption className="sr-only">Transactions</caption>
           <thead className="table-head">
             <tr>
-              <th className="px-4 py-2.5">Date</th>
-              <th className="px-4 py-2.5">Amount</th>
-              <th className="px-4 py-2.5">Description</th>
-              <th className="px-4 py-2.5">Pay method</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Owner</th>
-              <th className="px-4 py-2.5">Payer</th>
-              <th className="px-4 py-2.5 w-48">Actions</th>
+              <th scope="col" className="px-4 py-2.5">Date</th>
+              <th scope="col" className="px-4 py-2.5">Amount</th>
+              <th scope="col" className="px-4 py-2.5">Description</th>
+              <th scope="col" className="px-4 py-2.5">Pay method</th>
+              <th scope="col" className="px-4 py-2.5">Status</th>
+              <th scope="col" className="px-4 py-2.5">Owner</th>
+              <th scope="col" className="px-4 py-2.5">Payer</th>
+              <th scope="col" className="px-4 py-2.5 w-48">Actions</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-center text-muted">
-                  <div className="flex items-center justify-center">
-                    <div className="spinner spinner-md mr-3"></div>
+                  <div role="status" className="flex items-center justify-center">
+                    <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading transactions...
                   </div>
                 </td>
@@ -432,6 +456,7 @@ export default function TransactionsPage() {
                 const amt = Number(t.amount || 0);
                 const isPayer = txPayerId(t) === user?.id;
                 const canApprove = isPending && (isAdmin || isPayer);
+                const txName = `${t.date ? new Date(t.date).toISOString().split('T')[0] : ''} ${t.description || formatMoney(amt)}`.trim();
                 return (
                   <tr key={t._id} className="table-row">
                     <td className="px-4 py-2.5">
@@ -439,7 +464,7 @@ export default function TransactionsPage() {
                     </td>
                     <td className={`px-4 py-2.5 tabular-nums ${
                       amt > 0
-                        ? 'text-emerald-600 dark:text-emerald-400'
+                        ? 'text-emerald-700 dark:text-emerald-400'
                         : amt < 0
                           ? 'text-red-600 dark:text-red-400'
                           : ''
@@ -456,30 +481,30 @@ export default function TransactionsPage() {
                         <button
                           type="button"
                           className="btn-icon"
-                          onClick={() => { setEditing(t); setError(''); setOpen(true); }}
+                          onClick={() => { setEditing(t); setError(''); setFieldErrors({}); setOpen(true); }}
                           disabled={!isPending && !isAdmin}
-                          aria-label="Edit transaction"
+                          aria-label={`Edit transaction ${txName}`}
                           title="Edit"
                         >
-                          <Pencil size={16} />
+                          <Pencil size={16} aria-hidden />
                         </button>
                         <button
                           type="button"
                           className="btn-icon"
                           onClick={() => remove(t)}
                           disabled={!isPending && !isAdmin}
-                          aria-label="Delete transaction"
+                          aria-label={`Delete transaction ${txName}`}
                           title="Delete"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={16} aria-hidden />
                         </button>
                         {canApprove && (
                           <>
-                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'approved')} aria-label="Approve transaction" title="Approve">
-                              <CheckCircle size={16} />
+                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'approved')} aria-label={`Approve transaction ${txName}`} title="Approve">
+                              <CheckCircle size={16} aria-hidden />
                             </button>
-                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'rejected')} aria-label="Reject transaction" title="Reject">
-                              <XCircle size={16} />
+                            <button type="button" className="btn-icon" onClick={() => setStatus(t, 'rejected')} aria-label={`Reject transaction ${txName}`} title="Reject">
+                              <XCircle size={16} aria-hidden />
                             </button>
                           </>
                         )}
@@ -494,7 +519,7 @@ export default function TransactionsPage() {
       </div>
 
       {pagination && pagination.totalPages > 1 && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav aria-label="Transactions pagination" className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-muted">
             Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
@@ -503,6 +528,7 @@ export default function TransactionsPage() {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setCurrentPage(pagination.page - 1)}
               disabled={!pagination.hasPrev}
               className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
@@ -521,10 +547,13 @@ export default function TransactionsPage() {
                 return (
                   <button
                     key={pageNum}
+                    type="button"
                     onClick={() => setCurrentPage(pageNum)}
+                    aria-label={`Page ${pageNum}`}
+                    aria-current={pageNum === pagination.page ? 'page' : undefined}
                     className={`px-3 py-1 border rounded text-sm ${
                       pageNum === pagination.page
-                        ? 'bg-blue-500 text-white border-blue-500'
+                        ? 'bg-blue-600 text-white border-blue-600'
                         : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
                     }`}
                   >
@@ -535,6 +564,7 @@ export default function TransactionsPage() {
             </div>
 
             <button
+              type="button"
               onClick={() => setCurrentPage(pagination.page + 1)}
               disabled={!pagination.hasNext}
               className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
@@ -542,7 +572,7 @@ export default function TransactionsPage() {
               Next
             </button>
           </div>
-        </div>
+        </nav>
       )}
 
       <Modal
@@ -551,19 +581,21 @@ export default function TransactionsPage() {
         title={editing ? 'Edit Transaction' : 'Add Transaction'}
       >
         <div className="space-y-4">
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p role="alert" className="text-red-700 dark:text-red-400 text-sm">{error}</p>}
           <div>
-            <label htmlFor={`${formId}-date`} className="form-label mb-1 block">Date <span className="text-red-500">*</span></label>
+            <label htmlFor={`${formId}-date`} className="form-label mb-1 block">Date <span className="text-red-700 dark:text-red-400" aria-hidden>*</span></label>
             <input
               id={`${formId}-date`}
               className="input"
               type="date"
               value={form.date}
               onChange={(e) => setForm({ ...form, date: e.target.value })}
+              {...errProps('date')}
             />
+            {errText('date')}
           </div>
           <div>
-            <label htmlFor={`${formId}-amount`} className="form-label mb-1 block">Amount (USD) <span className="text-red-500">*</span></label>
+            <label htmlFor={`${formId}-amount`} className="form-label mb-1 block">Amount (USD) <span className="text-red-700 dark:text-red-400" aria-hidden>*</span></label>
             <input
               id={`${formId}-amount`}
               className="input"
@@ -572,7 +604,9 @@ export default function TransactionsPage() {
               placeholder="0.00"
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: Number(e.target.value || 0) })}
+              {...errProps('amount')}
             />
+            {errText('amount')}
           </div>
           <div>
             <label htmlFor={`${formId}-description`} className="form-label mb-1 block">Description</label>
@@ -595,10 +629,11 @@ export default function TransactionsPage() {
             />
           </div>
           <div>
-            <label htmlFor={`${formId}-pay-method`} className="form-label mb-1 block">Pay method <span className="text-red-500">*</span></label>
+            <label htmlFor={`${formId}-pay-method`} className="form-label mb-1 block">Pay method <span className="text-red-700 dark:text-red-400" aria-hidden>*</span></label>
             <select
               id={`${formId}-pay-method`}
               className="select focus-ring w-full"
+              {...errProps('payMethod')}
               value={form.payMethod}
               onChange={(e) => {
                 const v = e.target.value as '' | PayMethod;
@@ -609,12 +644,15 @@ export default function TransactionsPage() {
               <option value="coin">Coin</option>
               <option value="card">Card</option>
             </select>
+            {errText('payMethod')}
           </div>
           <div>
-            <label htmlFor={`${formId}-payer`} className="form-label mb-1 block">Payer <span className="text-red-500">*</span></label>
+            <label htmlFor={`${formId}-payer`} className="form-label mb-1 block">Payer <span className="text-red-700 dark:text-red-400" aria-hidden>*</span></label>
             <select
               id={`${formId}-payer`}
               className="select focus-ring w-full"
+              {...errProps('payerId')}
+              aria-describedby={[fieldErrors.payerId ? `${formId}-payerId-error` : '', `${formId}-payer-hint`].filter(Boolean).join(' ')}
               value={form.payerId}
               onChange={(e) => setForm({ ...form, payerId: e.target.value })}
             >
@@ -627,7 +665,8 @@ export default function TransactionsPage() {
                 </option>
               ))}
             </select>
-            <p className="hint mt-1">You can request payment from anyone, including yourself.</p>
+            {errText('payerId')}
+            <p id={`${formId}-payer-hint`} className="hint mt-1">You can request payment from anyone, including yourself.</p>
           </div>
           <div>
             <label htmlFor={`${formId}-billing-cycle`} className="form-label mb-1 block">Billing</label>
@@ -644,7 +683,7 @@ export default function TransactionsPage() {
           {form.payMethod === 'card' && (
             <>
               <div>
-                <label htmlFor={`${formId}-card-last4`} className="form-label mb-1 block">Last 4 digits of card <span className="text-red-500">*</span></label>
+                <label htmlFor={`${formId}-card-last4`} className="form-label mb-1 block">Last 4 digits of card <span className="text-red-700 dark:text-red-400" aria-hidden>*</span></label>
                 <input
                   id={`${formId}-card-last4`}
                   className="input"
@@ -652,6 +691,7 @@ export default function TransactionsPage() {
                   maxLength={4}
                   placeholder="1234"
                   list={`${formId}-card-hints`}
+                  {...errProps('cardLast4')}
                   value={form.cardLast4}
                   onChange={(e) => {
                     const last4 = e.target.value.replace(/\D/g, '').slice(0, 4);
@@ -670,6 +710,7 @@ export default function TransactionsPage() {
                     </option>
                   ))}
                 </datalist>
+                {errText('cardLast4')}
               </div>
               <div>
                 <label htmlFor={`${formId}-card-label`} className="form-label mb-1 block">Card nickname</label>
@@ -688,14 +729,7 @@ export default function TransactionsPage() {
               type="button"
               className="btn"
               onClick={save}
-              disabled={
-                !form.date ||
-                !form.amount ||
-                !form.payMethod ||
-                !form.payerId ||
-                (form.payMethod === 'card' && !/^\d{4}$/.test(form.cardLast4)) ||
-                saving
-              }
+              disabled={saving}
             >
               {saving
                 ? editing ? 'Saving...' : 'Creating...'
