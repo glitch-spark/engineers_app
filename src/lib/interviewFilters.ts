@@ -99,11 +99,22 @@ export function listDateRange(f: InterviewFilters, now = new Date()): { from: st
   return rangeForDatePreset(f.range, now);
 }
 
+/** Local calendar day → UTC instant, so "Monday" means the viewer's Monday. */
+function localDayStart(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).toISOString();
+}
+
+function localDayEnd(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+}
+
 export function listQuery(f: InterviewFilters, limit: number, now = new Date()): Record<string, string | number> {
   const { from, to } = listDateRange(f, now);
   const q: Record<string, string | number> = { page: f.page, limit, sort: f.sort, dir: f.dir };
-  if (from) q.from = from;
-  if (to) q.to = to;
+  if (from) q.from = localDayStart(from);
+  if (to) q.to = localDayEnd(to);
   if (f.user && f.user !== 'all') q.creatorId = f.user;
   if (f.profile) q.accountId = f.profile;
   if (f.stage) q.stage = f.stage;
@@ -120,8 +131,9 @@ export type RoundsQuery = {
   status?: string;
 };
 
+/** `range` is local YYYY-MM-DD with an exclusive `to`; sent as local midnights. */
 export function roundsQuery(f: InterviewFilters, range: { from: string; to: string }): RoundsQuery {
-  const q: RoundsQuery = { from: range.from, to: range.to };
+  const q: RoundsQuery = { from: localDayStart(range.from), to: localDayStart(range.to) };
   if (f.user && f.user !== 'all') q.creatorId = f.user;
   if (f.profile) q.accountId = f.profile;
   if (f.stage) q.stage = f.stage;

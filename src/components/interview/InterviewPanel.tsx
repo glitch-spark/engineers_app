@@ -70,17 +70,24 @@ export default function InterviewPanel({
   const [busy, setBusy] = useState(false);
   useDialog(open && !confirm, panelRef, onClose);
 
+  // Reset the mode only when the panel opens or switches interview — a refreshed
+  // copy of the same interview (after a save) must not reopen the form.
   useEffect(() => {
     if (!open) return;
-    setIv(interview ?? null);
     setMode(interview ? initialMode : 'new');
     setRoundId(initialRoundId);
     setConfirm(null);
-  }, [open, interview, initialMode, initialRoundId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, interview?._id, initialMode, initialRoundId]);
+  useEffect(() => {
+    if (open && interview) setIv(interview);
+  }, [open, interview]);
 
   if (!open) return null;
 
   const canEdit = !iv || user?.role === 'admin' || creatorId(iv) === user?.id;
+  // Read-only for everyone else, whatever mode the caller asked for.
+  const shownMode: PanelMode = canEdit ? mode : 'view';
   const rounds = [...(iv?.stageHistory ?? [])].reverse();
   const account = iv && typeof iv.accountId === 'object' ? iv.accountId : null;
 
@@ -140,11 +147,11 @@ export default function InterviewPanel({
       >
         <header className="flex shrink-0 items-start justify-between gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <div className="min-w-0">
-            <div className="text-xs text-muted">{MODE_LABEL[mode]}</div>
+            <div className="text-xs text-muted">{MODE_LABEL[shownMode]}</div>
             <h2 id={titleId} className="truncate font-semibold text-strong">
-              {mode === 'new' ? 'New interview' : iv?.companyName || 'Interview'}
+              {shownMode === 'new' ? 'New interview' : iv?.companyName || 'Interview'}
             </h2>
-            {iv && mode !== 'new' && (
+            {iv && shownMode !== 'new' && (
               <p className="truncate text-xs text-muted">
                 {formatProfileLabel(account?.name || account?.email, account?.country, 'Profile', account?.region)}
                 {iv.appliedPosition ? ` · ${iv.appliedPosition}` : ''}
@@ -163,7 +170,7 @@ export default function InterviewPanel({
           </div>
         </header>
 
-        {mode === 'view' && iv ? (
+        {shownMode === 'view' && iv ? (
           <>
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
               {iv.jobUrl && (
