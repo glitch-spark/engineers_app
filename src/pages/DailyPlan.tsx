@@ -1,6 +1,6 @@
 import useSWR from 'swr';
-import { useState, type MutableRefObject } from 'react';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { useState, type MutableRefObject, type ReactNode } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import NameWithAvatar from '../components/NameWithAvatar';
 import { useAuth } from '../auth/useAuth';
@@ -29,13 +29,32 @@ type DailyPlan = Partial<api.DailyPlanCounts & api.DailyPlanPlanCounts> & {
 
 type CountKey = keyof api.DailyPlanCounts | keyof api.DailyPlanPlanCounts;
 type ItemsKey = 'todayItems' | 'tomorrowItems';
+type TextKey = 'todayText' | 'tomorrowText';
 
 type DaySection = {
   dayOffset: 0 | 1;
   heading: string;
   itemsKey: ItemsKey;
+  textKey: TextKey;
   groups: { title: string; fields: { key: CountKey; label: string }[] }[];
+  /** The Bid and Interview lines, laid out like the Slack post. */
+  summary: (plan: DailyPlan) => ReactNode[];
 };
+
+function Num({ value }: { value: number | undefined }) {
+  return <span className="font-semibold text-strong tabular-nums">{value ?? 0}</span>;
+}
+
+function bidSummary(handsOn: number | undefined, byBidder: number | undefined): ReactNode {
+  return (
+    <>
+      <span className="font-medium text-strong">Bid</span> <Num value={(handsOn ?? 0) + (byBidder ?? 0)} />{' '}
+      <span className="text-muted">
+        (hands-on: <Num value={handsOn} /> + bidder: <Num value={byBidder} />)
+      </span>
+    </>
+  );
+}
 
 /** A regular plan covers the plan date (what was done) and the next day (the plan). */
 const DAY_SECTIONS: DaySection[] = [
@@ -43,6 +62,15 @@ const DAY_SECTIONS: DaySection[] = [
     dayOffset: 0,
     heading: 'Done',
     itemsKey: 'todayItems',
+    textKey: 'todayText',
+    summary: (plan) => [
+      bidSummary(plan.bidsHandsOn, plan.bidsByBidder),
+      <>
+        <span className="font-medium text-strong">Interview</span>{' '}
+        <span className="text-muted">Done/New Invitation :</span>{' '}
+        <Num value={plan.interviewsDone} />/<Num value={plan.interviewsNew} />
+      </>,
+    ],
     groups: [
       {
         title: 'Bid',
@@ -64,6 +92,14 @@ const DAY_SECTIONS: DaySection[] = [
     dayOffset: 1,
     heading: 'Plan',
     itemsKey: 'tomorrowItems',
+    textKey: 'tomorrowText',
+    summary: (plan) => [
+      bidSummary(plan.planBidsHandsOn, plan.planBidsByBidder),
+      <>
+        <span className="font-medium text-strong">Interview</span>{' '}
+        <span className="text-muted">Scheduled :</span> <Num value={plan.planInterviewsScheduled} />
+      </>,
+    ],
     groups: [
       {
         title: 'Bid',
@@ -82,37 +118,32 @@ const DAY_SECTIONS: DaySection[] = [
 
 const COUNT_KEYS: CountKey[] = DAY_SECTIONS.flatMap((s) => s.groups.flatMap((g) => g.fields.map((f) => f.key)));
 
-const PLAN_TYPES: { value: api.DailyPlanType; label: string }[] = [
-  { value: 'custom', label: 'Custom plan' },
-  { value: 'regular', label: 'Regular plan' },
-];
-
 type FormState = {
   date: string;
-  planType: api.DailyPlanType;
-  today: string;
-  tomorrow: string;
   counts: Record<CountKey, string>;
-  todayItems: string[];
-  tomorrowItems: string[];
+  /** One item per line; saved as the day's item list. */
+  todayText: string;
+  tomorrowText: string;
 };
 
 const EMPTY_COUNTS = Object.fromEntries(COUNT_KEYS.map((k) => [k, ''])) as Record<CountKey, string>;
 
 function emptyForm(date: string): FormState {
-  return {
-    date,
-    planType: 'custom',
-    today: '',
-    tomorrow: '',
-    counts: EMPTY_COUNTS,
-    todayItems: [],
-    tomorrowItems: [],
-  };
+  return { date, counts: EMPTY_COUNTS, todayText: '', tomorrowText: '' };
 }
 
 function cleanItems(items: string[]): string[] {
   return items.map((item) => item.trim()).filter(Boolean);
+}
+
+function textToItems(text: string): string[] {
+  return cleanItems(text.split(/\r?\n/));
+}
+
+/** Regular plans keep their items; an older custom plan brings its free text along. */
+function itemsText(plan: DailyPlan, section: DaySection): string {
+  if (plan.planType === 'regular') return (plan[section.itemsKey] ?? []).join('\n');
+  return (section.dayOffset === 0 ? plan.today : plan.tomorrow) || '';
 }
 
 function toCount(value: string): number {
@@ -190,12 +221,9 @@ export default function DailyPlanPanel({
     setEditing(plan);
     setForm({
       date: plan.date?.slice(0, 10) || todayInputValue(),
-      planType: plan.planType ?? 'custom',
-      today: plan.today || '',
-      tomorrow: plan.tomorrow || '',
       counts: Object.fromEntries(COUNT_KEYS.map((k) => [k, countInput(plan[k])])) as Record<CountKey, string>,
-      todayItems: plan.todayItems ?? [],
-      tomorrowItems: plan.tomorrowItems ?? [],
+      todayText: itemsText(plan, DAY_SECTIONS[0]),
+      tomorrowText: itemsText(plan, DAY_SECTIONS[1]),
     });
     setError('');
     setOpen(true);
@@ -206,14 +234,6 @@ export default function DailyPlanPanel({
   const setCount = (key: CountKey, value: string) =>
     setForm({ ...form, counts: { ...form.counts, [key]: value } });
 
-  const setItem = (key: ItemsKey, index: number, value: string) =>
-    setForm({ ...form, [key]: form[key].map((item, i) => (i === index ? value : item)) });
-
-  const addItem = (key: ItemsKey) => setForm({ ...form, [key]: [...form[key], ''] });
-
-  const removeItem = (key: ItemsKey, index: number) =>
-    setForm({ ...form, [key]: form[key].filter((_, i) => i !== index) });
-
   const save = async () => {
     if (!form.date) {
       setError('Date is required');
@@ -222,16 +242,13 @@ export default function DailyPlanPanel({
     setSaving(true);
     setError('');
     try {
-      const body: api.DailyPlanBody & { date: string } =
-        form.planType === 'regular'
-          ? {
-              date: form.date,
-              planType: 'regular',
-              ...(Object.fromEntries(COUNT_KEYS.map((k) => [k, toCount(form.counts[k])])) as Record<CountKey, number>),
-              todayItems: cleanItems(form.todayItems),
-              tomorrowItems: cleanItems(form.tomorrowItems),
-            }
-          : { date: form.date, planType: 'custom', today: form.today, tomorrow: form.tomorrow };
+      const body: api.DailyPlanBody & { date: string } = {
+        date: form.date,
+        planType: 'regular',
+        ...(Object.fromEntries(COUNT_KEYS.map((k) => [k, toCount(form.counts[k])])) as Record<CountKey, number>),
+        todayItems: textToItems(form.todayText),
+        tomorrowItems: textToItems(form.tomorrowText),
+      };
       if (editing) {
         await api.updateDailyPlan(editing._id, body);
         notify.success('Daily plan updated');
@@ -348,124 +365,68 @@ export default function DailyPlanPanel({
       <Modal open={open} onClose={() => setOpen(false)} size="lg" title={editing ? 'Edit daily plan' : 'New daily plan'}>
         <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
           {error && <p id="daily-plan-error" role="alert" className="text-red-700 dark:text-red-400 text-sm">{error}</p>}
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-date">Date</label>
-              <input
-                id="daily-plan-date"
-                aria-required
-                aria-invalid={!!error && !form.date}
-                aria-describedby={error ? 'daily-plan-error' : undefined}
-                className="input w-full text-sm"
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-              />
-            </div>
-            <div className="segmented" role="group" aria-label="Plan type">
-              {PLAN_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  aria-pressed={form.planType === t.value}
-                  onClick={() => setForm({ ...form, planType: t.value })}
-                  className={'segmented-btn ' + (form.planType === t.value ? 'segmented-btn-active' : '')}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+          <div>
+            <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-date">Date</label>
+            <input
+              id="daily-plan-date"
+              aria-required
+              aria-invalid={!!error && !form.date}
+              aria-describedby={error ? 'daily-plan-error' : undefined}
+              className="input text-sm"
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+            />
           </div>
-          {form.planType === 'regular' ? (
-            <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-              {DAY_SECTIONS.map((section) => {
-                const day = planDayLabel(form.date, section.dayOffset);
-                const items = form[section.itemsKey];
-                return (
-                  <section key={section.itemsKey} className="panel flex flex-col gap-4 p-4" aria-label={`${day} ${section.heading}`}>
-                    <h3 className="card-title">
-                      {day} <span className="font-normal text-muted">— {section.heading}</span>
-                    </h3>
-                    {section.groups.map((group) => (
-                      <fieldset key={group.title}>
-                        <legend className="form-label mb-2">{group.title}</legend>
-                        <div className="grid grid-cols-2 gap-3">
-                          {group.fields.map((f) => (
-                            <div key={f.key}>
-                              <label className="block text-xs text-muted mb-1" htmlFor={`daily-plan-${f.key}`}>{f.label}</label>
-                              <input
-                                id={`daily-plan-${f.key}`}
-                                className="input w-full text-sm tabular-nums"
-                                type="number"
-                                min={0}
-                                step={1}
-                                inputMode="numeric"
-                                placeholder="0"
-                                value={form.counts[f.key]}
-                                onChange={(e) => setCount(f.key, e.target.value)}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </fieldset>
-                    ))}
-                    <fieldset>
-                      <legend className="form-label mb-2">Custom items</legend>
-                      {items.length > 0 && (
-                        <div className="space-y-2 mb-3">
-                          {items.map((item, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input
-                                className="input flex-1 text-sm"
-                                aria-label={`${day} custom item ${i + 1}`}
-                                placeholder="e.g. Update resume"
-                                maxLength={200}
-                                value={item}
-                                onChange={(e) => setItem(section.itemsKey, i, e.target.value)}
-                              />
-                              <button
-                                type="button"
-                                className="btn-icon"
-                                onClick={() => removeItem(section.itemsKey, i)}
-                                aria-label={`Remove ${day} custom item ${i + 1}`}
-                                title="Remove"
-                              >
-                                <Trash2 size={16} aria-hidden />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <button type="button" className="btn-outline text-sm" onClick={() => addItem(section.itemsKey)}>
-                        <Plus size={16} aria-hidden /> Add item
-                      </button>
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+            {DAY_SECTIONS.map((section) => {
+              const day = planDayLabel(form.date, section.dayOffset);
+              return (
+                <section key={section.itemsKey} className="panel flex flex-col gap-4 p-4" aria-label={`${day} ${section.heading}`}>
+                  <h3 className="card-title">
+                    {day} <span className="font-normal text-muted">— {section.heading}</span>
+                  </h3>
+                  {section.groups.map((group) => (
+                    <fieldset key={group.title}>
+                      <legend className="form-label mb-2">{group.title}</legend>
+                      <div className="grid grid-cols-2 gap-3">
+                        {group.fields.map((f) => (
+                          <div key={f.key}>
+                            <label className="block text-xs text-muted mb-1" htmlFor={`daily-plan-${f.key}`}>{f.label}</label>
+                            <input
+                              id={`daily-plan-${f.key}`}
+                              className="input w-full text-sm tabular-nums"
+                              type="number"
+                              min={0}
+                              step={1}
+                              inputMode="numeric"
+                              placeholder="0"
+                              value={form.counts[f.key]}
+                              onChange={(e) => setCount(f.key, e.target.value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </fieldset>
-                  </section>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="flex min-h-0 flex-col">
-                <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-today">{planDayLabel(form.date)}</label>
-                <textarea
-                  id="daily-plan-today"
-                  className="input min-h-[28rem] w-full flex-1 text-sm"
-                  value={form.today}
-                  onChange={(e) => setForm({ ...form, today: e.target.value })}
-                />
-              </div>
-              <div className="flex min-h-0 flex-col">
-                <label className="block text-xs text-muted mb-1" htmlFor="daily-plan-tomorrow">{planDayLabel(form.date, 1)}</label>
-                <textarea
-                  id="daily-plan-tomorrow"
-                  className="input min-h-[28rem] w-full flex-1 text-sm"
-                  value={form.tomorrow}
-                  onChange={(e) => setForm({ ...form, tomorrow: e.target.value })}
-                />
-              </div>
-            </div>
-          )}
+                  ))}
+                  <div>
+                    <label className="form-label mb-2 block" htmlFor={`daily-plan-${section.textKey}`}>Other items</label>
+                    <textarea
+                      id={`daily-plan-${section.textKey}`}
+                      aria-describedby={`daily-plan-${section.textKey}-hint`}
+                      className="input min-h-[8rem] w-full text-sm"
+                      placeholder={'Update resume\nNewsela Work'}
+                      value={form[section.textKey]}
+                      onChange={(e) => setForm({ ...form, [section.textKey]: e.target.value })}
+                    />
+                    <p id={`daily-plan-${section.textKey}-hint`} className="mt-1 text-xs text-faint">
+                      One item per line, numbered after Bid and Interview.
+                    </p>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
           <div className="flex gap-2 justify-end mt-auto">
             <button type="button" className="btn" onClick={save} disabled={saving}>
               {saving ? 'Saving...' : editing ? 'Save changes' : 'Create'}
@@ -487,19 +448,8 @@ function RegularPlanSummary({ plan }: { plan: DailyPlan }) {
             {planDayLabel(plan.date, section.dayOffset)} · {section.heading}
           </div>
           <ol className="list-decimal space-y-1 pl-5 text-body marker:text-faint">
-            {section.groups.map((group) => (
-              <li key={group.title}>
-                <span className="font-medium text-strong">{group.title}</span>
-                <span className="text-muted">
-                  {' — '}
-                  {group.fields.map((f, i) => (
-                    <span key={f.key}>
-                      {i > 0 && ', '}
-                      {f.label} <span className="font-semibold text-strong tabular-nums">{plan[f.key] ?? 0}</span>
-                    </span>
-                  ))}
-                </span>
-              </li>
+            {section.summary(plan).map((line, i) => (
+              <li key={i}>{line}</li>
             ))}
             {(plan[section.itemsKey] ?? []).map((item, i) => (
               <li key={i} className="whitespace-pre-wrap">{item}</li>
