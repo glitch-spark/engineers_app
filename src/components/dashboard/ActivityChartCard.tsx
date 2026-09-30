@@ -23,6 +23,20 @@ const KINDS: { value: PeriodKind; label: string }[] = [
   { value: 'custom', label: 'Custom' },
 ];
 
+const MAX_CUSTOM_RANGE_DAYS = 1096;
+
+/** Validates the Custom range inputs before any request is fired.
+ * Returns the error message to show, or `null` when the range is valid. */
+function customRangeError(custom: { from: string; to: string }): string | null {
+  if (!custom.from || !custom.to) return 'Pick both dates.';
+  if (custom.from > custom.to) return 'From must be on or before To.';
+  const [fy, fm, fd] = custom.from.split('-').map(Number);
+  const [ty, tm, td] = custom.to.split('-').map(Number);
+  const days = Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000) + 1;
+  if (days > MAX_CUSTOM_RANGE_DAYS) return 'Pick a range of 3 years or less.';
+  return null;
+}
+
 export default function ActivityChartCard({ userId }: { userId?: string }) {
   const chart = useChartTheme();
   const [kind, setKind] = useState<PeriodKind>('week');
@@ -33,7 +47,8 @@ export default function ActivityChartCard({ userId }: { userId?: string }) {
   });
 
   const range = kind === 'custom' ? custom : periodRange(kind, anchor);
-  const invalidRange = kind === 'custom' && custom.from > custom.to;
+  const customError = kind === 'custom' ? customRangeError(custom) : null;
+  const invalidRange = customError != null;
   const nextDisabled = kind !== 'custom' && isFuturePeriod(kind, stepAnchor(kind, anchor, 1));
 
   const { data, error, isLoading, mutate } = useSWR(
@@ -61,10 +76,10 @@ export default function ActivityChartCard({ userId }: { userId?: string }) {
       </header>
 
       {kind === 'custom' ? (
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center flex-wrap gap-2 mb-3">
           <input
             type="date"
-            className="input"
+            className="input min-w-0"
             aria-label="From"
             value={custom.from}
             onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
@@ -72,7 +87,7 @@ export default function ActivityChartCard({ userId }: { userId?: string }) {
           <span className="text-muted">–</span>
           <input
             type="date"
-            className="input"
+            className="input min-w-0"
             aria-label="To"
             value={custom.to}
             onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))}
@@ -102,8 +117,8 @@ export default function ActivityChartCard({ userId }: { userId?: string }) {
       )}
 
       {invalidRange ? (
-        <p className="text-sm text-muted">From must be on or before To.</p>
-      ) : error ? (
+        <p className="text-sm text-muted">{customError}</p>
+      ) : error && !data ? (
         <>
           <p className="text-sm text-muted mb-3">Couldn&rsquo;t load activity.</p>
           <button type="button" className="btn-outline" onClick={() => mutate()}>

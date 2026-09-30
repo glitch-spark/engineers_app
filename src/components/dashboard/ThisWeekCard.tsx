@@ -27,7 +27,7 @@ export default function ThisWeekCard({ userId }: { userId?: string }) {
     () => api.getDashboardWeek({ userId, today }),
   );
 
-  if (error) {
+  if (error && !data) {
     return (
       <section className="panel p-4">
         <h2 className="card-title mb-3">This week</h2>
@@ -89,7 +89,7 @@ export default function ThisWeekCard({ userId }: { userId?: string }) {
         />
       </div>
 
-      {noTarget && (
+      {noTarget && !userId && (
         <div className="mt-3">
           <Link to="/report?tab=weekly" className="link-inline text-xs">
             Set weekly targets
@@ -98,19 +98,31 @@ export default function ThisWeekCard({ userId }: { userId?: string }) {
       )}
 
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-4">
-        {data.stages.map((s) => (
-          <Link
-            key={s.key}
-            to="/interviews"
-            className={
-              'block rounded-lg border p-2 text-center transition hover:opacity-80 ' +
-              stageBadgeClass(STAGE_BADGE_KEY[s.key] ?? s.key)
-            }
-          >
-            <div className="text-lg font-bold tabular-nums">{s.count}</div>
-            <div className="text-xs truncate">{s.label}</div>
-          </Link>
-        ))}
+        {data.stages.map((s) =>
+          userId ? (
+            <div
+              key={s.key}
+              className={
+                'block rounded-lg border p-2 text-center ' + stageBadgeClass(STAGE_BADGE_KEY[s.key] ?? s.key)
+              }
+            >
+              <div className="text-lg font-bold tabular-nums">{s.count}</div>
+              <div className="text-xs truncate">{s.label}</div>
+            </div>
+          ) : (
+            <Link
+              key={s.key}
+              to="/interviews"
+              className={
+                'block rounded-lg border p-2 text-center transition hover:opacity-80 ' +
+                stageBadgeClass(STAGE_BADGE_KEY[s.key] ?? s.key)
+              }
+            >
+              <div className="text-lg font-bold tabular-nums">{s.count}</div>
+              <div className="text-xs truncate">{s.label}</div>
+            </Link>
+          ),
+        )}
       </div>
     </section>
   );

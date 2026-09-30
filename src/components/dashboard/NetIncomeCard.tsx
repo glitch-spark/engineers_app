@@ -38,7 +38,7 @@ export default function NetIncomeCard({ userId }: { userId?: string }) {
     () => api.getDashboardNetMonthly({ userId, today }),
   );
 
-  if (error) {
+  if (error && !data) {
     return (
       <section className="panel p-4">
         <h2 className="card-title mb-3">Net income · last 12 months</h2>

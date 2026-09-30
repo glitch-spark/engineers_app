@@ -421,29 +421,11 @@ export interface DailyPlanBody extends Partial<DailyPlanCounts & DailyPlanPlanCo
   tomorrowItems?: string[];
 }
 
-/** Planned counts sit in the bucket of the day they were planned for. */
-export interface DailyPlanStatsRow extends DailyPlanCounts, DailyPlanPlanCounts {
-  key: string;
-  bucketStart: string;
-  bucketEnd: string;
-  planCount: number;
-}
-
-export interface DailyPlanStats {
-  bucket: 'day' | 'week' | 'month';
-  window: { from: string; to: string };
-  series: DailyPlanStatsRow[];
-  totals: DailyPlanCounts & DailyPlanPlanCounts & { planCount: number };
-}
-
 export const createDailyPlan = (body: DailyPlanBody & { date: string }) =>
   postJSON<Record<string, unknown>>('/daily-plans', body);
 
 export const updateDailyPlan = (id: string, body: DailyPlanBody) =>
   putJSON<Record<string, unknown>>(`/daily-plans/${id}`, body);
-
-export const getDailyPlanStats = (params: { bucket: 'day' | 'week' | 'month'; userId?: string; to?: string }) =>
-  apiFetch<DailyPlanStats>(`/daily-plans/stats${qs(params)}`);
 
 export const deleteDailyPlan = (id: string) => del<{ message: string }>(`/daily-plans/${id}`);
 
