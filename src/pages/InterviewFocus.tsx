@@ -30,11 +30,9 @@ import {
   stageLabel,
 } from '../lib/stageBadge';
 import ThemeToggle from '../components/ThemeToggle';
-import {
-  TranscriptUploadButton,
-  formatScheduledDate,
-  type Interview,
-} from '../components/InterviewEditPanel';
+import { TranscriptUploadButton } from '../components/interview/TranscriptUploadButton';
+import { formatScheduledDate } from '../components/interview/format';
+import type { Interview } from '../components/interview/types';
 
 type StepTone = 'done' | 'failed' | 'muted' | 'pending';
 

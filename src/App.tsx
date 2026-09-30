@@ -14,8 +14,7 @@ import Report from './pages/Report';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
 import Accountants from './pages/Accountants';
-import Interviews from './pages/Interviews';
-import InterviewsLive from './pages/InterviewsLive';
+import InterviewsPage from './pages/interviews/InterviewsPage';
 import InterviewsAnalyze from './pages/InterviewsAnalyze';
 import InterviewFocus from './pages/InterviewFocus';
 import InterviewReview from './pages/InterviewReview';
@@ -76,8 +75,9 @@ export default function App() {
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
       <Route path="/report" element={<Protected><Report /></Protected>} />
       <Route path="/weekly-plan" element={<Navigate to="/report?tab=weekly" replace />} />
-      <Route path="/interviews" element={<Protected><Interviews /></Protected>} />
-      <Route path="/interviews/live" element={<Protected><InterviewsLive /></Protected>} />
+      <Route path="/interviews" element={<Protected><InterviewsPage view="list" /></Protected>} />
+      <Route path="/interviews/calendar" element={<Protected><InterviewsPage view="calendar" /></Protected>} />
+      <Route path="/interviews/live" element={<Navigate to="/interviews/calendar" replace />} />
       <Route path="/interviews/analyze" element={<Protected><InterviewsAnalyze /></Protected>} />
       <Route path="/interviews/:id" element={<LegacyInterviewRedirect />} />
       <Route path="/interview/:id" element={<Standalone><InterviewFocus /></Standalone>} />

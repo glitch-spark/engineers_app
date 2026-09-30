@@ -521,13 +521,41 @@ export interface InterviewListParams {
   stage?: string;
   status?: string;
   creatorId?: string;
-  sort?: 'asc' | 'desc';
+  /** Column to sort by; legacy 'asc' | 'desc' means latest round date. */
+  sort?: 'latest' | 'company' | 'stage' | 'status' | 'asc' | 'desc';
+  dir?: 'asc' | 'desc';
 }
 
 export const listInterviews = (params?: InterviewListParams) =>
   apiFetch<{ interviews: Record<string, unknown>[]; pagination: Pagination }>(
     `/interviews${qs(params)}`
   );
+
+/** One calendar row: a round with its interview's headline fields. */
+export interface InterviewRoundRow {
+  interviewId: string;
+  roundId: string;
+  stage: string;
+  status: string | null;
+  scheduledAt: string;
+  endsAt: string | null;
+  companyName: string | null;
+  profileLabel: string | null;
+  ownerId: string;
+  ownerName: string | null;
+  hasCaller: boolean;
+}
+
+export const listInterviewRounds = (params: {
+  from: string;
+  to: string;
+  creatorId?: string;
+  accountId?: string;
+  stage?: string;
+  status?: string;
+}) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>> }>(
+  `/interviews/rounds${qs(params)}`,
+);
 
 export const getInterview = (id: string) =>
   apiFetch<Record<string, unknown>>(`/interviews/${id}`);
