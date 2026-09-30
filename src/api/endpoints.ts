@@ -752,6 +752,63 @@ export interface DashboardFeed {
 
 export const getDashboardFeed = () => apiFetch<DashboardFeed>('/metrics/dashboard-feed');
 
+// ---------- dashboard ----------
+
+export interface DashboardPace {
+  expected: number;
+  behindBy: number;
+  perDayNeeded: number | null;
+  onTrack: boolean;
+}
+
+export interface DashboardPercentile {
+  position: 'top' | 'bottom';
+  percent: number;
+}
+
+export interface DashboardWeek {
+  week: { start: string; end: string };
+  bids: {
+    self: number;
+    bidder: number;
+    total: number;
+    target: number | null;
+    pace: DashboardPace | null;
+    percentile: DashboardPercentile | null;
+  };
+  interviews: {
+    done: number;
+    target: number | null;
+    pace: DashboardPace | null;
+    percentile: DashboardPercentile | null;
+  };
+  stages: { key: string; label: string; count: number }[];
+  streak: number;
+  hasWeeklyPlan: boolean;
+}
+
+export interface DashboardActivity {
+  bucket: 'day' | 'week' | 'month';
+  from: string;
+  to: string;
+  series: { key: string; label: string; self: number; bidder: number; interviews: number }[];
+  totals: { self: number; bidder: number; bids: number; interviews: number };
+}
+
+export interface DashboardNetMonthly {
+  months: { period: string; income: number; outcome: number; net: number }[];
+  total: number;
+}
+
+export const getDashboardWeek = (params: { userId?: string; today?: string }) =>
+  apiFetch<DashboardWeek>(`/dashboard/week${qs(params)}`);
+
+export const getDashboardActivity = (params: { from: string; to: string; userId?: string }) =>
+  apiFetch<DashboardActivity>(`/dashboard/activity${qs(params)}`);
+
+export const getDashboardNetMonthly = (params: { userId?: string; today?: string }) =>
+  apiFetch<DashboardNetMonthly>(`/dashboard/net-monthly${qs(params)}`);
+
 // ---------- pipeline ----------
 
 export type KanbanStage =
