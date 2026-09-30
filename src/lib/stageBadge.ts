@@ -1,5 +1,54 @@
 /** Interview / pipeline stage labels and badge styling (shared across pages). */
 
+/**
+ * Per-round interview statuses. Rejected and canceled are statuses, never
+ * stages; legacy values from older rows/clients are mapped on read.
+ */
+export const INTERVIEW_STATUSES = [
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'passed', label: 'Passed' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'canceled', label: 'Canceled' },
+] as const;
+
+export type InterviewStatusValue = (typeof INTERVIEW_STATUSES)[number]['value'];
+
+const LEGACY_STATUS: Record<string, InterviewStatusValue> = {
+  failed: 'rejected',
+  no_show: 'canceled',
+  rescheduled: 'scheduled',
+};
+
+export function normalizeInterviewStatus(status?: string | null): InterviewStatusValue | '' {
+  if (!status) return '';
+  let s = status;
+  if (s.startsWith('InterviewStatus.')) s = s.slice('InterviewStatus.'.length);
+  const mapped = LEGACY_STATUS[s] ?? s;
+  return INTERVIEW_STATUSES.some((x) => x.value === mapped) ? (mapped as InterviewStatusValue) : '';
+}
+
+export function interviewStatusLabel(status?: string | null): string {
+  const s = normalizeInterviewStatus(status);
+  return INTERVIEW_STATUSES.find((x) => x.value === s)?.label ?? '—';
+}
+
+export function interviewStatusBadgeClass(status?: string | null): string {
+  switch (normalizeInterviewStatus(status)) {
+    case 'scheduled':
+      return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800';
+    case 'passed':
+      return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800';
+    case 'rejected':
+      return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
+    case 'canceled':
+      return 'bg-zinc-100 text-zinc-500 border-zinc-200 line-through dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700';
+    case 'completed':
+    default:
+      return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
+  }
+}
+
 /** Board-level stage shown in the interview form (Tech expands to sub-stages). */
 export const BOARD_FORM_STAGES = [
   { value: 'ai_interview', label: 'AI Interview' },
@@ -8,7 +57,6 @@ export const BOARD_FORM_STAGES = [
   { value: 'cultural', label: 'Hiring Manager' },
   { value: 'panel', label: 'Panel' },
   { value: 'final', label: 'Final' },
-  { value: 'rejected', label: 'Rejected' },
 ] as const;
 
 /** Sub-stages that live under the Tech board column. */
@@ -82,7 +130,6 @@ export const INTERVIEW_STAGES = [
   { value: 'cultural', label: 'Hiring Manager' },
   { value: 'panel', label: 'Panel' },
   { value: 'final', label: 'Final' },
-  { value: 'rejected', label: 'Rejected' },
 ] as const;
 
 /** Canonical interview-stage order (mirrors backend STAGE_ORDER, minus bid_sent/terminal). */
@@ -97,7 +144,6 @@ export const INTERVIEW_STAGE_ORDER = [
   'cultural',
   'ai_interview',
   'final',
-  'rejected',
 ] as const;
 
 export type InterviewStageValue = (typeof INTERVIEW_STAGE_ORDER)[number];

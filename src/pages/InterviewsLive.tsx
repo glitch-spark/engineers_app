@@ -21,6 +21,7 @@ import { messageOf, notify } from '../lib/notify';
 import {
   getInterviewMovementEntries,
   normalizeInterviewStage,
+  normalizeInterviewStatus,
   stageLabel,
 } from '../lib/stageBadge';
 import {
@@ -77,15 +78,11 @@ function formatCellDate(iso?: string): string {
 }
 
 function isCanceledInterview(iv: Interview): boolean {
-  const stage = normalizeInterviewStage(iv.stage);
-  const status = (iv.status || '').toLowerCase();
-  if (status === 'canceled') return true;
-  // Same convention as List: scheduled + rejected = canceled (never sat interview).
-  return status === 'scheduled' && stage === 'rejected';
+  return normalizeInterviewStatus(iv.status) === 'canceled';
 }
 
 function isRejectedFail(iv: Interview): boolean {
-  return normalizeInterviewStage(iv.stage) === 'rejected' && !isCanceledInterview(iv);
+  return normalizeInterviewStatus(iv.status) === 'rejected';
 }
 
 /** Open process (not canceled). Includes rejected fails. */
@@ -157,25 +154,23 @@ function recordCompleted(
 /** All passed stages + at most one scheduled (upcoming) cell. */
 function liveProgress(iv: Interview): LiveProgress {
   const trail = getInterviewMovementEntries(iv);
-  const status = (iv.status || '').toLowerCase();
+  const status = normalizeInterviewStatus(iv.status);
   const tip = trail[trail.length - 1];
   const tipDate = tip?.scheduledAt || dateKey(iv.scheduledAt);
   const completed: LiveProgress['completed'] = {};
 
-  // Rejected fail — mark every prior real stage completed; reject triangle on last real stage.
+  // Rejected at the current round — every round sat is completed; reject mark on the current one.
   if (isRejectedFail(iv)) {
-    const prior = trail.slice(0, -1); // drop the rejected tip
-    for (const entry of prior) {
+    for (const entry of trail) {
       recordCompleted(completed, entry.stage, entry.scheduledAt);
     }
-    const failEntry = prior[prior.length - 1];
-    const rejectCol = failEntry ? toLiveCol(failEntry.stage) : null;
+    const rejectCol = toLiveCol(tip?.stage ?? iv.stage);
     return { completed, rejectCol, scheduledCol: null };
   }
 
   const currentCol = toLiveCol(iv.stage);
 
-  if (status === 'completed') {
+  if (status === 'completed' || status === 'passed') {
     for (const entry of trail) {
       recordCompleted(completed, entry.stage, entry.scheduledAt || tipDate);
     }
@@ -184,7 +179,7 @@ function liveProgress(iv: Interview): LiveProgress {
     return { completed, rejectCol: null, scheduledCol: null };
   }
 
-  // Scheduled / rescheduled / unset → tip is upcoming; everything before it is completed.
+  // Scheduled / unset → tip is upcoming; everything before it is completed.
   const scheduledCol = currentCol || toLiveCol(tip?.stage);
   for (const entry of trail.slice(0, -1)) {
     const col = toLiveCol(entry.stage);

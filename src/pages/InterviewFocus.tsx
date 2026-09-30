@@ -22,6 +22,10 @@ import { formatProfileLabel } from '../lib/countries';
 import {
   BOARD_FORM_STAGES,
   INTERVIEW_STAGE_ORDER,
+  INTERVIEW_STATUSES,
+  interviewStatusBadgeClass,
+  interviewStatusLabel,
+  normalizeInterviewStatus,
   TECH_SUB_STAGES,
   normalizeInterviewStage,
   resolveInterviewStage,
@@ -39,40 +43,13 @@ import {
   type Interview,
 } from '../components/InterviewEditPanel';
 
-const STATUS_OPTIONS = [
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'passed', label: 'Passed' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'no_show', label: 'No Show' },
-  { value: 'rescheduled', label: 'Rescheduled' },
-  { value: 'canceled', label: 'Canceled' },
-];
-
-const statusLabel = (s?: string | null) => STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s ?? '';
-
-const statusBadgeClass = (s?: string | null) => {
-  switch (s) {
-    case 'scheduled':
-    case 'rescheduled':
-      return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800';
-    case 'passed':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
-    case 'failed':
-      return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
-    case 'no_show':
-      return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800';
-    default:
-      return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
-  }
-};
-
 type StepTone = 'done' | 'failed' | 'muted' | 'pending';
 
 function stepTone(e: InterviewStageEntry): StepTone {
-  if (normalizeInterviewStage(e.stage) === 'rejected' || e.status === 'failed') return 'failed';
-  if (e.status === 'passed' || e.status === 'completed') return 'done';
-  if (e.status === 'canceled' || e.status === 'no_show') return 'muted';
+  const status = normalizeInterviewStatus(e.status);
+  if (status === 'rejected') return 'failed';
+  if (status === 'passed' || status === 'completed') return 'done';
+  if (status === 'canceled') return 'muted';
   return 'pending';
 }
 
@@ -84,9 +61,8 @@ const STEP_CIRCLE: Record<StepTone, string> = {
 };
 
 /** Screen-reader text for a step's outcome (the circle shows it by colour + icon). */
-function stepStatusText(e: InterviewStageEntry, tone: StepTone): string {
-  if (tone === 'failed') return normalizeInterviewStage(e.stage) === 'rejected' ? 'Rejected' : 'Failed';
-  return e.status ? statusLabel(e.status) : 'No status';
+function stepStatusText(e: InterviewStageEntry): string {
+  return e.status ? interviewStatusLabel(e.status) : 'No status';
 }
 
 /** YYYY-MM-DD for a date input; calendar-date prefix wins so UTC noon never shifts the day. */
@@ -107,7 +83,7 @@ function todayInput(): string {
 function suggestNextStage(history: InterviewStageEntry[]): string {
   const used = new Set(history.map((e) => normalizeInterviewStage(e.stage)));
   const tip = normalizeInterviewStage(history[history.length - 1]?.stage);
-  const order = INTERVIEW_STAGE_ORDER.filter((s) => s !== 'rejected');
+  const order = INTERVIEW_STAGE_ORDER;
   const start = tip ? order.indexOf(tip as (typeof order)[number]) + 1 : 0;
   return order.slice(Math.max(start, 0)).find((s) => !used.has(s)) ?? '';
 }
@@ -240,8 +216,8 @@ export default function InterviewFocusPage() {
             </div>
           </div>
           {iv.status && (
-            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(iv.status)}`}>
-              {statusLabel(iv.status)}
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${interviewStatusBadgeClass(iv.status)}`}>
+              {interviewStatusLabel(iv.status)}
             </span>
           )}
         </section>
@@ -429,7 +405,7 @@ function StageStepper({
                   <span className="text-[11px] tabular-nums text-faint">
                     {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : '—'}
                   </span>
-                  <span className="sr-only">, {stepStatusText(entry, tone)}</span>
+                  <span className="sr-only">, {stepStatusText(entry)}</span>
                 </span>
               </button>
             </li>
@@ -589,7 +565,7 @@ function StageComposer({
             id="stage-composer-status"
             value={status}
             onChange={setStatus}
-            options={[{ value: '', label: '— None —' }, ...STATUS_OPTIONS]}
+            options={[{ value: '', label: '— None —' }, ...INTERVIEW_STATUSES]}
           />
         </div>
       </div>
@@ -727,8 +703,8 @@ function StageWorkspace({
             {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : 'No date'}
           </span>
           {entry.status && (
-            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(entry.status)}`}>
-              {statusLabel(entry.status)}
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${interviewStatusBadgeClass(entry.status)}`}>
+              {interviewStatusLabel(entry.status)}
             </span>
           )}
         </div>

@@ -53,6 +53,9 @@ import * as api from '../api/endpoints';
 import { messageOf, notify } from '../lib/notify';
 import {
   BOARD_FORM_STAGES,
+  interviewStatusBadgeClass,
+  interviewStatusLabel,
+  normalizeInterviewStatus,
   TECH_SUB_STAGES,
   TECH_SUB_STAGE_VALUES,
   getInterviewMovementEntries,
@@ -181,35 +184,21 @@ const BOARD_COLUMN_TO_STAGE: Record<BoardColumnKey, string> = {
   hiring_manager: 'cultural',
   panel: 'panel',
   final: 'final',
-  // Canceled = scheduled + rejected (did not sit the interview).
-  canceled: 'rejected',
+  // Canceled is a status, not a stage: dropping there only sets status canceled.
+  canceled: '',
 };
 
 function columnDroppableId(columnKey: BoardColumnKey): string {
   return `col:${columnKey}`;
 }
 
-function isCanceledInterview(iv: { stage?: string | null; status?: string | null }): boolean {
-  return (iv.status || '') === 'scheduled' && normalizeInterviewStage(iv.stage) === 'rejected';
+function isCanceledInterview(iv: { status?: string | null }): boolean {
+  return normalizeInterviewStatus(iv.status) === 'canceled';
 }
 
-/** Failed after interviewing — rejected stage, but not the canceled convention. */
-function isRejectedFail(iv: { stage?: string | null; status?: string | null }): boolean {
-  return normalizeInterviewStage(iv.stage) === 'rejected' && !isCanceledInterview(iv);
-}
-
-/** Last non-rejected stage from movement trail (where the process failed). */
-function lastActiveStage(iv: {
-  stage?: string | null;
-  scheduledAt?: string | null;
-  stageHistory?: Array<{ stage: string; scheduledAt?: string | null }>;
-}): string | null {
-  const trail = getInterviewMovementEntries(iv);
-  for (let i = trail.length - 1; i >= 0; i--) {
-    const s = normalizeInterviewStage(trail[i].stage);
-    if (s && s !== 'rejected') return s;
-  }
-  return null;
+/** Rejected at the current round — the card stays in that round's column. */
+function isRejectedFail(iv: { status?: string | null }): boolean {
+  return normalizeInterviewStatus(iv.status) === 'rejected';
 }
 
 function resolveInterviewDropColumn(
@@ -305,60 +294,13 @@ function boardColumnForStage(stage?: string | null): BoardColumnKey {
   }
 }
 
-/** Board pan for a card — canceled pan, or last active stage when rejected (fail). */
+/** Board pan for a card — Canceled pan by status, otherwise its current stage. */
 function boardColumnForInterview(iv: {
   stage?: string | null;
   status?: string | null;
-  scheduledAt?: string | null;
-  stageHistory?: Array<{ stage: string; scheduledAt?: string | null }>;
 }): BoardColumnKey {
   if (isCanceledInterview(iv)) return 'canceled';
-  if (normalizeInterviewStage(iv.stage) === 'rejected') {
-    return boardColumnForStage(lastActiveStage(iv) || 'intro');
-  }
-  return boardColumnForStage(iv.stage);
-}
-
-const STATUSES = [
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'passed', label: 'Passed' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'no_show', label: 'No Show' },
-  { value: 'rescheduled', label: 'Rescheduled' },
-  { value: 'canceled', label: 'Canceled' },
-];
-
-const statusBadgeClass = (s?: string | null) => {
-  switch (s) {
-    case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800';
-    case 'completed': return 'bg-zinc-100 dark:bg-zinc-800 text-body border-zinc-200 dark:border-zinc-700';
-    case 'passed': return 'bg-green-100 text-green-800 border-green-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800';
-    case 'failed': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800';
-    case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800';
-    case 'rescheduled': return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800';
-    case 'canceled': return 'bg-zinc-200 text-body border-zinc-300 dark:bg-zinc-700 dark:border-zinc-600 dark:text-zinc-300';
-    default: return 'bg-zinc-50 dark:bg-zinc-900/80 text-muted border-zinc-200 dark:border-zinc-700';
-  }
-};
-
-const statusLabel = (v?: string | null) =>
-  v ? STATUSES.find((s) => s.value === v)?.label ?? v : '—';
-
-function boardStatusLabel(status?: string | null): string {
-  if (status === 'scheduled' || status === 'rescheduled') return 'Scheduled';
-  if (status === 'completed') return 'Completed';
-  return statusLabel(status);
-}
-
-function boardStatusClass(status?: string | null): string {
-  if (status === 'scheduled' || status === 'rescheduled') {
-    return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800';
-  }
-  if (status === 'completed') {
-    return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
-  }
-  return statusBadgeClass(status);
+  return boardColumnForStage(normalizeInterviewStage(iv.stage));
 }
 
 type ModalMode = 'create' | 'read' | 'update' | 'delete' | null;
@@ -398,7 +340,7 @@ function formatPretty(startIso: string, endIso?: string | null): string {
 const formatScheduled = (iso: string) => formatPretty(iso);
 
 /** Stages excluded from the board “interviews total” round count. */
-const ROUND_COUNT_EXCLUDED = new Set(['ai_interview', 'rejected', 'home_assessment']);
+const ROUND_COUNT_EXCLUDED = new Set(['ai_interview', 'home_assessment']);
 
 /** Display order + short labels for the total breakdown. */
 const ROUND_BREAKDOWN_GROUPS: Array<{ key: string; label: string; match: (stage: string) => boolean }> = [
@@ -524,7 +466,7 @@ function interviewMatchesBoardFilters(
  * When a Stage filter is set, only badges of that stage are counted
  * (e.g. Intro filter → Intro only, not later Hiring/Tech on the same card).
  * Tech = round 1/2 + live coding + system design (never Home Assessment).
- * Rejected + Scheduled = canceled — counted separately (not in the main total).
+ * Interviews whose current round is Canceled are counted separately (not in the main total).
  */
 function countInterviewRoundsInRange(
   rows: Interview[],
@@ -535,15 +477,12 @@ function countInterviewRoundsInRange(
   const counts: Record<string, number> = {};
   for (const g of ROUND_BREAKDOWN_GROUPS) counts[g.key] = 0;
   const matchSet = stageFilterMatchSet(stageFilter || '');
-  const showCanceled = !stageFilter || stageFilter === 'rejected';
+  const showCanceled = !stageFilter;
 
   let total = 0;
   let canceled = 0;
   for (const iv of rows) {
-    const isCanceled =
-      (iv.status || '') === 'scheduled' && normalizeInterviewStage(iv.stage) === 'rejected';
-
-    if (isCanceled) {
+    if (isCanceledInterview(iv)) {
       if (!showCanceled) continue;
       const inRange =
         !(fromDate || toDate)
@@ -726,9 +665,7 @@ export default function InterviewsPage() {
 
   useEffect(() => {
     if (!stage) return;
-    const colKey = stage === 'rejected'
-      ? 'canceled'
-      : boardColumnForStage(stage);
+    const colKey = boardColumnForStage(stage);
     if (!colKey) return;
     revealBoardColumn(colKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to stage / width changes
@@ -949,7 +886,6 @@ export default function InterviewsPage() {
     kind: 'tech' | 'stage';
     targetStage: string;
     label: string;
-    asCanceled?: boolean;
   }>(null);
   const [moveSubStage, setMoveSubStage] = useState('');
   const [moveDate, setMoveDate] = useState('');
@@ -1007,7 +943,6 @@ export default function InterviewsPage() {
     newStage: string,
     label: string,
     scheduledDate?: string,
-    statusOverride?: string,
   ) => {
     const ivId = iv._id;
     const previousData = data;
@@ -1043,7 +978,6 @@ export default function InterviewsPage() {
               ...item,
               stage: newStage,
               stageHistory: nextHistory,
-              ...(statusOverride ? { status: statusOverride } : {}),
               ...(schedulePatch
                 ? { scheduledAt: schedulePatch.scheduledAt, endsAt: schedulePatch.endsAt }
                 : {}),
@@ -1056,7 +990,6 @@ export default function InterviewsPage() {
 
     try {
       const body: Record<string, unknown> = { stage: newStage };
-      if (statusOverride) body.status = statusOverride;
       if (schedulePatch) {
         body.scheduledAt = schedulePatch.scheduledAt;
         body.endsAt = schedulePatch.endsAt;
@@ -1069,6 +1002,28 @@ export default function InterviewsPage() {
     } catch (err) {
       mutate(previousData, { revalidate: false });
       notify.error(err, 'Failed to move interview');
+    }
+  };
+
+  /** Canceled column: mark the current round canceled (no stage change, no new round). */
+  const cancelInterview = async (iv: Interview) => {
+    const previousData = data;
+    mutate(
+      (current) => current && {
+        ...current,
+        interviews: (current.interviews as Interview[]).map((item) =>
+          item._id === iv._id ? { ...item, status: 'canceled' } : item),
+      },
+      { revalidate: false },
+    );
+    try {
+      const updated = await api.updateInterview(iv._id, { status: 'canceled' });
+      syncInterviewForms(iv._id, updated as unknown as Interview);
+      await mutate();
+      notify.success('Marked canceled');
+    } catch (err) {
+      mutate(previousData, { revalidate: false });
+      notify.error(err, 'Failed to cancel interview');
     }
   };
 
@@ -1117,6 +1072,10 @@ export default function InterviewsPage() {
     }
 
     if (targetCol === sourceCol) return;
+    if (targetCol === 'canceled') {
+      void cancelInterview(iv);
+      return;
+    }
     const newStage = BOARD_COLUMN_TO_STAGE[targetCol];
     const colLabel = BOARD_COLUMNS.find((c) => c.key === targetCol)?.label ?? stageLabel(newStage);
     setMovePrompt({
@@ -1124,7 +1083,6 @@ export default function InterviewsPage() {
       kind: 'stage',
       targetStage: newStage,
       label: colLabel,
-      asCanceled: targetCol === 'canceled',
     });
     setMoveDate(interviewDateInput(iv));
   };
@@ -1141,9 +1099,7 @@ export default function InterviewsPage() {
       return;
     }
     const label = movePrompt.kind === 'tech' ? stageLabel(newStage) : movePrompt.label;
-    const toCanceled = !!movePrompt.asCanceled;
-    const sameStage = movePrompt.interview.stage === newStage
-      && (!toCanceled || isCanceledInterview(movePrompt.interview));
+    const sameStage = movePrompt.interview.stage === newStage;
     const sameDate = interviewDateInput(movePrompt.interview) === moveDate;
     if (sameStage && sameDate) {
       closeMovePrompt();
@@ -1156,7 +1112,6 @@ export default function InterviewsPage() {
         newStage,
         label,
         moveDate,
-        toCanceled ? 'scheduled' : undefined,
       );
       setMovePrompt(null);
       setMoveSubStage('');
@@ -1527,8 +1482,8 @@ export default function InterviewsPage() {
                   <div className="text-muted text-xs">Status</div>
                   <div>
                     {form.status ? (
-                      <span className={`badge ${statusBadgeClass(form.status)}`}>
-                        {statusLabel(form.status)}
+                      <span className={`badge ${interviewStatusBadgeClass(form.status)}`}>
+                        {interviewStatusLabel(form.status)}
                       </span>
                     ) : <span className="text-faint">—</span>}
                   </div>
@@ -1829,8 +1784,8 @@ function InterviewBoardCardPreview({
       </div>
       <div className="mt-1.5 pl-1">
         {interview.status ? (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${boardStatusClass(interview.status)}`}>
-            {boardStatusLabel(interview.status)}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${interviewStatusBadgeClass(interview.status)}`}>
+            {interviewStatusLabel(interview.status)}
           </span>
         ) : (
           <span className="text-[11px] text-zinc-600 dark:text-zinc-400">No status</span>
@@ -1978,8 +1933,8 @@ function InterviewBoardCard({
       </div>
       <div className="mt-1.5 pl-1">
         {interview.status ? (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${boardStatusClass(interview.status)}`}>
-            {boardStatusLabel(interview.status)}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-[8px] text-xs font-medium border ${interviewStatusBadgeClass(interview.status)}`}>
+            {interviewStatusLabel(interview.status)}
           </span>
         ) : (
           <span className="text-[11px] text-zinc-600 dark:text-zinc-400">No status</span>

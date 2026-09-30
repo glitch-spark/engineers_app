@@ -11,6 +11,7 @@ import type { InterviewStageEntry } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import { listTimeZones, normalizeSlackTimezone } from '../lib/slackDigestPrefs';
 import {
+  INTERVIEW_STATUSES,
   BOARD_FORM_STAGES,
   TECH_SUB_STAGES,
   getInterviewMovementEntries,
@@ -123,11 +124,8 @@ export type InterviewFormState = {
 
 export type SelectOption = { value: string; label: string };
 
-/** Status choices on create/edit forms (filters may use a fuller list). */
-export const FORM_STATUSES = [
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'completed', label: 'Completed' },
-];
+/** Status choices on create/edit forms and filters: the five round statuses. */
+export const FORM_STATUSES = INTERVIEW_STATUSES;
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 

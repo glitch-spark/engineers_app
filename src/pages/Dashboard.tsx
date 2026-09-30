@@ -9,6 +9,7 @@ import { useAuth } from '../auth/useAuth';
 import { useChartTheme } from '../theme/useChartTheme';
 import * as api from '../api/endpoints';
 import { Delta, RankChip, TargetCell, fmtConversion } from '../lib/leaderboardUI';
+import { interviewStatusLabel, stageLabel } from '../lib/stageBadge';
 
 function timeAgo(iso: string): string {
   const t = new Date(iso).getTime();
@@ -293,7 +294,7 @@ function UpcomingInterviewsCard({ upcoming, loading }: {
                 <Link to={`/interview/${iv.interviewId}`} className="truncate font-medium text-strong hover:underline">
                   {iv.company || 'Interview'}
                 </Link>
-                {iv.stage && <span className="ml-2 shrink-0 text-xs text-muted">{iv.stage}</span>}
+                {iv.stage && <span className="ml-2 shrink-0 text-xs text-muted">{stageLabel(iv.stage)}</span>}
               </div>
               <span className="text-xs text-muted whitespace-nowrap">{formatWhen(iv.scheduledAt)}</span>
             </li>
@@ -335,7 +336,7 @@ function RecentActivityCard({ recent, loading }: {
                   {ev.kind === 'bid' ? (
                     <>Bid sent to <strong>{ev.company || '—'}</strong></>
                   ) : (
-                    <>Interview {ev.status ? `(${ev.status})` : ''} — <strong>{ev.company || '—'}</strong></>
+                    <>Interview {ev.status ? `(${interviewStatusLabel(ev.status)})` : ''} — <strong>{ev.company || '—'}</strong></>
                   )}
                 </span>
               </div>
