@@ -1,402 +1,60 @@
+import { useId, useState } from 'react';
 import useSWR from 'swr';
-import { Link } from 'react-router-dom';
-import { Loader2, ArrowRight, Calendar, ClipboardCheck, FileText, Sparkles } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
-import MotivationHero from '../components/MotivationHero';
-import DailyPlanChart from '../components/dashboard/DailyPlanChart';
 import PageHeader from '../components/PageHeader';
+import ThisWeekCard from '../components/dashboard/ThisWeekCard';
+import ActivityChartCard from '../components/dashboard/ActivityChartCard';
+import NetIncomeCard from '../components/dashboard/NetIncomeCard';
 import { useAuth } from '../auth/useAuth';
-import { useChartTheme } from '../theme/useChartTheme';
 import * as api from '../api/endpoints';
-import { Delta, RankChip, TargetCell, fmtConversion } from '../lib/leaderboardUI';
-
-function timeAgo(iso: string): string {
-  const t = new Date(iso).getTime();
-  const diff = Math.max(0, Date.now() - t);
-  const mins = Math.round(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
-
-function formatWhen(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const today = new Date();
-  const sameDay = d.toDateString() === today.toDateString();
-  if (sameDay) return `Today ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  if (d.toDateString() === tomorrow.toDateString()) {
-    return `Tomorrow ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  }
-  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
 
 export default function DashboardPage() {
+  const formId = useId();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [selectedUserId, setSelectedUserId] = useState('');
 
-  const { data: lb, isLoading: lbLoading } = useSWR(
-    ['dashboard-leaderboard'],
-    () => api.getLeaderboardConsolidated('week', 12),
-    { revalidateOnFocus: false },
+  const { data: lookupData } = useSWR(
+    isAdmin ? ['users-lookup', 'exclude-admin'] : null,
+    () => api.lookupUsers({ excludeRole: 'admin' }),
   );
-  const { data: feed, isLoading: feedLoading } = useSWR(
-    ['dashboard-feed'],
-    () => api.getDashboardFeed(),
-  );
+  const users = lookupData?.users ?? [];
 
-  const yourStats = lb?.yourStats ?? null;
-  const meTrend = lb?.users.find((u) => u.userId === user?.id)?.trend ?? [];
+  const userId = isAdmin ? (selectedUserId || undefined) : undefined;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" />
-      {!isAdmin && <MotivationHero userId={user?.id} />}
 
-      {/* Hero KPI row — bids, interviews, conversion (this week) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {lbLoading && !lb ? (
-          <SkeletonHero />
-        ) : (
-          <>
-            <HeroCard
-              label="Bids"
-              value={yourStats?.bids ?? 0}
-              target={yourStats?.bidsTarget ?? 0}
-              prev={yourStats?.prevBids ?? 0}
-              rank={yourStats?.rankBids}
-              bidsPlan={yourStats?.bidsPlan}
-              bidsTailor={yourStats?.bidsTailor}
-            />
-            <HeroCard
-              label="Interviews"
-              value={yourStats?.interviews ?? 0}
-              target={yourStats?.interviewsTarget ?? 0}
-              prev={yourStats?.prevInterviews ?? 0}
-              rank={yourStats?.rankInterviews}
-              canceled={yourStats?.interviewsCanceled}
-              valueClassName="text-emerald-600 dark:text-emerald-400"
-            />
-            <ConversionHeroCard
-              value={yourStats?.conversion ?? 0}
-              prev={yourStats?.prevConversion ?? 0}
-              rank={yourStats?.rankConversion}
-              minBids={lb?.conversionMinBids ?? 10}
-              qualifies={yourStats != null && yourStats.bids >= (lb?.conversionMinBids ?? 10)}
-            />
-          </>
-        )}
-      </div>
-
-      {/* Funnel + Plan CTA */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="md:col-span-2">
-          <FunnelCard
-            bids={yourStats?.bids ?? 0}
-            interviews={yourStats?.interviews ?? 0}
-            conversion={yourStats?.conversion ?? 0}
-            minBids={lb?.conversionMinBids ?? 10}
-          />
+      {isAdmin && (
+        <div className="w-64">
+          <label htmlFor={`${formId}-user`} className="block text-xs text-muted mb-1">User</label>
+          <select
+            id={`${formId}-user`}
+            className="select focus-ring w-full text-sm"
+            value={selectedUserId}
+            onChange={(e) => setSelectedUserId(e.target.value)}
+          >
+            <option value="">Pick a user</option>
+            {users.map((u) => (
+              <option key={u._id} value={u._id}>
+                {u.name || u.email}
+              </option>
+            ))}
+          </select>
         </div>
-        <WeeklyPlanCTA />
-      </div>
-
-      {/* Trend chart — 12 weeks bids vs interviews */}
-      <TrendSection data={meTrend} />
-
-      {/* Regular daily plan counts — bidder over hands-on, per day/week/month */}
-      <DailyPlanChart />
-
-      {/* Upcoming interviews + recent activity */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <UpcomingInterviewsCard upcoming={feed?.upcoming ?? []} loading={feedLoading && !feed} />
-        <RecentActivityCard recent={feed?.recent ?? []} loading={feedLoading && !feed} />
-      </div>
-    </div>
-  );
-}
-
-// ---------- Hero cards ----------
-
-function HeroCard({
-  label, value, target, prev, rank, canceled, valueClassName, bidsPlan, bidsTailor,
-}: {
-  label: string; value: number; target: number; prev: number; rank?: number;
-  canceled?: number; valueClassName?: string;
-  bidsPlan?: number; bidsTailor?: number;
-}) {
-  const showPlanTailor = bidsPlan !== undefined || bidsTailor !== undefined;
-  return (
-    <div className="panel p-4">
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-muted">{label} — this week</div>
-        <RankChip rank={rank} large />
-      </div>
-      <div className="mt-2 text-3xl font-bold tabular-nums">
-        {showPlanTailor ? (
-          <span className="text-strong">
-            Plan {bidsPlan ?? 0}
-            <span className="text-base font-medium text-muted"> / Tailor {bidsTailor ?? 0}</span>
-          </span>
-        ) : (
-          <>
-            <span className={valueClassName || 'text-strong'}>{value.toLocaleString()}</span>
-            {target > 0 && (
-              <span className="text-base font-medium text-faint"> / {target}</span>
-            )}
-            {(canceled ?? 0) > 0 && (
-              <span className="ml-2 text-base font-semibold text-red-600 dark:text-red-400">
-                (Canceled - {canceled})
-              </span>
-            )}
-          </>
-        )}
-      </div>
-      <div className="mt-1 flex items-center gap-3 text-xs">
-        {showPlanTailor && (bidsPlan ?? 0) > 0 ? (
-          <TargetCell value={bidsTailor ?? 0} target={bidsPlan ?? 0} />
-        ) : target > 0 ? (
-          <TargetCell value={value} target={target} />
-        ) : (
-          <span className="text-faint">no target set</span>
-        )}
-        <Delta cur={value} prev={prev} />
-      </div>
-    </div>
-  );
-}
-
-function ConversionHeroCard({
-  value, prev, rank, minBids, qualifies,
-}: { value: number; prev: number; rank?: number; minBids: number; qualifies: boolean }) {
-  return (
-    <div className="panel p-4">
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-muted">Conversion — this week</div>
-        <RankChip rank={rank} large />
-      </div>
-      {qualifies ? (
-        <>
-          <div className="mt-2 text-3xl font-bold text-strong tabular-nums">{fmtConversion(value)}</div>
-          <div className="mt-1 flex items-center gap-3 text-xs">
-            <Delta cur={value} prev={prev} />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="mt-2 text-3xl font-bold text-faint tabular-nums">—</div>
-          <div className="mt-1 text-xs text-faint">{minBids}+ bids needed to qualify</div>
-        </>
       )}
-    </div>
-  );
-}
 
-function SkeletonHero() {
-  return (
-    <>
-      <span role="status" className="sr-only">Loading your stats…</span>
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="panel p-4" aria-hidden>
-          <div className="h-3 w-24 bg-zinc-100 dark:bg-zinc-800 rounded mb-3" />
-          <div className="h-8 w-32 bg-zinc-100 dark:bg-zinc-800 rounded" />
-          <div className="mt-2 h-3 w-20 bg-zinc-100 dark:bg-zinc-800 rounded" />
+      {isAdmin && !selectedUserId ? (
+        <div className="panel p-4">
+          <p className="text-sm text-muted">Pick a user to see their dashboard.</p>
         </div>
-      ))}
-    </>
-  );
-}
-
-// ---------- Funnel ----------
-
-function FunnelCard({
-  bids, interviews, conversion, minBids,
-}: { bids: number; interviews: number; conversion: number; minBids: number }) {
-  const stages = [
-    { label: 'Bids', value: bids, color: 'bg-blue-500' },
-    { label: 'Interviews', value: interviews, color: 'bg-amber-500' },
-  ];
-  const top = Math.max(...stages.map((s) => s.value), 1);
-  return (
-    <div className="panel p-4">
-      <header className="flex items-center justify-between mb-3">
-        <h2 className="card-title uppercase tracking-wide">Pipeline — this week</h2>
-        <div className="text-xs text-muted">
-          Bid → Interview <span className="font-semibold text-body">{bids >= minBids ? fmtConversion(conversion) : `${minBids}+ needed`}</span>
+      ) : (
+        <div className="space-y-6">
+          <ThisWeekCard userId={userId} />
+          <ActivityChartCard userId={userId} />
+          <NetIncomeCard userId={userId} />
         </div>
-      </header>
-      <div className="space-y-2">
-        {stages.map((s) => (
-          <div key={s.label} className="flex items-center gap-3">
-            <div className="w-24 text-sm text-body">{s.label}</div>
-            <div aria-hidden className="flex-1 h-6 bg-zinc-100 dark:bg-zinc-800 rounded-[6px] overflow-hidden">
-              <div className={`h-full ${s.color}`} style={{ width: `${Math.max(2, (s.value / top) * 100)}%` }} />
-            </div>
-            <div className="w-12 text-right text-sm font-semibold text-strong tabular-nums">{s.value}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ---------- Weekly plan CTA ----------
-
-function WeeklyPlanCTA() {
-  return (
-    <Link
-      to="/weekly-plan"
-      className="panel-hover p-4 flex flex-col justify-between min-h-[140px]"
-    >
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <ClipboardCheck size={14} aria-hidden /> Weekly plan
-      </div>
-      <div className="text-sm text-strong mt-2">
-        Set this week's targets, log results at Friday EOD.
-      </div>
-      <span className="mt-3 link-inline text-xs">
-        Open weekly plan <ArrowRight size={12} aria-hidden />
-      </span>
-    </Link>
-  );
-}
-
-// ---------- Upcoming interviews ----------
-
-function UpcomingInterviewsCard({ upcoming, loading }: {
-  upcoming: api.DashboardFeed['upcoming'];
-  loading: boolean;
-}) {
-  return (
-    <div className="panel p-4">
-      <header className="flex items-center justify-between mb-3">
-        <h2 className="card-title uppercase tracking-wide flex items-center gap-2">
-          <Calendar size={14} className="text-muted" aria-hidden /> Upcoming interviews
-        </h2>
-        <Link to="/interviews" className="link-inline text-xs" aria-label="All interviews">
-          All <ArrowRight size={12} aria-hidden />
-        </Link>
-      </header>
-      {loading ? (
-        <div role="status" className="flex items-center gap-2 text-sm text-muted"><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading…</div>
-      ) : upcoming.length === 0 ? (
-        <div className="text-sm text-faint italic">Nothing scheduled.</div>
-      ) : (
-        <ul className="row-divider">
-          {upcoming.map((iv) => (
-            <li key={iv.interviewId} className="py-2 flex items-center justify-between gap-3 text-sm">
-              <div className="flex min-w-0 items-baseline">
-                <Link to={`/interview/${iv.interviewId}`} className="truncate font-medium text-strong hover:underline">
-                  {iv.company || 'Interview'}
-                </Link>
-                {iv.stage && <span className="ml-2 shrink-0 text-xs text-muted">{iv.stage}</span>}
-              </div>
-              <span className="text-xs text-muted whitespace-nowrap">{formatWhen(iv.scheduledAt)}</span>
-            </li>
-          ))}
-        </ul>
       )}
     </div>
-  );
-}
-
-// ---------- Recent activity ----------
-
-function RecentActivityCard({ recent, loading }: {
-  recent: api.DashboardFeed['recent'];
-  loading: boolean;
-}) {
-  return (
-    <div className="panel p-4">
-      <header className="flex items-center justify-between mb-3">
-        <h2 className="card-title uppercase tracking-wide flex items-center gap-2">
-          <Sparkles size={14} className="text-muted" aria-hidden /> Recent activity
-        </h2>
-      </header>
-      {loading ? (
-        <div role="status" className="flex items-center gap-2 text-sm text-muted"><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading…</div>
-      ) : recent.length === 0 ? (
-        <div className="text-sm text-faint italic">No activity yet.</div>
-      ) : (
-        <ul className="row-divider">
-          {recent.map((ev, i) => (
-            <li key={i} className="py-2 flex items-center justify-between gap-3 text-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                {ev.kind === 'bid' ? (
-                  <FileText size={14} className="text-blue-500 flex-shrink-0" aria-hidden />
-                ) : (
-                  <Calendar size={14} className="text-amber-500 flex-shrink-0" aria-hidden />
-                )}
-                <span className="text-body truncate">
-                  {ev.kind === 'bid' ? (
-                    <>Bid sent to <strong>{ev.company || '—'}</strong></>
-                  ) : (
-                    <>Interview {ev.status ? `(${ev.status})` : ''} — <strong>{ev.company || '—'}</strong></>
-                  )}
-                </span>
-              </div>
-              <span className="text-xs text-faint whitespace-nowrap">{timeAgo(ev.at)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function TrendSection({ data }: { data: { label: string; bids: number; interviews: number }[] }) {
-  const chart = useChartTheme();
-  return (
-    <section className="panel p-4">
-      <header className="flex items-center justify-between mb-3">
-        <h2 className="card-title uppercase tracking-wide">Trend — last 12 weeks</h2>
-        <Link to="/leaderboard" className="link-inline text-xs">
-          See leaderboard <ArrowRight size={12} aria-hidden />
-        </Link>
-      </header>
-      {data.length === 0 ? (
-        <div className="text-sm text-faint italic">No activity in the last 12 weeks yet.</div>
-      ) : (
-        <>
-          {/* Text alternative for the chart (WCAG 1.1.1); the SVG itself is hidden from AT. */}
-          <table className="sr-only">
-            <caption>Bids and interviews per week, last 12 weeks</caption>
-            <thead>
-              <tr><th scope="col">Week</th><th scope="col">Bids</th><th scope="col">Interviews</th></tr>
-            </thead>
-            <tbody>
-              {data.map((p) => (
-                <tr key={p.label}><th scope="row">{p.label}</th><td>{p.bids}</td><td>{p.interviews}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <div aria-hidden>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
-                <XAxis dataKey="label" stroke={chart.axis} fontSize={12} tick={{ fill: chart.axis }} />
-                <YAxis stroke={chart.axis} fontSize={12} allowDecimals={false} tick={{ fill: chart.axis }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: chart.tooltipBg,
-                    borderColor: chart.tooltipBorder,
-                    color: chart.tooltipText,
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Legend wrapperStyle={{ color: chart.axis, fontSize: 12 }} />
-                <Line type="monotone" dataKey="bids" name="Bids" stroke="#2563eb" strokeWidth={2} dot />
-                <Line type="monotone" dataKey="interviews" name="Interviews" stroke="#d97706" strokeWidth={2} dot />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </>
-      )}
-    </section>
   );
 }

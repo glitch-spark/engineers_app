@@ -610,40 +610,6 @@ export const updateInterviewStage = (id: string, stageId: string, body: Intervie
 export const deleteInterviewStage = (id: string, stageId: string) =>
   del<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}`);
 
-// ---------- dashboard metrics ----------
-
-export interface DashboardKpiTotals {
-  income: number;
-  bids: number;
-  interviews: number;
-  bidToInterview: number;
-}
-
-export interface DashboardSeriesPoint {
-  bucketStart: string;
-  income: number;
-  bids: number;
-  interviews: number;
-  rate: number;
-}
-
-export interface DashboardMetrics {
-  window: { from: string; to: string };
-  previousWindow: { from: string; to: string };
-  bucket: 'day' | 'week' | 'month';
-  totals: DashboardKpiTotals;
-  previousTotals: DashboardKpiTotals;
-  series: DashboardSeriesPoint[];
-}
-
-export const getDashboardMetrics = (params: {
-  range?: number;
-  bucket?: 'day' | 'week' | 'month';
-  from?: string;
-  to?: string;
-  includeSeries?: boolean;
-}) => apiFetch<DashboardMetrics>(`/metrics/dashboard${qs(params)}`);
-
 // ---------- leaderboard ----------
 
 export type LeaderboardMetric = 'earnings' | 'bids' | 'interviews' | 'conversion';
@@ -729,28 +695,6 @@ export const getLeaderboardConsolidated = (range: string = 'week', trendWeeks?: 
   if (trendWeeks) params.set('trendWeeks', String(trendWeeks));
   return apiFetch<ConsolidatedLeaderboard>(`/metrics/leaderboard/consolidated?${params.toString()}`);
 };
-
-export interface DashboardFeed {
-  recent: Array<{
-    kind: 'bid' | 'interview_done' | 'interview_past';
-    at: string;
-    company?: string | null;
-    profile?: string;
-    jobId?: string;
-    interviewId?: string;
-    stage?: string | null;
-    status?: string | null;
-  }>;
-  upcoming: Array<{
-    interviewId: string;
-    company?: string | null;
-    stage?: string | null;
-    scheduledAt: string | null;
-    endsAt: string | null;
-  }>;
-}
-
-export const getDashboardFeed = () => apiFetch<DashboardFeed>('/metrics/dashboard-feed');
 
 // ---------- dashboard ----------
 
