@@ -414,24 +414,29 @@ function stageFilterMatchSet(filter: string): Set<string> | null {
  * Dated rounds for filter/count — each badge keeps its own date.
  * Current interview.scheduledAt only applies to the current tip stage.
  */
-function getStrictDatedRounds(iv: Interview): MovementEntry[] {
-  const trail: MovementEntry[] = [];
-  const push = (stageRaw?: string | null, dateRaw?: string | null) => {
+type DatedRound = MovementEntry & { status: string };
+
+/** Rounds with their own dates and statuses (mirrors backend metrics._dated_rounds). */
+function getStrictDatedRounds(iv: Interview): DatedRound[] {
+  const trail: DatedRound[] = [];
+  const push = (stageRaw?: string | null, dateRaw?: string | null, statusRaw?: string | null) => {
     const stage = normalizeInterviewStage(stageRaw);
     if (!stage) return;
     const scheduledAt = movementDateKey(dateRaw);
+    const status = normalizeInterviewStatus(statusRaw);
     const tip = trail[trail.length - 1];
     if (tip?.stage === stage) {
       if (scheduledAt) tip.scheduledAt = scheduledAt;
+      if (status) tip.status = status;
       return;
     }
-    trail.push({ stage, ...(scheduledAt ? { scheduledAt } : {}) });
+    trail.push({ stage, status, ...(scheduledAt ? { scheduledAt } : {}) });
   };
   for (const h of iv.stageHistory ?? []) {
     // History entries must keep their own dates — never fill from interview.scheduledAt.
-    push(h.stage, h.scheduledAt ?? null);
+    push(h.stage, h.scheduledAt ?? null, h.status ?? null);
   }
-  push(iv.stage, iv.scheduledAt);
+  push(iv.stage, iv.scheduledAt, iv.status);
   return trail;
 }
 
@@ -466,7 +471,7 @@ function interviewMatchesBoardFilters(
  * When a Stage filter is set, only badges of that stage are counted
  * (e.g. Intro filter → Intro only, not later Hiring/Tech on the same card).
  * Tech = round 1/2 + live coding + system design (never Home Assessment).
- * Interviews whose current round is Canceled are counted separately (not in the main total).
+ * Canceled rounds are counted separately, never as held (same as the Dashboard/Leaderboard).
  */
 function countInterviewRoundsInRange(
   rows: Interview[],
@@ -477,25 +482,18 @@ function countInterviewRoundsInRange(
   const counts: Record<string, number> = {};
   for (const g of ROUND_BREAKDOWN_GROUPS) counts[g.key] = 0;
   const matchSet = stageFilterMatchSet(stageFilter || '');
-  const showCanceled = !stageFilter;
 
   let total = 0;
   let canceled = 0;
   for (const iv of rows) {
-    if (isCanceledInterview(iv)) {
-      if (!showCanceled) continue;
-      const inRange =
-        !(fromDate || toDate)
-        || dateInSelectedRange(movementDateKey(iv.scheduledAt), fromDate, toDate)
-        || getStrictDatedRounds(iv).some((e) => dateInSelectedRange(e.scheduledAt, fromDate, toDate));
-      if (inRange) canceled += 1;
-      continue;
-    }
-
     for (const entry of getStrictDatedRounds(iv)) {
-      if (ROUND_COUNT_EXCLUDED.has(entry.stage)) continue;
       if (matchSet && !matchSet.has(entry.stage)) continue;
       if (!dateInSelectedRange(entry.scheduledAt, fromDate, toDate)) continue;
+      if (entry.status === 'canceled') {
+        canceled += 1;
+        continue;
+      }
+      if (ROUND_COUNT_EXCLUDED.has(entry.stage)) continue;
       const groupKey = roundBreakdownGroupKey(entry.stage);
       if (!groupKey) continue;
       counts[groupKey] = (counts[groupKey] || 0) + 1;
@@ -978,6 +976,7 @@ export default function InterviewsPage() {
               ...item,
               stage: newStage,
               stageHistory: nextHistory,
+              status: 'scheduled',
               ...(schedulePatch
                 ? { scheduledAt: schedulePatch.scheduledAt, endsAt: schedulePatch.endsAt }
                 : {}),
@@ -989,7 +988,8 @@ export default function InterviewsPage() {
     );
 
     try {
-      const body: Record<string, unknown> = { stage: newStage };
+      // A move schedules that round: it never carries a Canceled/Rejected outcome.
+      const body: Record<string, unknown> = { stage: newStage, status: 'scheduled' };
       if (schedulePatch) {
         body.scheduledAt = schedulePatch.scheduledAt;
         body.endsAt = schedulePatch.endsAt;
@@ -1101,7 +1101,8 @@ export default function InterviewsPage() {
     const label = movePrompt.kind === 'tech' ? stageLabel(newStage) : movePrompt.label;
     const sameStage = movePrompt.interview.stage === newStage;
     const sameDate = interviewDateInput(movePrompt.interview) === moveDate;
-    if (sameStage && sameDate) {
+    // Dropping a canceled card on its own stage reopens it (status back to Scheduled).
+    if (sameStage && sameDate && !isCanceledInterview(movePrompt.interview)) {
       closeMovePrompt();
       return;
     }
