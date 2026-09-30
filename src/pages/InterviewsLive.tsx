@@ -1,23 +1,17 @@
 import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Check, Loader2, Pencil, Trash2, X } from 'lucide-react';
-import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
 import PageHeader from '../components/PageHeader';
 import {
-  InterviewSidePanel,
-  blankInterviewForm,
-  buildSaveBody,
-  defaultInterviewFormOptions,
-  interviewToForm,
   type Interview,
-  type InterviewFormState,
 } from '../components/InterviewEditPanel';
 import { useAuth } from '../auth/useAuth';
+import InterviewPanel from '../components/interview/InterviewPanel';
+import ConfirmDialog from '../components/ConfirmDialog';
 import * as api from '../api/endpoints';
-import { messageOf, notify } from '../lib/notify';
+import { notify } from '../lib/notify';
 import {
   getInterviewMovementEntries,
   normalizeInterviewStage,
@@ -33,7 +27,6 @@ import {
 import { countryName, formatProfileLabel } from '../lib/countries';
 
 type AccountRef = { _id: string; name?: string; email?: string; country?: string | null; region?: string | null };
-type CreatorRef = { _id: string; name?: string; email?: string };
 
 /** Live matrix columns — sync with List stage badges (no Offer, no Rejected). */
 const LIVE_COLUMNS = [
@@ -221,12 +214,6 @@ function liveProgressInRange(iv: Interview, fromDate?: string, toDate?: string):
   };
 }
 
-function refName(ref: AccountRef | CreatorRef | string | undefined, fallback = '—'): string {
-  if (!ref) return fallback;
-  if (typeof ref === 'string') return fallback;
-  return ref.name || ref.email || fallback;
-}
-
 function profileLabel(ref: AccountRef | string | undefined, fallback = 'Untitled profile'): string {
   if (!ref || typeof ref === 'string') return fallback;
   const name = (ref.name || ref.email || '').trim() || fallback;
@@ -235,7 +222,6 @@ function profileLabel(ref: AccountRef | string | undefined, fallback = 'Untitled
 }
 
 export default function InterviewsLivePage() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const meId = user?.id || '';
@@ -250,9 +236,6 @@ export default function InterviewsLivePage() {
   const [regionFilter, setRegionFilter] = useState<RegionFilter>('all');
 
   const [panelInterview, setPanelInterview] = useState<Interview | null>(null);
-  const [panelForm, setPanelForm] = useState<InterviewFormState>(blankInterviewForm);
-  const [panelSaving, setPanelSaving] = useState(false);
-  const [panelError, setPanelError] = useState('');
 
   useEffect(() => {
     if (!userFilterReady && meId) {
@@ -287,9 +270,6 @@ export default function InterviewsLivePage() {
 
   const { data: accountsLookup } = useSWR(['accounts-lookup'], () => api.lookupAccounts());
   const accounts = accountsLookup?.accounts ?? [];
-
-  const { data: ownAccountsData } = useSWR(['accounts-own'], () => api.listAccounts({ limit: 1000 }));
-  const ownAccounts = (ownAccountsData?.accounts as Array<{ _id: string; name?: string; title?: string }>) || [];
 
   const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
   const users = (usersData?.users as Array<{ _id: string; name?: string | null; email?: string | null }>) || [];
@@ -345,35 +325,14 @@ export default function InterviewsLivePage() {
     ];
   }, [accounts, creatorId]);
 
-  const accountSelectOptions = useMemo(
-    () => ownAccounts.map((a) => ({
-      value: a._id,
-      label: formatProfileLabel(a.name, a.country, a._id, a.region),
-    })),
-    [ownAccounts],
-  );
-
-  const { stageFormOptions, techSubStageOptions, statusFormOptions } = useMemo(
-    () => defaultInterviewFormOptions(),
-    [],
-  );
-
   const canEdit = (iv: Interview): boolean => {
     if (isAdmin) return true;
     const createdById = typeof iv.createdBy === 'string' ? iv.createdBy : iv.createdBy?._id;
     return createdById === meId;
   };
 
-  const openPanel = (iv: Interview) => {
-    setPanelInterview(iv);
-    setPanelForm(interviewToForm(iv));
-    setPanelError('');
-  };
-
-  const closePanel = () => {
-    setPanelInterview(null);
-    setPanelError('');
-  };
+  const openPanel = (iv: Interview) => setPanelInterview(iv);
+  const closePanel = () => setPanelInterview(null);
 
   const [deleteTarget, setDeleteTarget] = useState<Interview | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -395,37 +354,6 @@ export default function InterviewsLivePage() {
       notify.error(err, 'Failed to delete interview');
     } finally {
       setDeleting(false);
-    }
-  };
-
-  const savePanel = async () => {
-    if (!panelInterview) return;
-    const invalid = (msg: string) => { setPanelError(msg); notify.error(msg); };
-    if (!panelForm.date) {
-      invalid('Select a scheduled date');
-      return;
-    }
-    if (panelForm.stage === 'tech' && !panelForm.techSubStage) {
-      invalid('Select a Tech sub-stage');
-      return;
-    }
-    if (!canEdit(panelInterview)) {
-      invalid('You cannot edit this interview');
-      return;
-    }
-    setPanelSaving(true);
-    setPanelError('');
-    try {
-      const updated = await api.updateInterview(panelInterview._id, buildSaveBody(panelForm));
-      notify.success('Interview updated');
-      setPanelInterview(updated as unknown as Interview);
-      setPanelForm(interviewToForm(updated as unknown as Interview));
-      mutate();
-    } catch (err) {
-      setPanelError(messageOf(err, 'Failed to save interview'));
-      notify.error(err, 'Failed to save interview');
-    } finally {
-      setPanelSaving(false);
     }
   };
 
@@ -700,64 +628,23 @@ export default function InterviewsLivePage() {
         </div>
       )}
 
-      <Modal
+      <ConfirmDialog
         open={!!deleteTarget}
-        onClose={() => !deleting && setDeleteTarget(null)}
-        title="Delete interview"
-      >
-        {deleteTarget && (
-          <div className="space-y-4">
-            <p className="text-sm text-body">
-              Delete{' '}
-              <span className="font-medium text-strong">
-                {deleteTarget.companyName
-                  || refName(typeof deleteTarget.accountId === 'object' ? deleteTarget.accountId : undefined, 'this interview')}
-              </span>
-              ? This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn bg-red-600 hover:bg-red-700 border-red-600"
-                onClick={confirmDelete}
-                disabled={deleting}
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        title="Delete interview?"
+        body={`Deletes this interview and its ${deleteTarget?.stageHistory?.length || 1} round${(deleteTarget?.stageHistory?.length || 1) === 1 ? '' : 's'}.`}
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       {panelInterview && (
         <>
-          <div
-            className="fixed inset-0 top-16 bg-black/25 z-40"
-            onClick={closePanel}
-            aria-hidden
-          />
-          <InterviewSidePanel
+          <div className="fixed inset-0 top-16 z-40 bg-black/25" onClick={closePanel} aria-hidden />
+          <InterviewPanel
+            open
             interview={panelInterview}
-            form={panelForm}
-            setForm={setPanelForm}
-            error={panelError}
-            saving={panelSaving}
-            editable={canEdit(panelInterview)}
-            accountSelectOptions={accountSelectOptions}
-            stageFormOptions={stageFormOptions}
-            techSubStageOptions={techSubStageOptions}
-            statusFormOptions={statusFormOptions}
             onClose={closePanel}
-            onSave={savePanel}
-            onOpenTranscript={() => navigate(`/interview/${panelInterview._id}`)}
+            onChanged={() => { mutate(); }}
           />
         </>
       )}

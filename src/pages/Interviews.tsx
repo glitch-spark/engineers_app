@@ -23,48 +23,30 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, FileText, Maximize2, GripVertical } from 'lucide-react';
-import Modal from '../components/Modal';
 import Select from '../components/Select';
 import InterviewTabs from '../components/InterviewTabs';
 import PageHeader from '../components/PageHeader';
 import {
-  CALLER_METHOD_OPTIONS,
   CallerBadge,
   FORM_STATUSES,
-  formatCallerTime,
-  InterviewFormFields,
-  InterviewSidePanel,
   openInterviewFullScreen,
   StageMovementTrail,
-  blankInterviewForm,
-  buildSaveBody,
   formatScheduledDate,
-  interviewToForm,
-  MissingFieldsHint,
-  missingInterviewFields,
-  schedulePayload,
-  splitDateTime,
-  withCurrentStageInHistory,
   type Interview,
-  type InterviewFormState,
 } from '../components/InterviewEditPanel';
 import { useAuth } from '../auth/useAuth';
+import InterviewPanel, { type PanelMode } from '../components/interview/InterviewPanel';
+import type { RoundPrefill } from '../components/interview/InterviewForm';
+import ConfirmDialog from '../components/ConfirmDialog';
 import * as api from '../api/endpoints';
-import { messageOf, notify } from '../lib/notify';
+import { notify } from '../lib/notify';
 import {
   BOARD_FORM_STAGES,
   interviewStatusBadgeClass,
   interviewStatusLabel,
   normalizeInterviewStatus,
-  TECH_SUB_STAGES,
   TECH_SUB_STAGE_VALUES,
-  getInterviewMovementEntries,
-  isTechBoardStage,
   normalizeInterviewStage,
-  resolveInterviewStage,
-  stageBadgeClass,
-  stageLabel,
-  toTechSubStage,
   type MovementEntry,
 } from '../lib/stageBadge';
 import {
@@ -77,40 +59,6 @@ import {
 } from '../lib/dateRangePresets';
 import { formatProfileLabel } from '../lib/countries';
 
-const editorStyles = `
-  .ql-editor { min-height: 140px; font-size: 14px; line-height: 1.5; }
-  .prose h1, .prose h2, .prose h3 { font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; }
-  .prose h1 { font-size: 1.4em; } .prose h2 { font-size: 1.2em; } .prose h3 { font-size: 1.1em; }
-  .prose p { margin-bottom: 0.75em; line-height: 1.6; }
-  .prose ul, .prose ol { margin-bottom: 0.75em; padding-left: 1.5em; }
-  .prose strong { font-weight: 600; } .prose em { font-style: italic; } .prose u { text-decoration: underline; }
-  .prose a { color: #2563eb; text-decoration: underline; }
-
-  /* Read-modal prose blocks: word-wrap, scroll vertically only, min 2 / max 5 lines.
-     line-height 1.5 * font-size 14px = 21px per line; padding adds ~16px each side. */
-  .prose-readonly {
-    font-size: 14px;
-    line-height: 1.5;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.375rem;
-    min-height: calc(2 * 1.5em + 1rem);   /* 2 lines + padding */
-    max-height: calc(5 * 1.5em + 1rem);   /* 5 lines + padding */
-    overflow-y: auto;
-    overflow-x: hidden;
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word;
-  }
-  .prose-readonly p { margin: 0 0 0.5em 0; }
-  .prose-readonly p:last-child { margin-bottom: 0; }
-  .prose-readonly h1, .prose-readonly h2, .prose-readonly h3 { font-weight: 600; margin: 0.5em 0 0.25em; }
-  .prose-readonly h1 { font-size: 1.25em; } .prose-readonly h2 { font-size: 1.15em; } .prose-readonly h3 { font-size: 1.05em; }
-  .prose-readonly ul, .prose-readonly ol { margin: 0 0 0.5em 0; padding-left: 1.25em; }
-  .prose-readonly a { color: #2563eb; text-decoration: underline; }
-  .prose-readonly img { max-width: 100%; height: auto; }
-  .prose-readonly pre, .prose-readonly code { white-space: pre-wrap; word-break: break-all; }
-`;
 
 const BOARD_COLUMNS = [
   { key: 'ai_interview', label: 'AI Interview', tone: 'border-emerald-300 dark:border-emerald-600', columnClass: 'flex-1 min-w-0' },
@@ -303,42 +251,7 @@ function boardColumnForInterview(iv: {
   return boardColumnForStage(normalizeInterviewStage(iv.stage));
 }
 
-type ModalMode = 'create' | 'read' | 'update' | 'delete' | null;
-
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-function tzAbbrev(d: Date): string {
-  // "GMT-04:00" or named like "EDT" via toLocaleDateString long timezone name.
-  const parts = new Intl.DateTimeFormat(undefined, {
-    timeZoneName: 'short',
-  }).formatToParts(d);
-  const tz = parts.find((p) => p.type === 'timeZoneName')?.value || '';
-  return tz;
-}
-
-function fmt24(d: Date): string {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
 /** "May 2, 15:00 - 15:30, EST" */
-function formatPretty(startIso: string, endIso?: string | null): string {
-  if (!startIso) return '—';
-  const s = new Date(startIso);
-  if (isNaN(s.getTime())) return '—';
-  const datePart = `${MONTH_NAMES[s.getMonth()]} ${s.getDate()}`;
-  const tz = tzAbbrev(s);
-  if (!endIso) return `${datePart}, ${fmt24(s)}, ${tz}`;
-  const e = new Date(endIso);
-  if (isNaN(e.getTime())) return `${datePart}, ${fmt24(s)}, ${tz}`;
-  if (s.toDateString() !== e.toDateString()) {
-    const dateE = `${MONTH_NAMES[e.getMonth()]} ${e.getDate()}`;
-    return `${datePart}, ${fmt24(s)} – ${dateE}, ${fmt24(e)}, ${tz}`;
-  }
-  return `${datePart}, ${fmt24(s)} - ${fmt24(e)}, ${tz}`;
-}
-
-const formatScheduled = (iso: string) => formatPretty(iso);
-
 /** Stages excluded from the board “interviews total” round count. */
 const ROUND_COUNT_EXCLUDED = new Set(['ai_interview', 'home_assessment']);
 
@@ -508,26 +421,6 @@ function countInterviewRoundsInRange(
   return { total, breakdown, canceled };
 }
 
-/** YYYY-MM-DD for date inputs from an interview's scheduledAt. */
-function interviewDateInput(iv: { scheduledAt?: string | null }): string {
-  const raw = iv.scheduledAt;
-  if (!raw) return toDateInputValue(new Date());
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return toDateInputValue(new Date());
-  return toDateInputValue(d);
-}
-
-/** Keep existing clock times when only the calendar date changes on a board move. */
-function scheduleFromInterviewDate(
-  iv: { scheduledAt?: string | null; endsAt?: string | null },
-  date: string,
-): { scheduledAt: string; endsAt: string } {
-  const start = splitDateTime(iv.scheduledAt || '');
-  const end = splitDateTime(iv.endsAt || '');
-  return schedulePayload(date, start.time || '09:00', end.time || '10:00');
-}
-
 export default function InterviewsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -598,16 +491,6 @@ export default function InterviewsPage() {
   const { data: accountsLookup } = useSWR(['accounts-lookup'], () => api.lookupAccounts());
   const accounts = accountsLookup?.accounts ?? [];
 
-  // Owner-scoped accounts for the create/update form. Backend returns the user's own
-  // accounts for staff and ALL accounts for admin.
-  const { data: ownAccountsData } = useSWR(['accounts-own'], () => api.listAccounts({ limit: 1000 }));
-  const ownAccounts = (ownAccountsData?.accounts as Array<{
-    _id: string;
-    name?: string;
-    title?: string;
-    resumes?: Array<{ id: string; filename: string }>;
-  }>) || [];
-
   const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
   const users = (usersData?.users as Array<{ _id: string; name?: string | null; email?: string | null }>) || [];
 
@@ -669,66 +552,27 @@ export default function InterviewsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to stage / width changes
   }, [stage, visibleColumnCount]);
 
-  // Modal state
-  const [mode, setMode] = useState<ModalMode>(null);
-  const [active, setActive] = useState<Interview | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  // One side panel for every create / view / edit action.
+  const [panel, setPanel] = useState<null | {
+    interview: Interview | null;
+    mode: PanelMode;
+    prefill?: RoundPrefill;
+  }>(null);
+  const openPanel = (iv: Interview) => setPanel({ interview: iv, mode: 'view' });
+  const openCreate = () => setPanel({ interview: null, mode: 'new' });
+  const closePanel = () => setPanel(null);
+  const onPanelChanged = () => { mutate(); };
 
-  const [panelInterview, setPanelInterview] = useState<Interview | null>(null);
-  const [panelForm, setPanelForm] = useState<InterviewFormState>(blankInterviewForm);
-  const [panelSaving, setPanelSaving] = useState(false);
-  const [panelError, setPanelError] = useState('');
-
-  const blankForm = blankInterviewForm;
-
-  const [form, setForm] = useState<InterviewFormState>(blankInterviewForm);
-
-  useEffect(() => {
-    if (mode === 'create') {
-      setForm(blankForm());
-      setError('');
-    } else if ((mode === 'update' || mode === 'read') && active) {
-      setForm(interviewToForm(active));
-      setError('');
-    }
-  }, [mode, active]);
-
-  const closeModal = () => {
-    setMode(null);
-    setActive(null);
-    setError('');
-  };
-
-  const openPanel = (iv: Interview) => {
-    setPanelInterview(iv);
-    setPanelForm(interviewToForm(iv));
-    setPanelError('');
-  };
-
-  const closePanel = () => {
-    setPanelInterview(null);
-    setPanelError('');
-  };
-
-  const openCreate = () => { closePanel(); setActive(null); setMode('create'); };
-  const openUpdate = (iv: Interview) => {
-    closePanel();
-    setForm(interviewToForm(iv));
-    setActive(iv);
-    setMode('update');
-    setError('');
-  };
-  const openDelete = (iv: Interview) => { setActive(iv); setMode('delete'); };
+  const [deleteTarget, setDeleteTarget] = useState<Interview | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const openDelete = (iv: Interview) => setDeleteTarget(iv);
 
   const openTranscript = (iv: Interview) => {
     navigate(`/interview/${iv._id}`);
   };
 
-  // Honor `?edit=:id` so the detail page can hand off to the edit modal.
-  const editParam = searchParams.get('edit');
+  // `?panel=:id` opens that interview's panel (links from other pages).
   const panelParam = searchParams.get('panel');
-
   useEffect(() => {
     if (!panelParam) return;
     const fromList = (data?.interviews as Interview[] | undefined)?.find((i) => i._id === panelParam);
@@ -756,114 +600,19 @@ export default function InterviewsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelParam, data]);
 
-  useEffect(() => {
-    if (!editParam || mode !== null) return;
-    const fromList = (data?.interviews as Interview[] | undefined)?.find((i) => i._id === editParam);
-    if (fromList) {
-      openUpdate(fromList);
-      const next = new URLSearchParams(searchParams);
-      next.delete('edit');
-      setSearchParams(next, { replace: true });
-      return;
-    }
-    let cancelled = false;
-    api.getInterview(editParam)
-      .then((iv) => {
-        if (cancelled) return;
-        openUpdate(iv as unknown as Interview);
-        const next = new URLSearchParams(searchParams);
-        next.delete('edit');
-        setSearchParams(next, { replace: true });
-      })
-      .catch(() => { /* leave param; user can retry */ });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editParam, data]);
-
-  const save = async () => {
-    const invalid = (msg: string) => { setError(msg); notify.error(msg); };
-    if (mode === 'create' && !form.accountId) {
-      invalid('Select a profile (account)');
-      return;
-    }
-    if (!form.date) {
-      invalid('Select a scheduled date');
-      return;
-    }
-    if (form.stage === 'tech' && !form.techSubStage) {
-      invalid('Select a Tech sub-stage');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      const body = buildSaveBody(form);
-      const account = ownAccounts.find((a) => a._id === form.accountId);
-      const accountLabel = account?.name || account?.title || 'account';
-      const resolvedStage = resolveInterviewStage(form.stage, form.techSubStage);
-      const stageText = resolvedStage ? `${stageLabel(resolvedStage)} ` : '';
-      if (mode === 'update' && active) {
-        await api.updateInterview(active._id, body);
-        notify.success(`${stageText}interview for ${accountLabel} updated successfully`);
-      } else {
-        await api.createInterview(body);
-        notify.success(`${stageText}interview for ${accountLabel} created successfully`);
-      }
-      closeModal();
-      mutate();
-    } catch (err) {
-      setError(messageOf(err, 'Failed to save interview'));
-      notify.error(err, 'Failed to save interview');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const remove = async () => {
-    if (!active) return;
-    setSaving(true);
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.deleteInterview(active._id);
+      await api.deleteInterview(deleteTarget._id);
       notify.success('Interview deleted');
-      if (panelInterview?._id === active._id) closePanel();
-      closeModal();
+      if (panel?.interview?._id === deleteTarget._id) closePanel();
+      setDeleteTarget(null);
       mutate();
     } catch (err) {
-      setError(messageOf(err, 'Failed to delete interview'));
       notify.error(err, 'Failed to delete interview');
     } finally {
-      setSaving(false);
-    }
-  };
-
-  const savePanel = async () => {
-    if (!panelInterview) return;
-    const invalid = (msg: string) => { setPanelError(msg); notify.error(msg); };
-    if (!panelForm.date) {
-      invalid('Select a scheduled date');
-      return;
-    }
-    if (panelForm.stage === 'tech' && !panelForm.techSubStage) {
-      invalid('Select a Tech sub-stage');
-      return;
-    }
-    if (!canEdit(panelInterview)) {
-      invalid('You cannot edit this interview');
-      return;
-    }
-    setPanelSaving(true);
-    setPanelError('');
-    try {
-      const updated = await api.updateInterview(panelInterview._id, buildSaveBody(panelForm));
-      notify.success('Interview updated');
-      setPanelInterview(updated as unknown as Interview);
-      setPanelForm(interviewToForm(updated as unknown as Interview));
-      mutate();
-    } catch (err) {
-      setPanelError(messageOf(err, 'Failed to save interview'));
-      notify.error(err, 'Failed to save interview');
-    } finally {
-      setPanelSaving(false);
+      setDeleting(false);
     }
   };
 
@@ -878,23 +627,6 @@ export default function InterviewsPage() {
 
   const [activeDragInterview, setActiveDragInterview] = useState<Interview | null>(null);
   const [dropTargetColumn, setDropTargetColumn] = useState<BoardColumnKey | null>(null);
-  /** Confirm dialog after dropping a card onto another pan (Tech includes sub-stage radios). */
-  const [movePrompt, setMovePrompt] = useState<null | {
-    interview: Interview;
-    kind: 'tech' | 'stage';
-    targetStage: string;
-    label: string;
-  }>(null);
-  const [moveSubStage, setMoveSubStage] = useState('');
-  const [moveDate, setMoveDate] = useState('');
-
-  // Why Save / Confirm is disabled — shown next to the button instead of failing silently.
-  const formMissing = missingInterviewFields(form, { requireProfile: mode === 'create' });
-  const moveMissing = [
-    ...(movePrompt?.kind === 'tech' && !moveSubStage ? ['Tech sub-stage'] : []),
-    ...(!moveDate ? ['Scheduled date'] : []),
-  ];
-  const [moveSaving, setMoveSaving] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: boardKeyboardCoordinates }),
@@ -925,86 +657,6 @@ export default function InterviewsPage() {
     onDragCancel: ({ active: a }) => `Moving ${dragName(a.id)} was cancelled. Stage not changed.`,
   };
 
-  const syncInterviewForms = (ivId: string, updated: Interview) => {
-    if (panelInterview?._id === ivId) {
-      setPanelInterview(updated);
-      setPanelForm(interviewToForm(updated));
-    }
-    if (active?._id === ivId) {
-      setActive(updated);
-      setForm(interviewToForm(updated));
-    }
-  };
-
-  const applyStageMove = async (
-    iv: Interview,
-    newStage: string,
-    label: string,
-    scheduledDate?: string,
-  ) => {
-    const ivId = iv._id;
-    const previousData = data;
-    const prevStage = iv.stage || undefined;
-    const tipDate = scheduledDate || (() => {
-      const raw = iv.scheduledAt;
-      if (!raw) return undefined;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-      const d = new Date(raw);
-      if (isNaN(d.getTime())) return undefined;
-      return toDateInputValue(d);
-    })();
-    const schedulePatch = scheduledDate ? scheduleFromInterviewDate(iv, scheduledDate) : null;
-
-    mutate(
-      (current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          interviews: (current.interviews as Interview[]).map((item) => {
-            if (item._id !== ivId) return item;
-            let nextHistory = getInterviewMovementEntries(item);
-            if (prevStage && nextHistory.length === 0) {
-              nextHistory = [{ stage: prevStage, ...(item.scheduledAt ? { scheduledAt: interviewDateInput(item) } : {}) }];
-            } else if (prevStage && nextHistory[nextHistory.length - 1]?.stage !== prevStage) {
-              nextHistory = [
-                ...nextHistory,
-                { stage: prevStage, ...(item.scheduledAt ? { scheduledAt: interviewDateInput(item) } : {}) },
-              ];
-            }
-            nextHistory = withCurrentStageInHistory(nextHistory, newStage, tipDate);
-            return {
-              ...item,
-              stage: newStage,
-              stageHistory: nextHistory,
-              status: 'scheduled',
-              ...(schedulePatch
-                ? { scheduledAt: schedulePatch.scheduledAt, endsAt: schedulePatch.endsAt }
-                : {}),
-            };
-          }),
-        };
-      },
-      { revalidate: false },
-    );
-
-    try {
-      // A move schedules that round: it never carries a Canceled/Rejected outcome.
-      const body: Record<string, unknown> = { stage: newStage, status: 'scheduled' };
-      if (schedulePatch) {
-        body.scheduledAt = schedulePatch.scheduledAt;
-        body.endsAt = schedulePatch.endsAt;
-      }
-      const updated = await api.updateInterview(iv._id, body);
-      syncInterviewForms(ivId, updated as unknown as Interview);
-      if (stage && stage !== newStage && !isTechBoardStage(stage)) setStage('');
-      await mutate();
-      notify.success(`Moved to ${label}`);
-    } catch (err) {
-      mutate(previousData, { revalidate: false });
-      notify.error(err, 'Failed to move interview');
-    }
-  };
-
   /** Canceled column: mark the current round canceled (no stage change, no new round). */
   const cancelInterview = async (iv: Interview) => {
     const previousData = data;
@@ -1017,8 +669,7 @@ export default function InterviewsPage() {
       { revalidate: false },
     );
     try {
-      const updated = await api.updateInterview(iv._id, { status: 'canceled' });
-      syncInterviewForms(iv._id, updated as unknown as Interview);
+      await api.updateInterview(iv._id, { status: 'canceled' });
       await mutate();
       notify.success('Marked canceled');
     } catch (err) {
@@ -1042,13 +693,6 @@ export default function InterviewsPage() {
     setDropTargetColumn(col ?? null);
   };
 
-  const closeMovePrompt = () => {
-    if (moveSaving) return;
-    setMovePrompt(null);
-    setMoveSubStage('');
-    setMoveDate('');
-  };
-
   const onInterviewDragEnd = async (e: DragEndEvent) => {
     setActiveDragInterview(null);
     const ivId = String(e.active.id);
@@ -1062,64 +706,17 @@ export default function InterviewsPage() {
       return;
     }
     const sourceCol = boardColumnForInterview(iv);
-
-    // Dropping onto Tech always opens the sub-stage + date picker (including Tech → Tech).
-    if (targetCol === 'tech') {
-      setMovePrompt({ interview: iv, kind: 'tech', targetStage: '', label: 'Tech' });
-      setMoveSubStage(toTechSubStage(iv.stage) || TECH_SUB_STAGES[0].value);
-      setMoveDate(interviewDateInput(iv));
-      return;
-    }
-
-    if (targetCol === sourceCol) return;
+    if (targetCol === sourceCol && targetCol !== 'tech') return;
     if (targetCol === 'canceled') {
       void cancelInterview(iv);
       return;
     }
-    const newStage = BOARD_COLUMN_TO_STAGE[targetCol];
-    const colLabel = BOARD_COLUMNS.find((c) => c.key === targetCol)?.label ?? stageLabel(newStage);
-    setMovePrompt({
+    // A move is a new round: open "Add next round" with that column's stage.
+    setPanel({
       interview: iv,
-      kind: 'stage',
-      targetStage: newStage,
-      label: colLabel,
+      mode: 'addRound',
+      prefill: { stage: BOARD_COLUMN_TO_STAGE[targetCol] },
     });
-    setMoveDate(interviewDateInput(iv));
-  };
-
-  const confirmMovePrompt = async () => {
-    if (!movePrompt) return;
-    if (!moveDate) {
-      notify.error('Select a scheduled date');
-      return;
-    }
-    const newStage = movePrompt.kind === 'tech' ? moveSubStage : movePrompt.targetStage;
-    if (!newStage) {
-      notify.error(movePrompt.kind === 'tech' ? 'Select a Tech sub-stage' : 'Select a stage');
-      return;
-    }
-    const label = movePrompt.kind === 'tech' ? stageLabel(newStage) : movePrompt.label;
-    const sameStage = movePrompt.interview.stage === newStage;
-    const sameDate = interviewDateInput(movePrompt.interview) === moveDate;
-    // Dropping a canceled card on its own stage reopens it (status back to Scheduled).
-    if (sameStage && sameDate && !isCanceledInterview(movePrompt.interview)) {
-      closeMovePrompt();
-      return;
-    }
-    setMoveSaving(true);
-    try {
-      await applyStageMove(
-        movePrompt.interview,
-        newStage,
-        label,
-        moveDate,
-      );
-      setMovePrompt(null);
-      setMoveSubStage('');
-      setMoveDate('');
-    } finally {
-      setMoveSaving(false);
-    }
   };
 
   const resetFiltersPage = () => setBoardOffset(0);
@@ -1138,12 +735,6 @@ export default function InterviewsPage() {
   ], [userAccounts]);
 
   // Form-only account list — owner-scoped (admin sees all, staff sees own).
-  const accountSelectOptions = useMemo(() =>
-    ownAccounts.map((a) => ({
-      value: a._id,
-      label: formatProfileLabel(a.name, a.country, a._id, a.region),
-    })),
-  [ownAccounts]);
 
   const userOptions = useMemo(() => [
     { value: '', label: 'All' },
@@ -1160,21 +751,8 @@ export default function InterviewsPage() {
     ...FORM_STATUSES,
   ], []);
 
-  const stageFormOptions = useMemo(() => [
-    { value: '', label: '— None —' },
-    ...BOARD_FORM_STAGES,
-  ], []);
-
-  const techSubStageOptions = useMemo(() => [...TECH_SUB_STAGES], []);
-
-  const statusFormOptions = useMemo(() => [
-    { value: '', label: '— None —' },
-    ...FORM_STATUSES,
-  ], []);
-
   return (
     <>
-      <style>{editorStyles}</style>
       <div className="space-y-6">
       <PageHeader
         title="Interviews"
@@ -1388,7 +966,7 @@ export default function InterviewsPage() {
                     tone={col.tone}
                     columnClass={col.columnClass}
                     cards={boardBuckets[col.key]}
-                    selectedId={panelInterview?._id}
+                    selectedId={panel?.interview?._id}
                     isDropTarget={dropTargetColumn === col.key}
                     onCardClick={openPanel}
                     onCardDelete={openDelete}
@@ -1414,279 +992,28 @@ export default function InterviewsPage() {
       )}
       </div>
 
-      {panelInterview && (
+      {panel && (
         <>
-          <div
-            className="fixed inset-0 top-16 bg-black/25 z-40"
-            onClick={closePanel}
-            aria-hidden
-          />
-          <InterviewSidePanel
-            interview={panelInterview}
-            form={panelForm}
-            setForm={setPanelForm}
-            error={panelError}
-            saving={panelSaving}
-            editable={canEdit(panelInterview)}
-            accountSelectOptions={accountSelectOptions}
-            stageFormOptions={stageFormOptions}
-            techSubStageOptions={techSubStageOptions}
-            statusFormOptions={statusFormOptions}
+          <div className="fixed inset-0 top-16 z-40 bg-black/25" onClick={closePanel} aria-hidden />
+          <InterviewPanel
+            open
+            interview={panel.interview}
+            initialMode={panel.mode}
+            prefill={panel.prefill}
             onClose={closePanel}
-            onSave={savePanel}
-            onOpenTranscript={() => openTranscript(panelInterview)}
+            onChanged={onPanelChanged}
           />
         </>
       )}
 
-      {/* Create / Update / Read modal */}
-      <Modal
-        open={mode === 'create' || mode === 'update' || mode === 'read'}
-        onClose={closeModal}
-        title={
-          mode === 'create' ? 'Create Interview'
-          : mode === 'update' ? 'Update Interview'
-          : 'Interview Details'
-        }
-      >
-        <div className="space-y-6">
-          {error && <p className="text-red-600 dark:text-red-400 text-sm" role="alert">{error}</p>}
-
-          {mode === 'read' ? (
-            <>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <div className="text-muted text-xs">Profile</div>
-                  <div className="font-medium">
-                    {(() => {
-                      const a = accounts.find((x) => x._id === form.accountId);
-                      return a
-                        ? formatProfileLabel(a.name, a.country, a._id, a.region)
-                        : form.accountId || '—';
-                    })()}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">Stage</div>
-                  <div>
-                    {(() => {
-                      const displayStage = resolveInterviewStage(form.stage, form.techSubStage) || form.stage;
-                      return displayStage ? (
-                        <span className={`badge ${stageBadgeClass(displayStage)}`}>
-                          {stageLabel(displayStage)}
-                        </span>
-                      ) : <span className="text-faint">—</span>;
-                    })()}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">Status</div>
-                  <div>
-                    {form.status ? (
-                      <span className={`badge ${interviewStatusBadgeClass(form.status)}`}>
-                        {interviewStatusLabel(form.status)}
-                      </span>
-                    ) : <span className="text-faint">—</span>}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">Company</div>
-                  <div className="font-medium">{form.companyName || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">Interviewer Name</div>
-                  <div className="font-medium">{form.interviewerName || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">Applied Position</div>
-                  <div className="font-medium">{form.appliedPosition || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-muted text-xs">Scheduled date</div>
-                  <div>{form.date || '—'}</div>
-                </div>
-                {active?.caller?.enabled && (
-                  <>
-                    <div>
-                      <div className="text-muted text-xs">Caller</div>
-                      <div className="font-medium">{active.caller.callerName || 'TBD'}</div>
-                    </div>
-                    <div>
-                      <div className="text-muted text-xs">Call time</div>
-                      <div className="tabular-nums">{formatCallerTime(active.caller)}</div>
-                    </div>
-                    <div>
-                      <div className="text-muted text-xs">Method</div>
-                      <div className="break-words">
-                        {CALLER_METHOD_OPTIONS.find((m) => m.value === active.caller?.method)?.label || 'TBD'}
-                        {active.caller.methodValue ? ` — ${active.caller.methodValue}` : ''}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted text-xs">Coworkers</div>
-                      <div>
-                        {(active.caller.coworkers ?? []).map((c) => c.name || c.email).join(', ') || '—'}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div>
-                <div className="text-muted text-xs mb-1">Interview Transcript</div>
-                <div
-                  className="prose-readonly panel p-4"
-                  dangerouslySetInnerHTML={{ __html: form.transcript || '<p class="text-faint italic">—</p>' }}
-                />
-              </div>
-              <div>
-                <div className="text-muted text-xs mb-1">Note</div>
-                <div
-                  className="prose-readonly bg-zinc-50 dark:bg-zinc-900/80"
-                  dangerouslySetInnerHTML={{ __html: form.note || '<p class="text-faint italic">—</p>' }}
-                />
-              </div>
-              <div className="flex justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
-                <button type="button" className="btn" onClick={closeModal}>Close</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <InterviewFormFields
-                form={form}
-                setForm={setForm}
-                accountSelectOptions={accountSelectOptions}
-                stageFormOptions={stageFormOptions}
-                techSubStageOptions={techSubStageOptions}
-                statusFormOptions={statusFormOptions}
-                accountDisabled={mode === 'update' && !!active && !canEdit(active)}
-                datalistId="applied-position-suggestions-modal"
-              />
-
-              <div className="flex flex-wrap items-center gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
-                <MissingFieldsHint id="iv-form-missing" missing={formMissing} />
-                <button type="button" className="btn" onClick={closeModal} disabled={saving}>Cancel</button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={save}
-                  disabled={saving || formMissing.length > 0}
-                  aria-describedby={formMissing.length ? 'iv-form-missing' : undefined}
-                >
-                  {saving ? 'Saving…' : mode === 'update' ? 'Save changes' : 'Create'}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </Modal>
-
-      {/* Delete confirm modal */}
-      <Modal open={mode === 'delete'} onClose={closeModal} title="Delete Interview">
-        <div className="space-y-6">
-          {error && <p className="text-red-600 dark:text-red-400 text-sm" role="alert">{error}</p>}
-          <p className="text-sm text-body">
-            Are you sure you want to delete this interview? This action cannot be undone.
-          </p>
-          {active && (
-            <div className="text-sm text-muted bg-zinc-50 dark:bg-zinc-900/80 p-3 rounded">
-              <div><span className="text-muted">Stage:</span> {active.stage ? stageLabel(active.stage) : '—'}</div>
-              <div><span className="text-muted">When:</span> {formatScheduled(active.scheduledAt)}</div>
-            </div>
-          )}
-          <div className="flex gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
-            <button type="button" className="btn" onClick={closeModal} disabled={saving}>Cancel</button>
-            <button
-              type="button"
-              className="btn"
-              onClick={remove}
-              disabled={saving}
-              style={{ backgroundColor: '#dc2626', color: 'white' }}
-            >
-              {saving ? 'Deleting…' : 'Delete'}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Stage-move confirm: scheduled date (+ Tech sub-stage radios when dropping on Tech) */}
-      <Modal
-        open={!!movePrompt}
-        onClose={closeMovePrompt}
-        title={movePrompt?.kind === 'tech' ? 'Select Tech sub-stage' : `Move to ${movePrompt?.label ?? 'stage'}`}
-      >
-        <div className="space-y-4">
-          {movePrompt?.kind === 'tech' ? (
-            <>
-              <p className="text-sm text-muted">
-                Choose which Tech round this interview is in, and the scheduled date for that round.
-              </p>
-              <fieldset className="space-y-2">
-                <legend className="sr-only">Tech sub-stage</legend>
-                {TECH_SUB_STAGES.map((opt) => (
-                  <label
-                    key={opt.value}
-                    className={`flex items-center gap-3 rounded-[10px] border px-3 py-2.5 cursor-pointer transition-colors ${
-                      moveSubStage === opt.value
-                        ? 'border-sky-600 bg-sky-50 dark:border-sky-400 dark:bg-sky-950/40'
-                        : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="tech-sub-stage"
-                      value={opt.value}
-                      checked={moveSubStage === opt.value}
-                      onChange={() => setMoveSubStage(opt.value)}
-                      className="accent-primary"
-                    />
-                    <span className="text-sm font-medium text-strong">{opt.label}</span>
-                  </label>
-                ))}
-              </fieldset>
-            </>
-          ) : (
-            <p className="text-sm text-muted">
-              Set the scheduled date for <span className="font-medium text-strong">{movePrompt?.label}</span>.
-            </p>
-          )}
-
-          <div>
-            <label htmlFor="iv-move-date" className="block text-sm font-medium mb-1">
-              Scheduled date <span className="text-red-700 dark:text-red-400" aria-hidden>*</span>
-            </label>
-            <input
-              id="iv-move-date"
-              className="input"
-              type="date"
-              required
-              value={moveDate}
-              disabled={moveSaving}
-              onChange={(e) => setMoveDate(e.target.value)}
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 justify-end pt-3 border-t border-zinc-200 dark:border-zinc-800">
-            <MissingFieldsHint id="iv-move-missing" missing={moveMissing} />
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={closeMovePrompt}
-              disabled={moveSaving}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={confirmMovePrompt}
-              disabled={moveSaving || moveMissing.length > 0}
-              aria-describedby={moveMissing.length ? 'iv-move-missing' : undefined}
-            >
-              {moveSaving ? 'Moving…' : 'Confirm'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete interview?"
+        body={`Deletes this interview and its ${deleteTarget?.stageHistory?.length || 1} round${(deleteTarget?.stageHistory?.length || 1) === 1 ? '' : 's'}.`}
+        busy={deleting}
+        onConfirm={remove}
+        onCancel={() => setDeleteTarget(null)}
+      />
       </div>
     </>
   );
