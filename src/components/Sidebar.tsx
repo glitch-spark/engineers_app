@@ -122,6 +122,17 @@ export default function Sidebar({
           />
 
           <NavLink
+            href="/job-applies"
+            label="Job Applies"
+            isCollapsed={isCollapsed}
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6V5a2 2 0 012-2h2a2 2 0 012 2v1m-9 0h12a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2zm-2 6h16" />
+              </svg>
+            }
+          />
+
+          <NavLink
             href="/interview-prep"
             label="Interview Prep"
             isCollapsed={isCollapsed}
