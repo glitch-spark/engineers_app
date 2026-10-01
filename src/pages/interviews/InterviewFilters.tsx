@@ -4,6 +4,7 @@ import Select from '../../components/Select';
 import * as api from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { formatProfileLabel } from '../../lib/countries';
+import { archivedLabel, filterProfiles } from '../../lib/profileArchive';
 import { DATE_RANGE_PRESET_OPTIONS, type DateRangePreset } from '../../lib/dateRangePresets';
 import { INTERVIEW_STAGE_ORDER, INTERVIEW_STATUSES, stageLabel } from '../../lib/stageBadge';
 import type { InterviewFilters as Filters } from '../../lib/interviewFilters';
@@ -32,7 +33,10 @@ export default function InterviewFilters({
     const mine = filters.user === 'all' ? all : all.filter((a) => a.createdBy === filters.user);
     return [
       { value: '', label: 'All profiles' },
-      ...mine.map((a) => ({ value: a._id, label: formatProfileLabel(a.name, a.country, a._id, a.region) })),
+      ...filterProfiles(mine).map((a) => ({
+        value: a._id,
+        label: archivedLabel(formatProfileLabel(a.name, a.country, a._id, a.region), a.archived),
+      })),
     ];
   }, [accountsData, filters.user]);
 

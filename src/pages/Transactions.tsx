@@ -1,17 +1,19 @@
 import useSWR from 'swr';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Modal from '../components/Modal';
-import { Pencil, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Pencil, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { messageOf, notify } from '../lib/notify';
+import { calendarPeriodRange, formatCalendarPeriod, type CalendarPeriod } from '../lib/dateRangePresets';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
 
 type PayMethod = 'coin' | 'card';
 type BillingCycle = 'one_time' | 'monthly';
+type Period = CalendarPeriod | 'custom';
 
 type Tx = {
   _id: string;
@@ -46,28 +48,57 @@ export default function TransactionsPage() {
   const isAdmin = user?.role === 'admin';
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [userId, setUserId] = useState('');
+  const [period, setPeriod] = useState<Period>('month');
+  const [periodOffset, setPeriodOffset] = useState(0);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  // Opens on the logged-in user's own transactions; "All users" stays selectable.
+  const [userId, setUserId] = useState(user?.id ?? '');
+  const userFilterTouched = useRef(false);
+  useEffect(() => {
+    if (!userFilterTouched.current && user?.id) setUserId(user.id);
+  }, [user?.id]);
+  const [payerFilter, setPayerFilter] = useState('');
   const [payMethodFilter, setPayMethodFilter] = useState<'' | PayMethod>('');
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  const range = useMemo(
+    () => (period === 'custom' ? { from: customFrom, to: customTo } : calendarPeriodRange(period, periodOffset)),
+    [period, periodOffset, customFrom, customTo],
+  );
+
   const { data, mutate, isLoading } = useSWR(
-    ['transactions', from, to, isAdmin ? userId : '', payMethodFilter, currentPage, pageSize] as const,
+    ['transactions', range.from, range.to, userId, payerFilter, payMethodFilter, currentPage, pageSize] as const,
     () => api.listTransactions({
       page: currentPage,
       limit: pageSize,
-      ...(from ? { from } : {}),
-      ...(to ? { to } : {}),
-      ...(isAdmin && userId ? { userId } : {}),
+      ...(range.from ? { from: range.from } : {}),
+      ...(range.to ? { to: range.to } : {}),
+      ...(userId ? { userId } : {}),
+      ...(payerFilter ? { payerId: payerFilter } : {}),
       ...(payMethodFilter ? { payMethod: payMethodFilter } : {}),
-    })
+    }),
+    { keepPreviousData: true },
   );
 
-  const { data: usersData } = useSWR(isAdmin ? ['users-list'] : null, () => api.listUsers());
-  const users = (usersData?.users as Array<{ _id: string; name?: string; email?: string }>) || [];
+  const changePeriod = (next: Period) => {
+    if (next === 'custom') {
+      // Start the custom range from whatever window was showing.
+      setCustomFrom(range.from);
+      setCustomTo(range.to);
+    }
+    setPeriod(next);
+    setPeriodOffset(0);
+    setCurrentPage(1);
+  };
+
+  const stepPeriod = (delta: number) => {
+    setPeriodOffset((o) => o + delta);
+    setCurrentPage(1);
+  };
+
   const { data: lookupData } = useSWR(['users-lookup'], () => api.lookupUsers());
   const allUsers = lookupData?.users ?? [];
 
@@ -253,8 +284,8 @@ export default function TransactionsPage() {
 
   const transactions = (data?.transactions as Tx[]) || [];
   const pagination = data?.pagination;
-  const payerTotals = data?.payerTotals ?? [];
-  const totalOutcome = data?.totalOutcome ?? payerTotals.reduce((s, p) => s + p.outcome, 0);
+  const totals = data?.totals;
+  const periodUnit = period === 'custom' ? '' : period;
 
   const formatMoney = (n: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -279,46 +310,22 @@ export default function TransactionsPage() {
       />
 
       <div className="flex items-end gap-3 flex-wrap toolbar">
-        {isAdmin && (
-          <>
-            <div className="w-44">
-              <label htmlFor={`${formId}-filter-from`} className="block text-xs text-muted mb-1">From</label>
-              <input
-                id={`${formId}-filter-from`}
-                className="input w-full text-sm"
-                type="date"
-                value={from}
-                onChange={(e) => { setFrom(e.target.value); setCurrentPage(1); }}
-              />
-            </div>
-            <div className="w-44">
-              <label htmlFor={`${formId}-filter-to`} className="block text-xs text-muted mb-1">To</label>
-              <input
-                id={`${formId}-filter-to`}
-                className="input w-full text-sm"
-                type="date"
-                value={to}
-                onChange={(e) => { setTo(e.target.value); setCurrentPage(1); }}
-              />
-            </div>
-            <div className="w-56">
-              <label htmlFor={`${formId}-filter-user`} className="block text-xs text-muted mb-1">User</label>
-              <select
-                id={`${formId}-filter-user`}
-                className="select focus-ring w-full text-sm"
-                value={userId}
-                onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}
-              >
-                <option value="">All users</option>
-                {users.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name || u.email}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </>
-        )}
+        <div className="w-52">
+          <label htmlFor={`${formId}-filter-user`} className="block text-xs text-muted mb-1">User</label>
+          <select
+            id={`${formId}-filter-user`}
+            className="select focus-ring w-full text-sm"
+            value={userId}
+            onChange={(e) => { userFilterTouched.current = true; setUserId(e.target.value); setCurrentPage(1); }}
+          >
+            <option value="">All users</option>
+            {allUsers.map((u) => (
+              <option key={u._id} value={u._id}>
+                {u.name || u.email}{u._id === user?.id ? ' (you)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="w-44">
           <label htmlFor={`${formId}-filter-method`} className="block text-xs text-muted mb-1">Pay method</label>
           <select
@@ -332,69 +339,75 @@ export default function TransactionsPage() {
             <option value="card">Card</option>
           </select>
         </div>
-      </div>
-
-      {payerTotals.length > 0 && (
-        <div className="panel overflow-hidden">
-          <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-            <h2 className="card-title uppercase tracking-wide">Per-payer totals</h2>
-            <p className="hint">Outcome and net are grouped by who paid. Income stays on the payer of each row. Respects the filters above.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="table-head">
-                <tr>
-                  <th scope="col" className="px-4 py-2.5 text-left">Payer</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Income</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Outcome</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Net</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Txns</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payerTotals.map((p) => (
-                  <tr key={p.payerId} className="table-row">
-                    <td className="px-4 py-2.5">
-                      <NameWithAvatar name={p.name || p.email} imageUrl={p.image} />
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">
-                      {formatMoney(p.income)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400">
-                      {formatMoney(p.outcome)}
-                    </td>
-                    <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${
-                      p.net >= 0
-                        ? 'text-emerald-700 dark:text-emerald-300'
-                        : 'text-red-700 dark:text-red-300'
-                    }`}>
-                      {formatMoney(p.net)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-muted">{p.count}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/50 font-medium">
-                  <th scope="row" className="px-4 py-2.5 text-left font-medium text-sm text-zinc-700 dark:text-zinc-300">Total outcome</th>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-muted">
-                    {formatMoney(payerTotals.reduce((s, p) => s + p.income, 0))}
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400">
-                    {formatMoney(totalOutcome)}
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">
-                    {formatMoney(payerTotals.reduce((s, p) => s + p.net, 0))}
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-muted">
-                    {payerTotals.reduce((s, p) => s + p.count, 0)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+        <div className="w-52">
+          <label htmlFor={`${formId}-filter-payer`} className="block text-xs text-muted mb-1">Payer</label>
+          <select
+            id={`${formId}-filter-payer`}
+            className="select focus-ring w-full text-sm"
+            value={payerFilter}
+            onChange={(e) => { setPayerFilter(e.target.value); setCurrentPage(1); }}
+          >
+            <option value="">All payers</option>
+            {allUsers.map((u) => (
+              <option key={u._id} value={u._id}>
+                {u.name || u.email}{u._id === user?.id ? ' (you)' : ''}
+              </option>
+            ))}
+          </select>
         </div>
-      )}
+        <div className="w-36">
+          <label htmlFor={`${formId}-filter-period`} className="block text-xs text-muted mb-1">Period</label>
+          <select
+            id={`${formId}-filter-period`}
+            className="select focus-ring w-full text-sm"
+            value={period}
+            onChange={(e) => changePeriod(e.target.value as Period)}
+          >
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        {period === 'custom' ? (
+          <>
+            <div className="w-44">
+              <label htmlFor={`${formId}-filter-from`} className="block text-xs text-muted mb-1">From</label>
+              <input
+                id={`${formId}-filter-from`}
+                className="input w-full text-sm"
+                type="date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={(e) => { setCustomFrom(e.target.value); setCurrentPage(1); }}
+              />
+            </div>
+            <div className="w-44">
+              <label htmlFor={`${formId}-filter-to`} className="block text-xs text-muted mb-1">To</label>
+              <input
+                id={`${formId}-filter-to`}
+                className="input w-full text-sm"
+                type="date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={(e) => { setCustomTo(e.target.value); setCurrentPage(1); }}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-1">
+            <button type="button" className="btn-icon" onClick={() => stepPeriod(-1)} aria-label={`Previous ${periodUnit}`} title={`Previous ${periodUnit}`}>
+              <ChevronLeft size={16} aria-hidden />
+            </button>
+            <span className="min-w-[11rem] text-center text-sm font-medium tabular-nums" aria-live="polite">
+              {formatCalendarPeriod(period, range.from, range.to)}
+            </span>
+            <button type="button" className="btn-icon" onClick={() => stepPeriod(1)} aria-label={`Next ${periodUnit}`} title={`Next ${periodUnit}`}>
+              <ChevronRight size={16} aria-hidden />
+            </button>
+          </div>
+        )}
+      </div>
 
       {data && (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -455,7 +468,11 @@ export default function TransactionsPage() {
                 const isPending = t.status === 'pending';
                 const amt = Number(t.amount || 0);
                 const isPayer = txPayerId(t) === user?.id;
+                const isOwner = t.userId?._id === user?.id;
                 const canApprove = isPending && (isAdmin || isPayer);
+                // Everyone sees every row; only show actions the server allows.
+                const showEdit = isAdmin || isOwner || isPayer;
+                const showDelete = isAdmin || isOwner;
                 const txName = `${t.date ? new Date(t.date).toISOString().split('T')[0] : ''} ${t.description || formatMoney(amt)}`.trim();
                 return (
                   <tr key={t._id} className="table-row">
@@ -478,26 +495,30 @@ export default function TransactionsPage() {
                     <td className="px-4 py-2.5"><NameWithAvatar name={t.payerName || (typeof t.payerId === 'object' ? t.payerId?.name : undefined) || t.ownerName} imageUrl={t.payerImage || (typeof t.payerId === 'object' ? t.payerId?.image : undefined) || t.ownerImage} /></td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1 flex-wrap">
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          onClick={() => { setEditing(t); setError(''); setFieldErrors({}); setOpen(true); }}
-                          disabled={!isPending && !isAdmin}
-                          aria-label={`Edit transaction ${txName}`}
-                          title="Edit"
-                        >
-                          <Pencil size={16} aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          onClick={() => remove(t)}
-                          disabled={!isPending && !isAdmin}
-                          aria-label={`Delete transaction ${txName}`}
-                          title="Delete"
-                        >
-                          <Trash2 size={16} aria-hidden />
-                        </button>
+                        {showEdit && (
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => { setEditing(t); setError(''); setFieldErrors({}); setOpen(true); }}
+                            disabled={!isPending && !isAdmin}
+                            aria-label={`Edit transaction ${txName}`}
+                            title="Edit"
+                          >
+                            <Pencil size={16} aria-hidden />
+                          </button>
+                        )}
+                        {showDelete && (
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => remove(t)}
+                            disabled={!isPending && !isAdmin}
+                            aria-label={`Delete transaction ${txName}`}
+                            title="Delete"
+                          >
+                            <Trash2 size={16} aria-hidden />
+                          </button>
+                        )}
                         {canApprove && (
                           <>
                             <button type="button" className="btn-icon" onClick={() => setStatus(t, 'approved')} aria-label={`Approve transaction ${txName}`} title="Approve">
@@ -515,6 +536,25 @@ export default function TransactionsPage() {
               })
             )}
           </tbody>
+          {!isLoading && totals && totals.count > 0 && (
+            <tfoot>
+              <tr className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/50 font-medium">
+                <th scope="row" className="px-4 py-2.5 text-left font-medium text-sm text-zinc-700 dark:text-zinc-300">
+                  Total · {totals.count} transaction{totals.count !== 1 ? 's' : ''}
+                </th>
+                <td className={`px-4 py-2.5 tabular-nums ${
+                  totals.net >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'
+                }`}>
+                  {formatMoney(totals.net)}
+                </td>
+                <td colSpan={6} className="px-4 py-2.5 tabular-nums text-muted">
+                  Income <span className="text-emerald-700 dark:text-emerald-400">{formatMoney(totals.income)}</span>
+                  {' · '}
+                  Outcome <span className="text-red-600 dark:text-red-400">{formatMoney(totals.outcome)}</span>
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 

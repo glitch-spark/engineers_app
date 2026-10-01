@@ -70,7 +70,7 @@ export default function ReportPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Report" action={headerAction} />
+      <PageHeader title="Plans" action={headerAction} />
 
       <div className="flex items-end gap-3 flex-wrap toolbar">
         <div className="w-32">

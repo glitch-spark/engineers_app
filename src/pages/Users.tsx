@@ -176,7 +176,7 @@ export default function UsersPage() {
               <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-faint" aria-hidden />
               <input
                 id="users-search"
-                className="input pl-10 w-full"
+                className="input !pl-10 w-full"
                 type="text"
                 placeholder="Search by name, email, or phone..."
                 value={searchTerm}

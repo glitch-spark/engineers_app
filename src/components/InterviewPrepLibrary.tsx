@@ -267,7 +267,7 @@ export default function InterviewPrepLibrary({
               <input
                 type="search"
                 aria-label={`Search ${tab === 'prompts' ? 'prompts' : 'templates'}`}
-                className="input w-full pl-8 py-1.5 text-sm bg-white dark:bg-zinc-950"
+                className="input w-full !pl-8 !py-1.5 text-sm bg-white dark:bg-zinc-950"
                 placeholder={`Search ${tab === 'prompts' ? 'prompts' : 'templates'}…`}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
