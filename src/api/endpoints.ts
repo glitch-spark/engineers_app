@@ -324,110 +324,138 @@ export const markAllAlertsRead = () => postJSON<{ ok: boolean; updated?: number 
 export const runAlertAction = (id: string, action: string) =>
   postJSON<AppAlert>(`/alerts/${id}/actions/${action}`, {});
 
-// ---------- weekly plans ----------
+// ---------- weekly / daily plans (Goal vs Done) ----------
 
-export const listWeeklyPlans = (params?: {
-  page?: number;
-  limit?: number;
-  year?: number;
-  weekNumber?: number;
-  userId?: string;
-}) =>
-  apiFetch<{ plans: Record<string, unknown>[]; pagination: Pagination }>(
-    `/weekly-plans${qs(params)}`
-  );
+export const REGIONS = ['US', 'EU', 'Latam', 'Canada', 'Asia'] as const;
+/** Profiles without a region on the Profiles page count as Unassigned. */
+export const PROFILE_REGIONS = [...REGIONS, 'Unassigned'] as const;
+export type RegionCounts = Record<string, number>;
 
-export const getWeeklyPlan = (id: string) =>
-  apiFetch<Record<string, unknown>>(`/weekly-plans/${id}`);
-
-export const createWeeklyPlan = (body: Record<string, unknown>) =>
-  postJSON<Record<string, unknown>>('/weekly-plans', body);
-
-export const updateWeeklyPlan = (id: string, body: Record<string, unknown>) =>
-  putJSON<Record<string, unknown>>(`/weekly-plans/${id}`, body);
-
-export const deleteWeeklyPlan = (id: string) => del<{ message: string }>(`/weekly-plans/${id}`);
-
-export interface WeeklyMetricCatalogItem { key: string; label: string }
-
-export const getWeeklyMetricCatalog = () =>
-  apiFetch<{ metrics: WeeklyMetricCatalogItem[] }>('/weekly-plans/metric-catalog');
-
-export interface WeeklyPlanSummary {
-  series: Array<Record<string, unknown>>;
-  totals: Array<{ key: string; label: string; target: number; actual: number }>;
-  planCount: number;
-  reviewedCount: number;
-  completionRate: number;
+export interface Counts {
+  bidsSelf: number;
+  bidsBidder: number;
+  interviewsSelf: number;
+  interviewsCaller: number;
+  profiles: RegionCounts;
+  linkedin: RegionCounts;
 }
 
-export const getWeeklyPlanSummary = (params?: { year?: number; weekNumber?: number; userId?: string }) =>
-  apiFetch<WeeklyPlanSummary>(`/weekly-plans/summary${qs(params)}`);
+export interface ChecklistItem {
+  text: string;
+  done: boolean;
+}
 
-export const runWeeklyProgressReport = (params?: { year?: number; weekNumber?: number; userId?: string }) =>
-  postJSON<{ processed: number; skipped: number; plans: Record<string, unknown>[] }>(
-    `/weekly-plans/progress-report${qs(params)}`,
-    {},
-  );
+/** `null` = use the automatic value. */
+export interface DoneOverrides {
+  interviewsSelf: number | null;
+  interviewsCaller: number | null;
+  profiles: RegionCounts | null;
+}
 
-export interface WeeklyUserRollup {
+export interface WeeklyOverrides {
+  bidsSelf: number | null;
+  bidsBidder: number | null;
+  interviewsSelf: number | null;
+  interviewsCaller: number | null;
+  profiles: RegionCounts | null;
+  linkedin: RegionCounts | null;
+}
+
+export type StageCounts = Record<string, number>;
+
+export interface InterviewStages {
+  self: StageCounts;
+  caller: StageCounts;
+}
+
+export interface DayPlan {
+  date: string;
+  exists: boolean;
   userId: string;
-  name: string;
-  email: string;
-  planCount: number;
-  reviewedCount: number;
-  metrics: Array<{ key: string; label: string; target: number; actual: number }>;
+  goal: Counts;
+  goalItems: ChecklistItem[];
+  /** Effective Done (automatic values with overrides applied). */
+  done: Counts;
+  auto: { interviewsSelf: number; interviewsCaller: number; stages: InterviewStages; profiles: RegionCounts };
+  doneOverrides: DoneOverrides;
+  notes: string;
+  loggedAt: string | null;
 }
 
-export const getWeeklyUserRollup = (params?: { year?: number; weekNumber?: number; userId?: string }) =>
-  apiFetch<{ users: WeeklyUserRollup[] }>(`/weekly-plans/user-rollup${qs(params)}`);
-
-// ---------- daily plans ----------
-
-export const listDailyPlans = (params?: {
-  page?: number;
-  limit?: number;
-  year?: number;
-  weekNumber?: number;
-  userId?: string;
-}) =>
-  apiFetch<{ plans: Record<string, unknown>[]; pagination: Pagination }>(
-    `/daily-plans${qs(params)}`
-  );
-
-export type DailyPlanType = 'custom' | 'regular';
-
-/** What was done on the plan's date. */
-export interface DailyPlanCounts {
-  bidsHandsOn: number;
-  bidsByBidder: number;
-  interviewsDone: number;
-  interviewsNew: number;
+export interface DayPlanInput {
+  goal: Counts;
+  goalItems: ChecklistItem[];
+  /** Omit for a goal-only edit (future days). */
+  done?: { bidsSelf: number; bidsBidder: number; linkedin: RegionCounts };
+  doneOverrides: DoneOverrides;
+  notes: string;
+  tomorrow?: { goal: Counts; goalItems: ChecklistItem[] };
 }
 
-/** What is planned for the day after the plan's date. */
-export interface DailyPlanPlanCounts {
-  planBidsHandsOn: number;
-  planBidsByBidder: number;
-  planInterviewsScheduled: number;
+export interface WeekDaySummary {
+  date: string;
+  logged: boolean;
+  goal: Counts;
+  done: Counts;
 }
 
-export interface DailyPlanBody extends Partial<DailyPlanCounts & DailyPlanPlanCounts> {
-  date?: string;
-  planType?: DailyPlanType;
-  today?: string;
-  tomorrow?: string;
-  todayItems?: string[];
-  tomorrowItems?: string[];
+export interface WeekPlan {
+  weekStart: string;
+  exists: boolean;
+  userId: string;
+  goal: Counts;
+  goalItems: ChecklistItem[];
+  planNotes: string;
+  recapNotes: string;
+  done: Counts;
+  auto: Counts;
+  doneOverrides: WeeklyOverrides;
+  stages: InterviewStages;
+  days: WeekDaySummary[];
 }
 
-export const createDailyPlan = (body: DailyPlanBody & { date: string }) =>
-  postJSON<Record<string, unknown>>('/daily-plans', body);
+export interface WeekPlanInput {
+  goal: Counts;
+  goalItems: ChecklistItem[];
+  planNotes: string;
+  recapNotes: string;
+  doneOverrides: WeeklyOverrides;
+}
 
-export const updateDailyPlan = (id: string, body: DailyPlanBody) =>
-  putJSON<Record<string, unknown>>(`/daily-plans/${id}`, body);
+export interface TeamRow {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  goal: Counts;
+  done: Counts;
+  lastLoggedDate: string | null;
+  hasWeeklyPlan: boolean;
+}
 
-export const deleteDailyPlan = (id: string) => del<{ message: string }>(`/daily-plans/${id}`);
+export const getDayPlans = (weekStart: string, userId?: string) =>
+  apiFetch<{ weekStart: string; days: DayPlan[] }>(`/daily-plans${qs({ weekStart, userId })}`);
+
+export const getDayPlan = (date: string, userId?: string) =>
+  apiFetch<DayPlan>(`/daily-plans/${date}${qs({ userId })}`);
+
+export const putDayPlan = (date: string, body: DayPlanInput) =>
+  putJSON<{ day: DayPlan; tomorrow: DayPlan | null }>(`/daily-plans/${date}`, body);
+
+export const deleteDayPlan = (date: string) => del<{ message: string }>(`/daily-plans/${date}`);
+
+export const getWeekPlan = (weekStart: string, userId?: string) =>
+  apiFetch<WeekPlan>(`/weekly-plans/${weekStart}${qs({ userId })}`);
+
+export const putWeekPlan = (weekStart: string, body: WeekPlanInput) =>
+  putJSON<WeekPlan>(`/weekly-plans/${weekStart}`, body);
+
+export const deleteWeekPlan = (weekStart: string) => del<{ message: string }>(`/weekly-plans/${weekStart}`);
+
+export const getPreviousWeekGoals = (weekStart: string) =>
+  apiFetch<{ goal: Counts | null; goalItems: ChecklistItem[] }>(`/weekly-plans/${weekStart}/previous-goals`);
+
+export const getTeamReport = (weekStart: string) =>
+  apiFetch<{ weekStart: string; users: TeamRow[] }>(`/reports/team${qs({ weekStart })}`);
 
 export const askResumeJobScreening = (jobId: string, questions: string[]) =>
   postJSON<{ pairs: { question: string; answer: string }[] }>(`/resume/jobs/${jobId}/ask`, { questions });
