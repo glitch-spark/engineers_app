@@ -1,7 +1,7 @@
 /** Pure state helpers for the Application + Round interview form. */
 import type { CallerInput, InterviewStageEntry, RoundInput } from '../api/endpoints';
 import { INTERVIEW_STAGE_ORDER, normalizeInterviewStatus, type InterviewStatusValue } from './stageBadge';
-import { toDateInputValue } from './dateRangePresets';
+import { browserZone, fromZoned, zonedDateKey, zonedTime } from './interviewTimezone';
 
 export type InterviewFormMode = 'new' | 'editDetails' | 'addRound' | 'editRound';
 
@@ -39,10 +39,14 @@ export function blankApplication(): ApplicationFormState {
   return { accountId: '', companyName: '', appliedPosition: '', jobUrl: '' };
 }
 
-export function blankRound(opts: { date?: string; time?: string; stage?: string } = {}): RoundFormState {
+/** `tz` is the IANA zone the form's date and time are read in (default: browser). */
+export function blankRound(
+  opts: { date?: string; time?: string; stage?: string } = {},
+  tz: string = browserZone(),
+): RoundFormState {
   return {
     stage: opts.stage ?? '',
-    date: opts.date ?? toDateInputValue(new Date()),
+    date: opts.date ?? zonedDateKey(new Date(), tz),
     time: opts.time ?? DEFAULT_START_TIME,
     durationMin: DEFAULT_DURATION_MIN,
     status: 'scheduled',
@@ -58,11 +62,7 @@ export function blankRound(opts: { date?: string; time?: string; stage?: string 
   };
 }
 
-function localTime(d: Date): string {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-export function roundFromEntry(e: InterviewStageEntry): RoundFormState {
+export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone()): RoundFormState {
   const start = e.scheduledAt ? new Date(e.scheduledAt) : null;
   const end = e.endsAt ? new Date(e.endsAt) : null;
   const valid = start && !isNaN(start.getTime());
@@ -70,8 +70,8 @@ export function roundFromEntry(e: InterviewStageEntry): RoundFormState {
   const caller = e.caller;
   return {
     stage: e.stage || '',
-    date: valid ? toDateInputValue(start) : '',
-    time: valid ? localTime(start) : DEFAULT_START_TIME,
+    date: valid ? zonedDateKey(start, tz) : '',
+    time: valid ? zonedTime(start, tz) : DEFAULT_START_TIME,
     durationMin: minutes > 0 ? minutes : DEFAULT_DURATION_MIN,
     status: normalizeInterviewStatus(e.status) || 'scheduled',
     interviewerName: e.interviewerName || '',
@@ -86,11 +86,9 @@ export function roundFromEntry(e: InterviewStageEntry): RoundFormState {
   };
 }
 
-/** Local date + time → UTC ISO; end = start + duration. */
-export function roundPayload(r: RoundFormState): RoundInput {
-  const [y, m, d] = r.date.split('-').map(Number);
-  const [hh, mm] = (r.time || DEFAULT_START_TIME).split(':').map(Number);
-  const start = new Date(y, m - 1, d, hh, mm);
+/** Date + time read in `tz` → UTC ISO; end = start + duration. */
+export function roundPayload(r: RoundFormState, tz: string = browserZone()): RoundInput {
+  const start = fromZoned(r.date, r.time || DEFAULT_START_TIME, tz);
   const end = new Date(start.getTime() + (r.durationMin || DEFAULT_DURATION_MIN) * 60000);
   const caller: CallerInput | undefined = r.callerEnabled
     ? {

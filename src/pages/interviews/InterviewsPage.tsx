@@ -13,6 +13,7 @@ import InterviewFilters from './InterviewFilters';
 import InterviewsCalendar from './InterviewsCalendar';
 import InterviewsList from './InterviewsList';
 import { useInterviewFilters } from './useInterviewFilters';
+import ZoneSelect from '../../components/interview/ZoneSelect';
 
 type PanelState = { interview: Interview | null; mode: PanelMode; roundId?: string; prefill?: RoundPrefill };
 
@@ -78,10 +79,13 @@ export default function InterviewsPage({ view }: { view: 'list' | 'calendar' }) 
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <InterviewTabs />
-        <nav className="segmented" aria-label="Interview view">
-          {viewLink('list', 'List')}
-          {viewLink('calendar', 'Calendar')}
-        </nav>
+        <div className="flex flex-wrap items-center gap-3">
+          <ZoneSelect />
+          <nav className="segmented" aria-label="Interview view">
+            {viewLink('list', 'List')}
+            {viewLink('calendar', 'Calendar')}
+          </nav>
+        </div>
       </div>
 
       <InterviewFilters filters={filters} update={update} showDateRange={view === 'list'} />

@@ -3,6 +3,7 @@ import type { InterviewRoundRow } from '../../api/endpoints';
 import { sameDay } from '../../lib/calendarLayout';
 import { stageLabel } from '../../lib/stageBadge';
 import { localDateKey, roundClass, timeText, type RoundEvent } from './calendarShared';
+import { toWall } from '../../lib/interviewTimezone';
 
 const MAX_PER_DAY = 3;
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -12,6 +13,7 @@ export default function CalendarMonth({
   days,
   anchor,
   events,
+  tz,
   onOpen,
   onNew,
   onShowWeek,
@@ -19,11 +21,12 @@ export default function CalendarMonth({
   days: Date[];
   anchor: Date;
   events: RoundEvent[];
+  tz: string;
   onOpen: (row: InterviewRoundRow) => void;
   onNew: (date: string, time?: string) => void;
   onShowWeek: (date: string) => void;
 }) {
-  const today = new Date();
+  const today = toWall(new Date(), tz);
   return (
     <div className="panel overflow-hidden">
       <div className="grid grid-cols-7 border-b border-zinc-200 text-center text-xs text-muted dark:border-zinc-800">

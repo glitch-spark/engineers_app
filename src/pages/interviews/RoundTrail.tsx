@@ -1,5 +1,6 @@
 import type { InterviewStageEntry } from '../../api/endpoints';
 import { interviewStatusLabel, normalizeInterviewStatus, stageLabel } from '../../lib/stageBadge';
+import { formatInZone } from '../../lib/interviewTimezone';
 
 const DOT: Record<string, string> = {
   scheduled: 'bg-blue-500',
@@ -9,24 +10,24 @@ const DOT: Record<string, string> = {
   canceled: 'bg-zinc-300 dark:bg-zinc-600',
 };
 
-function shortDate(iso?: string | null): string {
+function shortDate(iso: string | null | undefined, tz: string): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return isNaN(d.getTime()) ? '' : formatInZone(d, tz, { month: 'short', day: 'numeric' });
 }
 
 /** One dot per round, oldest first, coloured by status. */
-export default function RoundTrail({ rounds }: { rounds: InterviewStageEntry[] }) {
+export default function RoundTrail({ rounds, tz }: { rounds: InterviewStageEntry[]; tz: string }) {
   if (!rounds.length) return <span className="text-muted">—</span>;
   const label = rounds
-    .map((r) => `${stageLabel(r.stage)} ${interviewStatusLabel(r.status).toLowerCase()} ${shortDate(r.scheduledAt)}`.trim())
+    .map((r) => `${stageLabel(r.stage)} ${interviewStatusLabel(r.status).toLowerCase()} ${shortDate(r.scheduledAt, tz)}`.trim())
     .join(', ');
   return (
     <span className="inline-flex items-center gap-1" role="img" aria-label={`Rounds: ${label}`}>
       {rounds.map((r) => (
         <span
           key={r.id}
-          title={`${stageLabel(r.stage)} · ${interviewStatusLabel(r.status)} · ${shortDate(r.scheduledAt)}`}
+          title={`${stageLabel(r.stage)} · ${interviewStatusLabel(r.status)} · ${shortDate(r.scheduledAt, tz)}`}
           className={`h-2 w-2 rounded-full ${DOT[normalizeInterviewStatus(r.status)] ?? 'bg-zinc-300'}`}
         />
       ))}

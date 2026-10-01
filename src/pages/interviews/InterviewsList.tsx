@@ -18,16 +18,18 @@ import {
   stageLabel,
 } from '../../lib/stageBadge';
 import RoundTrail from './RoundTrail';
+import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
+import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 
 export type OpenPanel = (iv: Interview, mode?: PanelMode, roundId?: string) => void;
 
 const PAGE_SIZES = [10, 20, 50];
 
-function whenText(iso?: string | null): string {
+function whenText(iso: string | null | undefined, tz: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return formatInZone(d, tz, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function profileText(iv: Interview): string {
@@ -49,7 +51,8 @@ export default function InterviewsList({
 }) {
   const { user } = useAuth();
   const [pageSize, setPageSize] = useState(20);
-  const query = listQuery(filters, pageSize);
+  const { tz } = useInterviewTimezone();
+  const query = listQuery(filters, pageSize, new Date(), tz);
   const { data, isLoading, mutate } = useSWR(['interviews-list', JSON.stringify(query)], () => api.listInterviews(query), {
     keepPreviousData: true,
   });
@@ -168,7 +171,7 @@ export default function InterviewsList({
               <th scope="col" className="px-3 py-2.5 text-left">Profile</th>
               {sortHeader('stage', 'Stage')}
               <th scope="col" className="px-3 py-2.5 text-left">Caller</th>
-              {sortHeader('latest', 'Latest round')}
+              {sortHeader('latest', `Latest round (${zoneAbbrev(new Date(), tz)})`)}
               {sortHeader('status', 'Status')}
               <th scope="col" className="px-3 py-2.5 text-left">Rounds</th>
               <th scope="col" className="px-3 py-2.5 text-left">Owner</th>
@@ -195,9 +198,9 @@ export default function InterviewsList({
                 <td className="px-3 py-2.5">{profileText(iv)}</td>
                 <td className="px-3 py-2.5">{stageCell(iv)}</td>
                 <td className="px-3 py-2.5">{callerCell(iv)}</td>
-                <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{whenText(iv.scheduledAt)}</td>
+                <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{whenText(iv.scheduledAt, tz)}</td>
                 <td className="px-3 py-2.5">{statusCell(iv)}</td>
-                <td className="px-3 py-2.5"><RoundTrail rounds={iv.stageHistory ?? []} /></td>
+                <td className="px-3 py-2.5"><RoundTrail rounds={iv.stageHistory ?? []} tz={tz} /></td>
                 <td className="px-3 py-2.5"><NameWithAvatar name={iv.ownerName || iv.ownerEmail} size="sm" /></td>
                 <td className="px-3 py-2.5 text-right">{rowMenu(iv)}</td>
               </tr>
@@ -221,9 +224,9 @@ export default function InterviewsList({
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 {stageCell(iv)}
                 {iv.caller?.enabled && callerCell(iv)}
-                <span className="tabular-nums text-muted">{whenText(iv.scheduledAt)}</span>
+                <span className="tabular-nums text-muted">{whenText(iv.scheduledAt, tz)}</span>
                 {statusCell(iv)}
-                <RoundTrail rounds={iv.stageHistory ?? []} />
+                <RoundTrail rounds={iv.stageHistory ?? []} tz={tz} />
               </div>
             </div>
           </li>

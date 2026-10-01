@@ -17,6 +17,8 @@ import { interviewStatusBadgeClass, interviewStatusLabel, normalizeInterviewStat
 import ApplicationFields from './ApplicationFields';
 import RoundFields from './RoundFields';
 import type { Interview } from './types';
+import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
+import { formatInZone } from '../../lib/interviewTimezone';
 
 export type RoundPrefill = { date?: string; time?: string; stage?: string };
 
@@ -29,11 +31,11 @@ function applicationFromInterview(iv: Interview): ApplicationFormState {
   };
 }
 
-function formatWhen(iso?: string | null): string {
+function formatWhen(iso: string | null | undefined, tz: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return formatInZone(d, tz, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 const SAVED_MESSAGE: Record<InterviewFormMode, string> = {
@@ -60,6 +62,7 @@ export default function InterviewForm({
   onCancel: () => void;
 }) {
   const idPrefix = useId();
+  const { tz } = useInterviewTimezone();
   const history = interview?.stageHistory ?? [];
   const entry = mode === 'editRound' ? history.find((e) => e.id === roundId) : undefined;
   const previous = history[history.length - 1];
@@ -68,12 +71,12 @@ export default function InterviewForm({
 
   const [app, setApp] = useState<ApplicationFormState>(() => (interview ? applicationFromInterview(interview) : blankApplication()));
   const [round, setRound] = useState<RoundFormState>(() => (entry
-    ? roundFromEntry(entry)
+    ? roundFromEntry(entry, tz)
     : blankRound({
       date: prefill?.date,
       time: prefill?.time,
       stage: prefill?.stage ?? (mode === 'addRound' ? nextStage(history) : ''),
-    })));
+    }, tz)));
   const [markPrevious, setMarkPrevious] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -97,16 +100,16 @@ export default function InterviewForm({
         jobUrl: app.jobUrl.trim(),
       };
       if (mode === 'new') {
-        saved = await api.createInterview({ ...appBody, round: roundPayload(round) });
+        saved = await api.createInterview({ ...appBody, round: roundPayload(round, tz) });
       } else if (mode === 'editDetails' && interview) {
         saved = await api.updateInterview(interview._id, appBody);
       } else if (mode === 'addRound' && interview) {
         saved = await api.addInterviewStage(interview._id, {
-          ...roundPayload(round),
+          ...roundPayload(round, tz),
           markPreviousPassed: previousOpen && markPrevious,
         });
       } else if (mode === 'editRound' && interview && roundId) {
-        const body = roundPayload(round);
+        const body = roundPayload(round, tz);
         if (!round.callerEnabled && entry?.caller?.enabled) body.caller = { enabled: false };
         saved = await api.updateInterviewStage(interview._id, roundId, body);
       }
@@ -134,7 +137,7 @@ export default function InterviewForm({
               {[...history].reverse().map((e) => (
                 <li key={e.id} className="flex items-center gap-2">
                   <span className={`badge ${stageBadgeClass(e.stage)}`}>{stageLabel(e.stage)}</span>
-                  <span className="text-muted tabular-nums">{formatWhen(e.scheduledAt)}</span>
+                  <span className="text-muted tabular-nums">{formatWhen(e.scheduledAt, tz)}</span>
                   <span className={`badge ${interviewStatusBadgeClass(e.status)}`}>{interviewStatusLabel(e.status)}</span>
                 </li>
               ))}
@@ -146,6 +149,7 @@ export default function InterviewForm({
             round={round}
             onChange={(p) => setRound((r) => ({ ...r, ...p }))}
             idPrefix={idPrefix}
+            tz={tz}
             legend={mode === 'new' ? 'First round' : mode === 'addRound' ? 'Next round' : 'Round'}
           />
         )}

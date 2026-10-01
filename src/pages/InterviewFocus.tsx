@@ -16,6 +16,8 @@ import {
 import * as api from '../api/endpoints';
 import type { InterviewStageEntry } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
+import { useInterviewTimezone } from '../lib/useInterviewTimezone';
+import ZoneSelect from '../components/interview/ZoneSelect';
 import InterviewPanel, { type PanelMode } from '../components/interview/InterviewPanel';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { notify } from '../lib/notify';
@@ -165,6 +167,7 @@ export default function InterviewFocusPage() {
                 <Trash2 className="h-4 w-4" aria-hidden />
               </button>
             )}
+            <ZoneSelect />
             <ThemeToggle />
           </div>
         </div>
@@ -278,6 +281,7 @@ function StageStepper({
   onSelect: (id: string) => void;
   onAdd: () => void;
 }) {
+  const { tz } = useInterviewTimezone();
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
@@ -364,7 +368,7 @@ function StageStepper({
                     {stageLabel(entry.stage)}
                   </span>
                   <span className="text-[11px] tabular-nums text-faint">
-                    {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : '—'}
+                    {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt, tz) : '—'}
                   </span>
                   <span className="sr-only">, {stepStatusText(entry)}</span>
                 </span>
@@ -422,6 +426,7 @@ function StageWorkspace({
   onEditDetails: () => void;
   onSaved: (next: Record<string, unknown>) => unknown;
 }) {
+  const { tz } = useInterviewTimezone();
   const [tab, setTab] = useState<WorkspaceTab>('script');
   const [transcript, setTranscript] = useState(entry.transcript ?? '');
   const [note, setNote] = useState(entry.note ?? '');
@@ -497,7 +502,7 @@ function StageWorkspace({
             {stageLabel(entry.stage)}
           </span>
           <span className="text-sm tabular-nums text-body">
-            {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : 'No date'}
+            {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt, tz) : 'No date'}
           </span>
           {entry.status && (
             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${interviewStatusBadgeClass(entry.status)}`}>

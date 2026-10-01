@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
-import { toDateInputValue } from '../../lib/dateRangePresets';
+import { zonedDateKey } from '../../lib/interviewTimezone';
+import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import {
   parseInterviewFilters,
   serializeInterviewFilters,
@@ -12,9 +13,10 @@ import {
 export function useInterviewFilters(): [InterviewFilters, (patch: Partial<InterviewFilters>) => void, string] {
   const [params, setParams] = useSearchParams();
   const { user } = useAuth();
+  const { tz } = useInterviewTimezone();
   const defaults = useMemo(
-    () => ({ userId: user?.id || 'all', today: toDateInputValue(new Date()) }),
-    [user?.id],
+    () => ({ userId: user?.id || 'all', today: zonedDateKey(new Date(), tz) }),
+    [user?.id, tz],
   );
   const filters = useMemo(() => parseInterviewFilters(params, defaults), [params, defaults]);
   const update = useCallback((patch: Partial<InterviewFilters>) => {

@@ -4,6 +4,7 @@ import type { InterviewRoundRow } from '../../api/endpoints';
 import { layoutDayEvents, sameDay, visibleHourRange } from '../../lib/calendarLayout';
 import { stageLabel } from '../../lib/stageBadge';
 import { localDateKey, roundClass, timeText, type RoundEvent } from './calendarShared';
+import { toWall } from '../../lib/interviewTimezone';
 
 const SLOT_PX = 24; // one 30-minute row
 const HOUR_PX = SLOT_PX * 2;
@@ -17,19 +18,23 @@ function hourLabel(h: number): string {
 export default function CalendarWeek({
   days,
   events,
+  tz,
   onOpen,
   onNew,
 }: {
   days: Date[];
   events: RoundEvent[];
+  /** Zone the grid is drawn in; `now` is that zone's wall clock. */
+  tz: string;
   onOpen: (row: InterviewRoundRow) => void;
   onNew: (date: string, time?: string) => void;
 }) {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => toWall(new Date(), tz));
   useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 60_000);
+    setNow(toWall(new Date(), tz));
+    const t = window.setInterval(() => setNow(toWall(new Date(), tz)), 60_000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [tz]);
   const hours = visibleHourRange(events);
   const slots = (hours.end - hours.start) * 2;
   const height = slots * SLOT_PX;

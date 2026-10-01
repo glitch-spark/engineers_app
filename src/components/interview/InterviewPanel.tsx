@@ -16,6 +16,8 @@ import {
 import ConfirmDialog from '../ConfirmDialog';
 import InterviewForm, { type RoundPrefill } from './InterviewForm';
 import type { Interview } from './types';
+import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
+import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 
 export type PanelMode = 'view' | InterviewFormMode;
 
@@ -27,14 +29,15 @@ const MODE_LABEL: Record<PanelMode, string> = {
   editRound: 'Edit round',
 };
 
-function formatRange(start?: string | null, end?: string | null): string {
+function formatRange(start: string | null | undefined, end: string | null | undefined, tz: string): string {
   if (!start) return '—';
   const s = new Date(start);
   if (isNaN(s.getTime())) return '—';
-  const day = s.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  const t = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const day = formatInZone(s, tz, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const t = (d: Date) => formatInZone(d, tz, { hour: 'numeric', minute: '2-digit' });
   const e = end ? new Date(end) : null;
-  return e && !isNaN(e.getTime()) ? `${day}, ${t(s)} – ${t(e)}` : `${day}, ${t(s)}`;
+  const abbrev = zoneAbbrev(s, tz);
+  return e && !isNaN(e.getTime()) ? `${day}, ${t(s)} – ${t(e)} ${abbrev}` : `${day}, ${t(s)} ${abbrev}`;
 }
 
 function creatorId(iv: Interview): string {
@@ -61,6 +64,7 @@ export default function InterviewPanel({
   onChanged?: (iv: Interview | null) => void;
 }) {
   const { user } = useAuth();
+  const { tz } = useInterviewTimezone();
   const titleId = useId();
   const panelRef = useRef<HTMLElement>(null);
   const [iv, setIv] = useState<Interview | null>(interview ?? null);
@@ -190,7 +194,7 @@ export default function InterviewPanel({
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={`badge ${stageBadgeClass(e.stage)}`}>{stageLabel(e.stage)}</span>
                           {e.caller?.enabled && <PhoneCall size={14} className="text-sky-600" aria-label="Caller requested" />}
-                          <span className="text-sm tabular-nums text-body">{formatRange(e.scheduledAt, e.endsAt)}</span>
+                          <span className="text-sm tabular-nums text-body">{formatRange(e.scheduledAt, e.endsAt, tz)}</span>
                         </div>
                         {e.interviewerName && <p className="mt-1 text-xs text-muted">with {e.interviewerName}</p>}
                         <div className="mt-2 flex flex-wrap items-center gap-2">

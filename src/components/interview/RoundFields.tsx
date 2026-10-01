@@ -4,6 +4,7 @@ import { DURATION_OPTIONS, type RoundFormState } from '../../lib/interviewForm';
 import StagePicker from './StagePicker';
 import CallerFields from './CallerFields';
 import { TranscriptUploadButton } from './TranscriptUploadButton';
+import { fromZoned, zoneAbbrev } from '../../lib/interviewTimezone';
 
 function durationLabel(min: number): string {
   if (min < 60) return `${min} min`;
@@ -18,12 +19,15 @@ export default function RoundFields({
   onChange,
   disabled,
   idPrefix,
+  tz,
   legend = 'Round',
 }: {
   round: RoundFormState;
   onChange: (patch: Partial<RoundFormState>) => void;
   disabled?: boolean;
   idPrefix: string;
+  /** Zone the date and time are entered in. */
+  tz: string;
   legend?: string;
 }) {
   const id = (k: string) => `${idPrefix}-round-${k}`;
@@ -31,14 +35,8 @@ export default function RoundFields({
   const durations = DURATION_OPTIONS.includes(round.durationMin)
     ? DURATION_OPTIONS
     : [...DURATION_OPTIONS, round.durationMin].sort((a, b) => a - b);
-  const tz = (() => {
-    try {
-      return new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(new Date())
-        .find((p) => p.type === 'timeZoneName')?.value ?? '';
-    } catch {
-      return '';
-    }
-  })();
+  // Abbreviation for the round's own date (EST vs EDT), in the chosen zone.
+  const tzLabel = zoneAbbrev(round.date ? fromZoned(round.date, round.time || '12:00', tz) : new Date(), tz);
 
   return (
     <fieldset className="space-y-3">
@@ -67,7 +65,7 @@ export default function RoundFields({
         </div>
         <div>
           <label htmlFor={id('time')} className="block text-sm font-medium mb-1">
-            Start{req} {tz && <span className="text-xs font-normal text-muted">({tz})</span>}
+            Start{req} {tzLabel && <span className="text-xs font-normal text-muted">({tzLabel})</span>}
           </label>
           <input id={id('time')} className="input tabular-nums" type="time" step={300} value={round.time} disabled={disabled}
             onChange={(e) => onChange({ time: e.target.value })} />

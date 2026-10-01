@@ -6,6 +6,7 @@ import {
   toDateInputValue,
   type DateRangePreset,
 } from './dateRangePresets';
+import { browserZone, toWall, zonedDayBounds } from './interviewTimezone';
 
 export type ListSort = 'latest' | 'company' | 'stage' | 'status';
 export type SortDir = 'asc' | 'desc';
@@ -99,22 +100,26 @@ export function listDateRange(f: InterviewFilters, now = new Date()): { from: st
   return rangeForDatePreset(f.range, now);
 }
 
-/** Local calendar day → UTC instant, so "Monday" means the viewer's Monday. */
-function localDayStart(key: string): string {
-  const [y, m, d] = key.split('-').map(Number);
-  return new Date(y, m - 1, d).toISOString();
+/** Calendar day in the chosen zone → UTC instant, so "Monday" means that zone's Monday. */
+function dayStart(key: string, tz: string): string {
+  return zonedDayBounds(key, tz)[0].toISOString();
 }
 
-function localDayEnd(key: string): string {
-  const [y, m, d] = key.split('-').map(Number);
-  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+function dayEnd(key: string, tz: string): string {
+  return new Date(zonedDayBounds(key, tz)[1].getTime() - 1).toISOString();
 }
 
-export function listQuery(f: InterviewFilters, limit: number, now = new Date()): Record<string, string | number> {
-  const { from, to } = listDateRange(f, now);
+export function listQuery(
+  f: InterviewFilters,
+  limit: number,
+  now = new Date(),
+  tz: string = browserZone(),
+): Record<string, string | number> {
+  // Presets ("this week", …) are worked out from today's date in the chosen zone.
+  const { from, to } = listDateRange(f, toWall(now, tz));
   const q: Record<string, string | number> = { page: f.page, limit, sort: f.sort, dir: f.dir };
-  if (from) q.from = localDayStart(from);
-  if (to) q.to = localDayEnd(to);
+  if (from) q.from = dayStart(from, tz);
+  if (to) q.to = dayEnd(to, tz);
   if (f.user && f.user !== 'all') q.creatorId = f.user;
   if (f.profile) q.accountId = f.profile;
   if (f.stage) q.stage = f.stage;
@@ -131,9 +136,13 @@ export type RoundsQuery = {
   status?: string;
 };
 
-/** `range` is local YYYY-MM-DD with an exclusive `to`; sent as local midnights. */
-export function roundsQuery(f: InterviewFilters, range: { from: string; to: string }): RoundsQuery {
-  const q: RoundsQuery = { from: localDayStart(range.from), to: localDayStart(range.to) };
+/** `range` is YYYY-MM-DD in `tz` with an exclusive `to`; sent as that zone's midnights. */
+export function roundsQuery(
+  f: InterviewFilters,
+  range: { from: string; to: string },
+  tz: string = browserZone(),
+): RoundsQuery {
+  const q: RoundsQuery = { from: dayStart(range.from, tz), to: dayStart(range.to, tz) };
   if (f.user && f.user !== 'all') q.creatorId = f.user;
   if (f.profile) q.accountId = f.profile;
   if (f.stage) q.stage = f.stage;

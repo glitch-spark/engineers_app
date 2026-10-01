@@ -1,13 +1,15 @@
 import type { InterviewRoundRow } from '../../api/endpoints';
 import { isLegacyAllDay, type CalEvent } from '../../lib/calendarLayout';
 import { normalizeInterviewStatus, stageBadgeClass } from '../../lib/stageBadge';
+import { toWall } from '../../lib/interviewTimezone';
 
 export type RoundEvent = CalEvent & { row: InterviewRoundRow };
 
-export function toEvents(rows: InterviewRoundRow[]): RoundEvent[] {
+/** Events on `tz`'s wall clock (see toWall), so layout can use local Date getters. */
+export function toEvents(rows: InterviewRoundRow[], tz: string): RoundEvent[] {
   return rows.map((row) => {
-    const start = new Date(row.scheduledAt);
-    const end = row.endsAt ? new Date(row.endsAt) : new Date(start.getTime() + 60 * 60000);
+    const start = toWall(new Date(row.scheduledAt), tz);
+    const end = row.endsAt ? toWall(new Date(row.endsAt), tz) : new Date(start.getTime() + 60 * 60000);
     return { id: row.roundId, start, end: end > start ? end : new Date(start.getTime() + 30 * 60000), allDay: isLegacyAllDay(row.scheduledAt, row.endsAt), row };
   });
 }
