@@ -105,9 +105,16 @@ export default function InterviewsList({
             Add next round
           </button>
         )}
-        <a href={`/interview/${iv._id}`} target="_blank" rel="noreferrer" className="block px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-          Open full screen
-        </a>
+        {canEdit(iv) && (
+          <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            onClick={(e) => {
+              (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
+              const tip = iv.stageHistory?.[iv.stageHistory.length - 1];
+              onOpen(iv, tip ? 'editRound' : 'editDetails', tip?.id);
+            }}>
+            Edit
+          </button>
+        )}
         {canEdit(iv) && (
           <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-zinc-100 dark:text-red-400 dark:hover:bg-zinc-800"
             onClick={(e) => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; onDelete(iv); }}>

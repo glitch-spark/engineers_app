@@ -8,15 +8,13 @@ import { DATE_RANGE_PRESET_OPTIONS, type DateRangePreset } from '../../lib/dateR
 import { INTERVIEW_STAGE_ORDER, INTERVIEW_STATUSES, stageLabel } from '../../lib/stageBadge';
 import type { InterviewFilters as Filters } from '../../lib/interviewFilters';
 
-/** Shared filter bar for List and Calendar (the date range is List-only). */
+/** One filter bar for List and Calendar; the Date range also picks the calendar's period. */
 export default function InterviewFilters({
   filters,
   update,
-  showDateRange,
 }: {
   filters: Filters;
   update: (patch: Partial<Filters>) => void;
-  showDateRange: boolean;
 }) {
   const { user } = useAuth();
   const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
@@ -62,31 +60,27 @@ export default function InterviewFilters({
         <label htmlFor="ivf-status" className="mb-1 block text-xs text-muted">Status</label>
         <Select id="ivf-status" value={filters.status} onChange={(v) => update({ status: v })} options={statusOptions} />
       </div>
-      {showDateRange && (
+      <div className="w-44">
+        <label htmlFor="ivf-range" className="mb-1 block text-xs text-muted">Date range</label>
+        <Select
+          id="ivf-range"
+          value={filters.range}
+          onChange={(v) => update({ range: v as DateRangePreset })}
+          options={DATE_RANGE_PRESET_OPTIONS}
+        />
+      </div>
+      {filters.range === 'custom' && (
         <>
-          <div className="w-44">
-            <label htmlFor="ivf-range" className="mb-1 block text-xs text-muted">Date range</label>
-            <Select
-              id="ivf-range"
-              value={filters.range}
-              onChange={(v) => update({ range: v as DateRangePreset })}
-              options={DATE_RANGE_PRESET_OPTIONS}
-            />
+          <div className="w-40">
+            <label htmlFor="ivf-from" className="mb-1 block text-xs text-muted">From</label>
+            <input id="ivf-from" type="date" className="input text-sm" value={filters.from} max={filters.to || undefined}
+              onChange={(e) => update({ from: e.target.value })} />
           </div>
-          {filters.range === 'custom' && (
-            <>
-              <div className="w-40">
-                <label htmlFor="ivf-from" className="mb-1 block text-xs text-muted">From</label>
-                <input id="ivf-from" type="date" className="input text-sm" value={filters.from} max={filters.to || undefined}
-                  onChange={(e) => update({ from: e.target.value })} />
-              </div>
-              <div className="w-40">
-                <label htmlFor="ivf-to" className="mb-1 block text-xs text-muted">To</label>
-                <input id="ivf-to" type="date" className="input text-sm" value={filters.to} min={filters.from || undefined}
-                  onChange={(e) => update({ to: e.target.value })} />
-              </div>
-            </>
-          )}
+          <div className="w-40">
+            <label htmlFor="ivf-to" className="mb-1 block text-xs text-muted">To</label>
+            <input id="ivf-to" type="date" className="input text-sm" value={filters.to} min={filters.from || undefined}
+              onChange={(e) => update({ to: e.target.value })} />
+          </div>
         </>
       )}
     </div>

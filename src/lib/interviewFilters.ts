@@ -24,12 +24,9 @@ export type InterviewFilters = {
   sort: ListSort;
   dir: SortDir;
   page: number;
-  view: CalendarView;
-  /** Calendar anchor, local YYYY-MM-DD. */
-  date: string;
 };
 
-export type FilterDefaults = { userId: string; today: string };
+export type FilterDefaults = { userId: string };
 
 const SORTS: ListSort[] = ['latest', 'company', 'stage', 'status'];
 const PRESETS = DATE_RANGE_PRESET_OPTIONS.map((o) => o.value);
@@ -47,8 +44,6 @@ function defaults(d: FilterDefaults): InterviewFilters {
     sort: 'latest',
     dir: 'desc',
     page: 1,
-    view: 'week',
-    date: d.today,
   };
 }
 
@@ -69,8 +64,6 @@ export function parseInterviewFilters(params: URLSearchParams, d: FilterDefaults
     sort: SORTS.includes(sort) ? sort : base.sort,
     dir: get('dir') === 'asc' ? 'asc' : 'desc',
     page: Number.isFinite(page) && page > 1 ? page : 1,
-    view: get('view') === 'month' ? 'month' : 'week',
-    date: DATE_RE.test(get('date')) ? get('date') : base.date,
   };
 }
 
@@ -98,6 +91,57 @@ export function listDateRange(f: InterviewFilters, now = new Date()): { from: st
     return { from: toDateInputValue(monday), to: toDateInputValue(sunday) };
   }
   return rangeForDatePreset(f.range, now);
+}
+
+const WEEK_PRESETS: Record<string, number> = { prev_week: -1, this_week: 0, next_week: 1 };
+
+function parseKey(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * What the calendar shows for the shared Date range: week presets → that
+ * week; month presets and This year → Month view; Custom → the week of
+ * `from` when it spans ≤ 7 days, else that month. `now` is today's wall date.
+ */
+export function calendarFromFilters(f: InterviewFilters, now: Date): { view: CalendarView; anchor: string } {
+  if (f.range in WEEK_PRESETS) return { view: 'week', anchor: listDateRange(f, now).from };
+  if (f.range === 'this_month' || f.range === 'prev_month') return { view: 'month', anchor: listDateRange(f, now).from };
+  if (f.range === 'custom' && f.from) {
+    const span = f.to ? Math.round((parseKey(f.to).getTime() - parseKey(f.from).getTime()) / 86400000) + 1 : 1;
+    return { view: span <= 7 ? 'week' : 'month', anchor: f.from };
+  }
+  if (f.range === 'this_year') {
+    return { view: 'month', anchor: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)) };
+  }
+  return { view: 'week', anchor: toDateInputValue(mondayOfWeek(now)) };
+}
+
+/** Date range for a calendar period (named presets when they match, else Custom). */
+export function filtersForCalendar(
+  view: CalendarView,
+  anchor: string,
+  now: Date,
+): Pick<InterviewFilters, 'range' | 'from' | 'to'> {
+  const day = parseKey(anchor);
+  if (view === 'week') {
+    const monday = mondayOfWeek(day);
+    const weeks = Math.round((monday.getTime() - mondayOfWeek(now).getTime()) / (7 * 86400000));
+    const named = Object.keys(WEEK_PRESETS).find((k) => WEEK_PRESETS[k] === weeks) as DateRangePreset | undefined;
+    if (named) return { range: named, from: '', to: '' };
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { range: 'custom', from: toDateInputValue(monday), to: toDateInputValue(sunday) };
+  }
+  const months = (day.getFullYear() - now.getFullYear()) * 12 + (day.getMonth() - now.getMonth());
+  if (months === 0) return { range: 'this_month', from: '', to: '' };
+  if (months === -1) return { range: 'prev_month', from: '', to: '' };
+  return {
+    range: 'custom',
+    from: toDateInputValue(new Date(day.getFullYear(), day.getMonth(), 1)),
+    to: toDateInputValue(new Date(day.getFullYear(), day.getMonth() + 1, 0)),
+  };
 }
 
 /** Calendar day in the chosen zone → UTC instant, so "Monday" means that zone's Monday. */
@@ -148,4 +192,17 @@ export function roundsQuery(
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
   return q;
+}
+
+/**
+ * Query string for the List | Calendar switch: every filter carries over
+ * (each view ignores the other's keys); only the page number and one-off
+ * `panel` links are dropped.
+ */
+export function viewSwitchQuery(params: URLSearchParams): string {
+  const keep = new URLSearchParams(params);
+  keep.delete('page');
+  keep.delete('panel');
+  const s = keep.toString();
+  return s ? `?${s}` : '';
 }

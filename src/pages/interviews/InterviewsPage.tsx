@@ -88,7 +88,7 @@ export default function InterviewsPage({ view }: { view: 'list' | 'calendar' }) 
         </div>
       </div>
 
-      <InterviewFilters filters={filters} update={update} showDateRange={view === 'list'} />
+      <InterviewFilters filters={filters} update={update} />
 
       {view === 'list' ? (
         <InterviewsList
