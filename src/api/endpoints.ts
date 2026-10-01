@@ -1564,6 +1564,8 @@ export interface JobApplyRun {
   appliedSince?: number;
   /** Only on GET /job-applies/runs/{id}: suggested jobs not applied to yet (here or in earlier runs). */
   toApply?: number;
+  /** Only on GET /job-applies/runs/{id}: jobs in the Excluded tab (failed a check, or no profile can take them). */
+  excludedCount?: number;
   /** Only on GET /job-applies/runs/{id}: this run's tailored resumes by status. */
   tailoring?: { queued: number; inProgress: number; ready: number; failed: number };
   selection: { accountId: string; resumeIds: string[] }[];

@@ -544,7 +544,7 @@ export default function JobApplyRun() {
             options={[
               { value: 'suggested', label: 'Suggested', count: run.suggested },
               { value: 'all', label: 'All', count: run.counts.total },
-              { value: 'excluded', label: 'Excluded', count: run.counts.excluded },
+              { value: 'excluded', label: 'Excluded', count: run.excludedCount ?? run.counts.excluded },
               { value: 'failed', label: 'Failed', count: run.counts.failed },
             ]}
           />

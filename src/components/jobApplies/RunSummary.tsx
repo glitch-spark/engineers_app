@@ -51,7 +51,7 @@ export default function RunSummary({
               <>
                 of {run.counts.total} ·{' '}
                 <button type="button" className="underline-offset-2 hover:underline" onClick={() => onView('excluded')}>
-                  {run.counts.excluded} excluded
+                  {run.excludedCount ?? run.counts.excluded} excluded
                 </button>
                 {run.counts.failed > 0 && (
                   <>
