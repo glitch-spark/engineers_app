@@ -2,7 +2,7 @@
  *  Weeks start on Monday; Monday–Saturday are working days and Sunday
  *  belongs to the week that just ended.
  */
-import type { Counts, RegionCounts } from '../api/endpoints';
+import type { Counts } from '../api/endpoints';
 import { mondayOfWeek, toDateInputValue } from './dateRangePresets';
 
 export type CompareState = 'met' | 'short' | 'over' | 'none';
@@ -86,22 +86,8 @@ export function compare(done: number, goal: number): { state: CompareState; diff
   return done < goal ? { state: 'short', diff: goal - done } : { state: 'over', diff: done - goal };
 }
 
-export function regionTotal(counts: RegionCounts | null | undefined): number {
-  return Object.values(counts ?? {}).reduce((sum, n) => sum + (n || 0), 0);
-}
-
-/** The region furthest below its goal, or null when every region meets it. */
-export function worstRegion(goal: RegionCounts, done: RegionCounts): { region: string; short: number } | null {
-  let worst: { region: string; short: number } | null = null;
-  for (const [region, target] of Object.entries(goal ?? {})) {
-    const short = target - (done?.[region] ?? 0);
-    if (short > 0 && (!worst || short > worst.short)) worst = { region, short };
-  }
-  return worst;
-}
-
 export function emptyCounts(): Counts {
-  return { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0, profiles: {}, linkedin: {} };
+  return { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0 };
 }
 
 /** Working days (Mon–Sat) strictly between two dates. */
@@ -128,4 +114,16 @@ export function shouldLogDone({
   if (date > today) return false;
   if (date < today || logged) return true;
   return doneChanged;
+}
+
+export type DayState = 'set-goal' | 'planned' | 'follow-up' | 'done' | 'missed';
+
+/** What a day row offers: set a goal, follow up today, or show results. */
+export function dayState({
+  date, today, hasGoal, logged,
+}: { date: string; today: string; hasGoal: boolean; logged: boolean }): DayState {
+  if (logged) return 'done';
+  if (date > today) return hasGoal ? 'planned' : 'set-goal';
+  if (date === today) return hasGoal ? 'follow-up' : 'set-goal';
+  return hasGoal ? 'follow-up' : 'missed';
 }

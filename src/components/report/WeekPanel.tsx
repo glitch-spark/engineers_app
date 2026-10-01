@@ -1,25 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import type { ChecklistItem, Counts, WeeklyOverrides } from '../../api/endpoints';
+import type { ChecklistItem, Counts } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
 import { parseDateParam, weekLabel } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import ChecklistEditor, { cleanItems } from './ChecklistEditor';
-import CountsEditor, { type CountsField, type OverrideValue } from './CountsEditor';
+import GoalDoneFields from './GoalDoneFields';
 
 interface WeekForm {
   goal: Counts;
   goalItems: ChecklistItem[];
-  planNotes: string;
   recapNotes: string;
-  doneOverrides: WeeklyOverrides;
 }
 
-// Every weekly Done value is computed from the days and interview records.
-const AUTO_FIELDS: CountsField[] = ['bidsSelf', 'bidsBidder', 'interviewsSelf', 'interviewsCaller', 'profiles', 'linkedin'];
-
-/** Set the week's goals and notes; review its computed Done. */
+/** Set the week's goals; Done is added up from the days and the Interviews page. */
 export default function WeekPanel({
   weekStart,
   userId,
@@ -47,13 +42,7 @@ export default function WeekPanel({
 
   useEffect(() => {
     if (!data) return;
-    const next: WeekForm = {
-      goal: data.goal,
-      goalItems: data.goalItems,
-      planNotes: data.planNotes,
-      recapNotes: data.recapNotes,
-      doneOverrides: data.doneOverrides,
-    };
+    const next: WeekForm = { goal: data.goal, goalItems: data.goalItems, recapNotes: data.recapNotes };
     setForm(next);
     setInitial(JSON.stringify(next));
   }, [data]);
@@ -66,9 +55,6 @@ export default function WeekPanel({
   }, [open]);
 
   const dirty = useMemo(() => !!form && JSON.stringify(form) !== initial, [form, initial]);
-
-  const setOverride = (field: CountsField, value: OverrideValue) =>
-    setForm((f) => (f ? { ...f, doneOverrides: { ...f.doneOverrides, [field]: value } } : f));
 
   const applyLastWeek = async () => {
     if (!form) return;
@@ -124,7 +110,7 @@ export default function WeekPanel({
     <SidePanel
       open={open}
       title={`Week ${weekLabel(monday)}`}
-      subtitle={readOnly ? 'View only' : 'Week goals · Done is added up from the days'}
+      subtitle={readOnly ? 'View only' : 'Week goals · Done adds up from the days'}
       onClose={onClose}
       footer={footer}
       dirty={dirty && !readOnly}
@@ -143,14 +129,12 @@ export default function WeekPanel({
         </div>
       ) : form && data ? (
         <div className="space-y-5">
-          <CountsEditor
+          <GoalDoneFields
             goal={form.goal}
             onGoal={readOnly ? undefined : (goal) => setForm({ ...form, goal })}
-            auto={data.auto}
-            overrides={form.doneOverrides}
-            autoFields={AUTO_FIELDS}
-            onOverride={readOnly ? undefined : setOverride}
+            done={data.done}
             stages={data.stages}
+            showInterviewGoal
             readOnly={readOnly}
           />
           <section>
@@ -161,24 +145,20 @@ export default function WeekPanel({
               readOnly={readOnly}
             />
           </section>
-          {(['planNotes', 'recapNotes'] as const).map((field) => (
-            <section key={field}>
-              <label className="form-label mb-1 block" htmlFor={`week-${field}`}>
-                {field === 'planNotes' ? 'Plan notes' : 'Recap notes'}
-              </label>
-              {readOnly ? (
-                <p className="whitespace-pre-wrap text-sm text-body">{form[field] || '—'}</p>
-              ) : (
-                <textarea
-                  id={`week-${field}`}
-                  className="input min-h-[5rem] w-full"
-                  maxLength={4000}
-                  value={form[field]}
-                  onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-                />
-              )}
-            </section>
-          ))}
+          <section>
+            <label className="form-label mb-1 block" htmlFor="week-recap">Recap notes</label>
+            {readOnly ? (
+              <p className="whitespace-pre-wrap text-sm text-body">{form.recapNotes || '—'}</p>
+            ) : (
+              <textarea
+                id="week-recap"
+                className="input min-h-[5rem] w-full"
+                maxLength={4000}
+                value={form.recapNotes}
+                onChange={(e) => setForm({ ...form, recapNotes: e.target.value })}
+              />
+            )}
+          </section>
         </div>
       ) : null}
     </SidePanel>

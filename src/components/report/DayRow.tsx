@@ -1,9 +1,9 @@
 import { ChevronRight } from 'lucide-react';
 import type { DayPlan } from '../../api/endpoints';
-import { dayLabel, parseDateParam, regionTotal } from '../../lib/reportWeek';
+import { dayLabel, dayState, parseDateParam } from '../../lib/reportWeek';
 import GoalDone from './GoalDone';
 
-/** One day of the week board: Goal → Done per category, or the goal still to come. */
+/** One day of the week board: its goal, then what was done once followed up. */
 export default function DayRow({
   day,
   today,
@@ -17,44 +17,53 @@ export default function DayRow({
 }) {
   const date = parseDateParam(day.date) ?? new Date();
   const isToday = day.date === today;
-  const isFuture = day.date > today;
-  const logged = day.loggedAt !== null;
   const { goal, done } = day;
   const bidsGoal = goal.bidsSelf + goal.bidsBidder;
-  const interviewsGoal = goal.interviewsSelf + goal.interviewsCaller;
   const ticked = day.goalItems.filter((i) => i.done).length;
-  const hasGoal = bidsGoal > 0 || interviewsGoal > 0 || day.goalItems.length > 0;
+  const hasGoal = bidsGoal > 0 || day.goalItems.length > 0;
+  const state = dayState({ date: day.date, today, hasGoal, logged: day.loggedAt !== null });
+  const interviews = done.interviewsSelf + done.interviewsCaller;
+
+  const interviewsText = (
+    <span className="whitespace-nowrap text-muted">
+      Interviews <span className="font-medium text-strong">{interviews}</span>
+      {interviews > 0 && ` (${done.interviewsSelf} self · ${done.interviewsCaller} caller)`}
+    </span>
+  );
+  const goalText = (
+    <span className="text-muted">
+      Goal: Bids {bidsGoal}
+      {day.goalItems.length > 0 && ` · ${day.goalItems.length} goal${day.goalItems.length === 1 ? '' : 's'}`}
+    </span>
+  );
 
   let body;
-  if (isFuture || (!logged && !isToday && !day.exists)) {
-    body = hasGoal ? (
-      <span className="text-sm text-muted">
-        Goal: Bids {bidsGoal} · Interviews {interviewsGoal}
-        {day.goalItems.length > 0 && ` · ${day.goalItems.length} items`}
-      </span>
-    ) : (
-      <span className="text-sm text-muted">{isFuture && canEdit ? 'Set goal' : '—'}</span>
-    );
-  } else if (isToday && !logged) {
+  if (state === 'done') {
     body = (
-      <span className="flex flex-wrap items-center gap-3 text-sm">
-        {canEdit && <span className="btn text-xs">Log today</span>}
-        {hasGoal && <span className="text-muted">Goal: Bids {bidsGoal} · Interviews {interviewsGoal}</span>}
-      </span>
+      <>
+        <GoalDone label="Bids" done={done.bidsSelf + done.bidsBidder} goal={bidsGoal} />
+        {interviewsText}
+        {day.goalItems.length > 0 && <span className="text-muted">Goals {ticked}/{day.goalItems.length}</span>}
+      </>
     );
+  } else if (state === 'follow-up') {
+    body = (
+      <>
+        {canEdit && <span className="btn text-xs">Follow up</span>}
+        {goalText}
+        {interviews > 0 && interviewsText}
+      </>
+    );
+  } else if (state === 'planned') {
+    body = goalText;
+  } else if (state === 'set-goal') {
+    body = canEdit ? <span className={isToday ? 'btn text-xs' : 'text-muted'}>Set goal</span> : <span className="text-muted">—</span>;
   } else {
     body = (
-      <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <GoalDone label="Bids" done={done.bidsSelf + done.bidsBidder} goal={bidsGoal} />
-        <GoalDone label="Interviews" done={done.interviewsSelf + done.interviewsCaller} goal={interviewsGoal} />
-        {(regionTotal(goal.profiles) > 0 || regionTotal(done.profiles) > 0) && (
-          <GoalDone label="Profiles" done={regionTotal(done.profiles)} goal={regionTotal(goal.profiles)} />
-        )}
-        {(regionTotal(goal.linkedin) > 0 || regionTotal(done.linkedin) > 0) && (
-          <GoalDone label="LinkedIn" done={regionTotal(done.linkedin)} goal={regionTotal(goal.linkedin)} />
-        )}
-        {day.goalItems.length > 0 && <span className="text-muted">Items {ticked}/{day.goalItems.length}</span>}
-      </span>
+      <>
+        <span className="text-muted">No plan</span>
+        {interviews > 0 && interviewsText}
+      </>
     );
   }
 
@@ -71,7 +80,7 @@ export default function DayRow({
           {dayLabel(date)}
           {isToday && <span className="block text-xs font-normal text-sky-700 dark:text-sky-400">Today</span>}
         </span>
-        <span className="min-w-0 flex-1">{body}</span>
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-sm">{body}</span>
         <ChevronRight size={16} className="shrink-0 text-muted" aria-hidden />
       </button>
     </li>

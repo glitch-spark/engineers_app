@@ -326,39 +326,21 @@ export const runAlertAction = (id: string, action: string) =>
 
 // ---------- weekly / daily plans (Goal vs Done) ----------
 
-export const REGIONS = ['US', 'EU', 'Latam', 'Canada', 'Asia'] as const;
-/** Profiles without a region on the Profiles page count as Unassigned. */
-export const PROFILE_REGIONS = [...REGIONS, 'Unassigned'] as const;
-export type RegionCounts = Record<string, number>;
-
 export interface Counts {
   bidsSelf: number;
   bidsBidder: number;
   interviewsSelf: number;
   interviewsCaller: number;
-  profiles: RegionCounts;
-  linkedin: RegionCounts;
+}
+
+export interface Bids {
+  bidsSelf: number;
+  bidsBidder: number;
 }
 
 export interface ChecklistItem {
   text: string;
   done: boolean;
-}
-
-/** `null` = use the automatic value. */
-export interface DoneOverrides {
-  interviewsSelf: number | null;
-  interviewsCaller: number | null;
-  profiles: RegionCounts | null;
-}
-
-export interface WeeklyOverrides {
-  bidsSelf: number | null;
-  bidsBidder: number | null;
-  interviewsSelf: number | null;
-  interviewsCaller: number | null;
-  profiles: RegionCounts | null;
-  linkedin: RegionCounts | null;
 }
 
 export type StageCounts = Record<string, number>;
@@ -368,28 +350,33 @@ export interface InterviewStages {
   caller: StageCounts;
 }
 
+/** Interviews held that day, from the Interviews page (never typed). */
+export interface DayInterviews {
+  self: number;
+  caller: number;
+  stages: InterviewStages;
+}
+
 export interface DayPlan {
   date: string;
   exists: boolean;
   userId: string;
   goal: Counts;
   goalItems: ChecklistItem[];
-  /** Effective Done (automatic values with overrides applied). */
+  /** Typed bids + interviews from the Interviews page. */
   done: Counts;
-  auto: { interviewsSelf: number; interviewsCaller: number; stages: InterviewStages; profiles: RegionCounts };
-  doneOverrides: DoneOverrides;
+  interviews: DayInterviews;
   notes: string;
+  /** Set once the day has been followed up. */
   loggedAt: string | null;
 }
 
 export interface DayPlanInput {
-  goal: Counts;
+  goal: Bids;
   goalItems: ChecklistItem[];
-  /** Omit for a goal-only edit (future days). */
-  done?: { bidsSelf: number; bidsBidder: number; linkedin: RegionCounts };
-  doneOverrides: DoneOverrides;
+  /** Send to follow up the day (sets it as logged and posts to Slack); omit to save the goal only. */
+  done?: Bids;
   notes: string;
-  tomorrow?: { goal: Counts; goalItems: ChecklistItem[] };
 }
 
 export interface WeekDaySummary {
@@ -397,6 +384,8 @@ export interface WeekDaySummary {
   logged: boolean;
   goal: Counts;
   done: Counts;
+  itemsDone: number;
+  itemsTotal: number;
 }
 
 export interface WeekPlan {
@@ -405,11 +394,8 @@ export interface WeekPlan {
   userId: string;
   goal: Counts;
   goalItems: ChecklistItem[];
-  planNotes: string;
   recapNotes: string;
   done: Counts;
-  auto: Counts;
-  doneOverrides: WeeklyOverrides;
   stages: InterviewStages;
   days: WeekDaySummary[];
 }
@@ -417,9 +403,7 @@ export interface WeekPlan {
 export interface WeekPlanInput {
   goal: Counts;
   goalItems: ChecklistItem[];
-  planNotes: string;
   recapNotes: string;
-  doneOverrides: WeeklyOverrides;
 }
 
 export interface TeamRow {
@@ -428,6 +412,8 @@ export interface TeamRow {
   email: string | null;
   goal: Counts;
   done: Counts;
+  itemsDone: number;
+  itemsTotal: number;
   lastLoggedDate: string | null;
   hasWeeklyPlan: boolean;
 }
@@ -439,7 +425,7 @@ export const getDayPlan = (date: string, userId?: string) =>
   apiFetch<DayPlan>(`/daily-plans/${date}${qs({ userId })}`);
 
 export const putDayPlan = (date: string, body: DayPlanInput) =>
-  putJSON<{ day: DayPlan; tomorrow: DayPlan | null }>(`/daily-plans/${date}`, body);
+  putJSON<DayPlan>(`/daily-plans/${date}`, body);
 
 export const deleteDayPlan = (date: string) => del<{ message: string }>(`/daily-plans/${date}`);
 

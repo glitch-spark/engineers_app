@@ -1,39 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import type { ChecklistItem, Counts, DayPlan, DoneOverrides } from '../../api/endpoints';
+import type { ChecklistItem, Counts } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
-import { dateParam, dayLabel, emptyCounts, isToday, nextWorkingDay, parseDateParam, shouldLogDone } from '../../lib/reportWeek';
+import { dateParam, dayLabel, isToday, parseDateParam } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import ChecklistEditor, { cleanItems } from './ChecklistEditor';
-import CountsEditor, { type CountsField, type OverrideValue } from './CountsEditor';
+import GoalDoneFields from './GoalDoneFields';
 
 interface DayForm {
   goal: Counts;
   goalItems: ChecklistItem[];
   done: Counts;
-  doneOverrides: DoneOverrides;
   notes: string;
 }
 
-interface TomorrowForm {
-  goal: Counts;
-  goalItems: ChecklistItem[];
-}
-
-const AUTO_FIELDS: CountsField[] = ['interviewsSelf', 'interviewsCaller', 'profiles'];
-
-function formOf(day: DayPlan): DayForm {
-  return {
-    goal: day.goal,
-    goalItems: day.goalItems,
-    done: day.done,
-    doneOverrides: day.doneOverrides,
-    notes: day.notes,
-  };
-}
-
-/** Log a day's Goal vs Done (and set tomorrow's goal) in a side panel. */
+/** A day: set its goal (bids + goal lines), then follow up with what was done. */
 export default function DayPanel({
   date,
   userId,
@@ -50,40 +32,26 @@ export default function DayPanel({
   onSaved: () => void;
 }) {
   const day = parseDateParam(date) ?? new Date();
-  const todayParam = dateParam(new Date());
-  const canLog = date <= todayParam;
-  const tomorrowDate = dateParam(nextWorkingDay(day));
-  const showTomorrow = !readOnly && canLog;
+  const today = dateParam(new Date());
+  const canFollowUp = date <= today;
 
   const { data, error, isLoading, mutate } = useSWR(
     open ? ['day-plan', date, userId ?? 'me'] : null,
     () => api.getDayPlan(date, userId),
     { revalidateOnFocus: false },
   );
-  const { data: tomorrowData, error: tomorrowError } = useSWR(
-    open && showTomorrow ? ['day-plan', tomorrowDate, 'me'] : null,
-    () => api.getDayPlan(tomorrowDate),
-    { revalidateOnFocus: false },
-  );
 
   const [form, setForm] = useState<DayForm | null>(null);
   const [initial, setInitial] = useState('');
-  const [tomorrow, setTomorrow] = useState<TomorrowForm | null>(null);
-  const [tomorrowTouched, setTomorrowTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!data) return;
-    const next = formOf(data);
+    const next: DayForm = { goal: data.goal, goalItems: data.goalItems, done: data.done, notes: data.notes };
     setForm(next);
     setInitial(JSON.stringify(next));
   }, [data]);
-
-  useEffect(() => {
-    if (tomorrowData) setTomorrow({ goal: tomorrowData.goal, goalItems: tomorrowData.goalItems });
-    setTomorrowTouched(false);
-  }, [tomorrowData]);
 
   useEffect(() => {
     if (!open) {
@@ -92,51 +60,19 @@ export default function DayPanel({
     }
   }, [open]);
 
-  const doneSnapshot = (f: DayForm) => JSON.stringify([f.done.bidsSelf, f.done.bidsBidder, f.done.linkedin, f.doneOverrides]);
-  const doneChanged = useMemo(
-    () => !!form && !!initial && doneSnapshot(form) !== doneSnapshot(JSON.parse(initial) as DayForm),
-    [form, initial],
-  );
-  const logs = shouldLogDone({ date, today: todayParam, logged: !!data?.loggedAt, doneChanged });
+  const dirty = useMemo(() => !!form && JSON.stringify(form) !== initial, [form, initial]);
+  const logged = !!data?.loggedAt;
 
-  const dirty = useMemo(
-    () => !!form && (JSON.stringify(form) !== initial || tomorrowTouched),
-    [form, initial, tomorrowTouched],
-  );
-
-  const overrides: Partial<Record<CountsField, OverrideValue>> = form
-    ? {
-        interviewsSelf: form.doneOverrides.interviewsSelf,
-        interviewsCaller: form.doneOverrides.interviewsCaller,
-        profiles: form.doneOverrides.profiles,
-      }
-    : {};
-
-  const setOverride = (field: CountsField, value: OverrideValue) =>
-    setForm((f) => (f ? { ...f, doneOverrides: { ...f.doneOverrides, [field]: value } } : f));
-
-  const updateTomorrow = (patch: Partial<TomorrowForm>) => {
-    setTomorrow((t) => ({ goal: t?.goal ?? emptyCounts(), goalItems: t?.goalItems ?? [], ...patch }));
-    setTomorrowTouched(true);
-  };
-
-  const save = async () => {
+  const save = async (followUp: boolean) => {
     if (!form) return;
     setSaving(true);
     setSaveError(null);
     try {
       await api.putDayPlan(date, {
-        goal: form.goal,
+        goal: { bidsSelf: form.goal.bidsSelf, bidsBidder: form.goal.bidsBidder },
         goalItems: cleanItems(form.goalItems),
-        // Today's goal alone doesn't count as logging the day.
-        done: logs
-          ? { bidsSelf: form.done.bidsSelf, bidsBidder: form.done.bidsBidder, linkedin: form.done.linkedin }
-          : undefined,
-        doneOverrides: form.doneOverrides,
+        done: followUp ? { bidsSelf: form.done.bidsSelf, bidsBidder: form.done.bidsBidder } : undefined,
         notes: form.notes,
-        tomorrow: tomorrowTouched && tomorrow
-          ? { goal: tomorrow.goal, goalItems: cleanItems(tomorrow.goalItems) }
-          : undefined,
       });
       await mutate();
       onSaved();
@@ -162,7 +98,8 @@ export default function DayPanel({
     }
   };
 
-  const title = `${dayLabel(day)}${isToday(day) ? ' · today' : ''}`;
+  // Future days only take a goal; today offers both until it's followed up.
+  const showGoalButton = !canFollowUp || (date === today && !logged);
   const footer = readOnly ? (
     <button type="button" className="btn-outline text-sm" onClick={onClose}>Close</button>
   ) : (
@@ -173,17 +110,24 @@ export default function DayPanel({
         </button>
       )}
       <button type="button" className="btn-outline text-sm" onClick={onClose}>Cancel</button>
-      <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form}>
-        {saving ? 'Saving…' : logs ? 'Save day' : 'Save goal'}
-      </button>
+      {showGoalButton && (
+        <button type="button" className={canFollowUp ? 'btn-outline text-sm' : 'btn text-sm'} onClick={() => save(false)} disabled={saving || !form}>
+          {saving ? 'Saving…' : 'Save goal'}
+        </button>
+      )}
+      {canFollowUp && (
+        <button type="button" className="btn text-sm" onClick={() => save(true)} disabled={saving || !form}>
+          {saving ? 'Saving…' : 'Save follow-up'}
+        </button>
+      )}
     </>
   );
 
   return (
     <SidePanel
       open={open}
-      title={title}
-      subtitle={readOnly ? 'View only' : canLog ? 'Goal vs Done' : 'Goal for this day'}
+      title={`${dayLabel(day)}${isToday(day) ? ' · today' : ''}`}
+      subtitle={readOnly ? 'View only' : canFollowUp ? 'Goal and follow-up' : 'Goal for this day'}
       onClose={onClose}
       footer={footer}
       dirty={dirty && !readOnly}
@@ -202,22 +146,14 @@ export default function DayPanel({
         </div>
       ) : form && data ? (
         <div className="space-y-5">
-          <CountsEditor
+          <GoalDoneFields
             goal={form.goal}
             onGoal={readOnly ? undefined : (goal) => setForm({ ...form, goal })}
-            done={form.done}
+            done={{ ...form.done, interviewsSelf: data.interviews.self, interviewsCaller: data.interviews.caller }}
             onDone={readOnly ? undefined : (done) => setForm({ ...form, done })}
-            auto={{
-              interviewsSelf: data.auto.interviewsSelf,
-              interviewsCaller: data.auto.interviewsCaller,
-              profiles: data.auto.profiles,
-            }}
-            overrides={overrides}
-            autoFields={AUTO_FIELDS}
-            onOverride={readOnly ? undefined : setOverride}
-            stages={data.auto.stages}
+            stages={data.interviews.stages}
+            showDone={canFollowUp}
             readOnly={readOnly}
-            showDone={canLog}
           />
 
           <section>
@@ -226,67 +162,25 @@ export default function DayPanel({
               items={form.goalItems}
               onChange={(goalItems) => setForm({ ...form, goalItems })}
               readOnly={readOnly}
-              allowTick={canLog}
+              allowTick={canFollowUp}
             />
           </section>
 
-          <section>
-            <label className="form-label mb-1 block" htmlFor="day-notes">Notes</label>
-            {readOnly ? (
-              <p className="whitespace-pre-wrap text-sm text-body">{form.notes || '—'}</p>
-            ) : (
-              <textarea
-                id="day-notes"
-                className="input min-h-[5rem] w-full"
-                maxLength={2000}
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              />
-            )}
-          </section>
-
-          {showTomorrow && tomorrowError && (
-            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-              Couldn&apos;t load the next day&apos;s goal, so it can&apos;t be edited here right now.
-            </p>
-          )}
-          {showTomorrow && tomorrowData && (
-            <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="card-title">Goal for {dayLabel(nextWorkingDay(day))}</h3>
-                <div className="flex flex-wrap gap-1">
-                  <button type="button" className="btn-outline text-xs" onClick={() => updateTomorrow({ goal: form.goal })}>
-                    Copy today&apos;s goal
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-outline text-xs"
-                    onClick={() =>
-                      updateTomorrow({
-                        goalItems: [
-                          ...(tomorrow?.goalItems ?? []),
-                          ...cleanItems(form.goalItems).filter((i) => !i.done).map((i) => ({ text: i.text, done: false })),
-                        ].slice(0, 20),
-                      })
-                    }
-                  >
-                    Roll over unticked items
-                  </button>
-                </div>
-              </div>
-              <CountsEditor
-                goal={tomorrow?.goal ?? emptyCounts()}
-                onGoal={(goal) => updateTomorrow({ goal })}
-                showDone={false}
-              />
-              <div className="mt-2">
-                <ChecklistEditor
-                  items={tomorrow?.goalItems ?? []}
-                  onChange={(goalItems) => updateTomorrow({ goalItems })}
-                  allowTick={false}
-                  label="Tomorrow"
+          {canFollowUp && (
+            <section>
+              <label className="form-label mb-1 block" htmlFor="day-notes">Follow-up notes</label>
+              {readOnly ? (
+                <p className="whitespace-pre-wrap text-sm text-body">{form.notes || '—'}</p>
+              ) : (
+                <textarea
+                  id="day-notes"
+                  className="input min-h-[5rem] w-full"
+                  maxLength={2000}
+                  placeholder="What actually happened today?"
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 />
-              </div>
+              )}
             </section>
           )}
         </div>
@@ -294,4 +188,3 @@ export default function DayPanel({
     </SidePanel>
   );
 }
-

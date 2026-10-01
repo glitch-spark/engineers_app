@@ -1,7 +1,7 @@
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { TeamRow } from '../../api/endpoints';
-import { dateParam, isLogStale, mondayOf, parseDateParam, regionTotal } from '../../lib/reportWeek';
+import { dateParam, isLogStale, mondayOf, parseDateParam } from '../../lib/reportWeek';
 import GoalDone from './GoalDone';
 
 function lastLog(row: TeamRow, week: string): { text: string; stale: boolean } {
@@ -39,15 +39,14 @@ export default function TeamTable({ week, onOpenUser }: { week: string; onOpenUs
 
   return (
     <section className="panel overflow-x-auto p-0" aria-label="Team progress">
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full min-w-[560px] text-sm">
         <thead>
           <tr className="border-b border-zinc-200 text-left text-xs text-muted dark:border-zinc-800">
             <th scope="col" className="px-4 py-2 font-medium">Teammate</th>
             <th scope="col" className="px-3 py-2 font-medium">Bids</th>
             <th scope="col" className="px-3 py-2 font-medium">Interviews</th>
-            <th scope="col" className="px-3 py-2 font-medium">Profiles</th>
-            <th scope="col" className="px-3 py-2 font-medium">LinkedIn</th>
-            <th scope="col" className="px-3 py-2 font-medium">Last log</th>
+            <th scope="col" className="px-3 py-2 font-medium">Goals done</th>
+            <th scope="col" className="px-3 py-2 font-medium">Last follow-up</th>
           </tr>
         </thead>
         <tbody>
@@ -76,16 +75,13 @@ export default function TeamTable({ week, onOpenUser }: { week: string; onOpenUs
                   />
                 </td>
                 <td className="px-3 py-2">
-                  <GoalDone done={regionTotal(row.done.profiles)} goal={regionTotal(row.goal.profiles)} />
-                </td>
-                <td className="px-3 py-2">
-                  <GoalDone done={regionTotal(row.done.linkedin)} goal={regionTotal(row.goal.linkedin)} />
+                  {row.itemsTotal ? <GoalDone done={row.itemsDone} goal={row.itemsTotal} /> : <span className="text-muted">—</span>}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   {log.text}
                   {log.stale && (
-                    <span className="ml-1 text-amber-700 dark:text-amber-400" title="Not logged for over a working day">
-                      ⚠<span className="sr-only"> not logged recently</span>
+                    <span className="ml-1 text-amber-700 dark:text-amber-400" title="No follow-up for over a working day">
+                      ⚠<span className="sr-only"> no recent follow-up</span>
                     </span>
                   )}
                 </td>
