@@ -72,7 +72,7 @@ export default function ReportPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Report" />
+      <PageHeader title="Plans" />
 
       <div className="toolbar flex flex-wrap items-center gap-2">
         <button type="button" className="btn-icon" aria-label="Previous week" onClick={() => setParam({ week: dateParam(addDays(monday, -7)) })}>

@@ -66,6 +66,7 @@ export interface TransactionListParams {
   from?: string;
   to?: string;
   userId?: string;
+  payerId?: string;
   search?: string;
   fromSearch?: string;
   toSearch?: string;
@@ -231,6 +232,8 @@ export const listAccounts = (params?: {
   limit?: number;
   search?: string;
   userId?: string;
+  /** Default (omitted) = active only. */
+  status?: 'active' | 'archived' | 'all';
 }) =>
   apiFetch<{ accounts: Record<string, unknown>[]; pagination: Pagination }>(
     `/accounts${qs(params)}`
@@ -278,6 +281,8 @@ export const listTransactions = (params?: TransactionListParams) =>
     userTotals?: TransactionUserTotal[];
     payerTotals?: TransactionPayerTotal[];
     totalOutcome?: number;
+    /** Sums over every row matching the filters, not just the current page. */
+    totals?: { income: number; outcome: number; net: number; count: number };
   }>(`/transactions${qs(params)}`);
 
 export const createTransaction = (body: Record<string, unknown>) =>
@@ -457,6 +462,7 @@ export interface AccountLookup {
   hasPrompt?: boolean;
   createdBy?: string;
   showInGenerate?: boolean;
+  archived?: boolean;
 }
 
 export const lookupAccounts = () =>

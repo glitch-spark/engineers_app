@@ -11,6 +11,7 @@ import {
 import * as api from '../api/endpoints';
 import type { ResumeJob, ResumeJobStatus, ResumeJobStep, ScreeningPair } from '../api/endpoints';
 import { notify } from '../lib/notify';
+import { archivedLabel, filterProfiles } from '../lib/profileArchive';
 import { useDialog } from '../lib/useDialog';
 import ResumeTabs from '../components/ResumeTabs';
 import PageHeader from '../components/PageHeader';
@@ -126,7 +127,7 @@ export default function GeneratedResumesPage() {
     );
     return [
       { value: '', label: 'All profiles' },
-      ...own.map((a) => ({ value: a._id, label: a.name })),
+      ...filterProfiles(own).map((a) => ({ value: a._id, label: archivedLabel(a.name, a.archived) })),
     ];
   }, [accountsData, user?.id]);
 

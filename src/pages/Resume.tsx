@@ -35,7 +35,7 @@ export default function ResumeGeneratorPage() {
   }, [accountsData, user?.id]);
 
   const accounts = useMemo(
-    () => ownedAccounts.filter((a) => a.showInGenerate !== false),
+    () => ownedAccounts.filter((a) => a.showInGenerate !== false && !a.archived),
     [ownedAccounts],
   );
 
@@ -191,7 +191,7 @@ export default function ResumeGeneratorPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Resume Generator" />
+      <PageHeader title="Resumes" />
       <ResumeTabs />
 
       <div className="panel p-4">
