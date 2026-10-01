@@ -7,7 +7,8 @@ import DayPanel from '../components/report/DayPanel';
 import DayRow from '../components/report/DayRow';
 import TeamTable from '../components/report/TeamTable';
 import WeekPanel from '../components/report/WeekPanel';
-import WeekSummaryCard from '../components/report/WeekSummaryCard';
+import DailyGoalCard from '../components/report/DailyGoalCard';
+import WeekGoalCard from '../components/report/WeekGoalCard';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { addDays, dateParam, mondayOf, parseWeekParam, weekLabel } from '../lib/reportWeek';
@@ -110,12 +111,32 @@ export default function ReportPage() {
           {weekQuery.error ? (
             <SectionError what="this week" onRetry={() => weekQuery.mutate()} />
           ) : !weekQuery.data ? (
-            <div className="panel space-y-2 p-4" aria-busy="true">
-              <div className="skeleton h-5 w-32" />
-              <div className="skeleton h-16 w-full" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5" aria-busy="true">
+              <div className="panel space-y-2 p-4 lg:col-span-3">
+                <div className="skeleton h-5 w-32" />
+                <div className="skeleton h-32 w-full" />
+              </div>
+              <div className="panel space-y-2 p-4 lg:col-span-2">
+                <div className="skeleton h-5 w-28" />
+                <div className="skeleton h-32 w-full" />
+              </div>
             </div>
           ) : (
-            <WeekSummaryCard week={weekQuery.data} canEdit={!readOnly} onOpen={() => setWeekOpen(true)} />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+              <div className="lg:col-span-3">
+                <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} onOpen={() => setWeekOpen(true)} />
+              </div>
+              <div className="lg:col-span-2">
+                <DailyGoalCard
+                  week={weekQuery.data}
+                  days={daysQuery.data?.days ?? []}
+                  today={today}
+                  canEdit={!readOnly}
+                  onOpenWeek={() => setWeekOpen(true)}
+                  onOpenDay={(date) => setOpenDay(date)}
+                />
+              </div>
+            </div>
           )}
 
           {daysQuery.error ? (
