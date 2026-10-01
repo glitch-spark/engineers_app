@@ -1,13 +1,15 @@
 import useSWR from 'swr';
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
+import ActionMenu from '../components/ActionMenu';
+import ConfirmDialog from '../components/ConfirmDialog';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
 import { countryFlag, countryName } from '../lib/countries';
+import { PROFILE_STATUS_OPTIONS, type ProfileStatus } from '../lib/profileArchive';
 
 type Acc = {
   _id: string;
@@ -18,6 +20,9 @@ type Acc = {
   ownerName?: string;
   ownerImage?: string | null;
   showInGenerate?: boolean;
+  archived?: boolean;
+  /** Populated owner, or the raw id when the user no longer exists. */
+  createdBy?: string | { _id: string };
 };
 
 export default function AccountsPage() {
@@ -29,6 +34,9 @@ export default function AccountsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [userId, setUserId] = useState('');
+  const [profileStatus, setProfileStatus] = useState<ProfileStatus>('active');
+  const [pendingDelete, setPendingDelete] = useState<Acc | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -39,22 +47,57 @@ export default function AccountsPage() {
   }, [searchTerm]);
 
   const { data, mutate, isLoading } = useSWR(
-    ['accounts', currentPage, pageSize, debouncedSearch, isAdmin ? userId : ''] as const,
-    () => api.listAccounts({ page: currentPage, limit: pageSize, search: debouncedSearch, ...(isAdmin && userId ? { userId } : {}) })
+    ['accounts', currentPage, pageSize, debouncedSearch, isAdmin ? userId : '', profileStatus] as const,
+    () => api.listAccounts({
+      page: currentPage,
+      limit: pageSize,
+      search: debouncedSearch,
+      status: profileStatus,
+      ...(isAdmin && userId ? { userId } : {}),
+    })
   );
 
   const { data: usersData } = useSWR(isAdmin ? ['users-list'] : null, () => api.listUsers());
   const users = (usersData?.users as Array<{ _id: string; name?: string; email?: string }>) || [];
 
-  const remove = async (acc: Acc) => {
-    if (!confirm(`Delete profile "${acc.name}"?`)) return;
+  const remove = async () => {
+    const acc = pendingDelete;
+    if (!acc) return;
+    setDeleting(true);
     try {
       await api.deleteAccount(acc._id);
       notify.success(`Profile "${acc.name}" deleted`);
+      setPendingDelete(null);
       mutate();
     } catch (err) {
       notify.error(err, 'Failed to delete profile');
+    } finally {
+      setDeleting(false);
     }
+  };
+
+  const setArchived = async (acc: Acc, archived: boolean) => {
+    try {
+      await api.updateAccount(acc._id, { archived });
+      notify.success(archived ? `"${acc.name}" archived` : `"${acc.name}" restored`);
+      mutate();
+    } catch (err) {
+      notify.error(err, archived ? 'Failed to archive profile' : 'Failed to unarchive profile');
+    }
+  };
+
+  // Only the creator can change a profile (the API returns 404 for anyone else).
+  const rowActions = (a: Acc) => {
+    const edit = { label: 'Edit', onSelect: () => navigate(`/accounts/${a._id}`) };
+    const ownerId = typeof a.createdBy === 'object' ? a.createdBy?._id : a.createdBy;
+    if (!user?.id || ownerId !== user.id) return [edit];
+    return [
+      edit,
+      a.archived
+        ? { label: 'Unarchive', onSelect: () => setArchived(a, false) }
+        : { label: 'Archive', onSelect: () => setArchived(a, true) },
+      { label: 'Delete', danger: true, onSelect: () => setPendingDelete(a) },
+    ];
   };
 
   const handlePageSizeChange = (size: number) => {
@@ -137,6 +180,18 @@ export default function AccountsPage() {
           </div>
         )}
 
+        <div className="w-32">
+          <label className="block text-xs text-muted mb-1" htmlFor="accounts-status">Status</label>
+          <select
+            id="accounts-status"
+            className="select focus-ring w-full text-sm"
+            value={profileStatus}
+            onChange={(e) => { setProfileStatus(e.target.value as ProfileStatus); setCurrentPage(1); }}
+          >
+            {PROFILE_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
         <div className="w-28">
           <label className="block text-xs text-muted mb-1" htmlFor="accounts-page-size">Show</label>
           <select
@@ -198,13 +253,15 @@ export default function AccountsPage() {
             ) : accounts.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-3 py-6 text-center text-muted">
-                  {debouncedSearch ? `No profiles found matching "${debouncedSearch}"` : 'No profiles found.'}
+                  {debouncedSearch
+                    ? `No profiles found matching "${debouncedSearch}"`
+                    : profileStatus === 'archived' ? 'No archived profiles.' : 'No profiles found.'}
                 </td>
               </tr>
             ) : accounts.map((a) => (
               <tr
                 key={a._id}
-                className="table-row cursor-pointer transition-colors"
+                className={`table-row cursor-pointer transition-colors ${a.archived ? 'text-muted' : ''}`}
                 onClick={() => navigate(`/accounts/${a._id}`)}
               >
                 <td className="px-4 py-2.5">
@@ -215,6 +272,9 @@ export default function AccountsPage() {
                   >
                     {a.name}
                   </Link>
+                  {a.archived && profileStatus !== 'archived' && (
+                    <span className="badge badge-neutral ml-2">Archived</span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5 text-muted">{a.region || '—'}</td>
                 <td className="px-4 py-2.5">
@@ -241,7 +301,7 @@ export default function AccountsPage() {
                   </div>
                 </td>
                 <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <button type="button" className="btn-icon" onClick={() => remove(a)} aria-label={`Delete profile ${a.name}`} title="Delete"><Trash2 size={16} aria-hidden /></button>
+                  <ActionMenu label={`Actions for ${a.name}`} items={rowActions(a)} />
                 </td>
               </tr>
             ))}
@@ -306,6 +366,22 @@ export default function AccountsPage() {
           </nav>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete profile?"
+        body={
+          <>
+            <p>"{pendingDelete?.name}" will be permanently deleted. This can't be undone.</p>
+            {!pendingDelete?.archived && <p className="mt-2 text-muted">To hide it but keep its history, archive it instead.</p>}
+          </>
+        }
+        confirmLabel="Delete"
+        tone="danger"
+        busy={deleting}
+        onConfirm={remove}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

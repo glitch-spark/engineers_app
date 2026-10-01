@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import Select from '../Select';
 import * as api from '../../api/endpoints';
 import { formatProfileLabel } from '../../lib/countries';
+import { archivedLabel, pickerProfiles } from '../../lib/profileArchive';
 import type { ApplicationFormState } from '../../lib/interviewForm';
 
 const POSITION_SUGGESTIONS = ['Backend', 'Frontend', 'Fullstack', 'AI / ML', 'Mobile', 'DevOps', 'Data', 'QA', 'Other'];
@@ -19,12 +20,17 @@ export default function ApplicationFields({
   disabled?: boolean;
   idPrefix: string;
 }) {
-  // Owner-scoped: staff get their own profiles, admins get all.
-  const { data } = useSWR(['accounts-own'], () => api.listAccounts({ limit: 1000 }));
+  // Owner-scoped: staff get their own profiles, admins get all. Archived
+  // profiles are left out, except the one this interview already uses.
+  const { data } = useSWR(['accounts-own', 'all'], () => api.listAccounts({ limit: 1000, status: 'all' }));
+  const [initialAccountId] = useState(app.accountId);
   const options = useMemo(() => {
-    const rows = (data?.accounts as Array<{ _id: string; name?: string; country?: string | null; region?: string | null }>) || [];
-    return rows.map((a) => ({ value: a._id, label: formatProfileLabel(a.name, a.country, a._id, a.region) }));
-  }, [data]);
+    const rows = (data?.accounts as Array<{ _id: string; name?: string; country?: string | null; region?: string | null; archived?: boolean }>) || [];
+    return pickerProfiles(rows, initialAccountId).map((a) => ({
+      value: a._id,
+      label: archivedLabel(formatProfileLabel(a.name, a.country, a._id, a.region), a.archived),
+    }));
+  }, [data, initialAccountId]);
   const id = (k: string) => `${idPrefix}-app-${k}`;
   const req = <span className="text-red-700 dark:text-red-400" aria-hidden> *</span>;
 

@@ -231,6 +231,8 @@ export const listAccounts = (params?: {
   limit?: number;
   search?: string;
   userId?: string;
+  /** Default (omitted) = active only. */
+  status?: 'active' | 'archived' | 'all';
 }) =>
   apiFetch<{ accounts: Record<string, unknown>[]; pagination: Pagination }>(
     `/accounts${qs(params)}`
@@ -443,6 +445,7 @@ export interface AccountLookup {
   hasPrompt?: boolean;
   createdBy?: string;
   showInGenerate?: boolean;
+  archived?: boolean;
 }
 
 export const lookupAccounts = () =>

@@ -12,6 +12,7 @@ import * as api from '../api/endpoints';
 import type { InterviewAnalyzeResult, InterviewAnalyzeStage, InterviewAnalyzeWeakSpot } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import { notify } from '../lib/notify';
+import { archivedLabel, filterProfiles } from '../lib/profileArchive';
 import {
   DATE_RANGE_PRESET_OPTIONS,
   currentWeekdayRange,
@@ -41,7 +42,7 @@ export default function InterviewsAnalyzePage() {
     const own = all.filter((a) => a.createdBy && user?.id && a.createdBy === user.id);
     return [
       { value: '', label: 'All profiles' },
-      ...own.map((a) => ({ value: a._id, label: a.name })),
+      ...filterProfiles(own).map((a) => ({ value: a._id, label: archivedLabel(a.name, a.archived) })),
     ];
   }, [accountsData, user?.id]);
 

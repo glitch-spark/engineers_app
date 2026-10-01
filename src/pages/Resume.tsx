@@ -35,7 +35,7 @@ export default function ResumeGeneratorPage() {
   }, [accountsData, user?.id]);
 
   const accounts = useMemo(
-    () => ownedAccounts.filter((a) => a.showInGenerate !== false),
+    () => ownedAccounts.filter((a) => a.showInGenerate !== false && !a.archived),
     [ownedAccounts],
   );
 
