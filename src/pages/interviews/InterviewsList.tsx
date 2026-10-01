@@ -126,7 +126,7 @@ export default function InterviewsList({
     return (
       <select
         aria-label={`Status of ${iv.companyName || 'interview'}`}
-        className={`select focus-ring h-8 w-auto py-0 text-xs ${interviewStatusBadgeClass(status)}`}
+        className={`select focus-ring !h-8 !w-auto !py-0 !text-xs ${interviewStatusBadgeClass(status)}`}
         value={status}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
@@ -240,7 +240,7 @@ export default function InterviewsList({
           </div>
           <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <label htmlFor="iv-page-size" className="text-muted">Per page</label>
-            <select id="iv-page-size" className="select focus-ring h-8 w-auto py-0 pr-8 text-sm" value={pageSize}
+            <select id="iv-page-size" className="select focus-ring !w-auto !pr-9" value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); update({ page: 1 }); }}>
               {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>

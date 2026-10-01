@@ -201,7 +201,7 @@ export default function InterviewPanel({
                           {canEdit ? (
                             <select
                               aria-label={`Status of ${stageLabel(e.stage)}`}
-                              className={`select focus-ring h-8 w-auto py-0 text-xs ${interviewStatusBadgeClass(status)}`}
+                              className={`select focus-ring !h-8 !w-auto !py-0 !text-xs ${interviewStatusBadgeClass(status)}`}
                               value={status}
                               onChange={(ev) => setRoundStatus(e.id, ev.target.value)}
                             >

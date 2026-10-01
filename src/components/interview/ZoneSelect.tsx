@@ -12,7 +12,7 @@ export default function ZoneSelect() {
       <label htmlFor={id} className="text-xs text-muted">Time zone</label>
       <select
         id={id}
-        className="select focus-ring h-8 w-auto py-0 pr-8 text-sm"
+        className="select focus-ring !w-auto !pr-9"
         value={choice}
         onChange={(e) => setChoice(e.target.value as ZoneChoice)}
       >
