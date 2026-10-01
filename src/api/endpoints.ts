@@ -66,6 +66,7 @@ export interface TransactionListParams {
   from?: string;
   to?: string;
   userId?: string;
+  payerId?: string;
   search?: string;
   fromSearch?: string;
   toSearch?: string;
@@ -280,6 +281,8 @@ export const listTransactions = (params?: TransactionListParams) =>
     userTotals?: TransactionUserTotal[];
     payerTotals?: TransactionPayerTotal[];
     totalOutcome?: number;
+    /** Sums over every row matching the filters, not just the current page. */
+    totals?: { income: number; outcome: number; net: number; count: number };
   }>(`/transactions${qs(params)}`);
 
 export const createTransaction = (body: Record<string, unknown>) =>

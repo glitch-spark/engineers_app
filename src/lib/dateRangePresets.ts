@@ -1,4 +1,4 @@
-/** Shared date-range presets for Interviews List / Live / Analyze filters. */
+/** Shared date-range presets for Interviews List / Live / Analyze and Transactions filters. */
 
 export type DateRangePreset =
   | 'prev_week'
@@ -88,4 +88,49 @@ export function formatDateRangeText(from: string, to: string): string {
     return `${month} ${d} (${y})`;
   };
   return `${fmt(from)}-${fmt(to)}`;
+}
+
+export type CalendarPeriod = 'week' | 'month' | 'year';
+
+/**
+ * Full calendar window containing `now`, shifted by `offset` periods
+ * (-1 = previous). Weeks run Monday → Sunday, unlike the board's Mon–Sat week.
+ */
+export function calendarPeriodRange(
+  period: CalendarPeriod,
+  offset = 0,
+  now = new Date(),
+): { from: string; to: string } {
+  if (period === 'week') {
+    const monday = mondayOfWeek(now);
+    monday.setDate(monday.getDate() + offset * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { from: toDateInputValue(monday), to: toDateInputValue(sunday) };
+  }
+  if (period === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    return { from: toDateInputValue(start), to: toDateInputValue(end) };
+  }
+  const year = now.getFullYear() + offset;
+  return { from: `${year}-01-01`, to: `${year}-12-31` };
+}
+
+/** e.g. "Sep 28 – Oct 4, 2026", "September 2026", "2026". */
+export function formatCalendarPeriod(period: CalendarPeriod, from: string, to: string): string {
+  const parse = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const start = parse(from);
+  if (period === 'year') return String(start.getFullYear());
+  if (period === 'month') return start.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const end = parse(to);
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const startText = start.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }),
+  });
+  const endText = end.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${startText} – ${endText}`;
 }
