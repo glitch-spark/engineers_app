@@ -50,10 +50,17 @@ async function pdfToMarkdown(file: File): Promise<string> {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
+      // Keep the PDF's line breaks (hasEOL) so headings, roles and dates stay on their own lines.
       const text = content.items
-        .map((item) => ('str' in item ? (item as { str: string }).str : ''))
-        .join(' ')
-        .replace(/\s+\n/g, '\n')
+        .map((item) => {
+          if (!('str' in item)) return '';
+          const t = item as { str: string; hasEOL?: boolean };
+          return t.str + (t.hasEOL ? '\n' : ' ');
+        })
+        .join('')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
         .trim();
       pages.push(`--- Page ${i} ---\n\n${text}`);
     }

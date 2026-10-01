@@ -5,6 +5,7 @@ import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
 import ResumeStylingEditor from '../components/ResumeStylingEditor';
+import ResumesSection from '../components/ResumesSection';
 import CountrySelect from '../components/CountrySelect';
 import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
@@ -228,6 +229,13 @@ export default function AccountEditPage() {
             />
           </div>
         </div>
+      </Section>
+
+      <Section
+        title="Resumes"
+        desc="Upload this profile's resumes as PDFs. Their text is what Job Applies scores against each job; keep one resume per stack."
+      >
+        <ResumesSection accountId={id!} />
       </Section>
 
       <Section title="HTML template" desc="Upload your resume as an .html file. The resume LLM rewrites text in place per generation; structure and styles preserved.">
