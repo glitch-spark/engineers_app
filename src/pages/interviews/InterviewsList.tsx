@@ -135,11 +135,20 @@ export default function InterviewsList({
   };
 
   const stageCell = (iv: Interview) => (
-    <span className="inline-flex items-center gap-1.5">
-      {iv.stage ? <span className={`badge ${stageBadgeClass(iv.stage)}`}>{stageLabel(iv.stage)}</span> : <span className="text-muted">—</span>}
-      {iv.caller?.enabled && <PhoneCall size={13} className="text-sky-600" aria-label="Caller requested" />}
-    </span>
+    iv.stage ? <span className={`badge ${stageBadgeClass(iv.stage)}`}>{stageLabel(iv.stage)}</span> : <span className="text-muted">—</span>
   );
+
+  /** Latest round's caller: name, "TBD" when requested but unassigned, "—" when none. */
+  const callerCell = (iv: Interview) => {
+    if (!iv.caller?.enabled) return <span className="text-muted">—</span>;
+    const name = (iv.caller.callerName || '').trim();
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+        <PhoneCall size={13} className="shrink-0 text-sky-600" aria-hidden />
+        <span className={!name || name === 'TBD' ? 'text-muted' : ''}>{name && name !== 'TBD' ? name : 'TBD'}</span>
+      </span>
+    );
+  };
 
   const openOnKey = (iv: Interview) => (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -158,6 +167,7 @@ export default function InterviewsList({
               {sortHeader('company', 'Company')}
               <th scope="col" className="px-3 py-2.5 text-left">Profile</th>
               {sortHeader('stage', 'Stage')}
+              <th scope="col" className="px-3 py-2.5 text-left">Caller</th>
               {sortHeader('latest', 'Latest round')}
               {sortHeader('status', 'Status')}
               <th scope="col" className="px-3 py-2.5 text-left">Rounds</th>
@@ -167,9 +177,9 @@ export default function InterviewsList({
           </thead>
           <tbody>
             {isLoading && !data ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">Loading interviews…</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">Loading interviews…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">No interviews match these filters.</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">No interviews match these filters.</td></tr>
             ) : rows.map((iv) => (
               <tr
                 key={iv._id}
@@ -184,6 +194,7 @@ export default function InterviewsList({
                 </td>
                 <td className="px-3 py-2.5">{profileText(iv)}</td>
                 <td className="px-3 py-2.5">{stageCell(iv)}</td>
+                <td className="px-3 py-2.5">{callerCell(iv)}</td>
                 <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{whenText(iv.scheduledAt)}</td>
                 <td className="px-3 py-2.5">{statusCell(iv)}</td>
                 <td className="px-3 py-2.5"><RoundTrail rounds={iv.stageHistory ?? []} /></td>
@@ -209,6 +220,7 @@ export default function InterviewsList({
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 {stageCell(iv)}
+                {iv.caller?.enabled && callerCell(iv)}
                 <span className="tabular-nums text-muted">{whenText(iv.scheduledAt)}</span>
                 {statusCell(iv)}
                 <RoundTrail rounds={iv.stageHistory ?? []} />
@@ -223,16 +235,16 @@ export default function InterviewsList({
           <div className="text-muted">
             {pagination.total === 0 ? 'No results' : `Showing ${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <label htmlFor="iv-page-size" className="text-muted">Per page</label>
-            <select id="iv-page-size" className="select focus-ring text-sm" value={pageSize}
+            <select id="iv-page-size" className="select focus-ring h-8 w-auto py-0 pr-8 text-sm" value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); update({ page: 1 }); }}>
               {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
             <button type="button" className="btn-outline btn-sm" disabled={!pagination.hasPrev} onClick={() => update({ page: pagination.page - 1 })}>
               Previous
             </button>
-            <span className="tabular-nums text-muted">{pagination.page} / {Math.max(pagination.totalPages, 1)}</span>
+            <span className="tabular-nums text-muted">Page {pagination.page} of {Math.max(pagination.totalPages, 1)}</span>
             <button type="button" className="btn-outline btn-sm" disabled={!pagination.hasNext} onClick={() => update({ page: pagination.page + 1 })}>
               Next
             </button>
