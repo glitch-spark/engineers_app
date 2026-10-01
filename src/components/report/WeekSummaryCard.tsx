@@ -13,6 +13,8 @@ export default function WeekSummaryCard({
 }) {
   const { goal, done } = week;
   const ticked = week.goalItems.filter((i) => i.done).length;
+  const daily = week.dailyGoal;
+  const dailyLines = week.dailyGoalItems.length;
   return (
     <section className="panel p-4" aria-labelledby="week-summary-title">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -24,7 +26,7 @@ export default function WeekSummaryCard({
       {!week.exists && canEdit && (
         <p className="mb-3 text-sm text-muted">No goals for this week yet — set them to track your progress.</p>
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="form-label">Bids</div>
           <div className="mt-1 space-y-0.5 text-sm">
@@ -48,6 +50,24 @@ export default function WeekSummaryCard({
               <span className="text-muted">None listed</span>
             )}
             {week.recapNotes && <div className="mt-0.5 text-xs text-muted">Recap written</div>}
+          </div>
+        </div>
+        <div>
+          <div className="form-label">Daily goal</div>
+          <div className="mt-1 space-y-0.5 text-sm">
+            {daily.bidsSelf + daily.bidsBidder > 0 || dailyLines > 0 ? (
+              <>
+                <div>
+                  Bids <span className="font-medium text-strong tabular-nums">{daily.bidsSelf}</span>
+                  <span className="text-muted"> self · </span>
+                  <span className="font-medium text-strong tabular-nums">{daily.bidsBidder}</span>
+                  <span className="text-muted"> bidder</span>
+                </div>
+                <div className="text-muted">{dailyLines} goal line{dailyLines === 1 ? '' : 's'} a day</div>
+              </>
+            ) : (
+              <span className="text-muted">Not set</span>
+            )}
           </div>
         </div>
       </div>

@@ -12,6 +12,7 @@ export default function SidePanel({
   children,
   footer,
   dirty = false,
+  wide = false,
 }: {
   open: boolean;
   title: string;
@@ -20,6 +21,8 @@ export default function SidePanel({
   children: ReactNode;
   footer?: ReactNode;
   dirty?: boolean;
+  /** Room for two columns. */
+  wide?: boolean;
 }) {
   const panelRef = useRef<HTMLElement>(null);
   const titleId = useId();
@@ -42,7 +45,7 @@ export default function SidePanel({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="fixed top-16 right-0 bottom-0 z-50 flex w-full flex-col border-l border-zinc-200 bg-white shadow-strong dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-2xl"
+        className={`fixed top-16 right-0 bottom-0 z-50 flex w-full flex-col border-l border-zinc-200 bg-white shadow-strong dark:border-zinc-800 dark:bg-zinc-950 ${wide ? 'sm:max-w-4xl' : 'sm:max-w-2xl'}`}
       >
         <header className="flex shrink-0 items-start justify-between gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <div className="min-w-0">

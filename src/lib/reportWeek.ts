@@ -106,14 +106,15 @@ export function isLogStale(lastLogged: string | null, today: Date, isCurrentWeek
   return workingDaysBetween(last, today) >= 1;
 }
 
-export type DayState = 'set-goal' | 'planned' | 'follow-up' | 'done' | 'missed';
+export type DayState = 'none' | 'planned' | 'follow-up' | 'done' | 'missed';
 
-/** What a day row offers: set a goal, follow up today, or show results. */
+/** What a day row offers. Goals come from the weekly plan, so a day is either
+ *  upcoming (shows its goal), waiting for its follow-up, or done. */
 export function dayState({
   date, today, hasGoal, logged,
 }: { date: string; today: string; hasGoal: boolean; logged: boolean }): DayState {
   if (logged) return 'done';
-  if (date > today) return hasGoal ? 'planned' : 'set-goal';
-  if (date === today) return hasGoal ? 'follow-up' : 'set-goal';
-  return hasGoal ? 'follow-up' : 'missed';
+  if (date > today) return hasGoal ? 'planned' : 'none';
+  if (date === today || hasGoal) return 'follow-up';
+  return 'missed';
 }

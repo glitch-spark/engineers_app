@@ -11,10 +11,12 @@ import GoalDoneFields from './GoalDoneFields';
 interface WeekForm {
   goal: Counts;
   goalItems: ChecklistItem[];
+  dailyGoal: Counts;
+  dailyGoalItems: ChecklistItem[];
   recapNotes: string;
 }
 
-/** Set the week's goals; Done is added up from the days and the Interviews page. */
+/** Set the week goal and the daily goal once, at the start of the week. */
 export default function WeekPanel({
   weekStart,
   userId,
@@ -42,7 +44,13 @@ export default function WeekPanel({
 
   useEffect(() => {
     if (!data) return;
-    const next: WeekForm = { goal: data.goal, goalItems: data.goalItems, recapNotes: data.recapNotes };
+    const next: WeekForm = {
+      goal: data.goal,
+      goalItems: data.goalItems,
+      dailyGoal: data.dailyGoal,
+      dailyGoalItems: data.dailyGoalItems,
+      recapNotes: data.recapNotes,
+    };
     setForm(next);
     setInitial(JSON.stringify(next));
   }, [data]);
@@ -60,7 +68,7 @@ export default function WeekPanel({
     if (!form) return;
     try {
       const prev = await api.getPreviousWeekGoals(weekStart);
-      if (!prev.goal && !prev.goalItems.length) {
+      if (!prev.goal && !prev.dailyGoal) {
         setMessage('No goals were set last week.');
         return;
       }
@@ -68,6 +76,8 @@ export default function WeekPanel({
         ...form,
         goal: prev.goal ?? form.goal,
         goalItems: [...cleanItems(form.goalItems), ...prev.goalItems].slice(0, 20),
+        dailyGoal: prev.dailyGoal ?? form.dailyGoal,
+        dailyGoalItems: cleanItems(form.dailyGoalItems).length ? form.dailyGoalItems : prev.dailyGoalItems,
       });
       setMessage(null);
     } catch (e) {
@@ -80,7 +90,13 @@ export default function WeekPanel({
     setSaving(true);
     setMessage(null);
     try {
-      await api.putWeekPlan(weekStart, { ...form, goalItems: cleanItems(form.goalItems) });
+      await api.putWeekPlan(weekStart, {
+        goal: form.goal,
+        goalItems: cleanItems(form.goalItems),
+        dailyGoal: { bidsSelf: form.dailyGoal.bidsSelf, bidsBidder: form.dailyGoal.bidsBidder },
+        dailyGoalItems: cleanItems(form.dailyGoalItems).map((i) => ({ text: i.text, done: false })),
+        recapNotes: form.recapNotes,
+      });
       await mutate();
       onSaved();
       onClose();
@@ -110,10 +126,11 @@ export default function WeekPanel({
     <SidePanel
       open={open}
       title={`Week ${weekLabel(monday)}`}
-      subtitle={readOnly ? 'View only' : 'Week goals · Done adds up from the days'}
+      subtitle={readOnly ? 'View only' : 'Set the week goal and the daily goal once for the week'}
       onClose={onClose}
       footer={footer}
       dirty={dirty && !readOnly}
+      wide
     >
       {error && (
         <div className="mb-3 text-sm text-red-600 dark:text-red-400" role="alert">
@@ -129,22 +146,47 @@ export default function WeekPanel({
         </div>
       ) : form && data ? (
         <div className="space-y-5">
-          <GoalDoneFields
-            goal={form.goal}
-            onGoal={readOnly ? undefined : (goal) => setForm({ ...form, goal })}
-            done={data.done}
-            stages={data.stages}
-            showInterviewGoal
-            readOnly={readOnly}
-          />
-          <section>
-            <h3 className="form-label mb-1">Goals</h3>
-            <ChecklistEditor
-              items={form.goalItems}
-              onChange={(goalItems) => setForm({ ...form, goalItems })}
-              readOnly={readOnly}
-            />
-          </section>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-goal-title">
+              <h3 id="week-goal-title" className="card-title mb-2">Week goal</h3>
+              <GoalDoneFields
+                goal={form.goal}
+                onGoal={readOnly ? undefined : (goal) => setForm({ ...form, goal })}
+                done={data.done}
+                stages={data.stages}
+                showInterviewGoal
+                readOnly={readOnly}
+              />
+              <h4 className="form-label mb-1 mt-3">Week goal lines</h4>
+              <ChecklistEditor
+                items={form.goalItems}
+                onChange={(goalItems) => setForm({ ...form, goalItems })}
+                readOnly={readOnly}
+                label="Week goal"
+              />
+            </section>
+
+            <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="daily-goal-title">
+              <h3 id="daily-goal-title" className="card-title">Daily goal</h3>
+              <p className="mb-2 text-xs text-muted">The same goal for every day, Monday to Saturday.</p>
+              <GoalDoneFields
+                goal={form.dailyGoal}
+                onGoal={readOnly ? undefined : (dailyGoal) => setForm({ ...form, dailyGoal })}
+                done={form.dailyGoal}
+                showDone={false}
+                readOnly={readOnly}
+              />
+              <h4 className="form-label mb-1 mt-3">Daily goal lines</h4>
+              <ChecklistEditor
+                items={form.dailyGoalItems}
+                onChange={(dailyGoalItems) => setForm({ ...form, dailyGoalItems })}
+                readOnly={readOnly}
+                allowTick={false}
+                label="Daily goal"
+              />
+            </section>
+          </div>
+
           <section>
             <label className="form-label mb-1 block" htmlFor="week-recap">Recap notes</label>
             {readOnly ? (

@@ -3,7 +3,7 @@ import type { DayPlan } from '../../api/endpoints';
 import { dayLabel, dayState, parseDateParam } from '../../lib/reportWeek';
 import GoalDone from './GoalDone';
 
-/** One day of the week board: its goal, then what was done once followed up. */
+/** One day of the week board: its goal (from the weekly plan), then what was done once followed up. */
 export default function DayRow({
   day,
   today,
@@ -56,8 +56,8 @@ export default function DayRow({
     );
   } else if (state === 'planned') {
     body = goalText;
-  } else if (state === 'set-goal') {
-    body = canEdit ? <span className={isToday ? 'btn text-xs' : 'text-muted'}>Set goal</span> : <span className="text-muted">—</span>;
+  } else if (state === 'none') {
+    body = <span className="text-muted">—</span>;
   } else {
     body = (
       <>

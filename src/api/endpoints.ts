@@ -376,11 +376,10 @@ export interface DayPlan {
   loggedAt: string | null;
 }
 
+/** A day's follow-up: bids done, the daily goal lines with ticks, and notes (posts to Slack). */
 export interface DayPlanInput {
-  goal: Bids;
   goalItems: ChecklistItem[];
-  /** Send to follow up the day (sets it as logged and posts to Slack); omit to save the goal only. */
-  done?: Bids;
+  done: Bids;
   notes: string;
 }
 
@@ -399,6 +398,9 @@ export interface WeekPlan {
   userId: string;
   goal: Counts;
   goalItems: ChecklistItem[];
+  /** The goal for every working day of the week (bids + goal lines). */
+  dailyGoal: Counts;
+  dailyGoalItems: ChecklistItem[];
   recapNotes: string;
   done: Counts;
   stages: InterviewStages;
@@ -408,6 +410,8 @@ export interface WeekPlan {
 export interface WeekPlanInput {
   goal: Counts;
   goalItems: ChecklistItem[];
+  dailyGoal: Bids;
+  dailyGoalItems: ChecklistItem[];
   recapNotes: string;
 }
 
@@ -443,7 +447,12 @@ export const putWeekPlan = (weekStart: string, body: WeekPlanInput) =>
 export const deleteWeekPlan = (weekStart: string) => del<{ message: string }>(`/weekly-plans/${weekStart}`);
 
 export const getPreviousWeekGoals = (weekStart: string) =>
-  apiFetch<{ goal: Counts | null; goalItems: ChecklistItem[] }>(`/weekly-plans/${weekStart}/previous-goals`);
+  apiFetch<{
+    goal: Counts | null;
+    goalItems: ChecklistItem[];
+    dailyGoal: Counts | null;
+    dailyGoalItems: ChecklistItem[];
+  }>(`/weekly-plans/${weekStart}/previous-goals`);
 
 export const getTeamReport = (weekStart: string) =>
   apiFetch<{ weekStart: string; users: TeamRow[] }>(`/reports/team${qs({ weekStart })}`);
