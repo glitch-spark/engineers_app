@@ -70,7 +70,8 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchOptions 
   const { timeoutMs, ...fetchInit } = init;
   const token = getToken();
   const headers = new Headers(fetchInit.headers);
-  if (fetchInit.body !== undefined && !headers.has('Content-Type')) {
+  // FormData sets its own multipart Content-Type (with boundary); don't override it.
+  if (fetchInit.body !== undefined && !(fetchInit.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);

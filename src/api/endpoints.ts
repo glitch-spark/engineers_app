@@ -1496,3 +1496,157 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
   const filename = _filenameFromCD(res.headers.get('Content-Disposition'), 'resumes.zip');
   _saveBlob(blob, filename);
 }
+
+// ---------- job applies ----------
+
+export type JobApplyRunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+export type JobApplyRowStatus =
+  | 'pending'
+  | 'fetched'
+  | 'extracted'
+  | 'scored'
+  | 'excluded'
+  | 'fetch_failed'
+  | 'llm_failed';
+export type JobApplyView = 'all' | 'suggested' | 'excluded' | 'failed';
+export type ScoreBand = 'strong' | 'good' | 'fair' | 'weak';
+
+export interface JobApplyCounts {
+  total: number;
+  fetched: number;
+  extracted: number;
+  scored: number;
+  excluded: number;
+  failed: number;
+}
+
+export interface JobApplyProfile {
+  accountId: string;
+  name: string;
+  country?: string | null;
+  region?: string | null;
+}
+
+export interface JobApplyRun {
+  _id: string;
+  fileName: string;
+  status: JobApplyRunStatus;
+  threshold: number;
+  maxAgeDays: number;
+  counts: JobApplyCounts;
+  suggested: number;
+  createdAt: string;
+  finishedAt?: string | null;
+  error?: string | null;
+  notes?: string[];
+  selection: { accountId: string; resumeIds: string[] }[];
+  /** Only on GET /job-applies/runs/{id}. */
+  profiles?: JobApplyProfile[];
+}
+
+export interface JobApplyGate {
+  name: string;
+  result: 'pass' | 'fail' | 'unknown';
+  reason: string;
+}
+
+export interface JobApplySuggestion {
+  accountId: string;
+  resumeId: string;
+  filename: string;
+  total: number;
+  band: ScoreBand;
+  knockouts: string[];
+}
+
+export interface JobApplyRow {
+  _id: string;
+  rowIndex: number;
+  url: string | null;
+  title: string;
+  company: string;
+  status: JobApplyRowStatus;
+  statusReason?: string | null;
+  jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | null;
+  postedDate?: string | null;
+  workMode?: 'remote' | 'hybrid' | 'onsite' | 'unknown' | null;
+  allowedLocations: { kind: 'country' | 'region'; value: string }[];
+  timezoneNote?: string | null;
+  extractionSource?: 'llm' | 'rules' | 'cache' | null;
+  gates: JobApplyGate[];
+  profileGates: { accountId: string; gates: JobApplyGate[] }[];
+  topScore: number | null;
+  suggestions: JobApplySuggestion[];
+  applied: boolean;
+}
+
+export interface JobApplyComponent {
+  score: number;
+  weight: number;
+  detail: string;
+}
+
+export interface JobApplyTermHit {
+  term: string;
+  tier: 'required' | 'core' | 'mentioned' | 'preferred' | 'context';
+  weight: number;
+  credit: number;
+  match: 'exact' | 'variant' | 'fuzzy' | 'missing';
+  where: 'recent' | 'skills' | 'old' | 'none';
+}
+
+export interface JobApplyResumeScore extends JobApplySuggestion {
+  components: Record<string, JobApplyComponent>;
+  terms: JobApplyTermHit[];
+  uploadedAt?: string | null;
+}
+
+export interface JobApplyRowDetail extends JobApplyRow {
+  scores: JobApplyResumeScore[];
+  extraction: Record<string, unknown> | null;
+  jdText: string | null;
+}
+
+export const createJobApplyRun = (
+  file: File,
+  selection: { accountId: string; resumeIds: string[] }[],
+  threshold: number,
+  maxAgeDays: number,
+) => {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('selection', JSON.stringify(selection));
+  form.append('threshold', String(threshold));
+  form.append('maxAgeDays', String(maxAgeDays));
+  return apiFetch<{ runId: string; status: JobApplyRunStatus; total: number }>('/job-applies/runs', {
+    method: 'POST',
+    body: form,
+    timeoutMs: 120_000,
+  });
+};
+
+export const listJobApplyRuns = () => apiFetch<{ runs: JobApplyRun[] }>('/job-applies/runs');
+
+export const getJobApplyRun = (id: string) => apiFetch<JobApplyRun>(`/job-applies/runs/${id}`);
+
+export const listJobApplyRows = (
+  id: string,
+  params: { view?: JobApplyView; accountId?: string; minScore?: number; page?: number; limit?: number } = {},
+) => apiFetch<{ rows: JobApplyRow[]; pagination: Pagination }>(`/job-applies/runs/${id}/rows${qs(params)}`);
+
+export const getJobApplyRow = (rowId: string) => apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}`);
+
+export const updateJobApplyRun = (id: string, body: { threshold: number }) =>
+  apiFetch<JobApplyRun>(`/job-applies/runs/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const cancelJobApplyRun = (id: string) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/cancel`, {});
+
+export const retryJobApplyRun = (id: string) => postJSON<{ reset: number }>(`/job-applies/runs/${id}/retry-failed`, {});
+
+export const deleteJobApplyRun = (id: string) => del<{ ok: boolean }>(`/job-applies/runs/${id}`);
+
+export const setJobApplyRowApplied = (rowId: string, applied: boolean) =>
+  apiFetch<{ _id: string; applied: boolean }>(`/job-applies/rows/${rowId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ applied }),
+  });
