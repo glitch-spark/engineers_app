@@ -50,7 +50,7 @@ export default function DayRow({
     body = (
       <>
         {canEdit && <span className="btn text-xs">Follow up</span>}
-        {goalText}
+        {hasGoal ? goalText : <span className="text-muted">No daily goal yet</span>}
         {interviews > 0 && interviewsText}
       </>
     );
