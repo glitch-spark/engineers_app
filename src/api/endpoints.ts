@@ -1554,8 +1554,12 @@ export interface JobApplyRun {
   finishedAt?: string | null;
   error?: string | null;
   notes?: string[];
-  /** When MongoDB deletes this run and its rows (60 days after upload). */
+  /** When this run's results are deleted (3 days after upload). Applied history is kept permanently. */
   expiresAt?: string | null;
+  /** Only on GET /job-applies/runs/{id}: resumes marked applied in this run. */
+  appliedInRun?: number;
+  /** Only when requested with appliedSince: applications since that moment (e.g. local midnight). */
+  appliedSince?: number;
   selection: { accountId: string; resumeIds: string[] }[];
   /** Only on GET /job-applies/runs/{id}. */
   profiles?: JobApplyProfile[];
@@ -1568,7 +1572,24 @@ export interface JobApplyResumeHealth {
   resumeId: string;
   filename: string;
   health: { score: number; issues: string[] };
+  /** The original file is stored (S3) and can be downloaded. */
+  hasFile?: boolean;
 }
+
+export interface JobApplyAppliedMark {
+  accountId: string;
+  resumeId: string;
+  at: string | null;
+}
+
+export interface JobApplyPreviousApplication {
+  appliedAt: string | null;
+  profileName: string;
+  filename: string;
+  accountId?: string | null;
+}
+
+export type JobApplyAppliedFilter = 'any' | 'yes' | 'no';
 
 export interface JobApplyGate {
   name: string;
@@ -1603,7 +1624,11 @@ export interface JobApplyRow {
   profileGates: { accountId: string; gates: JobApplyGate[] }[];
   topScore: number | null;
   suggestions: JobApplySuggestion[];
+  /** Resumes marked applied for this job in this run. */
+  appliedResumes: JobApplyAppliedMark[];
   applied: boolean;
+  /** Applications to this URL recorded in earlier runs. */
+  previouslyApplied: JobApplyPreviousApplication[];
 }
 
 export interface JobApplyComponent {
@@ -1657,11 +1682,19 @@ export const createJobApplyRun = (
 
 export const listJobApplyRuns = () => apiFetch<{ runs: JobApplyRun[] }>('/job-applies/runs');
 
-export const getJobApplyRun = (id: string) => apiFetch<JobApplyRun>(`/job-applies/runs/${id}`);
+export const getJobApplyRun = (id: string, appliedSince?: string) =>
+  apiFetch<JobApplyRun>(`/job-applies/runs/${id}${qs({ appliedSince })}`);
 
 export const listJobApplyRows = (
   id: string,
-  params: { view?: JobApplyView; accountId?: string; minScore?: number; page?: number; limit?: number } = {},
+  params: {
+    view?: JobApplyView;
+    applied?: JobApplyAppliedFilter;
+    accountId?: string;
+    minScore?: number;
+    page?: number;
+    limit?: number;
+  } = {},
 ) => apiFetch<{ rows: JobApplyRow[]; pagination: Pagination }>(`/job-applies/runs/${id}/rows${qs(params)}`);
 
 export const getJobApplyRow = (rowId: string) => apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}`);
@@ -1675,8 +1708,16 @@ export const retryJobApplyRun = (id: string) => postJSON<{ reset: number }>(`/jo
 
 export const deleteJobApplyRun = (id: string) => del<{ ok: boolean }>(`/job-applies/runs/${id}`);
 
-export const setJobApplyRowApplied = (rowId: string, applied: boolean) =>
-  apiFetch<{ _id: string; applied: boolean }>(`/job-applies/rows/${rowId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ applied }),
+/** Mark or unmark one resume as applied for one job (also recorded in the permanent applied log). */
+export const setJobApplyResumeApplied = (
+  rowId: string,
+  body: { accountId: string; resumeId: string; applied: boolean },
+) =>
+  apiFetch<{ _id: string; appliedResumes: JobApplyAppliedMark[] }>(`/job-applies/rows/${rowId}/applied`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
   });
+
+/** Mark each job's top suggestion applied; skips jobs with no suggestion or already marked. */
+export const markTopJobApplied = (runId: string, rowIds: string[]) =>
+  postJSON<{ marked: number }>(`/job-applies/runs/${runId}/mark-top-applied`, { rowIds });
