@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import DayPanel from '../components/report/DayPanel';
 import DayRow from '../components/report/DayRow';
+import TeamTable from '../components/report/TeamTable';
 import WeekPanel from '../components/report/WeekPanel';
 import WeekSummaryCard from '../components/report/WeekSummaryCard';
 import { useAuth } from '../auth/useAuth';
@@ -103,20 +104,7 @@ export default function ReportPage() {
       </div>
 
       {!showBoard ? (
-        <section className="panel p-4">
-          <label className="form-label mb-1 block" htmlFor="report-user">Teammate</label>
-          <select
-            id="report-user"
-            className="select w-full max-w-xs"
-            value=""
-            onChange={(e) => setParam({ user: e.target.value || null })}
-          >
-            <option value="">Pick a teammate</option>
-            {(usersData?.users ?? []).map((u) => (
-              <option key={u._id} value={u._id}>{u.name || u.email}</option>
-            ))}
-          </select>
-        </section>
+        <TeamTable week={week} onOpenUser={(id) => setParam({ user: id })} />
       ) : (
         <>
           {weekQuery.error ? (
