@@ -1289,6 +1289,8 @@ export type ResumeJobStep =
 
 export interface ResumeJob {
   _id: string;
+  /** Where it was queued from; Job Applies tailoring is tagged and not auto-downloaded. */
+  source?: 'generator' | 'job_applies';
   userId: string;
   accountId: string;
   profileName: string;
@@ -1562,6 +1564,8 @@ export interface JobApplyRun {
   appliedSince?: number;
   /** Only on GET /job-applies/runs/{id}: suggested jobs not applied to yet (here or in earlier runs). */
   toApply?: number;
+  /** Only on GET /job-applies/runs/{id}: this run's tailored resumes by status. */
+  tailoring?: { queued: number; inProgress: number; ready: number; failed: number };
   selection: { accountId: string; resumeIds: string[] }[];
   /** Only on GET /job-applies/runs/{id}. */
   profiles?: JobApplyProfile[];
@@ -1578,10 +1582,28 @@ export interface JobApplyResumeHealth {
   hasFile?: boolean;
 }
 
+/** The file applied with: an uploaded resume (resumeId) or the job's tailored resume (tailoredJobId). */
 export interface JobApplyAppliedMark {
   accountId: string;
-  resumeId: string;
+  resumeId?: string | null;
+  tailoredJobId?: string | null;
   at: string | null;
+}
+
+export interface JobApplyTailored {
+  jobId: string;
+  accountId: string;
+  status: ResumeJobStatus;
+  step: ResumeJobStep;
+  hasPdf: boolean;
+  error?: string | null;
+}
+
+export interface JobApplyOtherResume {
+  accountId: string;
+  resumeId: string;
+  filename: string;
+  total: number;
 }
 
 export interface JobApplyPreviousApplication {
@@ -1631,6 +1653,10 @@ export interface JobApplyRow {
   applied: boolean;
   /** Applications to this URL recorded in earlier runs. */
   previouslyApplied: JobApplyPreviousApplication[];
+  /** This job's tailored resume, if one was queued. */
+  tailored: JobApplyTailored | null;
+  /** Scored resumes that aren't suggestions (below the threshold or filtered out). */
+  otherResumes: JobApplyOtherResume[];
 }
 
 export interface JobApplyComponent {
@@ -1713,7 +1739,7 @@ export const deleteJobApplyRun = (id: string) => del<{ ok: boolean }>(`/job-appl
 /** Mark or unmark one resume as applied for one job (also recorded in the permanent applied log). */
 export const setJobApplyResumeApplied = (
   rowId: string,
-  body: { accountId: string; resumeId: string; applied: boolean },
+  body: { accountId: string; resumeId?: string; tailoredJobId?: string; applied: boolean },
 ) =>
   apiFetch<{ _id: string; appliedResumes: JobApplyAppliedMark[] }>(`/job-applies/rows/${rowId}/applied`, {
     method: 'PUT',
@@ -1723,7 +1749,8 @@ export const setJobApplyResumeApplied = (
 export interface JobApplyMarkRef {
   rowId: string;
   accountId: string;
-  resumeId: string;
+  resumeId?: string;
+  tailoredJobId?: string;
 }
 
 /**
@@ -1736,3 +1763,25 @@ export const markTopJobApplied = (runId: string, body: { rowIds?: string[]; all?
 /** Undo a bulk mark: removes exactly these marks. */
 export const unmarkJobApplied = (runId: string, marks: JobApplyMarkRef[]) =>
   postJSON<{ unmarked: number }>(`/job-applies/runs/${runId}/unmark-applied`, { marks });
+
+/** Queue a tailored resume for one job (default: the best-scoring profile). */
+export const tailorJobApplyRow = (rowId: string, body: { accountId?: string; coverLetter?: boolean } = {}) =>
+  postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
+
+/** Queue tailored resumes for every job still to apply to that has none, up to the daily cap. */
+export const tailorAllJobApplies = (runId: string, body: { accountId?: string; coverLetter?: boolean } = {}) =>
+  postJSON<{ queued: number; skippedCap: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
+
+/** Download a generated (tailored) resume PDF by its generation job id. */
+export async function downloadTailoredResume(jobId: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${BASE_URL}/resume/jobs/${jobId}/download?format=pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try { const data = await res.json(); message = data.error || data.detail || message; } catch { /* ignore */ }
+    throw new Error(message);
+  }
+  _saveBlob(await res.blob(), filename);
+}
