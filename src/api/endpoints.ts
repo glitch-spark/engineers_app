@@ -421,29 +421,11 @@ export interface DailyPlanBody extends Partial<DailyPlanCounts & DailyPlanPlanCo
   tomorrowItems?: string[];
 }
 
-/** Planned counts sit in the bucket of the day they were planned for. */
-export interface DailyPlanStatsRow extends DailyPlanCounts, DailyPlanPlanCounts {
-  key: string;
-  bucketStart: string;
-  bucketEnd: string;
-  planCount: number;
-}
-
-export interface DailyPlanStats {
-  bucket: 'day' | 'week' | 'month';
-  window: { from: string; to: string };
-  series: DailyPlanStatsRow[];
-  totals: DailyPlanCounts & DailyPlanPlanCounts & { planCount: number };
-}
-
 export const createDailyPlan = (body: DailyPlanBody & { date: string }) =>
   postJSON<Record<string, unknown>>('/daily-plans', body);
 
 export const updateDailyPlan = (id: string, body: DailyPlanBody) =>
   putJSON<Record<string, unknown>>(`/daily-plans/${id}`, body);
-
-export const getDailyPlanStats = (params: { bucket: 'day' | 'week' | 'month'; userId?: string; to?: string }) =>
-  apiFetch<DailyPlanStats>(`/daily-plans/stats${qs(params)}`);
 
 export const deleteDailyPlan = (id: string) => del<{ message: string }>(`/daily-plans/${id}`);
 
@@ -685,40 +667,6 @@ export const updateInterviewStage = (id: string, stageId: string, body: Intervie
 export const deleteInterviewStage = (id: string, stageId: string) =>
   del<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}`);
 
-// ---------- dashboard metrics ----------
-
-export interface DashboardKpiTotals {
-  income: number;
-  bids: number;
-  interviews: number;
-  bidToInterview: number;
-}
-
-export interface DashboardSeriesPoint {
-  bucketStart: string;
-  income: number;
-  bids: number;
-  interviews: number;
-  rate: number;
-}
-
-export interface DashboardMetrics {
-  window: { from: string; to: string };
-  previousWindow: { from: string; to: string };
-  bucket: 'day' | 'week' | 'month';
-  totals: DashboardKpiTotals;
-  previousTotals: DashboardKpiTotals;
-  series: DashboardSeriesPoint[];
-}
-
-export const getDashboardMetrics = (params: {
-  range?: number;
-  bucket?: 'day' | 'week' | 'month';
-  from?: string;
-  to?: string;
-  includeSeries?: boolean;
-}) => apiFetch<DashboardMetrics>(`/metrics/dashboard${qs(params)}`);
-
 // ---------- leaderboard ----------
 
 export type LeaderboardMetric = 'earnings' | 'bids' | 'interviews' | 'conversion';
@@ -805,27 +753,62 @@ export const getLeaderboardConsolidated = (range: string = 'week', trendWeeks?: 
   return apiFetch<ConsolidatedLeaderboard>(`/metrics/leaderboard/consolidated?${params.toString()}`);
 };
 
-export interface DashboardFeed {
-  recent: Array<{
-    kind: 'bid' | 'interview_done' | 'interview_past';
-    at: string;
-    company?: string | null;
-    profile?: string;
-    jobId?: string;
-    interviewId?: string;
-    stage?: string | null;
-    status?: string | null;
-  }>;
-  upcoming: Array<{
-    interviewId: string;
-    company?: string | null;
-    stage?: string | null;
-    scheduledAt: string | null;
-    endsAt: string | null;
-  }>;
+// ---------- dashboard ----------
+
+export interface DashboardPace {
+  expected: number;
+  behindBy: number;
+  perDayNeeded: number | null;
+  onTrack: boolean;
 }
 
-export const getDashboardFeed = () => apiFetch<DashboardFeed>('/metrics/dashboard-feed');
+export interface DashboardPercentile {
+  position: 'top' | 'bottom';
+  percent: number;
+}
+
+export interface DashboardWeek {
+  week: { start: string; end: string };
+  bids: {
+    self: number;
+    bidder: number;
+    total: number;
+    target: number | null;
+    pace: DashboardPace | null;
+    percentile: DashboardPercentile | null;
+  };
+  interviews: {
+    done: number;
+    target: number | null;
+    pace: DashboardPace | null;
+    percentile: DashboardPercentile | null;
+  };
+  stages: { key: string; label: string; count: number }[];
+  streak: number;
+  hasWeeklyPlan: boolean;
+}
+
+export interface DashboardActivity {
+  bucket: 'day' | 'week' | 'month';
+  from: string;
+  to: string;
+  series: { key: string; label: string; self: number; bidder: number; interviews: number }[];
+  totals: { self: number; bidder: number; bids: number; interviews: number };
+}
+
+export interface DashboardNetMonthly {
+  months: { period: string; income: number; outcome: number; net: number }[];
+  total: number;
+}
+
+export const getDashboardWeek = (params: { userId?: string; today?: string }) =>
+  apiFetch<DashboardWeek>(`/dashboard/week${qs(params)}`);
+
+export const getDashboardActivity = (params: { from: string; to: string; userId?: string }) =>
+  apiFetch<DashboardActivity>(`/dashboard/activity${qs(params)}`);
+
+export const getDashboardNetMonthly = (params: { userId?: string; today?: string }) =>
+  apiFetch<DashboardNetMonthly>(`/dashboard/net-monthly${qs(params)}`);
 
 // ---------- pipeline ----------
 

@@ -56,6 +56,17 @@ export default function Sidebar({
       <nav aria-label="Main" className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
 
           <NavLink
+            href="/dashboard"
+            label="Dashboard"
+            isCollapsed={isCollapsed}
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+              </svg>
+            }
+          />
+
+          <NavLink
             href="/leaderboard"
             label="Leaderboard"
             isCollapsed={isCollapsed}
