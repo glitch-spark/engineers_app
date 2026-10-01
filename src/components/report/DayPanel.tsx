@@ -45,12 +45,15 @@ export default function DayPanel({
   const [initial, setInitial] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Notes are optional: the box opens on request, or when the day already has a note.
+  const [notesOpen, setNotesOpen] = useState(false);
 
   useEffect(() => {
     if (!data) return;
     const next: FollowUp = { done: data.done, goalItems: data.goalItems, notes: data.notes };
     setForm(next);
     setInitial(JSON.stringify(next));
+    setNotesOpen(!!data.notes);
   }, [data]);
 
   useEffect(() => {
@@ -185,21 +188,33 @@ export default function DayPanel({
             </section>
           )}
 
-          {canFollowUp && (
+          {canFollowUp && editable && !notesOpen && (
+            <button
+              type="button"
+              className="text-sm font-medium text-accent-700 underline-offset-2 hover:underline dark:text-accent-300"
+              onClick={() => setNotesOpen(true)}
+            >
+              + Add a note
+            </button>
+          )}
+          {canFollowUp && editable && notesOpen && (
             <section>
-              <label className="form-label mb-1 block" htmlFor="day-notes">Follow-up notes</label>
-              {editable ? (
-                <textarea
-                  id="day-notes"
-                  className="input min-h-[5rem] w-full"
-                  maxLength={2000}
-                  placeholder="What actually happened today?"
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                />
-              ) : (
-                <p className="whitespace-pre-wrap text-sm text-body">{form.notes || '—'}</p>
-              )}
+              <label className="form-label mb-1 block" htmlFor="day-notes">Note</label>
+              <textarea
+                id="day-notes"
+                className="input min-h-[4.5rem] w-full"
+                maxLength={2000}
+                placeholder="Anything worth explaining — e.g. why a goal moved"
+                value={form.notes}
+                autoFocus={!data.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
+            </section>
+          )}
+          {!editable && form.notes && (
+            <section>
+              <h3 className="form-label mb-1">Note</h3>
+              <p className="whitespace-pre-wrap text-sm text-body">{form.notes}</p>
             </section>
           )}
         </div>
