@@ -269,8 +269,12 @@ export default function JobApplyRun() {
     [toggleFile, profileNames],
   );
 
+  // Rows with a tailor request in flight: a second click or `t` press waits for the first.
+  const tailoringRows = useRef(new Set<string>());
   const tailor = useCallback(
     async (row: JobApplyRow, accountId?: string) => {
+      if (tailoringRows.current.has(row._id)) return;
+      tailoringRows.current.add(row._id);
       try {
         const { tailored } = await api.tailorJobApplyRow(row._id, { accountId });
         await mutateRows(
@@ -280,6 +284,8 @@ export default function JobApplyRun() {
         void mutateRun();
       } catch (err) {
         notify.error(err, 'Could not start tailoring');
+      } finally {
+        tailoringRows.current.delete(row._id);
       }
     },
     [mutateRows, mutateRun],
@@ -383,7 +389,7 @@ export default function JobApplyRun() {
   // Keyboard flow for fast applying (see SHORTCUTS).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target)) return;
       if (e.key === '?') {
         e.preventDefault();
         setShowHelp((v) => !v);
@@ -412,7 +418,9 @@ export default function JobApplyRun() {
       else if (e.key === 'Enter') setExpanded((cur) => (cur === row._id ? null : row._id));
       else if (key === 'a') {
         const t = row.tailored;
-        if (t?.status === 'completed') {
+        if (row.applied) {
+          // Already applied with something: `a` just moves on (no second application / bid).
+        } else if (t?.status === 'completed') {
           void toggleFile(row, { accountId: t.accountId, tailoredJobId: t.jobId }, true, `Tailored · ${profileNames[t.accountId] ?? 'Profile'}`);
         } else if (row.suggestions[0]) void toggleApplied(row, row.suggestions[0], true);
         move(1);
@@ -434,7 +442,7 @@ export default function JobApplyRun() {
       const res = await api.tailorAllJobApplies(runId, { accountId: accountId || undefined, coverLetter: tailorCoverLetter });
       notify.success(
         res.queued
-          ? `Tailoring ${res.queued} resume${res.queued === 1 ? '' : 's'}${res.skippedCap ? ` · ${res.skippedCap} skipped (daily limit)` : ''}`
+          ? `Tailoring ${res.queued} resume${res.queued === 1 ? '' : 's'}${res.skippedCap ? ` · ${res.skippedCap} skipped (daily limit)` : ''}${res.skipped ? ` · ${res.skipped} skipped (profile has no HTML template?)` : ''}`
           : res.skippedCap
             ? `Daily limit reached · ${res.skippedCap} not queued`
             : 'Every job to apply to already has a tailored resume',

@@ -1770,7 +1770,7 @@ export const tailorJobApplyRow = (rowId: string, body: { accountId?: string; cov
 
 /** Queue tailored resumes for every job still to apply to that has none, up to the daily cap. */
 export const tailorAllJobApplies = (runId: string, body: { accountId?: string; coverLetter?: boolean } = {}) =>
-  postJSON<{ queued: number; skippedCap: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
+  postJSON<{ queued: number; skippedCap: number; skipped: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
 
 /** Download a generated (tailored) resume PDF by its generation job id. */
 export async function downloadTailoredResume(jobId: string, filename: string): Promise<void> {
