@@ -30,51 +30,53 @@ export default function Pagination({
   const from = (info.page - 1) * info.limit + 1;
   const to = Math.min(info.total, info.page * info.limit);
   return (
-    <nav aria-label={label} className="flex flex-wrap items-center justify-between gap-3 text-sm">
-      <p className="tabular-nums text-zinc-600 dark:text-zinc-400">
-        Showing <span className="font-medium text-zinc-900 dark:text-zinc-100">{from}–{to}</span> of{' '}
-        <span className="font-medium text-zinc-900 dark:text-zinc-100">{info.total}</span>
-      </p>
-      <div className="flex flex-wrap items-center gap-1">
-        <button type="button" className="btn-outline btn-sm" onClick={() => onPage(info.page - 1)} disabled={!info.hasPrev}>
-          Previous
-        </button>
-        {pageList(info.page, info.totalPages).map((p, i) =>
-          p === null ? (
-            <span key={`gap-${i}`} className="px-1 text-zinc-400" aria-hidden>
-              …
-            </span>
-          ) : (
-            <button
-              key={p}
-              type="button"
-              onClick={() => onPage(p)}
-              aria-current={p === info.page ? 'page' : undefined}
-              aria-label={`Page ${p}`}
-              className={`${p === info.page ? 'btn' : 'btn-outline'} btn-sm min-w-[2.25rem] tabular-nums`}
-            >
-              {p}
-            </button>
-          ),
-        )}
-        <button type="button" className="btn-outline btn-sm" onClick={() => onPage(info.page + 1)} disabled={!info.hasNext}>
-          Next
-        </button>
-        <label className="ml-2 flex items-center gap-1.5 text-xs text-zinc-500">
-          Per page
-          <select
-            className="select w-auto py-1 text-xs"
-            value={pageSize}
-            onChange={(e) => onPageSize(Number(e.target.value))}
-          >
-            {PAGE_SIZES.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+    <nav aria-label={label} className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+      {info.totalPages > 1 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <button type="button" className="btn-outline btn-sm" onClick={() => onPage(info.page - 1)} disabled={!info.hasPrev}>
+            Previous
+          </button>
+          {pageList(info.page, info.totalPages).map((p, i) =>
+            p === null ? (
+              <span key={`gap-${i}`} className="px-1 text-zinc-400" aria-hidden>
+                …
+              </span>
+            ) : (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onPage(p)}
+                aria-current={p === info.page ? 'page' : undefined}
+                aria-label={`Page ${p}`}
+                className={`${p === info.page ? 'btn' : 'btn-outline'} btn-sm min-w-[2.25rem] tabular-nums`}
+              >
+                {p}
+              </button>
+            ),
+          )}
+          <button type="button" className="btn-outline btn-sm" onClick={() => onPage(info.page + 1)} disabled={!info.hasNext}>
+            Next
+          </button>
+          <span className="ml-1 whitespace-nowrap tabular-nums text-xs text-zinc-500">
+            {from}–{to} of {info.total}
+          </span>
+        </div>
+      )}
+      <label className="flex items-center gap-1 whitespace-nowrap text-xs text-zinc-500">
+        <select
+          className="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-6 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+          value={pageSize}
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          aria-label="Jobs per page"
+        >
+          {PAGE_SIZES.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        / page
+      </label>
     </nav>
   );
 }

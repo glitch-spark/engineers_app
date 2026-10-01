@@ -124,3 +124,14 @@ export function healthBadge(score: number, issues: string[]): { className: strin
   const title = issues.length ? issues.map((i) => HEALTH_ISSUE[i] ?? i).join('\n') : 'No readability issues found';
   return { className, title };
 }
+
+/** "expires in 2 days" / "expires today" for a run's results (the applied history is kept regardless). */
+export function expiresHint(iso?: string | null): string {
+  if (!iso) return '';
+  const t = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`).getTime();
+  if (Number.isNaN(t)) return '';
+  const days = Math.floor((t - Date.now()) / 86_400_000);
+  if (days < 0) return '';
+  if (days === 0) return 'expires today';
+  return `expires in ${days} day${days === 1 ? '' : 's'}`;
+}

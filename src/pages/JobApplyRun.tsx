@@ -2,38 +2,32 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, RotateCcw, Square } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Square } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import RowDetail from '../components/jobApplies/RowDetail';
 import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions from '../components/jobApplies/Suggestions';
+import RunSummary from '../components/jobApplies/RunSummary';
+import Segmented from '../components/jobApplies/Segmented';
 import {
   ROW_STATUS_LABEL,
-  RUN_STATUS_BADGE,
-  RUN_STATUS_LABEL,
   TONE_CLASS,
   ageDays,
   formatDate,
   gateChip,
   isActive,
 } from '../components/jobApplies/format';
-import { ProgressBar } from './JobApplies';
 import { notify } from '../lib/notify';
 
-const VIEWS: { value: JobApplyView; label: string }[] = [
-  { value: 'suggested', label: 'Suggested' },
-  { value: 'all', label: 'All' },
-  { value: 'excluded', label: 'Excluded' },
-  { value: 'failed', label: 'Failed' },
-];
 const APPLIED_FILTERS: { value: JobApplyAppliedFilter; label: string }[] = [
-  { value: 'no', label: 'Not applied yet' },
+  { value: 'no', label: 'To apply' },
   { value: 'yes', label: 'Applied' },
-  { value: 'any', label: 'All' },
+  { value: 'any', label: 'Any' },
 ];
 const PAGE_SIZE_KEY = 'jobApplies.pageSize';
 const SHORTCUTS: [string, string][] = [
@@ -129,6 +123,7 @@ export default function JobApplyRun() {
   const [showHelp, setShowHelp] = useState(false);
   const [thresholdDraft, setThresholdDraft] = useState<number | null>(null);
   const [busy, setBusy] = useState<'cancel' | 'retry' | 'bulk' | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
   const [since] = useState(localMidnightIso);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 
@@ -293,15 +288,47 @@ export default function JobApplyRun() {
       return next;
     });
 
-  const bulkMarkTop = async () => {
+  const bulkMarkTop = async (scope: 'selected' | 'all') => {
     setBusy('bulk');
+    setConfirmAll(false);
     try {
-      const res = await api.markTopJobApplied(runId, [...selected]);
-      notify.success(`Marked ${res.marked} job${res.marked === 1 ? '' : 's'} applied`);
+      const res = await api.markTopJobApplied(
+        runId,
+        scope === 'all' ? { all: true, accountId } : { rowIds: [...selected], accountId },
+      );
       setSelected(new Set());
       await Promise.all([mutateRows(), mutateRun()]);
+      if (!res.marked) {
+        notify.info('Nothing to mark: those jobs are already applied or have no suggestion.');
+        return;
+      }
+      toast(
+        (t) => (
+          <span className="flex items-center gap-3">
+            <span>
+              Marked {res.marked} job{res.marked === 1 ? '' : 's'} applied
+            </span>
+            <button
+              type="button"
+              className="font-semibold text-sky-700 underline dark:text-sky-400"
+              onClick={async () => {
+                toast.dismiss(t.id);
+                try {
+                  await api.unmarkJobApplied(runId, res.marks);
+                  await Promise.all([mutateRows(), mutateRun()]);
+                } catch (err) {
+                  notify.error(err, 'Could not undo');
+                }
+              }}
+            >
+              Undo
+            </button>
+          </span>
+        ),
+        { duration: 8000, style: { fontSize: '0.875rem' } },
+      );
     } catch (err) {
-      notify.error(err, 'Could not mark the selected jobs');
+      notify.error(err, 'Could not mark the jobs applied');
     } finally {
       setBusy(null);
     }
@@ -407,113 +434,103 @@ export default function JobApplyRun() {
                 Cancel run
               </button>
             )}
-            {!active && run.counts.failed > 0 && (
-              <button type="button" className="btn-outline btn-sm" onClick={onRetry} disabled={busy !== null}>
-                {busy === 'retry' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
-                Retry {run.counts.failed} failed
-              </button>
-            )}
           </>
         }
       />
 
-      <section className="card-compact flex flex-wrap items-center gap-x-6 gap-y-3" aria-label="Run summary">
-        <span className={RUN_STATUS_BADGE[run.status]}>{RUN_STATUS_LABEL[run.status]}</span>
-        <ProgressBar run={run} />
-        <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-          <div className="flex gap-1"><dt className="text-zinc-500">Jobs</dt><dd className="font-medium tabular-nums">{run.counts.total}</dd></div>
-          <div className="flex gap-1"><dt className="text-zinc-500">Suggested</dt><dd className="font-medium tabular-nums">{run.suggested}</dd></div>
-          <div className="flex gap-1"><dt className="text-zinc-500">Excluded</dt><dd className="font-medium tabular-nums">{run.counts.excluded}</dd></div>
-          <div className="flex gap-1"><dt className="text-zinc-500">Failed</dt><dd className="font-medium tabular-nums">{run.counts.failed}</dd></div>
-          <div className="flex gap-1">
-            <dt className="text-zinc-500">Applied today</dt>
-            <dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{run.appliedSince ?? 0}</dd>
-          </div>
-          <div className="flex gap-1"><dt className="text-zinc-500">This run</dt><dd className="font-medium tabular-nums">{run.appliedInRun ?? 0}</dd></div>
-          {run.expiresAt && (
-            <div
-              className="flex gap-1"
-              title="This run's results (jobs and scores) are deleted on this date. Your applied history is kept permanently."
-            >
-              <dt className="text-zinc-500">Results kept until</dt>
-              <dd className="font-medium">{formatDate(run.expiresAt)}</dd>
-            </div>
-          )}
-        </dl>
-        {run.error && <p className="w-full text-sm text-red-700 dark:text-red-400">Run stopped: {run.error}</p>}
-        {(run.notes ?? []).map((n) => (
-          <p key={n} className="hint w-full">{n}</p>
-        ))}
-      </section>
+      <RunSummary
+        run={run}
+        onView={(v) => {
+          setView(v);
+          setAppliedFilter('any');
+          resetPaging();
+        }}
+        onRetry={onRetry}
+        retrying={busy === 'retry'}
+      />
 
-      <div className="toolbar flex flex-wrap items-end gap-4">
-        <div role="group" aria-label="Jobs" className="flex flex-wrap gap-1">
-          {VIEWS.map((v) => (
-            <button
-              key={v.value}
-              type="button"
-              aria-pressed={view === v.value}
-              onClick={() => {
-                setView(v.value);
-                resetPaging();
-              }}
-              className={view === v.value ? 'btn btn-sm' : 'btn-outline btn-sm'}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-        <div role="group" aria-label="Applied" className="flex flex-wrap gap-1">
-          {APPLIED_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              aria-pressed={appliedFilter === f.value}
-              onClick={() => {
-                setAppliedFilter(f.value);
-                resetPaging();
-              }}
-              className={appliedFilter === f.value ? 'btn btn-sm' : 'btn-outline btn-sm'}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <div className="w-52">
-          <Select
-            value={accountId}
+      <div className="toolbar space-y-3">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <Segmented
+            label="Jobs"
+            value={view}
             onChange={(v) => {
-              setAccountId(v);
+              setView(v);
               resetPaging();
             }}
-            options={profileOptions}
-            ariaLabel="Profile"
+            options={[
+              { value: 'suggested', label: 'Suggested', count: run.suggested },
+              { value: 'all', label: 'All', count: run.counts.total },
+              { value: 'excluded', label: 'Excluded', count: run.counts.excluded },
+              { value: 'failed', label: 'Failed', count: run.counts.failed },
+            ]}
+          />
+          <Segmented
+            label="Status"
+            value={appliedFilter}
+            onChange={(v) => {
+              setAppliedFilter(v);
+              resetPaging();
+            }}
+            options={APPLIED_FILTERS}
           />
         </div>
-        <div className="min-w-[14rem] flex-1 sm:max-w-xs">
-          <label htmlFor="threshold" className="form-label">
-            Minimum score: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{threshold}</span>
-          </label>
-          <input
-            id="threshold"
-            type="range"
-            min={50}
-            max={95}
-            value={threshold}
-            onChange={(e) => setThresholdDraft(Number(e.target.value))}
-            className="w-full accent-sky-600"
-          />
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+          <div className="w-56">
+            <Select
+              value={accountId}
+              onChange={(v) => {
+                setAccountId(v);
+                resetPaging();
+              }}
+              options={profileOptions}
+              ariaLabel="Profile"
+            />
+          </div>
+          <div className="min-w-[14rem] flex-1 sm:max-w-xs">
+            <label htmlFor="threshold" className="form-label">
+              Minimum score <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{threshold}</span>
+            </label>
+            <input
+              id="threshold"
+              type="range"
+              min={50}
+              max={95}
+              value={threshold}
+              onChange={(e) => setThresholdDraft(Number(e.target.value))}
+              className="w-full accent-sky-600"
+            />
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (top)" />
-        {selected.size > 0 && (
-          <button type="button" className="btn btn-sm" onClick={bulkMarkTop} disabled={busy !== null}>
-            {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
-            Mark top suggestion applied ({selected.size})
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+            {pagination ? pagination.total : '…'}{' '}
+            {appliedFilter === 'no' ? 'to apply to' : appliedFilter === 'yes' ? 'applied' : 'jobs'}
+          </p>
+          {selected.size > 0 ? (
+            <button type="button" className="btn btn-sm" onClick={() => void bulkMarkTop('selected')} disabled={busy !== null}>
+              {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
+              Mark {selected.size} selected applied
+            </button>
+          ) : (
+            appliedFilter === 'no' &&
+            (run.toApply ?? 0) > 0 && (
+              <button type="button" className="btn btn-sm" onClick={() => setConfirmAll(true)} disabled={busy !== null}>
+                {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
+                Mark all {accountId ? '' : `${run.toApply} `}as applied
+              </button>
+            )
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
+            Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for shortcuts
           </button>
-        )}
+          <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (top)" />
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -531,7 +548,7 @@ export default function JobApplyRun() {
           </p>
         ) : (
           <table className="min-w-full text-sm">
-            <thead className="table-head">
+            <thead className="table-head whitespace-nowrap">
               <tr>
                 <th className="w-8 px-3 py-2 font-medium">
                   <input
@@ -547,7 +564,7 @@ export default function JobApplyRun() {
                 <th className="px-3 py-2 font-medium">Work mode</th>
                 <th className="px-3 py-2 font-medium">Location</th>
                 <th className="px-3 py-2 font-medium">Flags</th>
-                <th className="px-3 py-2 font-medium">Suggested resumes · applied</th>
+                <th className="px-3 py-2 font-medium">Apply with</th>
               </tr>
             </thead>
             <tbody>
@@ -653,6 +670,22 @@ export default function JobApplyRun() {
       </div>
 
       <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (bottom)" />
+
+      <ConfirmDialog
+        open={confirmAll}
+        title="Mark all as applied?"
+        body={
+          <p>
+            The top suggested resume{accountId ? ` of ${profileNames[accountId] ?? 'this profile'}` : ''} will be marked applied for{' '}
+            {accountId ? 'every job still to apply to' : `${run.toApply ?? 0} job${run.toApply === 1 ? '' : 's'}`}, across all pages.
+            You can undo it right after.
+          </p>
+        }
+        confirmLabel="Mark all applied"
+        busy={busy === 'bulk'}
+        onConfirm={() => void bulkMarkTop('all')}
+        onCancel={() => setConfirmAll(false)}
+      />
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)} title="Keyboard shortcuts" size="sm">
         <p className="hint mb-3">The highlighted job is the one the keys act on. Click a row to highlight it.</p>

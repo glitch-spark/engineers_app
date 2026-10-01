@@ -1560,6 +1560,8 @@ export interface JobApplyRun {
   appliedInRun?: number;
   /** Only when requested with appliedSince: applications since that moment (e.g. local midnight). */
   appliedSince?: number;
+  /** Only on GET /job-applies/runs/{id}: suggested jobs not applied to yet (here or in earlier runs). */
+  toApply?: number;
   selection: { accountId: string; resumeIds: string[] }[];
   /** Only on GET /job-applies/runs/{id}. */
   profiles?: JobApplyProfile[];
@@ -1718,6 +1720,19 @@ export const setJobApplyResumeApplied = (
     body: JSON.stringify(body),
   });
 
-/** Mark each job's top suggestion applied; skips jobs with no suggestion or already marked. */
-export const markTopJobApplied = (runId: string, rowIds: string[]) =>
-  postJSON<{ marked: number }>(`/job-applies/runs/${runId}/mark-top-applied`, { rowIds });
+export interface JobApplyMarkRef {
+  rowId: string;
+  accountId: string;
+  resumeId: string;
+}
+
+/**
+ * Mark the top suggestion applied for the given jobs, or with `all` for every job still to apply to (all pages;
+ * `accountId` limits it to that profile's best resume). Returns the marks made so they can be undone.
+ */
+export const markTopJobApplied = (runId: string, body: { rowIds?: string[]; all?: boolean; accountId?: string }) =>
+  postJSON<{ marked: number; marks: JobApplyMarkRef[] }>(`/job-applies/runs/${runId}/mark-top-applied`, body);
+
+/** Undo a bulk mark: removes exactly these marks. */
+export const unmarkJobApplied = (runId: string, marks: JobApplyMarkRef[]) =>
+  postJSON<{ unmarked: number }>(`/job-applies/runs/${runId}/unmark-applied`, { marks });
