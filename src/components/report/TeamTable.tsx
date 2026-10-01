@@ -1,23 +1,17 @@
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { TeamRow } from '../../api/endpoints';
-import { addDays, dateParam, mondayOf, parseDateParam, regionTotal } from '../../lib/reportWeek';
+import { dateParam, isLogStale, mondayOf, parseDateParam, regionTotal } from '../../lib/reportWeek';
 import GoalDone from './GoalDone';
-
-/** Working days (Mon–Sat) strictly between `from` and `to`. */
-function workingDaysBetween(from: Date, to: Date): number {
-  let n = 0;
-  for (let d = addDays(from, 1); d < to; d = addDays(d, 1)) if (d.getDay() !== 0) n++;
-  return n;
-}
 
 function lastLog(row: TeamRow, week: string): { text: string; stale: boolean } {
   const isCurrentWeek = week === dateParam(mondayOf(new Date()));
-  if (!row.lastLoggedDate) return { text: 'No log', stale: isCurrentWeek };
-  const last = parseDateParam(row.lastLoggedDate) ?? new Date();
-  const text = last.toLocaleDateString('en-US', { weekday: 'short' });
-  const today = parseDateParam(dateParam(new Date())) ?? new Date();
-  return { text, stale: isCurrentWeek && workingDaysBetween(last, today) > 1 };
+  const stale = isLogStale(row.lastLoggedDate, new Date(), isCurrentWeek);
+  const last = parseDateParam(row.lastLoggedDate);
+  if (!last) return { text: 'No log', stale };
+  const sameWeek = dateParam(mondayOf(last)) === week;
+  const text = last.toLocaleDateString('en-US', sameWeek ? { weekday: 'short' } : { month: 'short', day: 'numeric' });
+  return { text, stale };
 }
 
 /** Admin overview: everyone's Goal vs Done for the week; a row opens that person's board. */

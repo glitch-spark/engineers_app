@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { ChecklistItem, Counts, DayPlan, DoneOverrides } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
-import { dateParam, dayLabel, emptyCounts, isToday, nextWorkingDay, parseDateParam } from '../../lib/reportWeek';
+import { dateParam, dayLabel, emptyCounts, isToday, nextWorkingDay, parseDateParam, shouldLogDone } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import ChecklistEditor, { cleanItems } from './ChecklistEditor';
 import CountsEditor, { type CountsField, type OverrideValue } from './CountsEditor';
@@ -60,7 +60,7 @@ export default function DayPanel({
     () => api.getDayPlan(date, userId),
     { revalidateOnFocus: false },
   );
-  const { data: tomorrowData } = useSWR(
+  const { data: tomorrowData, error: tomorrowError } = useSWR(
     open && showTomorrow ? ['day-plan', tomorrowDate, 'me'] : null,
     () => api.getDayPlan(tomorrowDate),
     { revalidateOnFocus: false },
@@ -92,6 +92,13 @@ export default function DayPanel({
     }
   }, [open]);
 
+  const doneSnapshot = (f: DayForm) => JSON.stringify([f.done.bidsSelf, f.done.bidsBidder, f.done.linkedin, f.doneOverrides]);
+  const doneChanged = useMemo(
+    () => !!form && !!initial && doneSnapshot(form) !== doneSnapshot(JSON.parse(initial) as DayForm),
+    [form, initial],
+  );
+  const logs = shouldLogDone({ date, today: todayParam, logged: !!data?.loggedAt, doneChanged });
+
   const dirty = useMemo(
     () => !!form && (JSON.stringify(form) !== initial || tomorrowTouched),
     [form, initial, tomorrowTouched],
@@ -121,7 +128,8 @@ export default function DayPanel({
       await api.putDayPlan(date, {
         goal: form.goal,
         goalItems: cleanItems(form.goalItems),
-        done: canLog
+        // Today's goal alone doesn't count as logging the day.
+        done: logs
           ? { bidsSelf: form.done.bidsSelf, bidsBidder: form.done.bidsBidder, linkedin: form.done.linkedin }
           : undefined,
         doneOverrides: form.doneOverrides,
@@ -166,7 +174,7 @@ export default function DayPanel({
       )}
       <button type="button" className="btn-outline text-sm" onClick={onClose}>Cancel</button>
       <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form}>
-        {saving ? 'Saving…' : canLog ? 'Save day' : 'Save goal'}
+        {saving ? 'Saving…' : logs ? 'Save day' : 'Save goal'}
       </button>
     </>
   );
@@ -237,7 +245,12 @@ export default function DayPanel({
             )}
           </section>
 
-          {showTomorrow && (
+          {showTomorrow && tomorrowError && (
+            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+              Couldn&apos;t load the next day&apos;s goal, so it can&apos;t be edited here right now.
+            </p>
+          )}
+          {showTomorrow && tomorrowData && (
             <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="card-title">Goal for {dayLabel(nextWorkingDay(day))}</h3>

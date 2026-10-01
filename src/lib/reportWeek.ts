@@ -103,3 +103,29 @@ export function worstRegion(goal: RegionCounts, done: RegionCounts): { region: s
 export function emptyCounts(): Counts {
   return { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0, profiles: {}, linkedin: {} };
 }
+
+/** Working days (Mon–Sat) strictly between two dates. */
+function workingDaysBetween(from: Date, to: Date): number {
+  let n = 0;
+  for (let d = addDays(from, 1); dateParam(d) < dateParam(to); d = addDays(d, 1)) if (d.getDay() !== 0) n++;
+  return n;
+}
+
+/** True when someone missed at least one working day since their last log
+ *  (only meaningful while viewing the current week). */
+export function isLogStale(lastLogged: string | null, today: Date, isCurrentWeek: boolean): boolean {
+  if (!isCurrentWeek) return false;
+  const last = parseDateParam(lastLogged);
+  if (!last) return true;
+  return workingDaysBetween(last, today) >= 1;
+}
+
+/** Whether saving a day records its Done (and so counts as logged).
+ *  Today's goal alone doesn't; past days and already-logged days do. */
+export function shouldLogDone({
+  date, today, logged, doneChanged,
+}: { date: string; today: string; logged: boolean; doneChanged: boolean }): boolean {
+  if (date > today) return false;
+  if (date < today || logged) return true;
+  return doneChanged;
+}
