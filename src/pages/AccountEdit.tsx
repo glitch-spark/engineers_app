@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Loader2, Save } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
@@ -247,7 +247,19 @@ export default function AccountEditPage() {
   );
 }
 
+const PROMPTS_OPEN_KEY = 'profileEdit.promptsOpen';
+
+function readPromptsOpen(): boolean {
+  try {
+    return window.localStorage.getItem(PROMPTS_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function PromptsBlock({ accountId }: { accountId: string }) {
+  // Collapsed by default; remembered per browser. Collapsing only hides the fields, so unsaved edits stay.
+  const [open, setOpen] = useState(readPromptsOpen);
   const [resumePrompt, setResumePrompt] = useState('');
   const [screeningPrompt, setScreeningPrompt] = useState('');
   const [coverLetterPrompt, setCoverLetterPrompt] = useState('');
@@ -288,68 +300,107 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     }
   }
 
-  if (loading) {
-    return (
-      <Section title="Prompts" desc="">
-        <div role="status" className="flex items-center gap-2 text-sm text-muted">
-          <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading prompts...
-        </div>
-      </Section>
-    );
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    try {
+      window.localStorage.setItem(PROMPTS_OPEN_KEY, next ? '1' : '0');
+    } catch {
+      /* storage unavailable: just don't remember */
+    }
   }
+
+  const customized = [
+    resumePrompt.trim() && 'Resume',
+    screeningPrompt.trim() && 'Screening Q&A',
+    coverLetterPrompt.trim() && 'Cover letter',
+  ].filter(Boolean);
+  const summary = loading
+    ? 'Loading…'
+    : customized.length
+      ? `Customized: ${customized.join(', ')}`
+      : 'Using defaults (inherit global → built-in)';
 
   return (
     <>
-      <Section
-        title="Resume generating prompt"
-        desc="Drives which fields the resume LLM rewrites (and how). Overrides your global prompt for this profile only. Empty = inherit global → built-in default."
-      >
-        <ResumePromptField
-          value={resumePrompt}
-          onChange={setResumePrompt}
-          label="Profile resume content prompt"
-          hint="Empty = inherit global → built-in default."
-          defaultSource="global"
-        />
-      </Section>
-
-      <Section
-        title="Screening Q&A answering prompt"
-        desc="How screening-question answers are written for this profile. Overrides your global screening prompt. Empty = inherit global → built-in default."
-      >
-        <ResumePromptField
-          kind="screening"
-          value={screeningPrompt}
-          onChange={setScreeningPrompt}
-          label="Profile screening prompt"
-          hint="Empty = inherit global → built-in default."
-          defaultSource="global"
-        />
-      </Section>
-
-      <Section
-        title="Cover letter prompt"
-        desc="How the cover letter is written when opted-in at submit time. Plain text output. Overrides your global cover-letter prompt. Empty = inherit global."
-      >
-        <ResumePromptField
-          kind="coverLetter"
-          value={coverLetterPrompt}
-          onChange={setCoverLetterPrompt}
-          label="Profile cover letter prompt"
-          hint="Empty = inherit global. If global is also empty, generic letter is produced."
-          defaultSource="global"
-        />
-      </Section>
-
-      <div className="flex justify-end">
+      <section className="panel">
         <button
-          onClick={save}
-          disabled={saving}
-          className="btn disabled:opacity-50"
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-controls="profile-prompts"
+          className="flex w-full items-center gap-3 rounded-[inherit] p-6 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
-          Save prompts
+          {open ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+          )}
+          <span className="card-title">Prompts</span>
+          <span className="text-xs text-muted">{summary}</span>
         </button>
+      </section>
+
+      <div id="profile-prompts" hidden={!open} className="space-y-6">
+        {loading ? (
+          <div role="status" className="flex items-center gap-2 text-sm text-muted">
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading prompts...
+          </div>
+        ) : (
+          <>
+            <Section
+              title="Resume generating prompt"
+              desc="Drives which fields the resume LLM rewrites (and how). Overrides your global prompt for this profile only. Empty = inherit global → built-in default."
+            >
+              <ResumePromptField
+                value={resumePrompt}
+                onChange={setResumePrompt}
+                label="Profile resume content prompt"
+                hint="Empty = inherit global → built-in default."
+                defaultSource="global"
+              />
+            </Section>
+
+            <Section
+              title="Screening Q&A answering prompt"
+              desc="How screening-question answers are written for this profile. Overrides your global screening prompt. Empty = inherit global → built-in default."
+            >
+              <ResumePromptField
+                kind="screening"
+                value={screeningPrompt}
+                onChange={setScreeningPrompt}
+                label="Profile screening prompt"
+                hint="Empty = inherit global → built-in default."
+                defaultSource="global"
+              />
+            </Section>
+
+            <Section
+              title="Cover letter prompt"
+              desc="How the cover letter is written when opted-in at submit time. Plain text output. Overrides your global cover-letter prompt. Empty = inherit global."
+            >
+              <ResumePromptField
+                kind="coverLetter"
+                value={coverLetterPrompt}
+                onChange={setCoverLetterPrompt}
+                label="Profile cover letter prompt"
+                hint="Empty = inherit global. If global is also empty, generic letter is produced."
+                defaultSource="global"
+              />
+            </Section>
+
+            <div className="flex justify-end">
+              <button
+                onClick={save}
+                disabled={saving}
+                className="btn disabled:opacity-50"
+              >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
+                Save prompts
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </>
   );
