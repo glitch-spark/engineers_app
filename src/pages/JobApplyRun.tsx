@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Sparkles, Square } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, FileSpreadsheet, Keyboard, Loader2, Sparkles, Square } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -13,6 +13,7 @@ import RowDetail from '../components/jobApplies/RowDetail';
 import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
 import RunSummary from '../components/jobApplies/RunSummary';
+import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import Segmented from '../components/jobApplies/Segmented';
 import {
   ROW_STATUS_LABEL,
@@ -126,6 +127,7 @@ export default function JobApplyRun() {
   const [busy, setBusy] = useState<'cancel' | 'retry' | 'bulk' | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
   const [tailorProfiles, setTailorProfiles] = useState<Set<string>>(new Set());
   const [tailorPreview, setTailorPreview] = useState<{ queued: number; skippedCap: number } | null>(null);
@@ -640,6 +642,10 @@ export default function JobApplyRun() {
             Tailor all to apply
           </button>
         )}
+        <button type="button" className="btn-outline btn-sm" onClick={() => setShowExport(true)} disabled={busy !== null}>
+          <FileSpreadsheet className="h-4 w-4" aria-hidden />
+          Export to Google Sheet
+        </button>
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
             Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for shortcuts
@@ -857,6 +863,13 @@ export default function JobApplyRun() {
           if (tailorPreview?.queued) void tailorAll();
         }}
         onCancel={() => setConfirmTailorAll(false)}
+      />
+
+      <ExportSheetDialog
+        open={showExport}
+        runId={runId}
+        onClose={() => setShowExport(false)}
+        onExported={() => void mutateRows()}
       />
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)} title="Keyboard shortcuts" size="sm">

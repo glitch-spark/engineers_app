@@ -1652,6 +1652,8 @@ export interface JobApplyRow {
   tailored: JobApplyTailored[];
   /** Profiles this job is open to (passes their location / work-authorization checks). */
   openProfiles: string[];
+  /** Profiles whose row for this job is already in the exported Google Sheet. */
+  exportedProfiles: string[];
   /** Profiles without uploaded resumes this job is open to (apply with a tailored resume). */
   tailorOnly: string[];
 }
@@ -1803,3 +1805,27 @@ export const previewJobSheet = (source: JobApplySource) => {
   else form.append('sheetUrl', source.sheetUrl);
   return apiFetch<JobSheetPreview>('/job-applies/sheet-preview', { method: 'POST', body: form, timeoutMs: 60_000 });
 };
+
+export interface JobApplyExportResult {
+  /** Rows that would be / were added. */
+  ready: number;
+  added: number;
+  /** Tailored resumes still generating (export them later). */
+  pending: number;
+  /** Open to a profile with nothing to apply with yet (tailor first). */
+  needsResume: number;
+  alreadyExported: number;
+  /** Matching uploaded resumes whose original PDF isn't stored (no link possible). */
+  noFile: number;
+  sheetTitle: string;
+  tab: string;
+  sheetUrl: string;
+  serviceAccount: string | null;
+}
+
+/**
+ * Append the run's jobs still to apply to (one row per job × profile, with a resume download link) to today's tab
+ * of the shared Google Sheet. Without `sheetUrl` the last one used is reused; `dryRun` only counts and checks access.
+ */
+export const exportJobApplySheet = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>
+  postJSON<JobApplyExportResult>(`/job-applies/runs/${runId}/export-sheet`, body, { timeoutMs: 120_000 });

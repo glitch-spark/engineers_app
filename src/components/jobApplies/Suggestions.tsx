@@ -102,8 +102,15 @@ export default function Suggestions({
           const t = row.tailored.find((x) => x.accountId === acc);
           return (
             <li key={acc} className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-center gap-x-2 py-1">
-              <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100" title={name}>
-                {name}
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100" title={name}>
+                  {name}
+                </span>
+                {row.exportedProfiles.includes(acc) && (
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400" title="In the exported Google Sheet">
+                    Exported
+                  </span>
+                )}
               </span>
 
               {/* Uploaded resume */}
