@@ -1,122 +1,188 @@
-import useSWR from 'swr';
-import { useCallback, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Calendar, Sparkles } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import useSWR, { useSWRConfig } from 'swr';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
-import Tabs from '../components/Tabs';
+import DayPanel from '../components/report/DayPanel';
+import DayRow from '../components/report/DayRow';
+import TeamTable from '../components/report/TeamTable';
+import WeekPanel from '../components/report/WeekPanel';
+import DailyGoalCard from '../components/report/DailyGoalCard';
+import WeekGoalCard from '../components/report/WeekGoalCard';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
-import { formatWeekOptionLabel, getWeekInfo } from '../lib/week';
-import WeeklyPlanPanel, { type WeeklyPlanActions } from './WeeklyPlan';
-import DailyPlanPanel, { type DailyPlanActions } from './DailyPlan';
+import { addDays, dateParam, mondayOf, parseWeekParam, weekLabel } from '../lib/reportWeek';
 
-const REPORT_TABS = [
-  { key: 'weekly', label: 'Weekly Plan' },
-  { key: 'daily', label: 'Daily Plan' },
-];
+function SectionError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
+      Couldn&apos;t load {what}.{' '}
+      <button type="button" className="underline" onClick={onRetry}>Retry</button>
+    </div>
+  );
+}
 
 export default function ReportPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [searchParams, setSearchParams] = useSearchParams();
-  // `?tab=weekly` deep-links (e.g. the weekly-plan alert); default is Daily.
-  const tab = searchParams.get('tab') === 'weekly' ? 'weekly' : 'daily';
-  const setTab = useCallback((next: string) => {
-    setSearchParams((prev) => {
-      const params = new URLSearchParams(prev);
-      params.set('tab', next);
-      return params;
-    }, { replace: true });
-  }, [setSearchParams]);
-  const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [weekNumber, setWeekNumber] = useState(getWeekInfo(new Date()).weekNumber.toString());
-  const [userFilter, setUserFilter] = useState<string | null>(null);
-  const userId = userFilter === null ? (user?.id ?? '') : userFilter;
-  const [reporting, setReporting] = useState(false);
-  const weeklyActions = useRef<WeeklyPlanActions | null>(null);
-  const dailyActions = useRef<DailyPlanActions | null>(null);
+  const [params, setParams] = useSearchParams();
+  const { mutate } = useSWRConfig();
 
-  const { data: usersData } = useSWR(['users-lookup'], () => api.lookupUsers());
-  const users = (usersData?.users as Array<{ _id: string; name?: string; email?: string }>) || [];
+  const monday = parseWeekParam(params.get('week'));
+  const week = dateParam(monday);
+  const currentMonday = mondayOf(new Date());
+  const canGoNext = monday < addDays(currentMonday, 7);
+  // Admins read other people's boards; only owners write.
+  const viewUser = isAdmin ? params.get('user') || undefined : undefined;
+  const readOnly = isAdmin;
+  const today = dateParam(new Date());
 
-  const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
-  const weekOptions = Array.from({ length: 52 }, (_, i) => i + 1);
+  const setParam = useCallback(
+    (patch: Record<string, string | null>) =>
+      setParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('tab');
+        for (const [key, value] of Object.entries(patch)) {
+          if (value) next.set(key, value);
+          else next.delete(key);
+        }
+        return next;
+      }),
+    [setParams],
+  );
 
-  const onReportingChange = useCallback((next: boolean) => {
-    setReporting(next);
-  }, []);
+  const showBoard = !isAdmin || !!viewUser;
+  const who = viewUser ?? 'me';
+  const weekKey = ['week-plan', week, who];
+  const daysKey = ['day-plans', week, who];
+  const weekQuery = useSWR(showBoard ? weekKey : null, () => api.getWeekPlan(week, viewUser));
+  const daysQuery = useSWR(showBoard ? daysKey : null, () => api.getDayPlans(week, viewUser));
 
-  const headerAction = tab === 'weekly' ? (
-    <div className="flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        className="btn-outline"
-        onClick={() => weeklyActions.current?.runReport()}
-        disabled={reporting}
-        title="Analyze plans in the current filter into progress metrics. Interview counts come from the interview board; next-week interviews are included."
-      >
-        <Sparkles size={16} className="mr-2" aria-hidden /> {reporting ? 'Analyzing...' : 'Run Progress Report'}
-      </button>
-      <button type="button" className="btn" onClick={() => weeklyActions.current?.openAdd()}>
-        <Calendar size={16} className="mr-2" aria-hidden /> Add Plan
-      </button>
-    </div>
-  ) : !isAdmin ? (
-    <button type="button" className="btn" onClick={() => dailyActions.current?.openAdd()}>
-      <Calendar size={16} className="mr-2" aria-hidden /> Add Plan
-    </button>
-  ) : null;
+  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [weekOpen, setWeekOpen] = useState(false);
+
+  const refresh = () => {
+    mutate(weekKey);
+    mutate(daysKey);
+  };
+
+  const { data: usersData } = useSWR(isAdmin ? ['users-lookup', 'no-admin'] : null, () =>
+    api.lookupUsers({ excludeRole: 'admin' }),
+  );
+  const viewedName = usersData?.users.find((u) => u._id === viewUser);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Plans" action={headerAction} />
+    <div className="space-y-4">
+      <PageHeader title="Plans" />
 
-      <div className="flex items-end gap-3 flex-wrap toolbar">
-        <div className="w-32">
-          <label className="block text-xs text-muted mb-1" htmlFor="report-year">Year</label>
-          <select id="report-year" className="select focus-ring w-full text-sm" value={year} onChange={(e) => setYear(e.target.value)}>
-            {yearOptions.map((y) => (<option key={y} value={y}>{y}</option>))}
-          </select>
-        </div>
-        <div className="w-56">
-          <label className="block text-xs text-muted mb-1" htmlFor="report-week">Week</label>
-          <select id="report-week" className="select focus-ring w-full text-sm" value={weekNumber} onChange={(e) => setWeekNumber(e.target.value)}>
-            <option value="">All weeks</option>
-            {weekOptions.map((w) => (<option key={w} value={w}>{formatWeekOptionLabel(Number(year), w)}</option>))}
-          </select>
-        </div>
-        <div className="w-56">
-          <label className="block text-xs text-muted mb-1" htmlFor="report-user">User</label>
-          <select id="report-user" className="select focus-ring w-full text-sm" value={userId} onChange={(e) => setUserFilter(e.target.value)}>
-            <option value="">All users</option>
-            {users.map((u) => (<option key={u._id} value={u._id}>{u.name || u.email}</option>))}
-          </select>
-        </div>
+      <div className="toolbar flex flex-wrap items-center gap-2">
+        <button type="button" className="btn-icon" aria-label="Previous week" onClick={() => setParam({ week: dateParam(addDays(monday, -7)) })}>
+          <ChevronLeft size={18} aria-hidden />
+        </button>
+        <span className="min-w-[10rem] text-center font-medium text-strong" aria-live="polite">
+          Week {weekLabel(monday)}
+        </span>
+        <button
+          type="button"
+          className="btn-icon"
+          aria-label="Next week"
+          disabled={!canGoNext}
+          onClick={() => setParam({ week: dateParam(addDays(monday, 7)) })}
+        >
+          <ChevronRight size={18} aria-hidden />
+        </button>
+        {week !== dateParam(currentMonday) && (
+          <button type="button" className="btn-outline text-xs" onClick={() => setParam({ week: null })}>
+            This week
+          </button>
+        )}
+        {isAdmin && viewUser && (
+          <span className="ml-auto flex items-center gap-2 text-sm">
+            <Link to={`/report?week=${week}`} className="underline">← Team</Link>
+            <span className="text-muted">Viewing {viewedName?.name || viewedName?.email || 'teammate'}</span>
+          </span>
+        )}
       </div>
 
-      <Tabs
-        tabs={REPORT_TABS}
-        value={tab}
-        onChange={setTab}
-      >
-        {tab === 'daily' ? (
-          <DailyPlanPanel
-            year={year}
-            weekNumber={weekNumber}
-            userId={userId}
-            actionsRef={dailyActions}
-          />
-        ) : (
-          <WeeklyPlanPanel
-            year={year}
-            weekNumber={weekNumber}
-            userId={userId}
-            actionsRef={weeklyActions}
-            onReportingChange={onReportingChange}
-          />
-        )}
-      </Tabs>
+      {!showBoard ? (
+        <TeamTable week={week} onOpenUser={(id) => setParam({ user: id })} />
+      ) : (
+        <>
+          {weekQuery.error ? (
+            <SectionError what="this week" onRetry={() => weekQuery.mutate()} />
+          ) : !weekQuery.data ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5" aria-busy="true">
+              <div className="panel space-y-2 p-4 lg:col-span-3">
+                <div className="skeleton h-5 w-32" />
+                <div className="skeleton h-32 w-full" />
+              </div>
+              <div className="panel space-y-2 p-4 lg:col-span-2">
+                <div className="skeleton h-5 w-28" />
+                <div className="skeleton h-32 w-full" />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+              <div className="lg:col-span-3">
+                <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} onOpen={() => setWeekOpen(true)} />
+              </div>
+              <div className="lg:col-span-2">
+                <DailyGoalCard
+                  week={weekQuery.data}
+                  days={daysQuery.data?.days ?? []}
+                  today={today}
+                  canEdit={!readOnly}
+                  onOpenWeek={() => setWeekOpen(true)}
+                  onOpenDay={(date) => setOpenDay(date)}
+                />
+              </div>
+            </div>
+          )}
+
+          {daysQuery.error ? (
+            <SectionError what="the days" onRetry={() => daysQuery.mutate()} />
+          ) : !daysQuery.data ? (
+            <div className="panel space-y-2 p-4" aria-busy="true">
+              {Array.from({ length: 6 }, (_, i) => <div key={i} className="skeleton h-10 w-full" />)}
+            </div>
+          ) : (
+            <section className="panel p-2" aria-label="Days">
+              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {daysQuery.data.days.map((day) => (
+                  <DayRow
+                    key={day.date}
+                    day={day}
+                    today={today}
+                    canEdit={!readOnly}
+                    onOpen={() => setOpenDay(day.date)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
+
+      {openDay && (
+        <DayPanel
+          date={openDay}
+          userId={viewUser}
+          readOnly={readOnly}
+          open
+          onClose={() => setOpenDay(null)}
+          onSaved={refresh}
+        />
+      )}
+      {weekOpen && (
+        <WeekPanel
+          weekStart={week}
+          userId={viewUser}
+          readOnly={readOnly}
+          open
+          onClose={() => setWeekOpen(false)}
+          onSaved={refresh}
+        />
+      )}
     </div>
   );
 }

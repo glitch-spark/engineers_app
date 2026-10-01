@@ -74,7 +74,7 @@ export default function App() {
       <Route path="/accounts/:id" element={<Protected><AccountEdit /></Protected>} />
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
       <Route path="/report" element={<Protected><Report /></Protected>} />
-      <Route path="/weekly-plan" element={<Navigate to="/report?tab=weekly" replace />} />
+      <Route path="/weekly-plan" element={<Navigate to="/report" replace />} />
       <Route path="/interviews" element={<Protected><InterviewsPage view="list" /></Protected>} />
       <Route path="/interviews/calendar" element={<Protected><InterviewsPage view="calendar" /></Protected>} />
       <Route path="/interviews/live" element={<Navigate to="/interviews/calendar" replace />} />
