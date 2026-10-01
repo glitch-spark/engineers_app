@@ -1,8 +1,8 @@
 import useSWR from 'swr';
 import { Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
-import type { JobApplyResumeScore, JobApplyTermHit } from '../../api/endpoints';
-import { TONE_CLASS, bandClass, gateChip } from './format';
+import type { JobApplyResumeHealth, JobApplyResumeScore, JobApplyTermHit } from '../../api/endpoints';
+import { TONE_CLASS, bandClass, gateChip, healthBadge } from './format';
 
 const COMPONENT_LABEL: Record<string, string> = {
   required: 'Required skills',
@@ -33,7 +33,17 @@ const WHERE_NOTE: Record<JobApplyTermHit['where'], string> = {
   none: '',
 };
 
-function ScoreCard({ score, profileName, open }: { score: JobApplyResumeScore; profileName: string; open: boolean }) {
+function ScoreCard({
+  score,
+  profileName,
+  open,
+  health,
+}: {
+  score: JobApplyResumeScore;
+  profileName: string;
+  open: boolean;
+  health?: JobApplyResumeHealth['health'];
+}) {
   const parts = COMPONENT_ORDER.filter((k) => score.components[k]);
   const totalWeight = parts.reduce((n, k) => n + score.components[k].weight, 0) || 1;
   const tiers = (Object.keys(TIER_LABEL) as JobApplyTermHit['tier'][]).filter((t) => score.terms.some((h) => h.tier === t));
@@ -46,6 +56,11 @@ function ScoreCard({ score, profileName, open }: { score: JobApplyResumeScore; p
         <span className="truncate">{score.filename}</span>
         <span className={bandClass(score.band)}>{score.total}</span>
         {score.knockouts.length > 0 && <span className="badge-warning">{score.knockouts.length} knockout risk{score.knockouts.length === 1 ? '' : 's'}</span>}
+        {health && (
+          <span className={healthBadge(health.score, health.issues).className} title={healthBadge(health.score, health.issues).title}>
+            Parse health {health.score}
+          </span>
+        )}
       </summary>
 
       <div className="mt-3 space-y-4">
@@ -113,7 +128,15 @@ function ScoreCard({ score, profileName, open }: { score: JobApplyResumeScore; p
   );
 }
 
-export default function RowDetail({ rowId, profileNames }: { rowId: string; profileNames: Record<string, string> }) {
+export default function RowDetail({
+  rowId,
+  profileNames,
+  healthByResume = {},
+}: {
+  rowId: string;
+  profileNames: Record<string, string>;
+  healthByResume?: Record<string, JobApplyResumeHealth['health']>;
+}) {
   const { data, error, isLoading } = useSWR(['job-apply-row', rowId], () => api.getJobApplyRow(rowId));
 
   if (isLoading) {
@@ -162,6 +185,7 @@ export default function RowDetail({ rowId, profileNames }: { rowId: string; prof
             score={s}
             profileName={profileNames[s.accountId] ?? 'Profile'}
             open={i === 0 || bestIds.has(s.resumeId)}
+            health={healthByResume[s.resumeId]}
           />
         ))
       )}

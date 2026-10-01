@@ -1542,6 +1542,15 @@ export interface JobApplyRun {
   selection: { accountId: string; resumeIds: string[] }[];
   /** Only on GET /job-applies/runs/{id}. */
   profiles?: JobApplyProfile[];
+  /** Only on GET /job-applies/runs/{id}: each selected resume with its parse-health badge. */
+  resumes?: JobApplyResumeHealth[];
+}
+
+export interface JobApplyResumeHealth {
+  accountId: string;
+  resumeId: string;
+  filename: string;
+  health: { score: number; issues: string[] };
 }
 
 export interface JobApplyGate {

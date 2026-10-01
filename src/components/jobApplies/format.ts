@@ -109,3 +109,18 @@ export function ageDays(iso?: string | null): number | null {
   if (Number.isNaN(d.getTime())) return null;
   return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86_400_000));
 }
+
+const HEALTH_ISSUE: Record<string, string> = {
+  too_little_text: 'Very little readable text (scanned or image-only PDF?)',
+  no_email: 'No email address found',
+  no_phone: 'No phone number found',
+  missing_headings: 'Missing a standard Experience, Education or Skills heading',
+  over_two_pages: 'More than two pages',
+};
+
+/** Parse-health badge (spec §3.1): text-detectable ATS readability checks, not part of the score. */
+export function healthBadge(score: number, issues: string[]): { className: string; title: string } {
+  const className = score >= 92 ? 'badge-neutral' : score >= 72 ? 'badge-warning' : 'badge-danger';
+  const title = issues.length ? issues.map((i) => HEALTH_ISSUE[i] ?? i).join('\n') : 'No readability issues found';
+  return { className, title };
+}

@@ -100,6 +100,10 @@ export default function JobApplyRun() {
     () => Object.fromEntries((run?.profiles ?? []).map((p) => [p.accountId, p.name])),
     [run?.profiles],
   );
+  const healthByResume = useMemo(
+    () => Object.fromEntries((run?.resumes ?? []).map((r) => [r.resumeId, r.health])),
+    [run?.resumes],
+  );
 
   // Debounced threshold change: PATCH the run, then the rows key (which includes the threshold) refetches.
   const threshold = thresholdDraft ?? run?.threshold ?? 75;
@@ -371,7 +375,7 @@ export default function JobApplyRun() {
                     {isOpen && (
                       <tr>
                         <td colSpan={8} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
-                          <RowDetail rowId={row._id} profileNames={profileNames} />
+                          <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
                         </td>
                       </tr>
                     )}
