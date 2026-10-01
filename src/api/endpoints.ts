@@ -1601,13 +1601,6 @@ export interface JobApplyTailored {
   error?: string | null;
 }
 
-export interface JobApplyOtherResume {
-  accountId: string;
-  resumeId: string;
-  filename: string;
-  total: number;
-}
-
 export interface JobApplyPreviousApplication {
   appliedAt: string | null;
   profileName: string;
@@ -1655,12 +1648,12 @@ export interface JobApplyRow {
   applied: boolean;
   /** Applications to this URL recorded in earlier runs. */
   previouslyApplied: JobApplyPreviousApplication[];
-  /** This job's tailored resume, if one was queued. */
-  tailored: JobApplyTailored | null;
+  /** Tailored resumes for this job, at most one per profile. */
+  tailored: JobApplyTailored[];
+  /** Profiles this job is open to (passes their location / work-authorization checks). */
+  openProfiles: string[];
   /** Profiles without uploaded resumes this job is open to (apply with a tailored resume). */
   tailorOnly: string[];
-  /** Scored resumes that aren't suggestions (below the threshold or filtered out). */
-  otherResumes: JobApplyOtherResume[];
 }
 
 export interface JobApplyComponent {
@@ -1772,8 +1765,14 @@ export const unmarkJobApplied = (runId: string, marks: JobApplyMarkRef[]) =>
 export const tailorJobApplyRow = (rowId: string, body: { accountId?: string; coverLetter?: boolean } = {}) =>
   postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
 
-/** Queue tailored resumes for every job still to apply to that has none, up to the daily cap. */
-export const tailorAllJobApplies = (runId: string, body: { accountId?: string; coverLetter?: boolean } = {}) =>
+/**
+ * Queue a tailored resume for each job still to apply to × each chosen profile it's open to (skipping ones that
+ * already have one), up to the daily cap. `dryRun` only returns the counts.
+ */
+export const tailorAllJobApplies = (
+  runId: string,
+  body: { accountIds?: string[]; coverLetter?: boolean; dryRun?: boolean } = {},
+) =>
   postJSON<{ queued: number; skippedCap: number; skipped: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
 
 /** Download a generated (tailored) resume PDF by its generation job id. */
