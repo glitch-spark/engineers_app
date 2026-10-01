@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Square } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Sparkles, Square } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -11,7 +11,7 @@ import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import RowDetail from '../components/jobApplies/RowDetail';
 import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
-import Suggestions from '../components/jobApplies/Suggestions';
+import Suggestions, { type AppliedFile, type ProfileChoice } from '../components/jobApplies/Suggestions';
 import RunSummary from '../components/jobApplies/RunSummary';
 import Segmented from '../components/jobApplies/Segmented';
 import {
@@ -33,9 +33,10 @@ const PAGE_SIZE_KEY = 'jobApplies.pageSize';
 const SHORTCUTS: [string, string][] = [
   ['j / k', 'Next / previous job'],
   ['o', 'Open the job posting in a new tab'],
-  ['d', 'Download the top suggestion’s resume PDF'],
+  ['t', 'Tailor a resume to this job (best-scoring profile)'],
+  ['d', 'Download the tailored PDF if ready, otherwise the top suggestion’s PDF'],
   ['1 – 9', 'Toggle “applied” for suggestion 1–9'],
-  ['a', 'Mark the top suggestion applied and go to the next job'],
+  ['a', 'Mark applied with the tailored resume if ready, otherwise the top suggestion, and go to the next job'],
   ['x', 'Select / unselect the job (for bulk marking)'],
   ['Enter', 'Show / hide the score breakdown'],
   ['?', 'Show this list'],
@@ -124,20 +125,24 @@ export default function JobApplyRun() {
   const [thresholdDraft, setThresholdDraft] = useState<number | null>(null);
   const [busy, setBusy] = useState<'cancel' | 'retry' | 'bulk' | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
+  const [confirmTailorAll, setConfirmTailorAll] = useState(false);
+  const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
   const [since] = useState(localMidnightIso);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 
+  const tailoringPending = (r?: api.JobApplyRun) => !!r?.tailoring && r.tailoring.queued + r.tailoring.inProgress > 0;
   const { data: run, mutate: mutateRun } = useSWR(
     ['job-apply-run', runId, since],
     () => api.getJobApplyRun(runId, since),
-    { refreshInterval: (latest) => (latest && isActive(latest.status) ? 3000 : 0) },
+    { refreshInterval: (latest) => (latest && (isActive(latest.status) || tailoringPending(latest)) ? 3000 : 0) },
   );
   const active = run ? isActive(run.status) : false;
+  const polling = active || tailoringPending(run);
 
   const { data: rowsData, isLoading: rowsLoading, mutate: mutateRows } = useSWR(
     run ? ['job-apply-rows', runId, view, appliedFilter, accountId, page, pageSize, run.threshold] : null,
     () => api.listJobApplyRows(runId, { view, applied: appliedFilter, accountId, page, limit: pageSize }),
-    { refreshInterval: active ? 3000 : 0, keepPreviousData: true },
+    { refreshInterval: polling ? 3000 : 0, keepPreviousData: true },
   );
   const rows = useMemo(() => rowsData?.rows ?? [], [rowsData]);
   const pagination = rowsData?.pagination;
@@ -200,26 +205,24 @@ export default function JobApplyRun() {
     setFocusedId(null);
   };
 
+  const sameFile = (m: { resumeId?: string | null; tailoredJobId?: string | null }, f: AppliedFile) =>
+    f.tailoredJobId ? m.tailoredJobId === f.tailoredJobId : !!f.resumeId && m.resumeId === f.resumeId;
+
   /** Optimistic: the row shows the change at once; on failure the server state is reloaded. */
-  const toggleApplied = useCallback(
-    async (row: JobApplyRow, s: JobApplySuggestion, applied: boolean, { undo = true } = {}) => {
-      const already = row.appliedResumes.some((m) => m.resumeId === s.resumeId);
-      if (already === applied) return;
+  const toggleFile = useCallback(
+    async (row: JobApplyRow, file: AppliedFile, applied: boolean, label: string, { undo = true } = {}) => {
+      if (row.appliedResumes.some((m) => sameFile(m, file)) === applied) return;
       await mutateRows(
         (prev: RowsPage | undefined) =>
           prev && {
             ...prev,
-            rows: prev.rows.map((r) =>
-              r._id !== row._id
-                ? r
-                : {
-                    ...r,
-                    applied: applied || r.appliedResumes.some((m) => m.resumeId !== s.resumeId),
-                    appliedResumes: applied
-                      ? [...r.appliedResumes, { accountId: s.accountId, resumeId: s.resumeId, at: new Date().toISOString() }]
-                      : r.appliedResumes.filter((m) => m.resumeId !== s.resumeId),
-                  },
-            ),
+            rows: prev.rows.map((r) => {
+              if (r._id !== row._id) return r;
+              const marks = applied
+                ? [...r.appliedResumes, { ...file, at: new Date().toISOString() }]
+                : r.appliedResumes.filter((m) => !sameFile(m, file));
+              return { ...r, applied: marks.length > 0, appliedResumes: marks };
+            }),
           },
         { revalidate: false },
       );
@@ -229,20 +232,20 @@ export default function JobApplyRun() {
         { revalidate: false },
       );
       try {
-        await api.setJobApplyResumeApplied(row._id, { accountId: s.accountId, resumeId: s.resumeId, applied });
+        await api.setJobApplyResumeApplied(row._id, { ...file, applied });
         if (applied && undo) {
           toast(
             (t) => (
               <span className="flex items-center gap-3">
                 <span>
-                  Applied: {row.title || 'job'} · {profileNames[s.accountId] ?? 'Profile'}
+                  Applied: {row.title || 'job'} · {label}
                 </span>
                 <button
                   type="button"
                   className="font-semibold text-sky-700 underline dark:text-sky-400"
                   onClick={() => {
                     toast.dismiss(t.id);
-                    void toggleApplied({ ...row, appliedResumes: [...row.appliedResumes, { ...s, at: null }] }, s, false, { undo: false });
+                    void toggleFile({ ...row, appliedResumes: [...row.appliedResumes, { ...file, at: null }] }, file, false, label, { undo: false });
                   }}
                 >
                   Undo
@@ -258,11 +261,54 @@ export default function JobApplyRun() {
         void mutateRun();
       }
     },
-    [mutateRows, mutateRun, profileNames],
+    [mutateRows, mutateRun],
+  );
+  const toggleApplied = useCallback(
+    (row: JobApplyRow, s: JobApplySuggestion, applied: boolean) =>
+      toggleFile(row, { accountId: s.accountId, resumeId: s.resumeId }, applied, `${profileNames[s.accountId] ?? 'Profile'} · ${s.filename}`),
+    [toggleFile, profileNames],
+  );
+
+  const tailor = useCallback(
+    async (row: JobApplyRow, accountId?: string) => {
+      try {
+        const { tailored } = await api.tailorJobApplyRow(row._id, { accountId });
+        await mutateRows(
+          (prev: RowsPage | undefined) => prev && { ...prev, rows: prev.rows.map((r) => (r._id === row._id ? { ...r, tailored } : r)) },
+          { revalidate: false },
+        );
+        void mutateRun();
+      } catch (err) {
+        notify.error(err, 'Could not start tailoring');
+      }
+    },
+    [mutateRows, mutateRun],
+  );
+
+  const downloadTailored = useCallback(async (row: JobApplyRow) => {
+    if (!row.tailored || row.tailored.status !== 'completed') return;
+    const company = (row.company || row.title || 'job').replace(/[^\w .()-]+/g, '_');
+    try {
+      await api.downloadTailoredResume(row.tailored.jobId, `Resume (${company}).pdf`);
+    } catch (err) {
+      notify.error(err, 'Could not download the tailored resume');
+    }
+  }, []);
+
+  /** Run profiles ordered by how well they scored on this job (the first is Tailor's default). */
+  const profilesFor = useCallback(
+    (row: JobApplyRow): ProfileChoice[] => {
+      const best = new Map<string, number>();
+      for (const s of [...row.suggestions, ...row.otherResumes]) best.set(s.accountId, Math.max(best.get(s.accountId) ?? 0, s.total));
+      return (run?.profiles ?? [])
+        .map((p) => ({ accountId: p.accountId, name: p.name, best: best.get(p.accountId) ?? null }))
+        .sort((x, y) => (y.best ?? -1) - (x.best ?? -1));
+    },
+    [run?.profiles],
   );
 
   const download = useCallback(
-    async (s: JobApplySuggestion) => {
+    async (s: { accountId: string; resumeId: string }) => {
       if (!resumesById.get(s.resumeId)?.hasFile) {
         notify.info('The original file isn’t stored for this resume');
         return;
@@ -356,12 +402,19 @@ export default function JobApplyRun() {
       if (key === 'j') move(1);
       else if (key === 'k') move(-1);
       else if (key === 'o' && row.url) window.open(row.url, '_blank', 'noopener');
-      else if (key === 'd' && row.suggestions[0]) void download(row.suggestions[0]);
+      else if (key === 't') {
+        if (!row.tailored || row.tailored.status === 'failed') void tailor(row, row.tailored?.accountId);
+      } else if (key === 'd') {
+        if (row.tailored?.status === 'completed') void downloadTailored(row);
+        else if (row.suggestions[0]) void download(row.suggestions[0]);
+      }
       else if (key === 'x') toggleSelected(row._id);
       else if (e.key === 'Enter') setExpanded((cur) => (cur === row._id ? null : row._id));
       else if (key === 'a') {
-        const top = row.suggestions[0];
-        if (top) void toggleApplied(row, top, true);
+        const t = row.tailored;
+        if (t?.status === 'completed') {
+          void toggleFile(row, { accountId: t.accountId, tailoredJobId: t.jobId }, true, `Tailored · ${profileNames[t.accountId] ?? 'Profile'}`);
+        } else if (row.suggestions[0]) void toggleApplied(row, row.suggestions[0], true);
         move(1);
       } else if (/^[1-9]$/.test(e.key)) {
         const s = row.suggestions[Number(e.key) - 1];
@@ -373,6 +426,26 @@ export default function JobApplyRun() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+
+  const tailorAll = async () => {
+    setConfirmTailorAll(false);
+    setBusy('bulk');
+    try {
+      const res = await api.tailorAllJobApplies(runId, { accountId: accountId || undefined, coverLetter: tailorCoverLetter });
+      notify.success(
+        res.queued
+          ? `Tailoring ${res.queued} resume${res.queued === 1 ? '' : 's'}${res.skippedCap ? ` · ${res.skippedCap} skipped (daily limit)` : ''}`
+          : res.skippedCap
+            ? `Daily limit reached · ${res.skippedCap} not queued`
+            : 'Every job to apply to already has a tailored resume',
+      );
+      await Promise.all([mutateRows(), mutateRun()]);
+    } catch (err) {
+      notify.error(err, 'Could not start tailoring');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const onCancel = async () => {
     setBusy('cancel');
@@ -525,6 +598,12 @@ export default function JobApplyRun() {
             )
           )}
         </div>
+        {appliedFilter === 'no' && (run.toApply ?? 0) > 0 && selected.size === 0 && (
+          <button type="button" className="btn-outline btn-sm" onClick={() => setConfirmTailorAll(true)} disabled={busy !== null}>
+            <Sparkles className="h-4 w-4" aria-hidden />
+            Tailor all to apply
+          </button>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
             Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for shortcuts
@@ -648,9 +727,12 @@ export default function JobApplyRun() {
                           row={row}
                           threshold={run.threshold}
                           profileNames={profileNames}
+                          profiles={profilesFor(row)}
                           hasFile={(id) => !!resumesById.get(id)?.hasFile}
-                          onToggle={(s, applied) => void toggleApplied(row, s, applied)}
+                          onToggle={(file, applied, label) => void toggleFile(row, file, applied, label)}
                           onDownload={(s) => void download(s)}
+                          onTailor={(acc) => void tailor(row, acc)}
+                          onDownloadTailored={() => void downloadTailored(row)}
                         />
                       </td>
                     </tr>
@@ -685,6 +767,28 @@ export default function JobApplyRun() {
         busy={busy === 'bulk'}
         onConfirm={() => void bulkMarkTop('all')}
         onCancel={() => setConfirmAll(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmTailorAll}
+        title="Tailor resumes for every job to apply to?"
+        body={
+          <div className="space-y-3">
+            <p>
+              A tailored resume is generated for each job still to apply to that doesn’t have one yet, using
+              {accountId ? ` ${profileNames[accountId] ?? 'this profile'}` : ' each job’s best-scoring profile'}. They’re ready to
+              download as you go; up to {run.toApply ?? 0} jobs, within your daily limit.
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={tailorCoverLetter} onChange={(e) => setTailorCoverLetter(e.target.checked)} />
+              Also write a cover letter for each (doubles the AI calls)
+            </label>
+          </div>
+        }
+        confirmLabel="Start tailoring"
+        busy={busy === 'bulk'}
+        onConfirm={() => void tailorAll()}
+        onCancel={() => setConfirmTailorAll(false)}
       />
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)} title="Keyboard shortcuts" size="sm">

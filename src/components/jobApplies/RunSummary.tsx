@@ -87,6 +87,18 @@ export default function RunSummary({
         </div>
       </div>
 
+      {run.tailoring && run.tailoring.queued + run.tailoring.inProgress + run.tailoring.ready + run.tailoring.failed > 0 && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="font-medium text-violet-700 dark:text-violet-300">Tailored resumes</span>
+          <span>{run.tailoring.ready} ready</span>
+          {run.tailoring.queued + run.tailoring.inProgress > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <span className="spinner spinner-sm" aria-hidden /> {run.tailoring.inProgress} generating · {run.tailoring.queued} queued
+            </span>
+          )}
+          {run.tailoring.failed > 0 && <span className="text-red-700 dark:text-red-400">{run.tailoring.failed} failed</span>}
+        </p>
+      )}
       {expiringSoon && run.expiresAt && (
         <p className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
