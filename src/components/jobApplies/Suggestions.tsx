@@ -78,9 +78,16 @@ export default function Suggestions({
       )}
 
       {row.suggestions.length === 0 ? (
-        <p className="hint">
-          {row.status === 'scored' && row.topScore !== null ? `No resume above ${threshold} (best ${row.topScore})` : 'No matching resume'}
-        </p>
+        row.tailorOnly.length > 0 ? (
+          <p className="inline-flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+            No uploaded resume · apply with a tailored one ({row.tailorOnly.map((a) => profileNames[a] ?? 'Profile').join(', ')})
+          </p>
+        ) : (
+          <p className="hint">
+            {row.status === 'scored' && row.topScore !== null ? `No resume above ${threshold} (best ${row.topScore})` : 'No matching resume'}
+          </p>
+        )
       ) : (
         <ol className="flex flex-col gap-1">
           {row.suggestions.map((s, i) => {

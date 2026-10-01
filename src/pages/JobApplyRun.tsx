@@ -306,9 +306,11 @@ export default function JobApplyRun() {
     (row: JobApplyRow): ProfileChoice[] => {
       const best = new Map<string, number>();
       for (const s of [...row.suggestions, ...row.otherResumes]) best.set(s.accountId, Math.max(best.get(s.accountId) ?? 0, s.total));
+      const rank = (p: ProfileChoice) => p.best ?? (row.tailorOnly.includes(p.accountId) ? -1 : -2);
       return (run?.profiles ?? [])
         .map((p) => ({ accountId: p.accountId, name: p.name, best: best.get(p.accountId) ?? null }))
-        .sort((x, y) => (y.best ?? -1) - (x.best ?? -1));
+        // Scored profiles by score; then tailor-only profiles this job is open to; then the rest.
+        .sort((x, y) => rank(y) - rank(x));
     },
     [run?.profiles],
   );

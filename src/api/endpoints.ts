@@ -1655,6 +1655,8 @@ export interface JobApplyRow {
   previouslyApplied: JobApplyPreviousApplication[];
   /** This job's tailored resume, if one was queued. */
   tailored: JobApplyTailored | null;
+  /** Profiles without uploaded resumes this job is open to (apply with a tailored resume). */
+  tailorOnly: string[];
   /** Scored resumes that aren't suggestions (below the threshold or filtered out). */
   otherResumes: JobApplyOtherResume[];
 }
@@ -1785,3 +1787,18 @@ export async function downloadTailoredResume(jobId: string, filename: string): P
   }
   _saveBlob(await res.blob(), filename);
 }
+
+export interface JobSheetPreview {
+  title: string;
+  total: number;
+  withDescription: number;
+  urlOnly: number;
+}
+
+/** Read a job sheet (link or file) without starting a run: job counts, or a 400 explaining the problem. */
+export const previewJobSheet = (source: JobApplySource) => {
+  const form = new FormData();
+  if ('file' in source) form.append('file', source.file);
+  else form.append('sheetUrl', source.sheetUrl);
+  return apiFetch<JobSheetPreview>('/job-applies/sheet-preview', { method: 'POST', body: form, timeoutMs: 60_000 });
+};
