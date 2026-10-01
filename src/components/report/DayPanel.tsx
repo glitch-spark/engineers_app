@@ -62,9 +62,24 @@ export default function DayPanel({
 
   const dirty = useMemo(() => !!form && JSON.stringify(form) !== initial, [form, initial]);
   const logged = !!data?.loggedAt;
+  // Results entered (bids done, ticks or notes) since the panel opened.
+  const resultsEntered = useMemo(() => {
+    if (!form || !initial) return false;
+    const start = JSON.parse(initial) as DayForm;
+    return (
+      form.done.bidsSelf !== start.done.bidsSelf ||
+      form.done.bidsBidder !== start.done.bidsBidder ||
+      form.notes !== start.notes ||
+      JSON.stringify(form.goalItems.map((i) => i.done)) !== JSON.stringify(start.goalItems.map((i) => i.done))
+    );
+  }, [form, initial]);
 
   const save = async (followUp: boolean) => {
     if (!form) return;
+    const nothingDone = !form.done.bidsSelf && !form.done.bidsBidder && !form.notes.trim()
+      && !form.goalItems.some((i) => i.done);
+    if (followUp && nothingDone
+      && !window.confirm('Post the follow-up with no bids, ticks or notes? It goes to the team Slack channel.')) return;
     setSaving(true);
     setSaveError(null);
     try {
@@ -99,7 +114,10 @@ export default function DayPanel({
   };
 
   // Future days only take a goal; today offers both until it's followed up.
+  // "Save goal" leads until results are entered, then "Save follow-up" does
+  // (and "Save goal" is disabled so entered results can't be dropped).
   const showGoalButton = !canFollowUp || (date === today && !logged);
+  const followUpLeads = !showGoalButton || resultsEntered;
   const footer = readOnly ? (
     <button type="button" className="btn-outline text-sm" onClick={onClose}>Close</button>
   ) : (
@@ -111,12 +129,18 @@ export default function DayPanel({
       )}
       <button type="button" className="btn-outline text-sm" onClick={onClose}>Cancel</button>
       {showGoalButton && (
-        <button type="button" className={canFollowUp ? 'btn-outline text-sm' : 'btn text-sm'} onClick={() => save(false)} disabled={saving || !form}>
+        <button
+          type="button"
+          className={followUpLeads ? 'btn-outline text-sm' : 'btn text-sm'}
+          onClick={() => save(false)}
+          disabled={saving || !form || (canFollowUp && resultsEntered)}
+          title={canFollowUp && resultsEntered ? 'You entered results — use Save follow-up' : undefined}
+        >
           {saving ? 'Saving…' : 'Save goal'}
         </button>
       )}
       {canFollowUp && (
-        <button type="button" className="btn text-sm" onClick={() => save(true)} disabled={saving || !form}>
+        <button type="button" className={followUpLeads ? 'btn text-sm' : 'btn-outline text-sm'} onClick={() => save(true)} disabled={saving || !form}>
           {saving ? 'Saving…' : 'Save follow-up'}
         </button>
       )}

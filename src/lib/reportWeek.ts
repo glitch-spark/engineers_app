@@ -106,16 +106,6 @@ export function isLogStale(lastLogged: string | null, today: Date, isCurrentWeek
   return workingDaysBetween(last, today) >= 1;
 }
 
-/** Whether saving a day records its Done (and so counts as logged).
- *  Today's goal alone doesn't; past days and already-logged days do. */
-export function shouldLogDone({
-  date, today, logged, doneChanged,
-}: { date: string; today: string; logged: boolean; doneChanged: boolean }): boolean {
-  if (date > today) return false;
-  if (date < today || logged) return true;
-  return doneChanged;
-}
-
 export type DayState = 'set-goal' | 'planned' | 'follow-up' | 'done' | 'missed';
 
 /** What a day row offers: set a goal, follow up today, or show results. */
