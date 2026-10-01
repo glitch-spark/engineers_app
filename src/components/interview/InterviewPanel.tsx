@@ -1,23 +1,19 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Maximize2, Pencil, PhoneCall, Plus, Trash2, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
 import { useDialog } from '../../lib/useDialog';
-import { formatProfileLabel } from '../../lib/countries';
+import { profileText } from '../../lib/interviewPanelInfo';
+import NameWithAvatar from '../NameWithAvatar';
+import ActionMenu from '../ActionMenu';
+import InterviewSummary from './InterviewSummary';
 import type { InterviewFormMode } from '../../lib/interviewForm';
-import {
-  INTERVIEW_STATUSES,
-  interviewStatusBadgeClass,
-  normalizeInterviewStatus,
-  stageBadgeClass,
-  stageLabel,
-} from '../../lib/stageBadge';
+import { interviewStatusBadgeClass, interviewStatusLabel, stageBadgeClass, stageLabel } from '../../lib/stageBadge';
 import ConfirmDialog from '../ConfirmDialog';
 import InterviewForm, { type RoundPrefill } from './InterviewForm';
 import type { Interview } from './types';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
-import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 
 export type PanelMode = 'view' | InterviewFormMode;
 
@@ -28,17 +24,6 @@ const MODE_LABEL: Record<PanelMode, string> = {
   addRound: 'Add next round',
   editRound: 'Edit round',
 };
-
-function formatRange(start: string | null | undefined, end: string | null | undefined, tz: string): string {
-  if (!start) return '—';
-  const s = new Date(start);
-  if (isNaN(s.getTime())) return '—';
-  const day = formatInZone(s, tz, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  const t = (d: Date) => formatInZone(d, tz, { hour: 'numeric', minute: '2-digit' });
-  const e = end ? new Date(end) : null;
-  const abbrev = zoneAbbrev(s, tz);
-  return e && !isNaN(e.getTime()) ? `${day}, ${t(s)} – ${t(e)} ${abbrev}` : `${day}, ${t(s)} ${abbrev}`;
-}
 
 function creatorId(iv: Interview): string {
   return typeof iv.createdBy === 'object' ? iv.createdBy._id : iv.createdBy;
@@ -157,17 +142,22 @@ export default function InterviewPanel({
             </h2>
             {iv && shownMode !== 'new' && (
               <p className="truncate text-xs text-muted">
-                {formatProfileLabel(account?.name || account?.email, account?.country, 'Profile', account?.region)}
-                {iv.appliedPosition ? ` · ${iv.appliedPosition}` : ''}
+                {[iv.appliedPosition, profileText(account)].filter(Boolean).join(' · ') || 'Profile'}
               </p>
+            )}
+            {iv && shownMode === 'view' && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {iv.stage && <span className={`badge ${stageBadgeClass(iv.stage)}`}>{stageLabel(iv.stage)}</span>}
+                {iv.status && <span className={`badge ${interviewStatusBadgeClass(iv.status)}`}>{interviewStatusLabel(iv.status)}</span>}
+                {(iv.ownerName || iv.ownerEmail) && (
+                  <span className="ml-1 inline-flex items-center gap-1 text-xs text-muted">
+                    Owner <NameWithAvatar name={iv.ownerName || iv.ownerEmail} size="sm" />
+                  </span>
+                )}
+              </div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
-            {iv && (
-              <a href={`/interview/${iv._id}`} target="_blank" rel="noreferrer" className="btn-icon" title="Open full screen" aria-label="Open full screen in a new tab">
-                <Maximize2 size={16} aria-hidden />
-              </a>
-            )}
             <button type="button" onClick={onClose} className="btn-icon" title="Close" aria-label="Close panel">
               <X size={16} aria-hidden />
             </button>
@@ -176,66 +166,34 @@ export default function InterviewPanel({
 
         {shownMode === 'view' && iv ? (
           <>
-            <div className="flex-1 space-y-4 overflow-y-auto p-4">
-              {iv.jobUrl && (
-                <a href={iv.jobUrl} target="_blank" rel="noreferrer" className="block truncate text-sm text-blue-700 hover:underline dark:text-sky-400">
-                  {iv.jobUrl}
-                </a>
-              )}
-              <section aria-labelledby={`${titleId}-rounds`}>
-                <h3 id={`${titleId}-rounds`} className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Rounds ({rounds.length})
-                </h3>
-                <ul className="space-y-2">
-                  {rounds.map((e) => {
-                    const status = normalizeInterviewStatus(e.status);
-                    return (
-                      <li key={e.id} className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`badge ${stageBadgeClass(e.stage)}`}>{stageLabel(e.stage)}</span>
-                          {e.caller?.enabled && <PhoneCall size={14} className="text-sky-600" aria-label="Caller requested" />}
-                          <span className="text-sm tabular-nums text-body">{formatRange(e.scheduledAt, e.endsAt, tz)}</span>
-                        </div>
-                        {e.interviewerName && <p className="mt-1 text-xs text-muted">with {e.interviewerName}</p>}
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {canEdit ? (
-                            <select
-                              aria-label={`Status of ${stageLabel(e.stage)}`}
-                              className={`select focus-ring !h-8 !w-auto !py-0 !text-xs ${interviewStatusBadgeClass(status)}`}
-                              value={status}
-                              onChange={(ev) => setRoundStatus(e.id, ev.target.value)}
-                            >
-                              {INTERVIEW_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                            </select>
-                          ) : (
-                            <span className={`badge ${interviewStatusBadgeClass(status)}`}>{INTERVIEW_STATUSES.find((s) => s.value === status)?.label ?? '—'}</span>
-                          )}
-                          {canEdit && (
-                            <span className="ml-auto flex gap-1">
-                              <button type="button" className="btn-icon" onClick={() => openForm('editRound', e.id)} aria-label={`Edit ${stageLabel(e.stage)} round`} title="Edit round">
-                                <Pencil size={15} aria-hidden />
-                              </button>
-                              <button type="button" className="btn-icon" onClick={() => setConfirm({ kind: 'round', id: e.id })} aria-label={`Delete ${stageLabel(e.stage)} round`} title="Delete round">
-                                <Trash2 size={15} aria-hidden />
-                              </button>
-                            </span>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            </div>
-            {canEdit && (
+            <InterviewSummary
+              iv={iv}
+              tz={tz}
+              canEdit={canEdit}
+              onStatus={setRoundStatus}
+              onEditRound={(id) => openForm('editRound', id)}
+              onDeleteRound={(id) => setConfirm({ kind: 'round', id })}
+              onEditDetails={() => openForm('editDetails')}
+            />
+            {canEdit ? (
               <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
                 <button type="button" className="btn text-sm" onClick={() => openForm('addRound')}>
                   <Plus size={14} aria-hidden /> Add next round
                 </button>
                 <button type="button" className="btn-outline text-sm" onClick={() => openForm('editDetails')}>Edit details</button>
-                <button type="button" className="btn-outline ml-auto text-sm text-red-700 dark:text-red-400" onClick={() => setConfirm({ kind: 'interview' })}>
-                  Delete interview
-                </button>
+                <span className="ml-auto">
+                  <ActionMenu
+                    label="More actions"
+                    items={[
+                      { label: 'Open full screen', onSelect: () => window.open(`/interview/${iv._id}`, '_blank', 'noopener') },
+                      { label: 'Delete interview', danger: true, onSelect: () => setConfirm({ kind: 'interview' }) },
+                    ]}
+                  />
+                </span>
+              </footer>
+            ) : (
+              <footer className="shrink-0 border-t border-zinc-200 px-4 py-2.5 text-xs text-muted dark:border-zinc-800">
+                View only{iv.ownerName || iv.ownerEmail ? ` · owned by ${iv.ownerName || iv.ownerEmail}` : ''}
               </footer>
             )}
           </>

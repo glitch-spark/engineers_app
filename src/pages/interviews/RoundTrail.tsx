@@ -2,7 +2,7 @@ import type { InterviewStageEntry } from '../../api/endpoints';
 import { interviewStatusLabel, normalizeInterviewStatus, stageLabel } from '../../lib/stageBadge';
 import { formatInZone } from '../../lib/interviewTimezone';
 
-const DOT: Record<string, string> = {
+export const STATUS_DOT: Record<string, string> = {
   scheduled: 'bg-blue-500',
   completed: 'bg-zinc-400',
   passed: 'bg-emerald-500',
@@ -28,7 +28,7 @@ export default function RoundTrail({ rounds, tz }: { rounds: InterviewStageEntry
         <span
           key={r.id}
           title={`${stageLabel(r.stage)} · ${interviewStatusLabel(r.status)} · ${shortDate(r.scheduledAt, tz)}`}
-          className={`h-2 w-2 rounded-full ${DOT[normalizeInterviewStatus(r.status)] ?? 'bg-zinc-300'}`}
+          className={`h-2 w-2 rounded-full ${STATUS_DOT[normalizeInterviewStatus(r.status)] ?? 'bg-zinc-300'}`}
         />
       ))}
     </span>

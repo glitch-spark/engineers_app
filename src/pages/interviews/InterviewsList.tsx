@@ -1,9 +1,10 @@
 import { useState, type KeyboardEvent } from 'react';
 import useSWR from 'swr';
-import { MoreHorizontal, PhoneCall } from 'lucide-react';
+import { PhoneCall } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import NameWithAvatar from '../../components/NameWithAvatar';
+import ActionMenu from '../../components/ActionMenu';
 import type { Interview } from '../../components/interview/types';
 import type { PanelMode } from '../../components/interview/InterviewPanel';
 import { formatProfileLabel } from '../../lib/countries';
@@ -93,37 +94,20 @@ export default function InterviewsList({
     );
   };
 
-  const rowMenu = (iv: Interview) => (
-    <details className="relative" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-      <summary className="btn-icon list-none cursor-pointer" aria-label={`Actions for ${iv.companyName || 'interview'}`}>
-        <MoreHorizontal size={16} aria-hidden />
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-zinc-200 bg-white py-1 text-sm shadow-strong dark:border-zinc-700 dark:bg-zinc-900">
-        {canEdit(iv) && (
-          <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            onClick={(e) => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; onOpen(iv, 'addRound'); }}>
-            Add next round
-          </button>
-        )}
-        {canEdit(iv) && (
-          <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            onClick={(e) => {
-              (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
-              const tip = iv.stageHistory?.[iv.stageHistory.length - 1];
-              onOpen(iv, tip ? 'editRound' : 'editDetails', tip?.id);
-            }}>
-            Edit
-          </button>
-        )}
-        {canEdit(iv) && (
-          <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-zinc-100 dark:text-red-400 dark:hover:bg-zinc-800"
-            onClick={(e) => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; onDelete(iv); }}>
-            Delete
-          </button>
-        )}
-      </div>
-    </details>
-  );
+  const rowMenu = (iv: Interview) => {
+    if (!canEdit(iv)) return null;
+    const tip = iv.stageHistory?.[iv.stageHistory.length - 1];
+    return (
+      <ActionMenu
+        label={`Actions for ${iv.companyName || 'interview'}`}
+        items={[
+          { label: 'Add next round', onSelect: () => onOpen(iv, 'addRound') },
+          { label: 'Edit', onSelect: () => onOpen(iv, tip ? 'editRound' : 'editDetails', tip?.id) },
+          { label: 'Delete', danger: true, onSelect: () => onDelete(iv) },
+        ]}
+      />
+    );
+  };
 
   const statusCell = (iv: Interview) => {
     const status = normalizeInterviewStatus(iv.status);
