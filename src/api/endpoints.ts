@@ -531,13 +531,41 @@ export interface InterviewListParams {
   stage?: string;
   status?: string;
   creatorId?: string;
-  sort?: 'asc' | 'desc';
+  /** Column to sort by; legacy 'asc' | 'desc' means latest round date. */
+  sort?: 'latest' | 'company' | 'stage' | 'status' | 'asc' | 'desc';
+  dir?: 'asc' | 'desc';
 }
 
 export const listInterviews = (params?: InterviewListParams) =>
   apiFetch<{ interviews: Record<string, unknown>[]; pagination: Pagination }>(
     `/interviews${qs(params)}`
   );
+
+/** One calendar row: a round with its interview's headline fields. */
+export interface InterviewRoundRow {
+  interviewId: string;
+  roundId: string;
+  stage: string;
+  status: string | null;
+  scheduledAt: string;
+  endsAt: string | null;
+  companyName: string | null;
+  profileLabel: string | null;
+  ownerId: string;
+  ownerName: string | null;
+  hasCaller: boolean;
+}
+
+export const listInterviewRounds = (params: {
+  from: string;
+  to: string;
+  creatorId?: string;
+  accountId?: string;
+  stage?: string;
+  status?: string;
+}) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>> }>(
+  `/interviews/rounds${qs(params)}`,
+);
 
 export const getInterview = (id: string) =>
   apiFetch<Record<string, unknown>>(`/interviews/${id}`);
@@ -579,10 +607,61 @@ export const interviewChatHistory = (interviewId: string, limit = 100) =>
 export const clearInterviewChatHistory = (interviewId: string) =>
   del<{ deleted: number }>(`/ai-review/interview/${interviewId}/chat/history`);
 
-export const createInterview = (body: Record<string, unknown>) =>
+export type CallerMethod = 'video' | 'phone_hushed' | 'phone_slynumber';
+
+/** Caller request on a round: a coworker joins at the round's start time. */
+export interface InterviewCaller {
+  enabled: boolean;
+  callerName?: string;
+  /** Round start (UTC ISO). */
+  startsAt?: string | null;
+  /** Display time zone for Slack. */
+  timezone?: string | null;
+  method?: CallerMethod | null;
+  methodValue?: string;
+  coworkerIds?: string[];
+  coworkers?: { _id: string; name?: string | null; email?: string | null }[];
+  slackChannelTs?: string | null;
+}
+
+export interface CallerInput {
+  enabled: boolean;
+  callerName?: string;
+  timezone?: string;
+  method?: string;
+  methodValue?: string;
+  coworkerIds?: string[];
+}
+
+/** One round as sent to the API (ISO UTC datetimes). */
+export interface RoundInput {
+  stage: string;
+  scheduledAt: string;
+  endsAt?: string;
+  status?: string;
+  interviewerName?: string;
+  note?: string;
+  transcript?: string;
+  caller?: CallerInput;
+}
+
+export interface CreateInterviewBody {
+  accountId: string;
+  companyName: string;
+  appliedPosition?: string;
+  jobUrl?: string;
+  round: RoundInput;
+}
+
+/** Application-level fields, or a status-only update of the current round. */
+export type UpdateInterviewBody =
+  | { accountId?: string; companyName?: string; appliedPosition?: string; jobUrl?: string }
+  | { status: string };
+
+export const createInterview = (body: CreateInterviewBody) =>
   postJSON<Record<string, unknown>>('/interviews', body);
 
-export const updateInterview = (id: string, body: Record<string, unknown>) =>
+export const updateInterview = (id: string, body: UpdateInterviewBody) =>
   putJSON<Record<string, unknown>>(`/interviews/${id}`, body);
 
 export const deleteInterview = (id: string) => del<{ ok: boolean }>(`/interviews/${id}`);
@@ -597,18 +676,14 @@ export interface InterviewStageEntry {
   status?: string | null;
   transcript?: string;
   note?: string;
+  interviewerName?: string | null;
+  endsAt?: string | null;
+  caller?: InterviewCaller | null;
 }
 
-export interface InterviewStageInput {
-  stage?: string;
-  /** ISO datetime or YYYY-MM-DD. */
-  scheduledAt?: string;
-  status?: string;
-  transcript?: string;
-  note?: string;
-}
+export type InterviewStageInput = Partial<RoundInput>;
 
-export const addInterviewStage = (id: string, body: InterviewStageInput & { stage: string }) =>
+export const addInterviewStage = (id: string, body: RoundInput & { markPreviousPassed?: boolean }) =>
   postJSON<Record<string, unknown>>(`/interviews/${id}/stages`, body);
 
 export const updateInterviewStage = (id: string, stageId: string, body: InterviewStageInput) =>

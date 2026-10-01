@@ -349,6 +349,13 @@ table { font-variant-numeric: tabular-nums; }
   @apply disabled:cursor-not-allowed disabled:opacity-60;
 }
 
+.btn-danger {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border-none px-4 py-2 text-sm font-semibold text-white transition;
+  @apply bg-red-700 hover:bg-red-800 active:scale-[0.99];
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-zinc-950;
+  @apply disabled:cursor-not-allowed disabled:opacity-60;
+}
+
 .spinner {
   @apply inline-block shrink-0 animate-spin rounded-full border-2 border-zinc-200 border-t-sky-600;
   @apply dark:border-zinc-700 dark:border-t-sky-400;

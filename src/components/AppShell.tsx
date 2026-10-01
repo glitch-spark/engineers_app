@@ -55,7 +55,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   if (isAuth) return <>{children}</>;
   const useWideLayout =
     pathname === '/interviews'
-    || pathname === '/interviews/live'
+    || pathname === '/interviews/calendar'
     || pathname === '/interviews/analyze'
     || pathname === '/pipeline';
   return (
