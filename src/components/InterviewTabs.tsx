@@ -1,10 +1,9 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ListChecks, BarChart3, Radio } from 'lucide-react';
+import { ListChecks, BarChart3 } from 'lucide-react';
 
 const TABS = [
-  { to: '/interviews/live', label: 'Live', icon: Radio, exact: true },
-  { to: '/interviews', label: 'List', icon: ListChecks, exact: true },
-  { to: '/interviews/analyze', label: 'Analyze', icon: BarChart3, exact: false },
+  { to: '/interviews', label: 'Interviews', icon: ListChecks, match: (p: string) => p === '/interviews' || p === '/interviews/calendar' },
+  { to: '/interviews/analyze', label: 'Analyze', icon: BarChart3, match: (p: string) => p.startsWith('/interviews/analyze') },
 ];
 
 export default function InterviewTabs() {
@@ -12,7 +11,7 @@ export default function InterviewTabs() {
   return (
     <nav className="tab-nav" aria-label="Interview sections">
       {TABS.map((t) => {
-        const active = t.exact ? pathname === t.to : pathname.startsWith(t.to);
+        const active = t.match(pathname);
         const Icon = t.icon;
         return (
           <Link

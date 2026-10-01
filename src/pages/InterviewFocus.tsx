@@ -16,63 +16,33 @@ import {
 import * as api from '../api/endpoints';
 import type { InterviewStageEntry } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
+import { useInterviewTimezone } from '../lib/useInterviewTimezone';
+import ZoneSelect from '../components/interview/ZoneSelect';
+import InterviewPanel, { type PanelMode } from '../components/interview/InterviewPanel';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { notify } from '../lib/notify';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { formatProfileLabel } from '../lib/countries';
 import {
-  BOARD_FORM_STAGES,
-  INTERVIEW_STAGE_ORDER,
-  TECH_SUB_STAGES,
+  interviewStatusBadgeClass,
+  interviewStatusLabel,
+  normalizeInterviewStatus,
   normalizeInterviewStage,
-  resolveInterviewStage,
   stageBadgeClass,
   stageLabel,
-  toBoardFormStage,
-  toTechSubStage,
 } from '../lib/stageBadge';
-import Select from '../components/Select';
 import ThemeToggle from '../components/ThemeToggle';
-import {
-  MissingFieldsHint,
-  TranscriptUploadButton,
-  formatScheduledDate,
-  type Interview,
-} from '../components/InterviewEditPanel';
-
-const STATUS_OPTIONS = [
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'passed', label: 'Passed' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'no_show', label: 'No Show' },
-  { value: 'rescheduled', label: 'Rescheduled' },
-  { value: 'canceled', label: 'Canceled' },
-];
-
-const statusLabel = (s?: string | null) => STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s ?? '';
-
-const statusBadgeClass = (s?: string | null) => {
-  switch (s) {
-    case 'scheduled':
-    case 'rescheduled':
-      return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800';
-    case 'passed':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
-    case 'failed':
-      return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
-    case 'no_show':
-      return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800';
-    default:
-      return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
-  }
-};
+import { TranscriptUploadButton } from '../components/interview/TranscriptUploadButton';
+import { formatScheduledDate } from '../components/interview/format';
+import type { Interview } from '../components/interview/types';
 
 type StepTone = 'done' | 'failed' | 'muted' | 'pending';
 
 function stepTone(e: InterviewStageEntry): StepTone {
-  if (normalizeInterviewStage(e.stage) === 'rejected' || e.status === 'failed') return 'failed';
-  if (e.status === 'passed' || e.status === 'completed') return 'done';
-  if (e.status === 'canceled' || e.status === 'no_show') return 'muted';
+  const status = normalizeInterviewStatus(e.status);
+  if (status === 'rejected') return 'failed';
+  if (status === 'passed' || status === 'completed') return 'done';
+  if (status === 'canceled') return 'muted';
   return 'pending';
 }
 
@@ -84,32 +54,8 @@ const STEP_CIRCLE: Record<StepTone, string> = {
 };
 
 /** Screen-reader text for a step's outcome (the circle shows it by colour + icon). */
-function stepStatusText(e: InterviewStageEntry, tone: StepTone): string {
-  if (tone === 'failed') return normalizeInterviewStage(e.stage) === 'rejected' ? 'Rejected' : 'Failed';
-  return e.status ? statusLabel(e.status) : 'No status';
-}
-
-/** YYYY-MM-DD for a date input; calendar-date prefix wins so UTC noon never shifts the day. */
-function toDateInput(raw?: string | null): string {
-  if (!raw) return '';
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function todayInput(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** Suggest the next round after the current one, skipping rounds already on the path. */
-function suggestNextStage(history: InterviewStageEntry[]): string {
-  const used = new Set(history.map((e) => normalizeInterviewStage(e.stage)));
-  const tip = normalizeInterviewStage(history[history.length - 1]?.stage);
-  const order = INTERVIEW_STAGE_ORDER.filter((s) => s !== 'rejected');
-  const start = tip ? order.indexOf(tip as (typeof order)[number]) + 1 : 0;
-  return order.slice(Math.max(start, 0)).find((s) => !used.has(s)) ?? '';
+function stepStatusText(e: InterviewStageEntry): string {
+  return e.status ? interviewStatusLabel(e.status) : 'No status';
 }
 
 const STEP_ANIM_MS = 900;
@@ -128,7 +74,8 @@ export default function InterviewFocusPage() {
   const iv = data as unknown as Interview | undefined;
   const history = useMemo(() => iv?.stageHistory ?? [], [iv]);
 
-  const [composer, setComposer] = useState<{ mode: 'add' } | { mode: 'edit'; stageId: string } | null>(null);
+  const [panel, setPanel] = useState<{ mode: PanelMode; roundId?: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [animatingId, setAnimatingId] = useState<string | null>(null);
 
   const stageParam = searchParams.get('stage');
@@ -180,7 +127,7 @@ export default function InterviewFocusPage() {
   const applyUpdate = (next: Record<string, unknown>) => mutate(next, { revalidate: false });
 
   const onDelete = async () => {
-    if (!confirm('Delete this interview and all its stages? This cannot be undone.')) return;
+    setConfirmDelete(false);
     try {
       await api.deleteInterview(iv._id);
       notify.success('Interview deleted');
@@ -189,8 +136,6 @@ export default function InterviewFocusPage() {
       notify.error(err, 'Failed to delete interview');
     }
   };
-
-  const editingEntry = composer?.mode === 'edit' ? history.find((e) => e.id === composer.stageId) : undefined;
 
   return (
     <div className="shell-content min-h-screen">
@@ -207,9 +152,14 @@ export default function InterviewFocusPage() {
               <Sparkles size={14} aria-hidden /> AI Review
             </Link>
             {canEdit && (
+              <button type="button" className="btn-outline btn-sm" onClick={() => setPanel({ mode: 'editDetails' })}>
+                Edit details
+              </button>
+            )}
+            {canEdit && (
               <button
                 type="button"
-                onClick={onDelete}
+                onClick={() => setConfirmDelete(true)}
                 className="shell-icon-btn hover:!bg-red-50 hover:!text-red-600 dark:hover:!bg-red-950/40 dark:hover:!text-red-400"
                 title="Delete interview"
                 aria-label="Delete interview"
@@ -217,6 +167,7 @@ export default function InterviewFocusPage() {
                 <Trash2 className="h-4 w-4" aria-hidden />
               </button>
             )}
+            <ZoneSelect />
             <ThemeToggle />
           </div>
         </div>
@@ -240,8 +191,8 @@ export default function InterviewFocusPage() {
             </div>
           </div>
           {iv.status && (
-            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(iv.status)}`}>
-              {statusLabel(iv.status)}
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${interviewStatusBadgeClass(iv.status)}`}>
+              {interviewStatusLabel(iv.status)}
             </span>
           )}
         </section>
@@ -251,54 +202,35 @@ export default function InterviewFocusPage() {
           selectedId={selected?.id}
           animatingId={animatingId}
           canAdd={canEdit}
-          adding={composer?.mode === 'add'}
-          onSelect={(sid) => {
-            selectStage(sid);
-            if (composer?.mode === 'edit') setComposer({ mode: 'edit', stageId: sid });
-          }}
-          onAdd={() => setComposer(composer?.mode === 'add' ? null : { mode: 'add' })}
+          adding={panel?.mode === 'addRound'}
+          onSelect={(sid) => selectStage(sid)}
+          onAdd={() => setPanel({ mode: 'addRound' })}
         />
 
-        {composer && (composer.mode === 'add' || editingEntry) && (
-          <StageComposer
-            key={composer.mode === 'add' ? 'composer-add' : `composer-${composer.stageId}`}
-            mode={composer.mode}
-            entry={editingEntry}
-            defaultStage={suggestNextStage(history)}
-            currentTip={normalizeInterviewStage(history[history.length - 1]?.stage)}
-            canDelete={history.length > 1}
-            onCancel={() => setComposer(null)}
-            onSave={async (body) => {
-              if (composer.mode === 'add') {
-                const res = await api.addInterviewStage(iv._id, body as api.InterviewStageInput & { stage: string });
-                const nextHistory = (res.stageHistory as InterviewStageEntry[] | undefined) ?? [];
-                const added = nextHistory[nextHistory.length - 1];
-                await applyUpdate(res);
-                setComposer(null);
+        {panel && (
+          <>
+            <div className="fixed inset-0 top-16 z-40 bg-black/25" onClick={() => setPanel(null)} aria-hidden />
+            <InterviewPanel
+              open
+              interview={iv}
+              initialMode={panel.mode}
+              initialRoundId={panel.roundId}
+              onClose={() => setPanel(null)}
+              onChanged={async (saved) => {
+                if (!saved) {
+                  navigate('/interviews');
+                  return;
+                }
+                const before = new Set(history.map((e) => e.id));
+                await applyUpdate(saved as unknown as Record<string, unknown>);
+                const added = (saved.stageHistory ?? []).find((e) => !before.has(e.id));
                 if (added) {
                   setAnimatingId(added.id);
                   selectStage(added.id);
                 }
-                notify.success(`${stageLabel(body.stage)} added`);
-              } else {
-                const res = await api.updateInterviewStage(iv._id, composer.stageId, body);
-                await applyUpdate(res);
-                setComposer(null);
-                notify.success('Stage updated');
-              }
-            }}
-            onDelete={async () => {
-              if (composer.mode !== 'edit') return;
-              if (!confirm('Delete this stage, including its script and notes?')) return;
-              const res = await api.deleteInterviewStage(iv._id, composer.stageId);
-              await applyUpdate(res);
-              setComposer(null);
-              const next = new URLSearchParams(searchParams);
-              next.delete('stage');
-              setSearchParams(next, { replace: true });
-              notify.success('Stage deleted');
-            }}
-          />
+              }}
+            />
+          </>
         )}
 
         {selected ? (
@@ -308,7 +240,7 @@ export default function InterviewFocusPage() {
             entry={selected}
             index={history.findIndex((e) => e.id === selected.id)}
             canEdit={canEdit}
-            onEditDetails={() => setComposer({ mode: 'edit', stageId: selected.id })}
+            onEditDetails={() => setPanel({ mode: 'editRound', roundId: selected.id })}
             onSaved={applyUpdate}
           />
         ) : (
@@ -320,6 +252,14 @@ export default function InterviewFocusPage() {
           </div>
         )}
       </main>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete interview?"
+        body={`Deletes this interview and its ${history.length} round${history.length === 1 ? '' : 's'}.`}
+        onConfirm={onDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
@@ -341,6 +281,7 @@ function StageStepper({
   onSelect: (id: string) => void;
   onAdd: () => void;
 }) {
+  const { tz } = useInterviewTimezone();
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
@@ -427,9 +368,9 @@ function StageStepper({
                     {stageLabel(entry.stage)}
                   </span>
                   <span className="text-[11px] tabular-nums text-faint">
-                    {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : '—'}
+                    {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt, tz) : '—'}
                   </span>
-                  <span className="sr-only">, {stepStatusText(entry, tone)}</span>
+                  <span className="sr-only">, {stepStatusText(entry)}</span>
                 </span>
               </button>
             </li>
@@ -465,170 +406,6 @@ function StageStepper({
   );
 }
 
-type StageFormBody = { stage: string; scheduledAt: string; status: string };
-
-function StageComposer({
-  mode,
-  entry,
-  defaultStage,
-  currentTip,
-  canDelete,
-  onCancel,
-  onSave,
-  onDelete,
-}: {
-  mode: 'add' | 'edit';
-  entry?: InterviewStageEntry;
-  defaultStage: string;
-  currentTip?: string;
-  canDelete: boolean;
-  onCancel: () => void;
-  onSave: (body: StageFormBody) => Promise<void>;
-  onDelete: () => Promise<void>;
-}) {
-  const initialStage = entry?.stage ?? defaultStage;
-  const [boardStage, setBoardStage] = useState(toBoardFormStage(initialStage));
-  const [techSubStage, setTechSubStage] = useState(toTechSubStage(initialStage));
-  const [date, setDate] = useState(entry ? toDateInput(entry.scheduledAt) || todayInput() : todayInput());
-  const [status, setStatus] = useState(entry ? entry.status || '' : 'scheduled');
-  const [busy, setBusy] = useState(false);
-  const rootRef = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    const root = rootRef.current;
-    if (!root) return;
-    root.querySelector<HTMLElement>('select, input')?.focus({ preventScroll: true });
-    root.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    return () => {
-      // Closing the composer removes the focused field; put focus back on the "+" / "Edit details" button.
-      const lost = !document.activeElement || document.activeElement === document.body;
-      if (lost && opener?.isConnected) opener.focus({ preventScroll: true });
-    };
-  }, []);
-
-  const resolved = resolveInterviewStage(boardStage, techSubStage);
-  const sameAsTip = mode === 'add' && !!currentTip && resolved === currentTip;
-  const canSave = !!resolved && !!date && !busy && !sameAsTip;
-  const missing = [
-    ...(!boardStage ? ['Stage'] : []),
-    ...(boardStage === 'tech' && !techSubStage ? ['Tech round'] : []),
-    ...(!date ? ['Scheduled date'] : []),
-  ];
-
-  const run = async (fn: () => Promise<void>, failMsg: string) => {
-    setBusy(true);
-    try {
-      await fn();
-    } catch (err) {
-      notify.error(err, failMsg);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const row = 'grid items-center gap-x-4 gap-y-1.5 sm:grid-cols-[112px_minmax(0,1fr)]';
-
-  return (
-    <form
-      id="stage-composer"
-      ref={rootRef}
-      className="panel-elevated t-step-panel p-5"
-      aria-label={mode === 'add' ? 'Add stage' : 'Edit stage'}
-      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onCancel(); } }}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!canSave) return;
-        void run(() => onSave({ stage: resolved, scheduledAt: date, status }), 'Could not save stage');
-      }}
-    >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="card-title">{mode === 'add' ? 'New stage' : `Edit ${stageLabel(entry?.stage)}`}</h2>
-        <button type="button" className="btn-icon" onClick={onCancel} aria-label="Close">
-          <X size={16} aria-hidden />
-        </button>
-      </div>
-
-      <div className="grid gap-x-10 gap-y-3 lg:grid-cols-2">
-        <div className={row}>
-          <label className="form-label" htmlFor="stage-composer-stage">Stage</label>
-          <Select
-            id="stage-composer-stage"
-            value={boardStage}
-            onChange={(v) => { setBoardStage(v); setTechSubStage(''); }}
-            options={[...BOARD_FORM_STAGES]}
-            placeholder="Select a stage"
-          />
-        </div>
-        <div className={row}>
-          <label className="form-label" htmlFor="stage-composer-date">Scheduled date</label>
-          <input
-            id="stage-composer-date"
-            className="input"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            required
-          />
-        </div>
-        {boardStage === 'tech' && (
-          <div className={row}>
-            <label className="form-label" htmlFor="stage-composer-sub">Tech round</label>
-            <Select
-              id="stage-composer-sub"
-              value={techSubStage}
-              onChange={setTechSubStage}
-              options={[...TECH_SUB_STAGES]}
-              placeholder="Select a Tech round"
-            />
-          </div>
-        )}
-        <div className={row}>
-          <label className="form-label" htmlFor="stage-composer-status">Status</label>
-          <Select
-            id="stage-composer-status"
-            value={status}
-            onChange={setStatus}
-            options={[{ value: '', label: '— None —' }, ...STATUS_OPTIONS]}
-          />
-        </div>
-      </div>
-
-      <div className="mt-5 flex items-center justify-between gap-2">
-        <div>
-          {mode === 'edit' && canDelete && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void run(onDelete, 'Could not delete stage')}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40"
-            >
-              <Trash2 size={14} aria-hidden /> Delete stage
-            </button>
-          )}
-        </div>
-        <div className="flex flex-col items-end gap-1.5">
-          {sameAsTip && (
-            <p id="stage-composer-hint" className="text-xs text-muted">Pick a different stage — this round is already the latest.</p>
-          )}
-          {!sameAsTip && <MissingFieldsHint id="stage-composer-hint" missing={missing} />}
-          <div className="flex gap-2">
-            <button type="button" className="btn-outline" onClick={onCancel} disabled={busy}>Cancel</button>
-            <button
-              type="submit"
-              className="btn"
-              disabled={!canSave}
-              aria-describedby={!busy && !canSave && (sameAsTip || missing.length) ? 'stage-composer-hint' : undefined}
-            >
-              {busy ? 'Saving…' : mode === 'add' ? 'Add stage' : 'Save'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </form>
-  );
-}
-
 type WorkspaceTab = 'script' | 'notes' | 'questions';
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -649,6 +426,7 @@ function StageWorkspace({
   onEditDetails: () => void;
   onSaved: (next: Record<string, unknown>) => unknown;
 }) {
+  const { tz } = useInterviewTimezone();
   const [tab, setTab] = useState<WorkspaceTab>('script');
   const [transcript, setTranscript] = useState(entry.transcript ?? '');
   const [note, setNote] = useState(entry.note ?? '');
@@ -724,11 +502,11 @@ function StageWorkspace({
             {stageLabel(entry.stage)}
           </span>
           <span className="text-sm tabular-nums text-body">
-            {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt) : 'No date'}
+            {entry.scheduledAt ? formatScheduledDate(entry.scheduledAt, tz) : 'No date'}
           </span>
           {entry.status && (
-            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(entry.status)}`}>
-              {statusLabel(entry.status)}
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${interviewStatusBadgeClass(entry.status)}`}>
+              {interviewStatusLabel(entry.status)}
             </span>
           )}
         </div>
