@@ -154,7 +154,7 @@ export default function CountrySelect({
         aria-activedescendant={open && options.length ? optionId(activeIndex) : undefined}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
-        className={`input w-full text-sm min-h-[38px] ${showFlag ? 'pl-9' : ''} ${value ? 'pr-14' : 'pr-9'}`}
+        className={`input w-full text-sm min-h-[38px] ${showFlag ? '!pl-9' : ''} ${value ? '!pr-14' : '!pr-9'}`}
         value={open ? query : selectedName}
         placeholder={placeholder}
         autoComplete="off"

@@ -101,7 +101,7 @@ export default function AccountsPage() {
               placeholder="Search profiles..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input w-full text-sm pl-9 pr-8"
+              className="input w-full text-sm !pl-9 !pr-8"
             />
             {searchTerm && (
               <button
