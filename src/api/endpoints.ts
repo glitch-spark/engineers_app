@@ -1529,7 +1529,10 @@ export interface JobApplyProfile {
 
 export interface JobApplyRun {
   _id: string;
+  /** Uploaded file name, or the Google Sheet's title. */
   fileName: string;
+  /** Google Sheets link when the run came from one. */
+  sourceUrl?: string | null;
   status: JobApplyRunStatus;
   threshold: number;
   maxAgeDays: number;
@@ -1616,14 +1619,18 @@ export interface JobApplyRowDetail extends JobApplyRow {
   jdText: string | null;
 }
 
+/** The job sheet: an uploaded .xlsx/.csv, or a Google Sheets link shared as "Anyone with the link". */
+export type JobApplySource = { file: File } | { sheetUrl: string };
+
 export const createJobApplyRun = (
-  file: File,
+  source: JobApplySource,
   selection: { accountId: string; resumeIds: string[] }[],
   threshold: number,
   maxAgeDays: number,
 ) => {
   const form = new FormData();
-  form.append('file', file);
+  if ('file' in source) form.append('file', source.file);
+  else form.append('sheetUrl', source.sheetUrl);
   form.append('selection', JSON.stringify(selection));
   form.append('threshold', String(threshold));
   form.append('maxAgeDays', String(maxAgeDays));

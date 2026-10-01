@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
-import { Loader2, Trash2 } from 'lucide-react';
+import { ExternalLink, Loader2, Trash2 } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyRun } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -92,6 +92,18 @@ export default function JobApplies() {
                       <Link to={`/job-applies/${run._id}`} className="font-medium text-sky-700 hover:underline dark:text-sky-400">
                         {run.fileName}
                       </Link>
+                      {run.sourceUrl && (
+                        <a
+                          href={run.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-icon ml-1 align-middle"
+                          title="Open the Google Sheet"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                          <span className="sr-only">Open the Google Sheet (new tab)</span>
+                        </a>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2">{formatDate(run.createdAt)}</td>
                     <td className="px-3 py-2">

@@ -20,6 +20,26 @@ interface ProfileOption {
   resumes: ProfileResume[];
 }
 
+type SourceKind = 'gsheet' | 'file';
+const LAST_SHEET_KEY = 'jobApplies.lastSheetUrl';
+const GSHEET_RE = /^https:\/\/docs\.google\.com\/spreadsheets\/(?:u\/\d+\/)?d\/[\w-]{10,}/;
+
+function readLastSheet(): string {
+  try {
+    return window.localStorage.getItem(LAST_SHEET_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function rememberSheet(url: string): void {
+  try {
+    window.localStorage.setItem(LAST_SHEET_KEY, url);
+  } catch {
+    /* private mode: nothing to remember */
+  }
+}
+
 function toProfile(raw: Record<string, unknown>): ProfileOption {
   const resumes = Array.isArray(raw.resumes) ? (raw.resumes as Record<string, unknown>[]) : [];
   return {
@@ -35,7 +55,9 @@ function toProfile(raw: Record<string, unknown>): ProfileOption {
 
 export default function NewRunPanel() {
   const navigate = useNavigate();
-  const ids = { file: useId(), threshold: useId(), maxAge: useId(), profiles: useId() };
+  const ids = { file: useId(), sheet: useId(), threshold: useId(), maxAge: useId(), profiles: useId() };
+  const [sourceKind, setSourceKind] = useState<SourceKind>('gsheet');
+  const [sheetUrl, setSheetUrl] = useState(readLastSheet);
   const [file, setFile] = useState<File | null>(null);
   const [profileIds, setProfileIds] = useState<string[]>([]);
   const [checked, setChecked] = useState<Record<string, string[]>>({});
@@ -74,14 +96,19 @@ export default function NewRunPanel() {
     .map((accountId) => ({ accountId, resumeIds: checked[accountId] ?? [] }))
     .filter((s) => s.resumeIds.length > 0);
   const resumeCount = selection.reduce((n, s) => n + s.resumeIds.length, 0);
-  const canSubmit = !!file && resumeCount > 0 && !submitting;
+  const trimmedUrl = sheetUrl.trim();
+  const sheetUrlInvalid = sourceKind === 'gsheet' && trimmedUrl !== '' && !GSHEET_RE.test(trimmedUrl);
+  const hasSource = sourceKind === 'gsheet' ? GSHEET_RE.test(trimmedUrl) : !!file;
+  const canSubmit = hasSource && resumeCount > 0 && !submitting;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!file || !canSubmit) return;
+    if (!canSubmit) return;
+    const source: api.JobApplySource = sourceKind === 'gsheet' ? { sheetUrl: trimmedUrl } : { file: file as File };
     setSubmitting(true);
     try {
-      const res = await api.createJobApplyRun(file, selection, threshold, maxAgeDays);
+      const res = await api.createJobApplyRun(source, selection, threshold, maxAgeDays);
+      if (sourceKind === 'gsheet') rememberSheet(trimmedUrl);
       notify.success(`Started: ${res.total} jobs`);
       navigate(`/job-applies/${res.runId}`);
     } catch (err) {
@@ -97,14 +124,57 @@ export default function NewRunPanel() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="space-y-2">
-          <label htmlFor={ids.file} className="form-label">Job sheet (.xlsx or .csv)</label>
-          <input
-            id={ids.file}
-            type="file"
-            accept=".xlsx,.csv"
-            className="input"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
+          <div role="radiogroup" aria-label="Job sheet source" className="flex gap-1">
+            {(
+              [
+                ['gsheet', 'Google Sheet link'],
+                ['file', 'Upload file'],
+              ] as const
+            ).map(([kind, label]) => (
+              <button
+                key={kind}
+                type="button"
+                role="radio"
+                aria-checked={sourceKind === kind}
+                onClick={() => setSourceKind(kind)}
+                className={sourceKind === kind ? 'btn btn-sm' : 'btn-outline btn-sm'}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {sourceKind === 'gsheet' ? (
+            <>
+              <label htmlFor={ids.sheet} className="sr-only">Google Sheets link</label>
+              <input
+                id={ids.sheet}
+                type="url"
+                inputMode="url"
+                placeholder="https://docs.google.com/spreadsheets/d/…"
+                value={sheetUrl}
+                onChange={(e) => setSheetUrl(e.target.value)}
+                aria-invalid={sheetUrlInvalid}
+                aria-describedby={`${ids.sheet}-hint`}
+                className="input"
+              />
+              <p id={`${ids.sheet}-hint`} className={sheetUrlInvalid ? 'text-xs text-red-700 dark:text-red-400' : 'hint'}>
+                {sheetUrlInvalid
+                  ? 'That isn\u2019t a Google Sheets link.'
+                  : 'Share the sheet as \u201cAnyone with the link \u2192 Viewer\u201d. The tab in the link is used.'}
+              </p>
+            </>
+          ) : (
+            <>
+              <label htmlFor={ids.file} className="sr-only">Job sheet file (.xlsx or .csv)</label>
+              <input
+                id={ids.file}
+                type="file"
+                accept=".xlsx,.csv"
+                className="input"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </>
+          )}
           <p className="hint">
             One job per row. A URL column is required; a full job-description column is optional (URL-only rows are fetched).
           </p>
@@ -197,7 +267,7 @@ export default function NewRunPanel() {
         <p className="hint">
           {resumeCount > 0
             ? `${resumeCount} resume${resumeCount === 1 ? '' : 's'} across ${selection.length} profile${selection.length === 1 ? '' : 's'}. Only remote, clearance-free jobs posted in the last ${maxAgeDays} days are suggested.`
-            : 'Pick a sheet and at least one resume.'}
+            : 'Add a job sheet and pick at least one resume.'}
         </p>
       </div>
     </form>
