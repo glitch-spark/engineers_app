@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
+import { Download, Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import * as api from '../api/endpoints';
 import ConfirmDialog from './ConfirmDialog';
 import { notify } from '../lib/notify';
@@ -17,6 +17,8 @@ interface StoredResume {
   filename: string;
   markdown: string;
   uploadedAt?: string;
+  /** Set when the original file is stored in S3. */
+  s3Key?: string | null;
 }
 
 function toResumes(raw: unknown): StoredResume[] {
@@ -28,6 +30,7 @@ function toResumes(raw: unknown): StoredResume[] {
       filename: String(r.filename ?? 'resume'),
       markdown: String(r.markdown ?? ''),
       uploadedAt: typeof r.uploadedAt === 'string' ? r.uploadedAt : undefined,
+      s3Key: typeof r.s3Key === 'string' ? r.s3Key : null,
     }));
 }
 
@@ -41,7 +44,8 @@ function formatUploaded(iso?: string): string {
 
 /**
  * The profile's resumes (text extracted in the browser from PDF/TXT/MD). These are what Job Applies scores.
- * Saving sends the whole list; resumes that keep their id keep their upload date server-side.
+ * Uploads go one file at a time (text on the profile, original file in S3 when configured); deletes save the
+ * remaining list, and the server removes the deleted resume's S3 file.
  */
 export default function ResumesSection({ accountId }: { accountId: string }) {
   const inputId = useId();
@@ -77,12 +81,17 @@ export default function ResumesSection({ accountId }: { accountId: string }) {
     if (!files?.length || !resumes) return;
     setBusy(true);
     const errors: string[] = [];
-    const next = [...resumes];
+    let current = resumes;
     let added = 0;
     let replaced = 0;
     for (const file of Array.from(files)) {
       if (file.size > MAX_FILE_BYTES) {
         errors.push(`${file.name}: file is larger than 10 MB.`);
+        continue;
+      }
+      const replacing = current.some((r) => r.filename.toLowerCase() === file.name.toLowerCase());
+      if (!replacing && current.length >= MAX_RESUMES) {
+        errors.push(`${file.name}: a profile can hold at most ${MAX_RESUMES} resumes.`);
         continue;
       }
       try {
@@ -91,32 +100,31 @@ export default function ResumesSection({ accountId }: { accountId: string }) {
           errors.push(`${file.name}: almost no text found. It looks scanned or image-only; export a text PDF instead.`);
           continue;
         }
-        const existing = next.findIndex((r) => r.filename.toLowerCase() === parsed.filename.toLowerCase());
-        if (existing >= 0) {
-          next[existing] = { ...next[existing], markdown: parsed.markdown };
-          replaced++;
-        } else if (next.length >= MAX_RESUMES) {
-          errors.push(`${file.name}: a profile can hold at most ${MAX_RESUMES} resumes.`);
-        } else {
-          next.push({ id: '', filename: parsed.filename, markdown: parsed.markdown });
-          added++;
-        }
+        const saved = await api.uploadAccountResume(accountId, file, parsed.markdown);
+        current = toResumes(saved.resumes);
+        setResumes(current);
+        if (replacing) replaced++;
+        else added++;
       } catch (err) {
         errors.push(`${file.name}: ${err instanceof Error ? err.message : 'could not read this file'}`);
       }
     }
     if (added || replaced) {
-      try {
-        await save(next);
-        notify.success(
-          [added && `${added} resume${added === 1 ? '' : 's'} added`, replaced && `${replaced} replaced`].filter(Boolean).join(', '),
-        );
-      } catch (err) {
-        errors.push(err instanceof Error ? err.message : 'Could not save resumes');
-      }
+      notify.success(
+        [added && `${added} resume${added === 1 ? '' : 's'} added`, replaced && `${replaced} replaced`].filter(Boolean).join(', '),
+      );
     }
     setProblems(errors);
     setBusy(false);
+  }
+
+  async function download(r: StoredResume) {
+    try {
+      const { url } = await api.getAccountResumeFileUrl(accountId, r.id);
+      window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      notify.error(err, 'Could not download the original file');
+    }
   }
 
   async function confirmDelete() {
@@ -198,6 +206,17 @@ export default function ResumesSection({ accountId }: { accountId: string }) {
               >
                 <Eye className="h-4 w-4" aria-hidden />
               </button>
+              {r.s3Key && (
+                <button
+                  type="button"
+                  className="btn-icon"
+                  onClick={() => void download(r)}
+                  aria-label={`Download original ${r.filename}`}
+                  title="Download the original file"
+                >
+                  <Download className="h-4 w-4" aria-hidden />
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-icon"

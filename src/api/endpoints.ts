@@ -250,6 +250,18 @@ export const updateAccount = (id: string, body: Record<string, unknown>) =>
 
 export const deleteAccount = (id: string) => del<{ ok: boolean }>(`/accounts/${id}`);
 
+/** Add or replace (by filename) one resume: extracted text is stored on the profile, the original file in S3. */
+export const uploadAccountResume = (accountId: string, file: File, markdown: string) => {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('markdown', markdown);
+  return apiFetch<Record<string, unknown>>(`/accounts/${accountId}/resumes`, { method: 'POST', body: form, timeoutMs: 120_000 });
+};
+
+/** Short-lived download link for a resume's original file (404 when only the text is stored). */
+export const getAccountResumeFileUrl = (accountId: string, resumeId: string) =>
+  apiFetch<{ url: string }>(`/accounts/${accountId}/resumes/${resumeId}/file`);
+
 // ---------- transactions ----------
 
 export interface TransactionUserTotal {
@@ -1542,6 +1554,8 @@ export interface JobApplyRun {
   finishedAt?: string | null;
   error?: string | null;
   notes?: string[];
+  /** When MongoDB deletes this run and its rows (60 days after upload). */
+  expiresAt?: string | null;
   selection: { accountId: string; resumeIds: string[] }[];
   /** Only on GET /job-applies/runs/{id}. */
   profiles?: JobApplyProfile[];

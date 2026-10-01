@@ -91,6 +91,9 @@ function ScoreCard({
           </tbody>
         </table>
 
+        {score.terms.length === 0 && (
+          <p className="hint">Term-by-term detail is kept only for each profile's best resume.</p>
+        )}
         {tiers.map((tier) => {
           const hits = score.terms.filter((h) => h.tier === tier);
           return (

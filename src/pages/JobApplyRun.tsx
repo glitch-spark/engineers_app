@@ -215,6 +215,9 @@ export default function JobApplyRun() {
           <div className="flex gap-1"><dt className="text-zinc-500">Excluded</dt><dd className="font-medium tabular-nums">{run.counts.excluded}</dd></div>
           <div className="flex gap-1"><dt className="text-zinc-500">Failed</dt><dd className="font-medium tabular-nums">{run.counts.failed}</dd></div>
           <div className="flex gap-1"><dt className="text-zinc-500">Max age</dt><dd className="font-medium tabular-nums">{run.maxAgeDays} days</dd></div>
+          {run.expiresAt && (
+            <div className="flex gap-1"><dt className="text-zinc-500">Kept until</dt><dd className="font-medium">{formatDate(run.expiresAt)}</dd></div>
+          )}
         </dl>
         {run.error && <p className="w-full text-sm text-red-700 dark:text-red-400">Run stopped: {run.error}</p>}
         {(run.notes ?? []).map((n) => (
