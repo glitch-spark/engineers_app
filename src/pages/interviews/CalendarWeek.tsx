@@ -1,20 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PhoneCall, Plus } from 'lucide-react';
 import type { InterviewRoundRow } from '../../api/endpoints';
-import { layoutDayEvents, sameDay, visibleHourRange } from '../../lib/calendarLayout';
+import { layoutDayEvents, sameDay } from '../../lib/calendarLayout';
 import { stageLabel } from '../../lib/stageBadge';
 import { localDateKey, roundClass, timeText, type RoundEvent } from './calendarShared';
 import { toWall } from '../../lib/interviewTimezone';
 
 const SLOT_PX = 24; // one 30-minute row
 const HOUR_PX = SLOT_PX * 2;
+// The grid always spans the whole day and opens scrolled to this hour.
+const HOURS = { start: 0, end: 24 };
+const SCROLL_TO_HOUR = 7;
 
 function hourLabel(h: number): string {
   const d = new Date(2000, 0, 1, h);
   return d.toLocaleTimeString('en-US', { hour: 'numeric' });
 }
 
-/** Mon–Sun time grid; overlapping rounds sit side by side. */
+/** Mon–Sun 24-hour time grid; overlapping rounds sit side by side. */
 export default function CalendarWeek({
   days,
   events,
@@ -35,19 +38,30 @@ export default function CalendarWeek({
     const t = window.setInterval(() => setNow(toWall(new Date(), tz)), 60_000);
     return () => window.clearInterval(t);
   }, [tz]);
-  const hours = visibleHourRange(events);
+  const hours = HOURS;
   const slots = (hours.end - hours.start) * 2;
   const height = slots * SLOT_PX;
   const hasAllDay = events.some((e) => e.allDay);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  // Open at 7 AM, just below the sticky day headers.
+  useLayoutEffect(() => {
+    const box = scrollRef.current;
+    const grid = gridRef.current;
+    if (!box || !grid) return;
+    box.scrollTop = grid.offsetTop + (SCROLL_TO_HOUR - hours.start) * HOUR_PX - (headRef.current?.offsetHeight ?? 0);
+  }, [hours.start]);
+
   return (
-    <div className="panel overflow-x-auto">
+    <div ref={scrollRef} className="panel relative max-h-[calc(100vh-13rem)] min-h-[24rem] overflow-auto">
       <div className="grid min-w-[760px] grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]">
-        <div />
+        <div ref={headRef} className="sticky top-0 z-30 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950" />
         {days.map((d) => {
           const today = sameDay(d, now);
           return (
-            <div key={localDateKey(d)} className="flex items-center justify-between border-b border-l border-zinc-200 px-2 py-1.5 dark:border-zinc-800">
+            <div key={localDateKey(d)} className="sticky top-0 z-30 flex items-center justify-between border-b border-l border-zinc-200 bg-white px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-950">
               <span className={`text-xs ${today ? 'font-semibold text-sky-700 dark:text-sky-400' : 'text-muted'}`}>
                 {d.toLocaleDateString('en-US', { weekday: 'short' })} <span className="tabular-nums">{d.getDate()}</span>
               </span>
@@ -75,7 +89,7 @@ export default function CalendarWeek({
           </>
         )}
 
-        <div className="relative" style={{ height }}>
+        <div ref={gridRef} className="relative" style={{ height }}>
           {Array.from({ length: hours.end - hours.start }, (_, i) => (
             <div key={i} className="absolute right-1 -translate-y-1/2 text-[10px] text-muted" style={{ top: i * HOUR_PX }}>
               {i === 0 ? '' : hourLabel(hours.start + i)}

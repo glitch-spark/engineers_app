@@ -30,23 +30,6 @@ export function monthGrid(anchor: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => addDays(first, i));
 }
 
-/** Hour span to draw: the base range, stretched to fit every timed event. */
-export function visibleHourRange(
-  events: CalEvent[],
-  base: { start: number; end: number } = { start: 7, end: 21 },
-): { start: number; end: number } {
-  let start = base.start;
-  let end = base.end;
-  for (const e of events) {
-    if (e.allDay) continue;
-    start = Math.min(start, e.start.getHours());
-    const endHour = e.end.getHours() + (e.end.getMinutes() > 0 ? 1 : 0);
-    // An event ending at midnight the next day ends at 24.
-    end = Math.max(end, e.end.getDate() !== e.start.getDate() ? 24 : endHour);
-  }
-  return { start: Math.max(0, start), end: Math.min(24, end) };
-}
-
 /**
  * Side-by-side columns for overlapping events of one day. Events that only
  * touch (a.end == b.start) do not overlap. `cols` is the column count of the

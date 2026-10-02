@@ -628,8 +628,6 @@ export interface InterviewCaller {
   callerName?: string;
   /** Round start (UTC ISO). */
   startsAt?: string | null;
-  /** Display time zone for Slack. */
-  timezone?: string | null;
   method?: CallerMethod | null;
   methodValue?: string;
   coworkerIds?: string[];
@@ -640,7 +638,6 @@ export interface InterviewCaller {
 export interface CallerInput {
   enabled: boolean;
   callerName?: string;
-  timezone?: string;
   method?: string;
   methodValue?: string;
   coworkerIds?: string[];
