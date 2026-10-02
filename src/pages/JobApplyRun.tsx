@@ -2,9 +2,9 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, FileSpreadsheet, Keyboard, Loader2, Sparkles, Square } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Square, X } from 'lucide-react';
 import * as api from '../api/endpoints';
-import type { JobApplyAppliedFilter, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
+import type { JobApplyAppliedFilter, JobApplyMarkRef, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import RowDetail from '../components/jobApplies/RowDetail';
 import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
+import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import RunSummary from '../components/jobApplies/RunSummary';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import Segmented from '../components/jobApplies/Segmented';
@@ -37,7 +38,7 @@ const SHORTCUTS: [string, string][] = [
   ['t', 'Tailor a resume for every profile on this job that doesn’t have one'],
   ['d', 'Download the first ready tailored PDF, otherwise the top uploaded PDF'],
   ['1 – 9', 'Toggle “applied” for suggestion 1–9'],
-  ['a', 'Mark applied with the first ready tailored resume, otherwise the top uploaded one, and go to the next job'],
+  ['a', 'Mark the job applied for every profile with a resume ready (tailored, else the matching upload), and go to the next job'],
   ['x', 'Select / unselect the job (for bulk marking)'],
   ['Enter', 'Show / hide the score breakdown'],
   ['?', 'Show this list'],
@@ -225,7 +226,12 @@ export default function JobApplyRun() {
               const marks = applied
                 ? [...r.appliedResumes, { ...file, at: new Date().toISOString() }]
                 : r.appliedResumes.filter((m) => !sameFile(m, file));
-              return { ...r, applied: marks.length > 0, appliedResumes: marks };
+              const stillMarked = marks.some((m) => m.accountId === file.accountId);
+              const applications = r.applications.map((a) =>
+                a.accountId !== file.accountId ? a : { ...a, state: stillMarked ? ('applied' as const) : ('ready' as const) },
+              );
+              const done = applications.length ? applications.every((a) => a.state === 'applied') : marks.length > 0;
+              return { ...r, applied: done, appliedResumes: marks, applications };
             }),
           },
         { revalidate: false },
@@ -237,6 +243,7 @@ export default function JobApplyRun() {
       );
       try {
         await api.setJobApplyResumeApplied(row._id, { ...file, applied });
+        void mutateRun();
         if (applied && undo) {
           toast(
             (t) => (
@@ -351,7 +358,35 @@ export default function JobApplyRun() {
       return next;
     });
 
-  const bulkMarkTop = async (scope: 'selected' | 'all') => {
+  const undoToast = (text: string, marks: JobApplyMarkRef[]) =>
+    toast(
+      (t) => (
+        <span className="flex items-center gap-3">
+          <span>{text}</span>
+          <button
+            type="button"
+            className="font-semibold text-sky-700 underline dark:text-sky-400"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                await api.unmarkJobApplied(runId, marks);
+                await Promise.all([mutateRows(), mutateRun()]);
+              } catch (err) {
+                notify.error(err, 'Could not undo');
+              }
+            }}
+          >
+            Undo
+          </button>
+        </span>
+      ),
+      { duration: 8000, style: { fontSize: '0.875rem' } },
+    );
+
+  const applicationsText = (n: number) => `${n} application${n === 1 ? '' : 's'}`;
+
+  /** Mark every ready application applied: on all suggested jobs, or on the selected ones. */
+  const bulkMark = async (scope: 'selected' | 'all') => {
     setBusy('bulk');
     setConfirmAll(false);
     try {
@@ -362,40 +397,48 @@ export default function JobApplyRun() {
       setSelected(new Set());
       await Promise.all([mutateRows(), mutateRun()]);
       if (!res.marked) {
-        notify.info('Nothing to mark: those jobs are already applied or have no suggestion.');
+        notify.info('Nothing to mark: no ready application on those jobs (already applied, still tailoring, or no resume).');
         return;
       }
-      toast(
-        (t) => (
-          <span className="flex items-center gap-3">
-            <span>
-              Marked {res.marked} job{res.marked === 1 ? '' : 's'} applied
-            </span>
-            <button
-              type="button"
-              className="font-semibold text-sky-700 underline dark:text-sky-400"
-              onClick={async () => {
-                toast.dismiss(t.id);
-                try {
-                  await api.unmarkJobApplied(runId, res.marks);
-                  await Promise.all([mutateRows(), mutateRun()]);
-                } catch (err) {
-                  notify.error(err, 'Could not undo');
-                }
-              }}
-            >
-              Undo
-            </button>
-          </span>
-        ),
-        { duration: 8000, style: { fontSize: '0.875rem' } },
-      );
+      undoToast(`Marked ${applicationsText(res.marked)} applied`, res.marks);
     } catch (err) {
       notify.error(err, 'Could not mark the jobs applied');
     } finally {
       setBusy(null);
     }
   };
+
+  /** `a`: mark this job's ready applications applied, at once on screen, then save. */
+  const markRow = useCallback(
+    async (row: JobApplyRow) => {
+      const ready = row.applications.filter((a) => a.state === 'ready' && (!accountId || a.accountId === accountId));
+      if (!ready.length) return;
+      const readyIds = new Set(ready.map((a) => a.accountId));
+      const patchRow = (fn: (r: JobApplyRow) => JobApplyRow) =>
+        mutateRows((prev: RowsPage | undefined) => prev && { ...prev, rows: prev.rows.map((r) => (r._id === row._id ? fn(r) : r)) }, {
+          revalidate: false,
+        });
+      await patchRow((r) => {
+        const applications = r.applications.map((a) => (readyIds.has(a.accountId) ? { ...a, state: 'applied' as const } : a));
+        return { ...r, applications, applied: applications.every((a) => a.state === 'applied') };
+      });
+      try {
+        const res = await api.markTopJobApplied(runId, { rowIds: [row._id], accountId });
+        const at = new Date().toISOString();
+        await patchRow((r) => ({ ...r, appliedResumes: [...r.appliedResumes, ...res.marks.map((m) => ({ ...m, at }))] }));
+        void mutateRun();
+        if (res.marked) {
+          const who = res.marks.map((m) => profileNames[m.accountId] ?? 'Profile').join(', ');
+          undoToast(`Applied: ${row.title || 'job'} · ${who}`, res.marks);
+        }
+      } catch (err) {
+        notify.error(err, 'Could not save — reloaded the list');
+        void mutateRows();
+        void mutateRun();
+      }
+    },
+    [accountId, mutateRows, mutateRun, profileNames, runId],
+  );
 
   // Keyboard flow for fast applying (see SHORTCUTS).
   useEffect(() => {
@@ -428,12 +471,8 @@ export default function JobApplyRun() {
       else if (key === 'x') toggleSelected(row._id);
       else if (e.key === 'Enter') setExpanded((cur) => (cur === row._id ? null : row._id));
       else if (key === 'a') {
-        const t = firstReadyTailored(row);
-        if (row.applied) {
-          // Already applied with something: `a` just moves on (no second application / bid).
-        } else if (t) {
-          void toggleFile(row, { accountId: t.accountId, tailoredJobId: t.jobId }, true, `Tailored · ${profileNames[t.accountId] ?? 'Profile'}`);
-        } else if (row.suggestions[0]) void toggleApplied(row, row.suggestions[0], true);
+        // Every profile with a resume ready; ones already applied are left (no second application / bid).
+        void markRow(row);
         move(1);
       } else if (/^[1-9]$/.test(e.key)) {
         const s = row.suggestions[Number(e.key) - 1];
@@ -615,43 +654,37 @@ export default function JobApplyRun() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-            {pagination ? pagination.total : '…'}{' '}
-            {appliedFilter === 'no' ? 'to apply to' : appliedFilter === 'yes' ? 'applied' : 'jobs'}
-          </p>
-          {selected.size > 0 ? (
-            <button type="button" className="btn btn-sm" onClick={() => void bulkMarkTop('selected')} disabled={busy !== null}>
+      {run.applications && (
+        <ApplyWorkflow
+          counts={run.applications}
+          profileFilter={accountId ? { accountId, name: profileNames[accountId] ?? 'this profile' } : undefined}
+          busy={busy !== null}
+          onTailor={openTailorAll}
+          onExport={() => setShowExport(true)}
+          onMark={() => setConfirmAll(true)}
+        />
+      )}
+
+      <div className="flex min-h-[2rem] flex-wrap items-center justify-between gap-3">
+        {selected.size > 0 ? (
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Selected jobs">
+            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{selected.size} selected</span>
+            <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
               {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
-              Mark {selected.size} selected applied
+              Mark applied
             </button>
-          ) : (
-            appliedFilter === 'no' &&
-            (run.toApply ?? 0) > 0 && (
-              <button type="button" className="btn btn-sm" onClick={() => setConfirmAll(true)} disabled={busy !== null}>
-                {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
-                Mark all {accountId ? '' : `${run.toApply} `}as applied
-              </button>
-            )
-          )}
-        </div>
-        {appliedFilter === 'no' && (run.toApply ?? 0) > 0 && selected.size === 0 && (
-          <button type="button" className="btn-outline btn-sm" onClick={openTailorAll} disabled={busy !== null}>
-            <Sparkles className="h-4 w-4" aria-hidden />
-            Tailor all to apply
-          </button>
+            <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
+              <X className="h-4 w-4" aria-hidden />
+              Clear
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+            {pagination ? pagination.total : '…'} job{pagination?.total === 1 ? '' : 's'}
+            {appliedFilter === 'no' ? ' to apply to' : appliedFilter === 'yes' ? ' applied' : ''}
+          </p>
         )}
-        <button type="button" className="btn-outline btn-sm" onClick={() => setShowExport(true)} disabled={busy !== null}>
-          <FileSpreadsheet className="h-4 w-4" aria-hidden />
-          Export to Google Sheet
-        </button>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
-            Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for shortcuts
-          </button>
-          <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (top)" />
-        </div>
+        <Pagination info={pagination} onPage={goToPage} label="Pages (top)" />
       </div>
 
       <div className="table-wrap">
@@ -793,27 +826,41 @@ export default function JobApplyRun() {
         )}
       </div>
 
-      <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (bottom)" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (bottom)" />
+        <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
+          Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for keyboard shortcuts
+        </button>
+      </div>
 
       <ConfirmDialog
         open={confirmAll}
-        title="Mark all as applied?"
-        body={
-          <p>
-            The top suggested resume{accountId ? ` of ${profileNames[accountId] ?? 'this profile'}` : ''} will be marked applied for{' '}
-            {accountId ? 'every job still to apply to' : `${run.toApply ?? 0} job${run.toApply === 1 ? '' : 's'}`}, across all pages.
-            You can undo it right after.
-          </p>
-        }
-        confirmLabel="Mark all applied"
+        title="Mark as applied?"
+        body={(() => {
+          const c = run.applications;
+          const ready = accountId ? c?.byProfile.find((p) => p.accountId === accountId)?.ready ?? 0 : c?.ready ?? 0;
+          const left = accountId ? 0 : (c?.tailoring ?? 0) + (c?.needsResume ?? 0);
+          return (
+            <div className="space-y-2">
+              <p>
+                <span className="font-semibold">{applicationsText(ready)}</span>
+                {accountId ? ` of ${profileNames[accountId] ?? 'this profile'}` : ''} will be marked applied, across all pages: each
+                profile with its tailored resume when it’s ready, otherwise its matching uploaded resume.
+              </p>
+              {left > 0 && <p className="hint">{applicationsText(left)} still tailoring or without a resume are left as they are.</p>}
+              <p className="hint">You can undo it right after.</p>
+            </div>
+          );
+        })()}
+        confirmLabel="Mark applied"
         busy={busy === 'bulk'}
-        onConfirm={() => void bulkMarkTop('all')}
+        onConfirm={() => void bulkMark('all')}
         onCancel={() => setConfirmAll(false)}
       />
 
       <ConfirmDialog
         open={confirmTailorAll}
-        title="Tailor resumes for the jobs to apply to"
+        title="Tailor resumes"
         body={
           <div className="space-y-4">
             <fieldset className="space-y-1.5">
@@ -869,7 +916,10 @@ export default function JobApplyRun() {
         open={showExport}
         runId={runId}
         onClose={() => setShowExport(false)}
-        onExported={() => void mutateRows()}
+        onExported={() => {
+          void mutateRows();
+          void mutateRun();
+        }}
       />
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)} title="Keyboard shortcuts" size="sm">

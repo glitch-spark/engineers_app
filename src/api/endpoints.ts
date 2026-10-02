@@ -1562,8 +1562,10 @@ export interface JobApplyRun {
   appliedInRun?: number;
   /** Only when requested with appliedSince: applications since that moment (e.g. local midnight). */
   appliedSince?: number;
-  /** Only on GET /job-applies/runs/{id}: suggested jobs not applied to yet (here or in earlier runs). */
+  /** Only on GET /job-applies/runs/{id}: suggested jobs with at least one application still to go. */
   toApply?: number;
+  /** Only on GET /job-applies/runs/{id}: applications (job × profile) by state, and what's left per profile. */
+  applications?: JobApplyApplicationCounts;
   /** Only on GET /job-applies/runs/{id}: jobs in the Excluded tab (failed a check, or no profile can take them). */
   excludedCount?: number;
   /** Only on GET /job-applies/runs/{id}: this run's tailored resumes by status. */
@@ -1573,6 +1575,27 @@ export interface JobApplyRun {
   profiles?: JobApplyProfile[];
   /** Only on GET /job-applies/runs/{id}: each selected resume with its parse-health badge. */
   resumes?: JobApplyResumeHealth[];
+}
+
+export type JobApplyApplicationState = 'applied' | 'ready' | 'tailoring' | 'needsResume';
+
+/** One profile applying to one job. */
+export interface JobApplyApplication {
+  accountId: string;
+  state: JobApplyApplicationState;
+}
+
+export interface JobApplyApplicationCounts {
+  /** Jobs with at least one application to go. */
+  jobs: number;
+  /** Applications not applied yet (ready + tailoring + needsResume). */
+  toGo: number;
+  applied: number;
+  /** Has a resume to apply with: the tailored one when done, else the matching uploaded one. */
+  ready: number;
+  tailoring: number;
+  needsResume: number;
+  byProfile: { accountId: string; name: string; toGo: number; ready: number }[];
 }
 
 export interface JobApplyResumeHealth {
@@ -1645,7 +1668,10 @@ export interface JobApplyRow {
   suggestions: JobApplySuggestion[];
   /** Resumes marked applied for this job in this run. */
   appliedResumes: JobApplyAppliedMark[];
+  /** Every application for this job is applied (or, with none, something was marked). */
   applied: boolean;
+  /** One per profile this job is for (job × profile), with its state. */
+  applications: JobApplyApplication[];
   /** Applications to this URL recorded in earlier runs. */
   previouslyApplied: JobApplyPreviousApplication[];
   /** Tailored resumes for this job, at most one per profile. */

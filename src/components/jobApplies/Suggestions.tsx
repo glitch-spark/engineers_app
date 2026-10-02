@@ -77,6 +77,7 @@ export default function Suggestions({
     return !t || t.status === 'failed';
   });
   const previous = row.previouslyApplied[0];
+  const appliedCount = row.applications.filter((a) => a.state === 'applied').length;
 
   if (profiles.length === 0) {
     return <p className="hint">No profile can take this job (see Flags).</p>;
@@ -91,6 +92,12 @@ export default function Suggestions({
         >
           Already applied {formatDate(previous.appliedAt)} · {previous.profileName}
           {row.previouslyApplied.length > 1 ? ` +${row.previouslyApplied.length - 1}` : ''}
+        </p>
+      )}
+
+      {row.applications.length > 1 && appliedCount > 0 && (
+        <p className={appliedCount === row.applications.length ? 'text-xs font-medium text-emerald-700 dark:text-emerald-400' : 'text-xs text-zinc-500'}>
+          {appliedCount} of {row.applications.length} profiles applied
         </p>
       )}
 

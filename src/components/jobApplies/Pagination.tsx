@@ -21,8 +21,9 @@ export default function Pagination({
 }: {
   info: PaginationInfo | undefined;
   onPage: (page: number) => void;
-  pageSize: number;
-  onPageSize: (size: number) => void;
+  /** Shows the per-page picker when given. */
+  pageSize?: number;
+  onPageSize?: (size: number) => void;
   /** Distinguishes the top and bottom bars for screen readers. */
   label: string;
 }) {
@@ -62,6 +63,7 @@ export default function Pagination({
           </span>
         </div>
       )}
+      {onPageSize && (
       <label className="flex items-center gap-1 whitespace-nowrap text-xs text-zinc-500">
         <select
           className="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-6 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
@@ -77,6 +79,7 @@ export default function Pagination({
         </select>
         / page
       </label>
+      )}
     </nav>
   );
 }

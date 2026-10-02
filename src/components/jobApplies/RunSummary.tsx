@@ -41,7 +41,16 @@ export default function RunSummary({
     <section className="card-compact space-y-3" aria-label="Run summary">
       <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
         <dl className="flex flex-wrap gap-x-8 gap-y-4">
-          <Stat label="To apply" value={run.toApply ?? 0} tone="primary" />
+          {run.applications ? (
+            <Stat
+              label="Applications to go"
+              value={run.applications.toGo}
+              tone="primary"
+              sub={`on ${run.applications.jobs} job${run.applications.jobs === 1 ? '' : 's'}`}
+            />
+          ) : (
+            <Stat label="To apply" value={run.toApply ?? 0} tone="primary" />
+          )}
           <Stat label="Applied today" value={run.appliedSince ?? 0} tone="good" />
           <Stat label="This run" value={run.appliedInRun ?? 0} />
           <Stat
