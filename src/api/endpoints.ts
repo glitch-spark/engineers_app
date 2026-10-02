@@ -250,6 +250,18 @@ export const updateAccount = (id: string, body: Record<string, unknown>) =>
 
 export const deleteAccount = (id: string) => del<{ ok: boolean }>(`/accounts/${id}`);
 
+/** Add or replace (by filename) one resume: extracted text is stored on the profile, the original file in S3. */
+export const uploadAccountResume = (accountId: string, file: File, markdown: string) => {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('markdown', markdown);
+  return apiFetch<Record<string, unknown>>(`/accounts/${accountId}/resumes`, { method: 'POST', body: form, timeoutMs: 120_000 });
+};
+
+/** Short-lived download link for a resume's original file (404 when only the text is stored). */
+export const getAccountResumeFileUrl = (accountId: string, resumeId: string) =>
+  apiFetch<{ url: string }>(`/accounts/${accountId}/resumes/${resumeId}/file`);
+
 // ---------- transactions ----------
 
 export interface TransactionUserTotal {
@@ -1277,6 +1289,8 @@ export type ResumeJobStep =
 
 export interface ResumeJob {
   _id: string;
+  /** Where it was queued from; Job Applies tailoring is tagged and not auto-downloaded. */
+  source?: 'generator' | 'job_applies';
   userId: string;
   accountId: string;
   profileName: string;
@@ -1496,3 +1510,348 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
   const filename = _filenameFromCD(res.headers.get('Content-Disposition'), 'resumes.zip');
   _saveBlob(blob, filename);
 }
+
+// ---------- job applies ----------
+
+export type JobApplyRunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+export type JobApplyRowStatus =
+  | 'pending'
+  | 'fetched'
+  | 'extracted'
+  | 'scored'
+  | 'excluded'
+  | 'fetch_failed'
+  | 'llm_failed';
+export type JobApplyView = 'all' | 'suggested' | 'excluded' | 'failed';
+export type ScoreBand = 'strong' | 'good' | 'fair' | 'weak';
+
+export interface JobApplyCounts {
+  total: number;
+  fetched: number;
+  extracted: number;
+  scored: number;
+  excluded: number;
+  failed: number;
+}
+
+export interface JobApplyProfile {
+  accountId: string;
+  name: string;
+  country?: string | null;
+  region?: string | null;
+}
+
+export interface JobApplyRun {
+  _id: string;
+  /** Uploaded file name, or the Google Sheet's title. */
+  fileName: string;
+  /** Google Sheets link when the run came from one. */
+  sourceUrl?: string | null;
+  status: JobApplyRunStatus;
+  threshold: number;
+  maxAgeDays: number;
+  counts: JobApplyCounts;
+  suggested: number;
+  createdAt: string;
+  finishedAt?: string | null;
+  error?: string | null;
+  notes?: string[];
+  /** When this run's results are deleted (3 days after upload). Applied history is kept permanently. */
+  expiresAt?: string | null;
+  /** Only on GET /job-applies/runs/{id}: resumes marked applied in this run. */
+  appliedInRun?: number;
+  /** Only when requested with appliedSince: applications since that moment (e.g. local midnight). */
+  appliedSince?: number;
+  /** Only on GET /job-applies/runs/{id}: suggested jobs with at least one application still to go. */
+  toApply?: number;
+  /** Only on GET /job-applies/runs/{id}: applications (job × profile) by state, and what's left per profile. */
+  applications?: JobApplyApplicationCounts;
+  /** Only on GET /job-applies/runs/{id}: jobs in the Excluded tab (failed a check, or no profile can take them). */
+  excludedCount?: number;
+  /** Only on GET /job-applies/runs/{id}: this run's tailored resumes by status. */
+  tailoring?: { queued: number; inProgress: number; ready: number; failed: number };
+  selection: { accountId: string; resumeIds: string[] }[];
+  /** Only on GET /job-applies/runs/{id}. */
+  profiles?: JobApplyProfile[];
+  /** Only on GET /job-applies/runs/{id}: each selected resume with its parse-health badge. */
+  resumes?: JobApplyResumeHealth[];
+}
+
+export type JobApplyApplicationState = 'applied' | 'ready' | 'tailoring' | 'needsResume';
+
+/** One profile applying to one job. */
+export interface JobApplyApplication {
+  accountId: string;
+  state: JobApplyApplicationState;
+}
+
+export interface JobApplyApplicationCounts {
+  /** Jobs with at least one application to go. */
+  jobs: number;
+  /** Applications not applied yet (ready + tailoring + needsResume). */
+  toGo: number;
+  applied: number;
+  /** Has a resume to apply with: the tailored one when done, else the matching uploaded one. */
+  ready: number;
+  tailoring: number;
+  needsResume: number;
+  byProfile: { accountId: string; name: string; toGo: number; ready: number }[];
+}
+
+export interface JobApplyResumeHealth {
+  accountId: string;
+  resumeId: string;
+  filename: string;
+  health: { score: number; issues: string[] };
+  /** The original file is stored (S3) and can be downloaded. */
+  hasFile?: boolean;
+}
+
+/** The file applied with: an uploaded resume (resumeId) or the job's tailored resume (tailoredJobId). */
+export interface JobApplyAppliedMark {
+  accountId: string;
+  resumeId?: string | null;
+  tailoredJobId?: string | null;
+  at: string | null;
+}
+
+export interface JobApplyTailored {
+  jobId: string;
+  accountId: string;
+  status: ResumeJobStatus;
+  step: ResumeJobStep;
+  hasPdf: boolean;
+  error?: string | null;
+}
+
+export interface JobApplyPreviousApplication {
+  appliedAt: string | null;
+  profileName: string;
+  filename: string;
+  accountId?: string | null;
+}
+
+export type JobApplyAppliedFilter = 'any' | 'yes' | 'no';
+
+export interface JobApplyGate {
+  name: string;
+  result: 'pass' | 'fail' | 'unknown';
+  reason: string;
+}
+
+export interface JobApplySuggestion {
+  accountId: string;
+  resumeId: string;
+  filename: string;
+  total: number;
+  band: ScoreBand;
+  knockouts: string[];
+}
+
+export interface JobApplyRow {
+  _id: string;
+  rowIndex: number;
+  url: string | null;
+  title: string;
+  company: string;
+  status: JobApplyRowStatus;
+  statusReason?: string | null;
+  jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | null;
+  postedDate?: string | null;
+  workMode?: 'remote' | 'hybrid' | 'onsite' | 'unknown' | null;
+  allowedLocations: { kind: 'country' | 'region'; value: string }[];
+  timezoneNote?: string | null;
+  extractionSource?: 'llm' | 'rules' | 'cache' | null;
+  gates: JobApplyGate[];
+  profileGates: { accountId: string; gates: JobApplyGate[] }[];
+  topScore: number | null;
+  suggestions: JobApplySuggestion[];
+  /** Resumes marked applied for this job in this run. */
+  appliedResumes: JobApplyAppliedMark[];
+  /** Every application for this job is applied (or, with none, something was marked). */
+  applied: boolean;
+  /** One per profile this job is for (job × profile), with its state. */
+  applications: JobApplyApplication[];
+  /** Applications to this URL recorded in earlier runs. */
+  previouslyApplied: JobApplyPreviousApplication[];
+  /** Tailored resumes for this job, at most one per profile. */
+  tailored: JobApplyTailored[];
+  /** Profiles this job is open to (passes their location / work-authorization checks). */
+  openProfiles: string[];
+  /** Profiles whose row for this job is already in the exported Google Sheet. */
+  exportedProfiles: string[];
+  /** Profiles without uploaded resumes this job is open to (apply with a tailored resume). */
+  tailorOnly: string[];
+}
+
+export interface JobApplyComponent {
+  score: number;
+  weight: number;
+  detail: string;
+}
+
+export interface JobApplyTermHit {
+  term: string;
+  tier: 'required' | 'core' | 'mentioned' | 'preferred' | 'context';
+  weight: number;
+  credit: number;
+  match: 'exact' | 'variant' | 'fuzzy' | 'missing';
+  where: 'recent' | 'skills' | 'old' | 'none';
+}
+
+export interface JobApplyResumeScore extends JobApplySuggestion {
+  components: Record<string, JobApplyComponent>;
+  terms: JobApplyTermHit[];
+  uploadedAt?: string | null;
+}
+
+export interface JobApplyRowDetail extends JobApplyRow {
+  scores: JobApplyResumeScore[];
+  extraction: Record<string, unknown> | null;
+  jdText: string | null;
+}
+
+/** The job sheet: an uploaded .xlsx/.csv, or a Google Sheets link shared as "Anyone with the link". */
+export type JobApplySource = { file: File } | { sheetUrl: string };
+
+export const createJobApplyRun = (
+  source: JobApplySource,
+  selection: { accountId: string; resumeIds: string[] }[],
+  threshold: number,
+  maxAgeDays: number,
+) => {
+  const form = new FormData();
+  if ('file' in source) form.append('file', source.file);
+  else form.append('sheetUrl', source.sheetUrl);
+  form.append('selection', JSON.stringify(selection));
+  form.append('threshold', String(threshold));
+  form.append('maxAgeDays', String(maxAgeDays));
+  return apiFetch<{ runId: string; status: JobApplyRunStatus; total: number }>('/job-applies/runs', {
+    method: 'POST',
+    body: form,
+    timeoutMs: 120_000,
+  });
+};
+
+export const listJobApplyRuns = () => apiFetch<{ runs: JobApplyRun[] }>('/job-applies/runs');
+
+export const getJobApplyRun = (id: string, appliedSince?: string) =>
+  apiFetch<JobApplyRun>(`/job-applies/runs/${id}${qs({ appliedSince })}`);
+
+export const listJobApplyRows = (
+  id: string,
+  params: {
+    view?: JobApplyView;
+    applied?: JobApplyAppliedFilter;
+    accountId?: string;
+    minScore?: number;
+    page?: number;
+    limit?: number;
+  } = {},
+) => apiFetch<{ rows: JobApplyRow[]; pagination: Pagination }>(`/job-applies/runs/${id}/rows${qs(params)}`);
+
+export const getJobApplyRow = (rowId: string) => apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}`);
+
+export const updateJobApplyRun = (id: string, body: { threshold: number }) =>
+  apiFetch<JobApplyRun>(`/job-applies/runs/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const cancelJobApplyRun = (id: string) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/cancel`, {});
+
+export const retryJobApplyRun = (id: string) => postJSON<{ reset: number }>(`/job-applies/runs/${id}/retry-failed`, {});
+
+export const deleteJobApplyRun = (id: string) => del<{ ok: boolean }>(`/job-applies/runs/${id}`);
+
+/** Mark or unmark one resume as applied for one job (also recorded in the permanent applied log). */
+export const setJobApplyResumeApplied = (
+  rowId: string,
+  body: { accountId: string; resumeId?: string; tailoredJobId?: string; applied: boolean },
+) =>
+  apiFetch<{ _id: string; appliedResumes: JobApplyAppliedMark[] }>(`/job-applies/rows/${rowId}/applied`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+
+export interface JobApplyMarkRef {
+  rowId: string;
+  accountId: string;
+  resumeId?: string;
+  tailoredJobId?: string;
+}
+
+/**
+ * Mark the top suggestion applied for the given jobs, or with `all` for every job still to apply to (all pages;
+ * `accountId` limits it to that profile's best resume). Returns the marks made so they can be undone.
+ */
+export const markTopJobApplied = (runId: string, body: { rowIds?: string[]; all?: boolean; accountId?: string }) =>
+  postJSON<{ marked: number; marks: JobApplyMarkRef[] }>(`/job-applies/runs/${runId}/mark-top-applied`, body);
+
+/** Undo a bulk mark: removes exactly these marks. */
+export const unmarkJobApplied = (runId: string, marks: JobApplyMarkRef[]) =>
+  postJSON<{ unmarked: number }>(`/job-applies/runs/${runId}/unmark-applied`, { marks });
+
+/** Queue a tailored resume for one job (default: the best-scoring profile). */
+export const tailorJobApplyRow = (rowId: string, body: { accountId?: string; coverLetter?: boolean } = {}) =>
+  postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
+
+/**
+ * Queue a tailored resume for each job still to apply to × each chosen profile it's open to (skipping ones that
+ * already have one), up to the daily cap. `dryRun` only returns the counts.
+ */
+export const tailorAllJobApplies = (
+  runId: string,
+  body: { accountIds?: string[]; coverLetter?: boolean; dryRun?: boolean } = {},
+) =>
+  postJSON<{ queued: number; skippedCap: number; skipped: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
+
+/** Download a generated (tailored) resume PDF by its generation job id. */
+export async function downloadTailoredResume(jobId: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${BASE_URL}/resume/jobs/${jobId}/download?format=pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try { const data = await res.json(); message = data.error || data.detail || message; } catch { /* ignore */ }
+    throw new Error(message);
+  }
+  _saveBlob(await res.blob(), filename);
+}
+
+export interface JobSheetPreview {
+  title: string;
+  total: number;
+  withDescription: number;
+  urlOnly: number;
+}
+
+/** Read a job sheet (link or file) without starting a run: job counts, or a 400 explaining the problem. */
+export const previewJobSheet = (source: JobApplySource) => {
+  const form = new FormData();
+  if ('file' in source) form.append('file', source.file);
+  else form.append('sheetUrl', source.sheetUrl);
+  return apiFetch<JobSheetPreview>('/job-applies/sheet-preview', { method: 'POST', body: form, timeoutMs: 60_000 });
+};
+
+export interface JobApplyExportResult {
+  /** Rows that would be / were added. */
+  ready: number;
+  added: number;
+  /** Tailored resumes still generating (export them later). */
+  pending: number;
+  /** Open to a profile with nothing to apply with yet (tailor first). */
+  needsResume: number;
+  alreadyExported: number;
+  /** Matching uploaded resumes whose original PDF isn't stored (no link possible). */
+  noFile: number;
+  sheetTitle: string;
+  tab: string;
+  sheetUrl: string;
+  serviceAccount: string | null;
+}
+
+/**
+ * Append the run's jobs still to apply to (one row per job × profile, with a resume download link) to today's tab
+ * of the shared Google Sheet. Without `sheetUrl` the last one used is reused; `dryRun` only counts and checks access.
+ */
+export const exportJobApplySheet = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>
+  postJSON<JobApplyExportResult>(`/job-applies/runs/${runId}/export-sheet`, body, { timeoutMs: 120_000 });

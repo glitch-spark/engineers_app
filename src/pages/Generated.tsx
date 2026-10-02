@@ -173,8 +173,10 @@ export default function GeneratedResumesPage() {
     for (const j of data.jobs) {
       if (j.status === 'completed' && !seen.has(j._id)) {
         seen.add(j._id);
-        messages.push(`${j.companyName} resume completed${j.hasPdf ? ', downloading' : ''}.`);
-        if (j.hasPdf) {
+        // Job Applies tailors in batches; those are downloaded from the Job Applies table, not here.
+        const autoDownload = j.hasPdf && j.source !== 'job_applies';
+        messages.push(`${j.companyName} resume completed${autoDownload ? ', downloading' : ''}.`);
+        if (autoDownload) {
           api.downloadResumeJob(j).catch((err) =>
             notify.error(err, `Auto-download failed for ${j.companyName}`)
           );
@@ -529,6 +531,11 @@ function JobRow({
               </a>
             ) : (
               job.companyName
+            )}
+            {job.source === 'job_applies' && (
+              <span className="badge-neutral ml-2 align-middle text-[10px]" title="Tailored from a Job Applies run">
+                Job Applies
+              </span>
             )}
           </div>
           {job.matchSnippet && (
