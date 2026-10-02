@@ -25,7 +25,6 @@ export type RoundFormState = {
   transcript: string;
   callerEnabled: boolean;
   callerName: string;
-  callerTimezone: string;
   callerMethod: string;
   callerMethodValue: string;
   callerCoworkerIds: string[];
@@ -55,7 +54,6 @@ export function blankRound(
     transcript: '',
     callerEnabled: false,
     callerName: '',
-    callerTimezone: '',
     callerMethod: '',
     callerMethodValue: '',
     callerCoworkerIds: [],
@@ -79,7 +77,6 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     transcript: e.transcript || '',
     callerEnabled: !!caller?.enabled,
     callerName: caller?.callerName && caller.callerName !== 'TBD' ? caller.callerName : '',
-    callerTimezone: caller?.timezone || '',
     callerMethod: caller?.method || '',
     callerMethodValue: caller?.methodValue || '',
     callerCoworkerIds: caller?.coworkerIds ?? [],
@@ -94,7 +91,6 @@ export function roundPayload(r: RoundFormState, tz: string = browserZone()): Rou
     ? {
       enabled: true,
       callerName: r.callerName.trim(),
-      timezone: r.callerTimezone || undefined,
       method: r.callerMethod || undefined,
       methodValue: r.callerMethodValue.trim(),
       coworkerIds: r.callerCoworkerIds,
