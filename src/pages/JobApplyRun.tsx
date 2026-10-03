@@ -867,7 +867,12 @@ export default function JobApplyRun() {
                           run.screenedAt &&
                           !run.autoStart && (
                             <p className="hint truncate">
-                              {[...new Set([...(run.assignments[row.groupKey] ?? []), ...(run.assignments['*'] ?? [])])]
+                              {[
+                                ...new Set([
+                                  ...(row.markets?.length ? row.markets : ['none']).flatMap((m) => run.assignments[m] ?? []),
+                                  ...(run.assignments['*'] ?? []),
+                                ]),
+                              ]
                                 .map((id) => profileNames[id])
                                 .filter(Boolean)
                                 .join(', ')}

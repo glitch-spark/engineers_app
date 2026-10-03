@@ -8,7 +8,7 @@ import { countryFlag } from '../../lib/countries';
 import { notify } from '../../lib/notify';
 import BucketJobs from './BucketJobs';
 import { ResumeChecklist, selectionFor, toProfile, usable, type ProfileOption } from './ProfilePicker';
-import { BUCKET_COLOR, BUCKET_LABEL, BUCKET_ORDER, locationLabel } from './format';
+import { BUCKET_COLOR, BUCKET_LABEL, BUCKET_ORDER, locationLabel, marketLabel } from './format';
 
 const PREFS_KEY = 'jobApplies.newRun';
 const AGE_OPTIONS = [7, 14, 30, 60, 90];
@@ -207,20 +207,24 @@ export default function ScreeningReport({
       </div>
 
       <div>
-        <h3 className="form-label">Apply with — by location</h3>
-        {report.groups.length === 0 ? (
+        <h3 className="form-label">Apply with — by candidate location</h3>
+        {report.worth === 0 && (
           <p className="hint">No jobs worth applying to. Open the buckets above to see why, or include jobs anyway.</p>
-        ) : (
+        )}
+        {(
+
           <ul className="mt-2 space-y-2">
             {report.groups.map((g) => (
               <li key={g.key} className="rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-700">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <p className="min-w-[12rem] text-sm">
-                    <span className="font-semibold text-zinc-900 dark:text-zinc-50">{locationLabel(g.key)}</span>
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-50">{marketLabel(g.key)}</span>
                     <span className="text-zinc-600 dark:text-zinc-400"> · {g.jobs} job{g.jobs === 1 ? '' : 's'}</span>
                     {g.check > 0 && <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">({g.check} need a check)</span>}
                   </p>
-                  {profiles.length === 0 ? (
+                  {g.jobs === 0 ? (
+                    <span className="hint">No jobs</span>
+                  ) : profiles.length === 0 ? (
                     <span className="hint">No profiles</span>
                   ) : (
                     <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -245,6 +249,12 @@ export default function ScreeningReport({
               </li>
             ))}
           </ul>
+        )}
+        {report.others.length > 0 && (
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">Other locations</span> (not scored):{' '}
+            {report.others.map((o) => `${locationLabel(o.key)} ${o.jobs}`).join(' · ')}
+          </p>
         )}
         {profiles.length === 0 && !readOnly && (
           <p className="hint mt-2">

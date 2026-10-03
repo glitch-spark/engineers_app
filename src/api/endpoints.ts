@@ -1600,7 +1600,8 @@ export type JobApplyScreenBucket =
   | 'read_failed'
   | 'clearance'
   | 'onsite'
-  | 'too_old';
+  | 'too_old'
+  | 'other_location';
 export type JobApplyView = 'all' | 'suggested' | 'excluded' | 'failed';
 export type ScoreBand = 'strong' | 'good' | 'fair' | 'weak';
 
@@ -1747,6 +1748,8 @@ export interface JobApplyRow {
   screen?: JobApplyScreenBucket | null;
   /** Normalised allowed locations, e.g. 'GB', 'EU+US', 'none'. */
   groupKey?: string | null;
+  /** Candidate markets the job is open to: 'US', 'UKEU', 'LATAM'. */
+  markets?: string[];
   forceInclude?: boolean;
   jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | null;
   postedDate?: string | null;
@@ -1848,6 +1851,7 @@ export const updateJobApplyRun = (id: string, body: { threshold?: number; maxAge
   apiFetch<JobApplyRun>(`/job-applies/runs/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 export interface JobApplyScreeningGroup {
+  /** Candidate market: 'US', 'UKEU', 'LATAM', or 'none' (no stated location). */
   key: string;
   jobs: number;
   /** Of `jobs`, how many need a check (no date, work mode or location not stated, or included anyway). */
@@ -1871,6 +1875,8 @@ export interface JobApplyScreening {
   buckets: Record<JobApplyScreenBucket, number>;
   maxAgeDays: number;
   groups: JobApplyScreeningGroup[];
+  /** Jobs open only to candidates outside the markets, per location group (counted, not scored). */
+  others: { key: string; jobs: number }[];
   profiles: JobApplyScreeningProfile[];
 }
 

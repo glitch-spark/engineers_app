@@ -43,6 +43,7 @@ export const BUCKET_ORDER: JobApplyScreenBucket[] = [
   'closed',
   'too_old',
   'not_fetched',
+  'other_location',
   'onsite',
   'clearance',
   'read_failed',
@@ -57,6 +58,7 @@ export const BUCKET_LABEL: Record<JobApplyScreenBucket, string> = {
   clearance: 'Clearance required',
   onsite: 'On-site / hybrid',
   too_old: 'Too old',
+  other_location: 'Other locations',
 };
 
 /** Bar colour per bucket (Tailwind background classes). */
@@ -69,7 +71,18 @@ export const BUCKET_COLOR: Record<JobApplyScreenBucket, string> = {
   clearance: 'bg-red-500',
   onsite: 'bg-red-300 dark:bg-red-700',
   too_old: 'bg-zinc-300 dark:bg-zinc-600',
+  other_location: 'bg-violet-300 dark:bg-violet-700',
 };
+
+const MARKET_LABEL: Record<string, string> = {
+  US: 'United States',
+  UKEU: 'UK / EU',
+  LATAM: 'Latam',
+  none: 'Location not stated',
+};
+
+/** A candidate market card's title. */
+export const marketLabel = (key: string) => MARKET_LABEL[key] ?? locationLabel(key);
 
 export const FORCEABLE_BUCKETS: JobApplyScreenBucket[] = ['clearance', 'onsite', 'too_old'];
 
