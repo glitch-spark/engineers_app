@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Download, Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket, JobApplyScreening } from '../../api/endpoints';
 import { countryFlag } from '../../lib/countries';
@@ -68,6 +68,7 @@ export default function ScreeningReport({
   const [open, setOpen] = useState<JobApplyScreenBucket | null>(null);
   const [starting, setStarting] = useState(false);
   const [savingAge, setSavingAge] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Start from the fitting profiles; keep the user's picks for groups that still exist after a refresh.
   const groupKeys = report?.groups.map((g) => g.key).join('|') ?? '';
@@ -125,6 +126,48 @@ export default function ScreeningReport({
     }
   };
 
+  /** The clean, de-duplicated links of the jobs worth applying to, as a CSV download. */
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const rows: api.JobApplyRow[] = [];
+      for (const screen of ['valid', 'check'] as const) {
+        for (let page = 1; ; page += 1) {
+          const res = await api.listJobApplyRows(runId, { screen, page, limit: 200 });
+          rows.push(...res.rows);
+          if (page >= (res.pagination.totalPages || 1)) break;
+        }
+      }
+      const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const lines = [
+        ['url', 'title', 'company', 'candidate markets', 'status', 'posted'].map(cell).join(','),
+        ...rows.map((r) =>
+          [
+            r.url,
+            r.title,
+            r.company,
+            r.markets?.length ? r.markets.map(marketLabel).join(' / ') : locationLabel(r.groupKey),
+            r.screen ? BUCKET_LABEL[r.screen] : '',
+            r.postedDate ?? '',
+          ]
+            .map(cell)
+            .join(','),
+        ),
+      ];
+      // BOM so Excel opens it as UTF-8; CRLF line ends.
+      const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `clean-job-links-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      notify.error(err, 'Could not export the links');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const start = async () => {
     if (blocker || starting || savingAge) return;
     setStarting(true);
@@ -147,6 +190,16 @@ export default function ScreeningReport({
   return (
     <section className="panel space-y-6 p-6" aria-label="Screening report">
       <div>
+        <button
+          type="button"
+          className="btn-outline btn-sm float-right"
+          onClick={exportCsv}
+          disabled={exporting || report.worth === 0}
+          title="The clean, de-duplicated links of the jobs worth applying to"
+        >
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
+          Export clean links (CSV)
+        </button>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           <span className="text-3xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{report.worth}</span>{' '}
           of {report.total} jobs worth applying to

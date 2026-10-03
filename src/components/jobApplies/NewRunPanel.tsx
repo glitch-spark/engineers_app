@@ -194,8 +194,28 @@ export default function NewRunPanel() {
               <>
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
                 <span className="text-zinc-700 dark:text-zinc-300">
-                  <span className="font-medium">{preview.data.title}</span> · {preview.data.total} jobs ·{' '}
-                  {preview.data.withDescription} with descriptions · {preview.data.urlOnly} links to fetch
+                  <span className="font-medium">{preview.data.title}</span> ·{' '}
+                  {preview.data.links && preview.data.links !== preview.data.total
+                    ? `${preview.data.links} links → ${preview.data.total} unique jobs`
+                    : `${preview.data.total} jobs`}
+                  {(preview.data.duplicates || preview.data.cleaned) ? (
+                    <span className="hint">
+                      {' '}
+                      ({[
+                        preview.data.duplicates ? `${preview.data.duplicates} duplicates` : '',
+                        preview.data.cleaned ? `${preview.data.cleaned} cleaned` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(', ')})
+                    </span>
+                  ) : null}{' '}
+                  · {preview.data.withDescription} with descriptions · {preview.data.urlOnly} links to fetch
+                  {preview.data.blocked ? (
+                    <span className="block text-amber-700 dark:text-amber-400">
+                      {preview.data.blocked} on LinkedIn / Indeed / Glassdoor can’t be fetched — paste their description
+                      into the sheet to include them.
+                    </span>
+                  ) : null}
                 </span>
               </>
             )}

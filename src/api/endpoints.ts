@@ -1961,9 +1961,17 @@ export async function downloadTailoredResume(jobId: string, filename: string): P
 
 export interface JobSheetPreview {
   title: string;
+  /** Unique jobs (links after cleaning and de-duplication). */
   total: number;
   withDescription: number;
   urlOnly: number;
+  /** Links found in the sheet, before de-duplication. */
+  links?: number;
+  duplicates?: number;
+  /** Links whose URL was cleaned (tracking params, apply pages…). */
+  cleaned?: number;
+  /** Link-only jobs on sites that block automated access (LinkedIn, Indeed, Glassdoor…). */
+  blocked?: number;
 }
 
 /** Read a job sheet (link or file) without starting a run: job counts, or a 400 explaining the problem. */
