@@ -16,6 +16,9 @@ import { useDialog } from '../lib/useDialog';
 import ResumeTabs from '../components/ResumeTabs';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
+import ModelSelect from '../components/ModelSelect';
+import { useModelChoice } from '../lib/useModelChoice';
+import { formatUsd } from '../lib/modelCost';
 import { useAuth } from '../auth/useAuth';
 
 const STEP_LABEL: Record<ResumeJobStep, string> = {
@@ -56,12 +59,19 @@ function shortModelName(model?: string | null): string {
   return slash >= 0 ? model.slice(slash + 1) : model;
 }
 
+const SHORT_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+
+/** "Oct 3, 9:20 PM": compact so the table fits; the full timestamp is in the tooltip. */
+function shortDate(d: Date | null): string {
+  return d ? d.toLocaleString(undefined, SHORT_DATE) : '—';
+}
+
 function LlmProviderBadge({
   provider,
   model,
   fallbackUsed,
 }: {
-  provider?: 'free' | 'openai' | null;
+  provider?: api.LlmProvider | null;
   model?: string | null;
   fallbackUsed?: boolean | null;
 }) {
@@ -70,12 +80,8 @@ function LlmProviderBadge({
   }
 
   const short = shortModelName(model);
-  const providerLabel =
-    provider === 'free'
-      ? 'Free'
-      : fallbackUsed
-        ? 'OpenAI (fallback)'
-        : 'OpenAI';
+  const baseLabel = provider === 'free' ? 'Free' : provider === 'anthropic' ? 'Anthropic' : 'OpenAI';
+  const providerLabel = provider !== 'free' && fallbackUsed ? `${baseLabel} (fallback)` : baseLabel;
   const badgeClass =
     provider === 'free'
       ? 'badge-info'
@@ -351,7 +357,6 @@ export default function GeneratedResumesPage() {
                     aria-label="Select all"
                   />
                 </th>
-                <th className="px-3 py-2 font-medium">Created</th>
                 <th className="px-3 py-2 font-medium">Profile</th>
                 <th className="px-3 py-2 font-medium">Company</th>
                 <th className="px-3 py-2 font-medium">Status</th>
@@ -359,7 +364,9 @@ export default function GeneratedResumesPage() {
                 <th className="px-3 py-2 font-medium">Time</th>
                 <th className="px-3 py-2 font-medium">Tokens</th>
                 <th className="px-3 py-2 font-medium">File</th>
-                <th className="px-3 py-2 font-medium w-32 text-right">Actions</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap">Created</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap">Generated</th>
+                <th className="sticky right-0 z-10 bg-zinc-50 dark:bg-zinc-900/80 border-l border-zinc-200/80 dark:border-zinc-700/30 px-3 py-2 font-medium w-32 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="row-divider">
@@ -458,6 +465,7 @@ function JobRow({
   const [deleting, setDeleting] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const created = job.createdAt ? new Date(job.createdAt) : null;
+  const generated = job.completedAt ? new Date(job.completedAt) : null;
   const elapsed = job.executionMs != null ? `${(job.executionMs / 1000).toFixed(1)}s` : '—';
   const inFlight = job.status === 'queued' || job.status === 'in_progress';
   const hasAnswers = job.screeningPairs && job.screeningPairs.length > 0;
@@ -506,7 +514,7 @@ function JobRow({
 
   return (
     <>
-      <tr className="table-row reveal-scope cursor-pointer" onClick={onOpen}>
+      <tr className="table-row group reveal-scope cursor-pointer" onClick={onOpen}>
         <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
@@ -517,13 +525,10 @@ function JobRow({
             title={selectable ? 'Select for bulk download' : 'Not selectable until completed'}
           />
         </td>
-        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
-          {created ? created.toLocaleString() : '—'}
-        </td>
-        <td className="px-3 py-2 text-strong truncate reveal-on-focus max-w-[160px]" title={job.profileName}>
+        <td className="px-3 py-2 text-strong truncate reveal-on-focus max-w-[140px]" title={job.profileName}>
           {job.profileName}
         </td>
-        <td className="px-3 py-2 text-strong max-w-[280px]" title={job.jobUrl || job.companyName}>
+        <td className="px-3 py-2 text-strong max-w-[200px]" title={job.jobUrl || job.companyName}>
           <div className="truncate reveal-on-focus">
             {job.jobUrl ? (
               <a href={job.jobUrl} target="_blank" rel="noreferrer" className="link">
@@ -571,23 +576,36 @@ function JobRow({
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{elapsed}</td>
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap tabular-nums" title={
           (job.inputTokens != null || job.outputTokens != null || job.reasoningTokens != null)
-            ? `input ${job.inputTokens ?? 0} · output ${job.outputTokens ?? 0} · reasoning ${job.reasoningTokens ?? 0}`
+            ? `input ${job.inputTokens ?? 0} · output ${job.outputTokens ?? 0} · reasoning ${job.reasoningTokens ?? 0}` +
+              (job.estimatedCostUsd != null ? ` · est. cost ${formatUsd(job.estimatedCostUsd)}` : '')
             : 'No usage recorded'
         }>
           {job.inputTokens != null || job.outputTokens != null
             ? `${(job.inputTokens ?? 0).toLocaleString()} / ${(job.outputTokens ?? 0).toLocaleString()}`
             : '—'}
+          {job.estimatedCostUsd != null && (
+            <div className="text-[11px] text-faint">{formatUsd(job.estimatedCostUsd)}</div>
+          )}
         </td>
-        <td className="px-3 py-2 text-xs">
+        <td className="px-3 py-2 text-xs max-w-[150px]">
           {job.pdfFilename ? (
-            <span className="text-body font-mono break-all" title={job.pdfFilename}>
+            <span className="block truncate text-body font-mono" title={job.pdfFilename.split('/').pop()}>
               {job.pdfFilename.split('/').pop()}
             </span>
           ) : (
             <span className="text-faint">—</span>
           )}
         </td>
-        <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap" title={created ? created.toLocaleString() : undefined}>
+          {shortDate(created)}
+        </td>
+        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap" title={generated ? generated.toLocaleString() : undefined}>
+          {shortDate(generated)}
+        </td>
+        <td
+          className="sticky right-0 z-10 bg-white dark:bg-zinc-950 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-900 border-l border-zinc-200/80 dark:border-zinc-700/30 px-3 py-2 text-right"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="inline-flex gap-1 justify-end">
             {isFailed && (
               <button
@@ -849,6 +867,11 @@ function ScreeningPanel({
   const [jdCopied, setJdCopied] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetterCopied, setCoverLetterCopied] = useState(false);
+  const screeningModel = useModelChoice('screening');
+  const coverLetterModel = useModelChoice('cover_letter');
+  const [regenerating, setRegenerating] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const coverLetterHistory = job.coverLetterHistory ?? [];
   const pairs = job.screeningPairs || [];
 
   useEffect(() => {
@@ -884,6 +907,31 @@ function ScreeningPanel({
     }
   }
 
+  async function copyText(content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      notify.success('Cover letter copied');
+    } catch {
+      notify.error('Failed to copy');
+    }
+  }
+
+  async function regenerateCover() {
+    setRegenerating(true);
+    try {
+      // '' (model list unavailable) is omitted so the server picks its default.
+      await api.regenerateCoverLetter(job._id, { model: coverLetterModel.value || undefined });
+      notify.success('Cover letter written');
+      onChanged();
+    } catch (err) {
+      notify.error(err, 'Cover letter generation failed');
+      // A request that timed out client-side may still have saved on the server: refresh so it shows.
+      onChanged();
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
   async function ask() {
     const questions = parseNumberedQuestions(text);
     if (questions.length === 0) {
@@ -892,7 +940,8 @@ function ScreeningPanel({
     }
     setAsking(true);
     try {
-      await api.askResumeJobScreening(job._id, questions);
+      // '' (model list unavailable) is omitted so the server picks its default.
+      await api.askResumeJobScreening(job._id, questions, screeningModel.value || undefined);
       setText('');
       notify.success(`Answered ${questions.length} question${questions.length === 1 ? '' : 's'}`);
       onChanged();
@@ -989,8 +1038,10 @@ function ScreeningPanel({
             )}
           </section>
 
-          {job.coverLetterText && (
+          {(job.coverLetterText || job.status === 'completed') && (
             <section className="space-y-2">
+              {job.coverLetterText ? (
+              <>
               <button
                 type="button"
                 onClick={() => setCoverLetterOpen((v) => !v)}
@@ -1020,6 +1071,71 @@ function ScreeningPanel({
                   {job.coverLetterText}
                 </pre>
               )}
+              </>
+              ) : (
+                <p className="text-xs text-faint italic">No cover letter yet.</p>
+              )}
+
+              {job.coverLetterLlmProvider && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted">Written by:</span>
+                  <LlmProviderBadge
+                    provider={job.coverLetterLlmProvider}
+                    model={job.coverLetterLlmModel}
+                    fallbackUsed={job.coverLetterLlmFallbackUsed}
+                  />
+                </div>
+              )}
+              {job.coverLetterLlmFallbackReason && (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-snug">
+                  <span className="font-medium">Cover letter fallback:</span> {job.coverLetterLlmFallbackReason}
+                </p>
+              )}
+
+              <ModelSelect
+                label={job.coverLetterText ? 'Regenerate with' : 'Write with'}
+                choice={coverLetterModel}
+                disabled={regenerating}
+              />
+              <button type="button" className="btn" onClick={regenerateCover} disabled={regenerating}>
+                {regenerating ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Writing...</>
+                ) : job.coverLetterText ? (
+                  'Regenerate cover letter'
+                ) : (
+                  'Write cover letter'
+                )}
+              </button>
+
+              {coverLetterHistory.length > 0 && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen((v) => !v)}
+                    className="link-inline text-xs text-muted hover:text-sky-600 dark:hover:text-sky-400"
+                    aria-expanded={historyOpen}
+                    aria-controls={`${titleId}-cover-history`}
+                  >
+                    <span aria-hidden>{historyOpen ? '▾' : '▸'}</span> Previous versions ({coverLetterHistory.length})
+                  </button>
+                  {historyOpen && (
+                    <ul id={`${titleId}-cover-history`} className="space-y-2">
+                      {coverLetterHistory.map((v, i) => (
+                        <li key={`${v.createdAt}-${i}`} className="panel p-3 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+                            <span className="font-mono truncate" title={v.model}>{v.model || v.provider}</span>
+                            <span className="whitespace-nowrap">{new Date(v.createdAt).toLocaleString()}</span>
+                          </div>
+                          <pre className="text-xs text-strong whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">{v.text}</pre>
+                          <button type="button" className="link-inline text-xs" onClick={() => copyText(v.text)}>
+                            Copy
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
@@ -1043,6 +1159,7 @@ function ScreeningPanel({
             placeholder={'e.g.\n1. Why are you a fit for this role?\n2. Tell me about a recent challenging project.\n3. Where do you see yourself in 5 years?'}
             className="input w-full text-sm"
           />
+          <ModelSelect label="Screening model" choice={screeningModel} />
           <div className="flex justify-end">
             <button type="button" className="btn" onClick={ask} disabled={asking || !text.trim()}>
               {asking ? <><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Asking...</> : 'Ask'}
