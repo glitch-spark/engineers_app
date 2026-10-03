@@ -1622,6 +1622,15 @@ export interface JobApplyProfile {
   region?: string | null;
 }
 
+export interface JobApplyRunSummary {
+  worth: number;
+  closed: number;
+  markets: { US: number; UKEU: number; LATAM: number };
+  toApply: number;
+  applied: number;
+  tailoring: number;
+}
+
 export interface JobApplyRun {
   _id: string;
   /** Uploaded file name, or the Google Sheet's title. */
@@ -1642,6 +1651,8 @@ export interface JobApplyRun {
   suggested: number;
   /** Failed jobs a retry can help (closed jobs excluded). */
   retryable?: number;
+  /** Only on GET /job-applies/runs: the numbers its card shows (per job); null when they couldn't be computed. */
+  summary?: JobApplyRunSummary | null;
   createdAt: string;
   finishedAt?: string | null;
   error?: string | null;

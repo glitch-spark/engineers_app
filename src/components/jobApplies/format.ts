@@ -1,4 +1,5 @@
 import type {
+  JobApplyRun,
   JobApplyCounts,
   JobApplyGate,
   JobApplyRowStatus,
@@ -106,6 +107,20 @@ export function locationLabel(key: string | null | undefined): string {
 }
 
 export const isActive = (status: JobApplyRunStatus) => status === 'queued' || status === 'running';
+
+/** Which of the 3 steps a run is at: ① checking, ② waiting for profiles, ③ suggestions / tailoring / applying. */
+export function runStep(run: JobApplyRun): 1 | 2 | 3 {
+  if (run.phase === 'screen') return run.status === 'screened' ? 2 : 1;
+  return 3;
+}
+
+/** Landing-page group: waiting on the user, still working, or finished. */
+export function runGroup(run: JobApplyRun): 'needs' | 'progress' | 'finished' {
+  if (isActive(run.status)) return 'progress';
+  if (run.status === 'screened') return 'needs';
+  if (run.status === 'done' && run.phase === 'score' && (run.summary?.toApply ?? run.suggested) > 0) return 'needs';
+  return 'finished';
+}
 
 export function bandClass(band: ScoreBand): string {
   switch (band) {

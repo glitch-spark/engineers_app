@@ -14,6 +14,7 @@ import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import RunSummary from '../components/jobApplies/RunSummary';
+import StepTrack from '../components/jobApplies/StepTrack';
 import ScreeningReport from '../components/jobApplies/ScreeningReport';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import Segmented from '../components/jobApplies/Segmented';
@@ -24,6 +25,7 @@ import {
   formatDate,
   gateChip,
   isActive,
+  runStep,
   locationLabel,
 } from '../components/jobApplies/format';
 import { notify } from '../lib/notify';
@@ -582,6 +584,14 @@ export default function JobApplyRun() {
             ) : undefined
           }
         />
+        <StepTrack
+          current={runStep(run)}
+          hint={
+            run.status === 'screened'
+              ? 'Pick who applies in each market, then score. Next: the best resume per job, ready to tailor and apply.'
+              : 'Opening every link and reading each job. Next: you pick which profiles apply in each market.'
+          }
+        />
         {run.status === 'screened' ? (
           <ScreeningReport runId={runId} onStarted={() => void mutateRun()} onRunChanged={() => void mutateRun()} />
         ) : active ? (
@@ -644,6 +654,14 @@ export default function JobApplyRun() {
               </button>
             )}
           </>
+        }
+      />
+      <StepTrack
+        current={3}
+        hint={
+          active
+            ? 'Scoring your resumes against each job. Next: export to your sheet, tailor the rest, apply.'
+            : 'Export to your sheet, tailor the jobs that need it, then apply and mark them applied.'
         }
       />
 
