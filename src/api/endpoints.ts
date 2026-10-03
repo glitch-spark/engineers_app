@@ -1631,6 +1631,8 @@ export interface JobApplyRun {
   phase: 'screen' | 'score';
   /** Location group key → profile ids its jobs are scored against; '*' = every group. */
   assignments: Record<string, string[]>;
+  /** Created with profiles up front: scored right after screening, every group against every profile. */
+  autoStart?: boolean;
   screenedAt?: string | null;
   threshold: number;
   maxAgeDays: number;

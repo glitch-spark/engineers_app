@@ -24,6 +24,7 @@ import {
   formatDate,
   gateChip,
   isActive,
+  locationLabel,
 } from '../components/jobApplies/format';
 import { notify } from '../lib/notify';
 
@@ -852,7 +853,27 @@ export default function JobApplyRun() {
                       </td>
                       <td className="px-3 py-2">{capitalize(row.workMode) || <span className="hint">—</span>}</td>
                       <td className="max-w-[10rem] px-3 py-2">
-                        {row.allowedLocations.length ? row.allowedLocations.map((l) => l.value).join(', ') : <span className="hint">Not stated</span>}
+                        {row.groupKey ? (
+                          locationLabel(row.groupKey)
+                        ) : row.allowedLocations.length ? (
+                          row.allowedLocations.map((l) => l.value).join(', ')
+                        ) : (
+                          <span className="hint">Not stated</span>
+                        )}
+                        {row.status === 'unassigned' ? (
+                          <p className="hint">No profile picked</p>
+                        ) : (
+                          row.groupKey &&
+                          run.screenedAt &&
+                          !run.autoStart && (
+                            <p className="hint truncate">
+                              {[...new Set([...(run.assignments[row.groupKey] ?? []), ...(run.assignments['*'] ?? [])])]
+                                .map((id) => profileNames[id])
+                                .filter(Boolean)
+                                .join(', ')}
+                            </p>
+                          )
+                        )}
                       </td>
                       <td className="max-w-[14rem] px-3 py-2">
                         <Flags row={row} profileNames={profileNames} />
