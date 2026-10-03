@@ -2025,7 +2025,27 @@ export interface JobApplyExportResult {
   tab: string;
   sheetUrl: string;
   serviceAccount: string | null;
+  /** The run's Checks tab (every job and what the checks found), rewritten by each export. */
+  checksTab?: string;
+  checksJobs?: number;
+  /** Set when the application rows were added but the Checks tab couldn't be written. */
+  checksError?: string | null;
 }
+
+export interface JobApplyChecksExport {
+  tab: string;
+  jobs: number;
+  sheetTitle: string;
+  sheetUrl: string;
+  serviceAccount: string | null;
+}
+
+/**
+ * Write every job in the run with what the checks found to the run's own "Checks · …" tab of the shared Google
+ * Sheet (replacing what an earlier export wrote there). Available once the jobs are checked; `dryRun` only counts.
+ */
+export const exportJobApplyChecks = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>
+  postJSON<JobApplyChecksExport>(`/job-applies/runs/${runId}/export-checks`, body, { timeoutMs: 120_000 });
 
 /**
  * Append the run's jobs still to apply to (one row per job × profile, with a resume download link) to today's tab

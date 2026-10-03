@@ -1,11 +1,12 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Download, Loader2 } from 'lucide-react';
+import { ArrowRight, Download, ListChecks, Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket, JobApplyScreening } from '../../api/endpoints';
 import { notify } from '../../lib/notify';
 import BucketJobs from './BucketJobs';
+import ExportSheetDialog from './ExportSheetDialog';
 import MarketRow from './MarketRow';
 import { selectionFor, toProfile, usable, type ProfileOption } from './ProfilePicker';
 import { BUCKET_COLOR, BUCKET_LABEL, BUCKET_ORDER, locationLabel, marketLabel } from './format';
@@ -92,6 +93,7 @@ export default function ScreeningReport({
   const [threshold, setThreshold] = useState(readThreshold);
   const [open, setOpen] = useState<JobApplyScreenBucket | null>(null);
   const [starting, setStarting] = useState(false);
+  const [checksOpen, setChecksOpen] = useState(false);
   const [savingAge, setSavingAge] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -222,16 +224,29 @@ export default function ScreeningReport({
   return (
     <section className="panel space-y-6 p-6" aria-label="Screening report">
       <div>
-        <button
-          type="button"
-          className="btn-outline btn-sm float-right"
-          onClick={exportCsv}
-          disabled={exporting || report.worth === 0}
-          title="The clean, de-duplicated links of the jobs worth applying to"
-        >
-          {exporting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
-          Export clean links (CSV)
-        </button>
+        <div className="float-right ml-3 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            className="btn-outline btn-sm"
+            onClick={() => setChecksOpen(true)}
+            disabled={report.total === 0}
+            title="Every job with what the checks found (posted date, location, clearance, each check), to validate them"
+          >
+            <ListChecks className="h-4 w-4" aria-hidden />
+            Export checks to Google Sheet
+          </button>
+          <button
+            type="button"
+            className="btn-outline btn-sm"
+            onClick={exportCsv}
+            disabled={exporting || report.worth === 0}
+            title="The clean, de-duplicated links of the jobs worth applying to"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
+            Export clean links (CSV)
+          </button>
+        </div>
+        <ExportSheetDialog mode="checks" open={checksOpen} runId={runId} onClose={() => setChecksOpen(false)} onExported={() => {}} />
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           <span className="text-3xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{report.worth}</span>{' '}
           of {report.total} jobs worth applying to

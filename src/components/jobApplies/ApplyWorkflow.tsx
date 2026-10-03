@@ -115,13 +115,13 @@ export default function ApplyWorkflow({
           icon={FileSpreadsheet}
           title="Export to sheet"
           todo={toExport > 0}
-          disabled={busy || toExport === 0}
+          disabled={busy}
           onClick={onExport}
           detail={
             toExport === 0
               ? counts.toGo > 0
-                ? `All ${counts.toGo} in the sheet`
-                : 'Nothing to export'
+                ? `All ${counts.toGo} in the sheet · update the checks tab`
+                : 'Nothing to export · update the checks tab'
               : counts.needsResume + counts.tailoring > 0
                 ? `${toExport} to export · ${counts.needsResume + counts.tailoring} links fill in after tailoring`
                 : `${toExport} to export, with resume links`
