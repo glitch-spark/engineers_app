@@ -11,6 +11,7 @@ import PageHeader from '../components/PageHeader';
 import Switch from '../components/Switch';
 import BidderFormModal from '../components/bidders/BidderFormModal';
 import BidderHistoryPanel from '../components/bidders/BidderHistoryPanel';
+import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDialog';
 
 export default function BiddersPage() {
   const [showArchived, setShowArchived] = useState(false);
@@ -19,6 +20,9 @@ export default function BiddersPage() {
   const [pendingArchive, setPendingArchive] = useState<api.Bidder | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [historyFor, setHistoryFor] = useState<api.Bidder | null>(null);
+  const [inviteShown, setInviteShown] = useState<{ name: string; invite: api.BidderInvite } | null>(null);
+  const [pendingReset, setPendingReset] = useState<api.Bidder | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const { data, mutate, isLoading } = useSWR(['bidders', showArchived] as const, () => api.listBidders(showArchived));
   const { data: counts, error: countsError } = useSWR('bidder-live-counts', () => api.bidderLiveCounts(), { refreshInterval: 300_000 });
@@ -51,6 +55,44 @@ export default function BiddersPage() {
     }
   };
 
+  const newInvite = async (b: api.Bidder) => {
+    try {
+      const invite = await api.newBidderInvite(b._id);
+      setInviteShown({ name: b.name, invite });
+      refresh();
+    } catch (err) {
+      notify.error(err, 'Failed to create invite code');
+    }
+  };
+
+  const resetLogin = async () => {
+    const b = pendingReset;
+    if (!b) return;
+    setResetting(true);
+    try {
+      const invite = await api.resetBidderLogin(b._id);
+      setPendingReset(null);
+      setInviteShown({ name: b.name, invite });
+      refresh();
+    } catch (err) {
+      notify.error(err, 'Failed to reset login');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const statusCell = (b: api.Bidder) => {
+    if (b.status === 'archived') return 'Archived';
+    if (b.status === 'active') return `Active · @${b.username ?? ''}`;
+    if (!b.inviteExpiresAt) return 'Invited · no code yet';
+    const expired = new Date(b.inviteExpiresAt).getTime() < Date.now();
+    return (
+      <span className={expired ? 'text-red-600' : undefined}>
+        Invited · expires {formatInviteDate(b.inviteExpiresAt)}
+      </span>
+    );
+  };
+
   const countCell = (b: api.Bidder, key: 'today' | 'week') => {
     if (!counts) {
       if (countsError) return <span title={messageOf(countsError, 'Failed to load live counts')}>⚠️</span>;
@@ -72,6 +114,8 @@ export default function BiddersPage() {
     if (b.archivedAt) return [history];
     return [
       { label: 'Edit', onSelect: () => openForm(b) },
+      ...(b.status === 'invited' ? [{ label: 'New invite code', onSelect: () => newInvite(b) }] : []),
+      ...(b.status === 'active' ? [{ label: 'Reset login', onSelect: () => setPendingReset(b) }] : []),
       history,
       { label: 'Archive', danger: true, onSelect: () => setPendingArchive(b) },
     ];
@@ -91,6 +135,7 @@ export default function BiddersPage() {
           <thead className="table-head">
             <tr>
               <th className="px-4 py-2.5">Name</th>
+              <th className="px-4 py-2.5">Status</th>
               <th className="px-4 py-2.5">Country</th>
               <th className="px-4 py-2.5">Profile</th>
               <th className="px-4 py-2.5">Rate</th>
@@ -103,7 +148,7 @@ export default function BiddersPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted">
+                <td colSpan={9} className="px-4 py-8 text-center text-muted">
                   <div role="status" className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading bidders...
@@ -112,13 +157,14 @@ export default function BiddersPage() {
               </tr>
             ) : bidders.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-muted">
+                <td colSpan={9} className="px-3 py-6 text-center text-muted">
                   {showArchived ? 'No archived bidders.' : 'No bidders yet — add one to start tracking bids.'}
                 </td>
               </tr>
             ) : bidders.map((b) => (
               <tr key={b._id} className={`table-row ${b.archivedAt ? 'text-muted opacity-60' : ''}`}>
                 <td className="px-4 py-2.5">{b.name}</td>
+                <td className="px-4 py-2.5">{statusCell(b)}</td>
                 <td className="px-4 py-2.5">
                   {b.country ? (
                     <span className="inline-flex items-center gap-1.5">
@@ -143,13 +189,32 @@ export default function BiddersPage() {
         open={formOpen}
         bidder={editing}
         onClose={() => setFormOpen(false)}
-        onSaved={() => {
+        onSaved={(invite, saved) => {
           setFormOpen(false);
+          if (invite) setInviteShown({ name: saved.name, invite });
           refresh();
         }}
       />
 
+      <InviteDialog
+        open={!!inviteShown}
+        bidderName={inviteShown?.name ?? ''}
+        invite={inviteShown?.invite ?? null}
+        onClose={() => setInviteShown(null)}
+      />
+
       <BidderHistoryPanel bidder={historyFor} onClose={() => setHistoryFor(null)} />
+
+      <ConfirmDialog
+        open={!!pendingReset}
+        title="Reset login"
+        body={`Reset ${pendingReset?.name}'s login? Their extension stops uploading until they register again with the new code. Their folder and bid history stay.`}
+        confirmLabel="Reset login"
+        tone="danger"
+        busy={resetting}
+        onConfirm={resetLogin}
+        onCancel={() => setPendingReset(null)}
+      />
 
       <ConfirmDialog
         open={!!pendingArchive}

@@ -1863,11 +1863,21 @@ export interface Bidder {
   profileName: string | null;
   rate: number;
   screenshotFolderUrl: string;
+  folder: string | null;
+  status: 'invited' | 'active' | 'archived';
+  username: string | null;
+  inviteExpiresAt: string | null;
+  registeredAt: string | null;
   archivedAt: string | null;
   createdAt: string;
 }
 
-export type BidderInput = Pick<Bidder, 'name' | 'country' | 'profileId' | 'rate' | 'screenshotFolderUrl'>;
+export type BidderInput = Pick<Bidder, 'name' | 'country' | 'profileId' | 'rate'>;
+
+export interface BidderInvite {
+  code: string;
+  expiresAt: string;
+}
 
 export interface BidderLiveCount {
   today: number | null;
@@ -1889,7 +1899,12 @@ export interface BidReport {
 export const listBidders = (archived = false) =>
   apiFetch<{ bidders: Bidder[] }>(`/bidders${qs({ archived })}`);
 
-export const createBidder = (body: BidderInput) => postJSON<Bidder>('/bidders', body);
+export const createBidder = (body: BidderInput) =>
+  postJSON<{ bidder: Bidder; invite: BidderInvite }>('/bidders', body);
+
+export const newBidderInvite = (id: string) => postJSON<BidderInvite>(`/bidders/${id}/invite`, {});
+
+export const resetBidderLogin = (id: string) => postJSON<BidderInvite>(`/bidders/${id}/reset-login`, {});
 
 export const updateBidder = (id: string, body: BidderInput) => putJSON<Bidder>(`/bidders/${id}`, body);
 
