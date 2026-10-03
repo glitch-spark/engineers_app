@@ -65,7 +65,8 @@ function exportedToast(message: string, sheetUrl: string) {
 /**
  * Export to the shared Google Sheet. "apply" (step ③): one row per job × profile still to apply to, with check
  * columns, to today's tab — and the run's Checks tab is refreshed. "checks" (step ② onward): only the Checks tab,
- * every job with what the checks found, for validating them. The Checks tab is replaced on each export.
+ * every job with its company, URL, title, posting date, location, clearance, work mode and status. The Checks tab is
+ * replaced on each export.
  */
 export default function ExportSheetDialog({
   open,
@@ -181,13 +182,13 @@ export default function ExportSheetDialog({
         <p className="text-zinc-600 dark:text-zinc-400">
           {mode === 'checks' ? (
             <>
-              Writes every job in this run to its own tab with what the checks found: result and reason, posted date and where it
-              came from, location, market, work mode, clearance and each check. Exporting again replaces that tab.
+              Writes every job in this run to its own tab: company, job URL, title, posting date, location, security clearance,
+              remote / hybrid / on-site and status. Exporting again replaces that tab.
             </>
           ) : (
             <>
               Adds one row per job and profile still to apply to, with a download link to the resume to send (the tailored one when
-              it’s ready, otherwise the matching uploaded one) and the job’s location, work mode, clearance and checks, to today’s
+              it’s ready, otherwise the matching uploaded one) and the job’s location, security clearance and work mode, to today’s
               tab of your shared sheet. It also refreshes this run’s checks tab.
             </>
           )}
@@ -261,7 +262,7 @@ export default function ExportSheetDialog({
               <p className="flex items-center gap-2">
                 <ListChecks className="h-4 w-4 text-sky-600" aria-hidden />
                 <span>
-                  <span className="font-semibold">{ok.checksJobs}</span> job{s(ok.checksJobs)} with their checks to tab{' '}
+                  <span className="font-semibold">{ok.checksJobs}</span> job{s(ok.checksJobs)} to tab{' '}
                   <span className="font-medium">“{ok.checksTab}”</span>
                   {mode === 'checks' && <> in {sheetLink}</>} (replaced each export)
                 </span>

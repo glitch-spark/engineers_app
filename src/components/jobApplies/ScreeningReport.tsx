@@ -230,7 +230,7 @@ export default function ScreeningReport({
             className="btn-outline btn-sm"
             onClick={() => setChecksOpen(true)}
             disabled={report.total === 0}
-            title="Every job with what the checks found (posted date, location, clearance, each check), to validate them"
+            title="Every job with its posting date, location, security clearance, work mode and status"
           >
             <ListChecks className="h-4 w-4" aria-hidden />
             Export checks to Google Sheet
