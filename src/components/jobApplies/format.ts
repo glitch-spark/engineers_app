@@ -3,12 +3,14 @@ import type {
   JobApplyGate,
   JobApplyRowStatus,
   JobApplyRunStatus,
+  JobApplyScreenBucket,
   ScoreBand,
 } from '../../api/endpoints';
 
 export const RUN_STATUS_LABEL: Record<JobApplyRunStatus, string> = {
   queued: 'Queued',
   running: 'Running',
+  screened: 'Ready to review',
   done: 'Done',
   failed: 'Failed',
   cancelled: 'Cancelled',
@@ -17,6 +19,7 @@ export const RUN_STATUS_LABEL: Record<JobApplyRunStatus, string> = {
 export const RUN_STATUS_BADGE: Record<JobApplyRunStatus, string> = {
   queued: 'badge-neutral',
   running: 'badge-info',
+  screened: 'badge-warning',
   done: 'badge-success',
   failed: 'badge-danger',
   cancelled: 'badge-neutral',
@@ -30,7 +33,61 @@ export const ROW_STATUS_LABEL: Record<JobApplyRowStatus, string> = {
   excluded: 'Excluded',
   fetch_failed: 'Fetch failed',
   llm_failed: 'Extraction failed',
+  unassigned: 'No profile picked',
 };
+
+/** Screening buckets in display order: worth applying to first, then why the others were dropped. */
+export const BUCKET_ORDER: JobApplyScreenBucket[] = [
+  'valid',
+  'check',
+  'closed',
+  'too_old',
+  'not_fetched',
+  'onsite',
+  'clearance',
+  'read_failed',
+];
+
+export const BUCKET_LABEL: Record<JobApplyScreenBucket, string> = {
+  valid: 'Worth applying',
+  check: 'Needs a check',
+  closed: 'Closed',
+  not_fetched: 'Not fetched',
+  read_failed: "Couldn't read",
+  clearance: 'Clearance required',
+  onsite: 'On-site / hybrid',
+  too_old: 'Too old',
+};
+
+/** Bar colour per bucket (Tailwind background classes). */
+export const BUCKET_COLOR: Record<JobApplyScreenBucket, string> = {
+  valid: 'bg-emerald-600',
+  check: 'bg-emerald-300 dark:bg-emerald-700',
+  closed: 'bg-zinc-400 dark:bg-zinc-500',
+  not_fetched: 'bg-amber-500',
+  read_failed: 'bg-amber-300 dark:bg-amber-700',
+  clearance: 'bg-red-500',
+  onsite: 'bg-red-300 dark:bg-red-700',
+  too_old: 'bg-zinc-300 dark:bg-zinc-600',
+};
+
+export const FORCEABLE_BUCKETS: JobApplyScreenBucket[] = ['clearance', 'onsite', 'too_old'];
+
+let _regionNames: Intl.DisplayNames | null = null;
+
+/** 'none' → 'Location not stated'; 'GB' → 'United Kingdom'; 'EU+US' → 'EU · United States'. */
+export function locationLabel(key: string | null | undefined): string {
+  if (!key || key === 'none') return 'Location not stated';
+  try {
+    _regionNames ??= new Intl.DisplayNames(['en'], { type: 'region' });
+  } catch {
+    _regionNames = null;
+  }
+  return key
+    .split('+')
+    .map((part) => (/^[A-Z]{2}$/.test(part) && part !== 'EU' && _regionNames ? _regionNames.of(part) ?? part : part))
+    .join(' · ');
+}
 
 export const isActive = (status: JobApplyRunStatus) => status === 'queued' || status === 'running';
 

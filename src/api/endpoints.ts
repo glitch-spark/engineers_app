@@ -1581,7 +1581,7 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
 
 // ---------- job applies ----------
 
-export type JobApplyRunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+export type JobApplyRunStatus = 'queued' | 'running' | 'screened' | 'done' | 'failed' | 'cancelled';
 export type JobApplyRowStatus =
   | 'pending'
   | 'fetched'
@@ -1589,7 +1589,18 @@ export type JobApplyRowStatus =
   | 'scored'
   | 'excluded'
   | 'fetch_failed'
-  | 'llm_failed';
+  | 'llm_failed'
+  | 'unassigned';
+/** Where screening put a job: worth applying to (valid / check) or why not. */
+export type JobApplyScreenBucket =
+  | 'valid'
+  | 'check'
+  | 'closed'
+  | 'not_fetched'
+  | 'read_failed'
+  | 'clearance'
+  | 'onsite'
+  | 'too_old';
 export type JobApplyView = 'all' | 'suggested' | 'excluded' | 'failed';
 export type ScoreBand = 'strong' | 'good' | 'fair' | 'weak';
 
@@ -1616,6 +1627,11 @@ export interface JobApplyRun {
   /** Google Sheets link when the run came from one. */
   sourceUrl?: string | null;
   status: JobApplyRunStatus;
+  /** 'screen': fetching and checking jobs (then waits at 'screened'); 'score': scoring the picked profiles. */
+  phase: 'screen' | 'score';
+  /** Location group key → profile ids its jobs are scored against; '*' = every group. */
+  assignments: Record<string, string[]>;
+  screenedAt?: string | null;
   threshold: number;
   maxAgeDays: number;
   counts: JobApplyCounts;
@@ -1724,6 +1740,10 @@ export interface JobApplyRow {
   company: string;
   status: JobApplyRowStatus;
   statusReason?: string | null;
+  screen?: JobApplyScreenBucket | null;
+  /** Normalised allowed locations, e.g. 'GB', 'EU+US', 'none'. */
+  groupKey?: string | null;
+  forceInclude?: boolean;
   jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | null;
   postedDate?: string | null;
   workMode?: 'remote' | 'hybrid' | 'onsite' | 'unknown' | null;
@@ -1782,18 +1802,17 @@ export interface JobApplyRowDetail extends JobApplyRow {
 /** The job sheet: an uploaded .xlsx/.csv, or a Google Sheets link shared as "Anyone with the link". */
 export type JobApplySource = { file: File } | { sheetUrl: string };
 
+/** Without `selection` the run checks the jobs and waits at 'screened' for profiles per location group. */
 export const createJobApplyRun = (
   source: JobApplySource,
-  selection: { accountId: string; resumeIds: string[] }[],
-  threshold: number,
-  maxAgeDays: number,
+  opts: { maxAgeDays: number; selection?: { accountId: string; resumeIds: string[] }[]; threshold?: number },
 ) => {
   const form = new FormData();
   if ('file' in source) form.append('file', source.file);
   else form.append('sheetUrl', source.sheetUrl);
-  form.append('selection', JSON.stringify(selection));
-  form.append('threshold', String(threshold));
-  form.append('maxAgeDays', String(maxAgeDays));
+  if (opts.selection) form.append('selection', JSON.stringify(opts.selection));
+  if (opts.threshold !== undefined) form.append('threshold', String(opts.threshold));
+  form.append('maxAgeDays', String(opts.maxAgeDays));
   return apiFetch<{ runId: string; status: JobApplyRunStatus; total: number }>('/job-applies/runs', {
     method: 'POST',
     body: form,
@@ -1815,13 +1834,55 @@ export const listJobApplyRows = (
     minScore?: number;
     page?: number;
     limit?: number;
+    screen?: JobApplyScreenBucket;
   } = {},
 ) => apiFetch<{ rows: JobApplyRow[]; pagination: Pagination }>(`/job-applies/runs/${id}/rows${qs(params)}`);
 
 export const getJobApplyRow = (rowId: string) => apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}`);
 
-export const updateJobApplyRun = (id: string, body: { threshold: number }) =>
+export const updateJobApplyRun = (id: string, body: { threshold?: number; maxAgeDays?: number }) =>
   apiFetch<JobApplyRun>(`/job-applies/runs/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export interface JobApplyScreeningGroup {
+  key: string;
+  jobs: number;
+  /** Of `jobs`, how many need a check (no date, work mode or location not stated, or included anyway). */
+  check: number;
+  /** Profile ids whose country/region fits this group. */
+  fits: string[];
+}
+
+export interface JobApplyScreeningProfile {
+  id: string;
+  name: string;
+  country: string | null;
+  region: string | null;
+  resumes: number;
+}
+
+export interface JobApplyScreening {
+  total: number;
+  worth: number;
+  check: number;
+  buckets: Record<JobApplyScreenBucket, number>;
+  maxAgeDays: number;
+  groups: JobApplyScreeningGroup[];
+  profiles: JobApplyScreeningProfile[];
+}
+
+export const getJobApplyScreening = (id: string) => apiFetch<JobApplyScreening>(`/job-applies/runs/${id}/screening`);
+
+export const startJobApplyRun = (
+  id: string,
+  body: {
+    assignments: Record<string, string[]>;
+    selection: { accountId: string; resumeIds: string[] }[];
+    threshold: number;
+  },
+) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/start`, body);
+
+export const setJobApplyRowInclude = (rowId: string, include: boolean) =>
+  apiFetch<JobApplyRow>(`/job-applies/rows/${rowId}/include`, { method: 'PUT', body: JSON.stringify({ include }) });
 
 export const cancelJobApplyRun = (id: string) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/cancel`, {});
 
