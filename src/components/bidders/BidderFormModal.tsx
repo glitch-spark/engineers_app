@@ -66,6 +66,10 @@ export default function BidderFormModal({
       .filter((a) => !a.archived && (a.createdBy === user?.id || isAdmin))
       .map((a) => ({ value: a._id, label: a.name })),
   ];
+  // Keep the bidder's current profile selectable even when the filter (or a pending lookup) hides it.
+  if (bidder?.profileId && !profileOptions.some((o) => o.value === bidder.profileId)) {
+    profileOptions.splice(1, 0, { value: bidder.profileId, label: bidder.profileName ?? 'Current profile' });
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

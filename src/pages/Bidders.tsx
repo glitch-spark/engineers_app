@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { mutate as globalMutate } from 'swr';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import { countryFlag } from '../lib/countries';
@@ -25,6 +25,12 @@ export default function BiddersPage() {
   const { data: counts } = useSWR('bidder-live-counts', () => api.bidderLiveCounts(), { refreshInterval: 300_000 });
   const bidders = data?.bidders ?? [];
 
+  // A new, edited or archived bidder changes the live-count map too.
+  const refresh = () => {
+    mutate();
+    globalMutate('bidder-live-counts');
+  };
+
   const openForm = (b: api.Bidder | null) => {
     setEditing(b);
     setFormOpen(true);
@@ -38,7 +44,7 @@ export default function BiddersPage() {
       await api.archiveBidder(b._id);
       notify.success(`${b.name} archived`);
       setPendingArchive(null);
-      mutate();
+      refresh();
     } catch (err) {
       notify.error(err, 'Failed to archive bidder');
     } finally {
@@ -137,7 +143,7 @@ export default function BiddersPage() {
         onClose={() => setFormOpen(false)}
         onSaved={() => {
           setFormOpen(false);
-          mutate();
+          refresh();
         }}
       />
 
