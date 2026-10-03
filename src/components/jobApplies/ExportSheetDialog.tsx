@@ -30,6 +30,8 @@ export default function ExportSheetDialog({
   const [sheetUrl, setSheetUrl] = useState('');
   const [check, setCheck] = useState<Check>({ state: 'idle' });
   const [saving, setSaving] = useState(false);
+  // Rows without a resume are exported now; also queue their tailored resumes so the links actually fill in.
+  const [tailorMissing, setTailorMissing] = useState(true);
 
   // On open: dry run with the saved link (if any) to prefill it and show the counts.
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function ExportSheetDialog({
   const exportNow = async () => {
     setSaving(true);
     try {
-      const res = await api.exportJobApplySheet(runId, { sheetUrl: trimmed });
+      const res = await api.exportJobApplySheet(runId, { sheetUrl: trimmed, tailorMissing });
       onExported();
       onClose();
       toast(
@@ -88,6 +90,8 @@ export default function ExportSheetDialog({
           <span className="flex items-center gap-3">
             <span>
               Added {res.added} row{res.added === 1 ? '' : 's'} to “{res.tab}”
+              {res.tailorQueued ? ` · tailoring ${res.tailorQueued}` : ''}
+              {res.overLimit ? ` · ${res.overLimit} over today's tailoring limit` : ''}
             </span>
             <a
               href={res.sheetUrl}
@@ -176,14 +180,28 @@ export default function ExportSheetDialog({
                 </span>
               </p>
               <ul className="hint list-disc space-y-0.5 pl-9">
-                {check.result.pending > 0 && <li>{check.result.pending} still tailoring: export them later</li>}
-                {check.result.needsResume > 0 && <li>{check.result.needsResume} have nothing to apply with yet: tailor them first</li>}
+                {(check.result.pendingLinks ?? 0) > 0 && (
+                  <li>
+                    {check.result.pendingLinks} without a resume yet: added now as “To tailor” / “Tailoring…”, and the link
+                    fills in when the tailored PDF is ready
+                  </li>
+                )}
                 {check.result.alreadyExported > 0 && <li>{check.result.alreadyExported} already exported (skipped)</li>}
                 {check.result.noFile > 0 && <li>{check.result.noFile} uploaded resumes have no stored PDF to link to</li>}
               </ul>
             </div>
           )}
         </div>
+
+        {check.state === 'ok' && check.result.needsResume > 0 && (
+          <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <input type="checkbox" className="mt-0.5" checked={tailorMissing} onChange={(e) => setTailorMissing(e.target.checked)} />
+            <span>
+              Tailor the {check.result.needsResume} job{check.result.needsResume === 1 ? '' : 's'} without a resume now
+              <span className="hint block">Their sheet rows get the download link as each tailored PDF is ready.</span>
+            </span>
+          </label>
+        )}
 
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-outline" onClick={onClose}>

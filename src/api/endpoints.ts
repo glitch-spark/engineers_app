@@ -2003,6 +2003,11 @@ export interface JobApplyExportResult {
   pending: number;
   /** Open to a profile with nothing to apply with yet (tailor first). */
   needsResume: number;
+  /** Rows exported with "To tailor" / "Tailoring…": their link is filled in when the tailored PDF is ready. */
+  pendingLinks?: number;
+  /** With tailorMissing: tailored resumes queued for those rows, and rows left over today's limit. */
+  tailorQueued?: number;
+  overLimit?: number;
   alreadyExported: number;
   /** Matching uploaded resumes whose original PDF isn't stored (no link possible). */
   noFile: number;
@@ -2016,7 +2021,10 @@ export interface JobApplyExportResult {
  * Append the run's jobs still to apply to (one row per job × profile, with a resume download link) to today's tab
  * of the shared Google Sheet. Without `sheetUrl` the last one used is reused; `dryRun` only counts and checks access.
  */
-export const exportJobApplySheet = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>
+export const exportJobApplySheet = (
+  runId: string,
+  body: { sheetUrl?: string; dryRun?: boolean; tailorMissing?: boolean } = {},
+) =>
   postJSON<JobApplyExportResult>(`/job-applies/runs/${runId}/export-sheet`, body, { timeoutMs: 120_000 });
 
 // ---------- bidders ----------

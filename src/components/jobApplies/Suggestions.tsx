@@ -1,4 +1,4 @@
-import { Check, Download, Loader2, RotateCcw, Sparkles } from 'lucide-react';
+import { Check, Download, ExternalLink, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyRow, JobApplySuggestion, JobApplyTailored } from '../../api/endpoints';
 import { bandClass, formatDate } from './format';
 
@@ -85,6 +85,16 @@ export default function Suggestions({
 
   return (
     <div className="min-w-[20rem] space-y-1">
+      {row.url && (
+        <a
+          href={row.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"
+        >
+          <ExternalLink className="h-3 w-3" aria-hidden /> Open posting
+        </a>
+      )}
       {previous && (
         <p
           className="badge-info"
@@ -182,6 +192,16 @@ export default function Suggestions({
                     <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${name})`}>
                       <Download className="h-3.5 w-3.5" aria-hidden />
                     </button>
+                    <a
+                      href={`/resume/generated?job=${t.jobId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-icon"
+                      title="Screening Q&A, job description and cover letter (Generated Resumes)"
+                      aria-label={`Screening Q&A for ${name}'s tailored resume (opens in a new tab)`}
+                    >
+                      <MessageSquareText className="h-3.5 w-3.5" aria-hidden />
+                    </a>
                     {!marked({ accountId: acc, tailoredJobId: t.jobId }) && (
                       <button type="button" className="btn-icon" onClick={() => onTailor(acc)} title="Generate again" aria-label={`Re-tailor for ${name}`}>
                         <RotateCcw className="h-3.5 w-3.5" aria-hidden />
