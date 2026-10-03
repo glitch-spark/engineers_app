@@ -17,6 +17,7 @@ function reason(row: api.JobApplyRow): string {
   if (row.forceInclude) return 'Included anyway';
   if (failing.length) return failing.join(' · ');
   if (row.groupKey === 'none') unknown.push('location not stated');
+  if (row.jdStructured === false) unknown.push('read from page text, not job-site data');
   return unknown.join(' · ');
 }
 

@@ -1753,6 +1753,8 @@ export interface JobApplyRow {
   markets?: string[];
   forceInclude?: boolean;
   jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | null;
+  /** false: read from the page's text only (no job-site API or posting data), so it needs a check. */
+  jdStructured?: boolean | null;
   postedDate?: string | null;
   workMode?: 'remote' | 'hybrid' | 'onsite' | 'unknown' | null;
   allowedLocations: { kind: 'country' | 'region'; value: string }[];
