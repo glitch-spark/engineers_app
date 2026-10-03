@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, ListFilter, Loader2, Square, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Square, X } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyMarkRef, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -14,7 +14,7 @@ import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import RunSummary from '../components/jobApplies/RunSummary';
-import StepTrack from '../components/jobApplies/StepTrack';
+import StepTrack, { type Step } from '../components/jobApplies/StepTrack';
 import ScreeningReport from '../components/jobApplies/ScreeningReport';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import Segmented from '../components/jobApplies/Segmented';
@@ -133,7 +133,8 @@ export default function JobApplyRun() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
-  const [showScreening, setShowScreening] = useState(false);
+  // An earlier step opened from the step track (null: the run's own step).
+  const [stepView, setStepView] = useState<Step | null>(null);
   const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
   const [tailorProfiles, setTailorProfiles] = useState<Set<string>>(new Set());
   const [tailorPreview, setTailorPreview] = useState<{ queued: number; skippedCap: number } | null>(null);
@@ -448,6 +449,7 @@ export default function JobApplyRun() {
   // Keyboard flow for fast applying (see SHORTCUTS).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (stepView !== null) return; // an earlier step is shown: the shortcuts act on step 3's table
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target)) return;
       if (e.key === '?') {
         e.preventDefault();
@@ -585,14 +587,20 @@ export default function JobApplyRun() {
           }
         />
         <StepTrack
-          current={runStep(run)}
+          current={stepView ?? runStep(run)}
+          reached={runStep(run)}
+          onStep={(s) => setStepView(s === runStep(run) ? null : s)}
           hint={
-            run.status === 'screened'
-              ? 'Pick who applies in each market, then score. Next: the best resume per job, ready to tailor and apply.'
-              : 'Opening every link and reading each job. Next: you pick which profiles apply in each market.'
+            stepView === 1
+              ? 'Every job and what the check found. Go to ② to pick who applies.'
+              : run.status === 'screened'
+                ? 'Pick who applies in each market, then score. Next: the best resume per job, ready to tailor and apply.'
+                : 'Opening every link and reading each job. Next: you pick which profiles apply in each market.'
           }
         />
-        {run.status === 'screened' ? (
+        {run.status === 'screened' && stepView === 1 ? (
+          <ScreeningReport runId={runId} checksOnly onRunChanged={() => void mutateRun()} />
+        ) : run.status === 'screened' ? (
           <ScreeningReport runId={runId} onStarted={() => void mutateRun()} onRunChanged={() => void mutateRun()} />
         ) : active ? (
           <section className="panel space-y-3 p-6" aria-label="Checking jobs">
@@ -625,47 +633,77 @@ export default function JobApplyRun() {
   ];
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selected.has(r._id));
 
+  const header = (
+    <PageHeader
+      title={run.fileName}
+      backTo="/job-applies"
+      action={
+        <>
+          <button type="button" className="btn-outline btn-sm" onClick={() => setShowHelp(true)}>
+            <Keyboard className="h-4 w-4" aria-hidden />
+            Shortcuts
+          </button>
+          {active && (
+            <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
+              {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
+              Cancel run
+            </button>
+          )}
+        </>
+      }
+    />
+  );
+  const track = (
+    <StepTrack
+      current={stepView ?? 3}
+      reached={run.screenedAt ? 3 : undefined}
+      onStep={(s) => setStepView(s === 3 ? null : s)}
+      hint={
+        stepView === 1
+          ? 'Every job and what the check found.'
+          : stepView === 2
+            ? active
+              ? 'Scoring is running with these picks. You can change them once it’s done.'
+              : 'Change who applies in each location group, then score again. Your tailored resumes, sheet rows and applied marks stay.'
+            : active
+              ? 'Scoring your resumes against each job. Next: export to your sheet, tailor the rest, apply.'
+              : 'Export to your sheet, tailor the jobs that need it, then apply and mark them applied.'
+      }
+    />
+  );
+
+  // An earlier step, opened from the step track: ① what the check found, ② the picks (change them, score again).
+  if (stepView !== null) {
+    return (
+      <div className="space-y-5">
+        {header}
+        {track}
+        <button type="button" className="btn-outline btn-sm" onClick={() => setStepView(null)}>
+          <ChevronRight className="h-4 w-4 rotate-180" aria-hidden /> Back to ③ Tailor &amp; apply
+        </button>
+
+        {stepView === 1 ? (
+          <ScreeningReport runId={runId} checksOnly readOnly />
+        ) : active ? (
+          <ScreeningReport runId={runId} readOnly assignments={run.assignments} />
+        ) : (
+          <ScreeningReport
+            runId={runId}
+            rescore={{ assignments: run.assignments, selection: run.selection, threshold: run.threshold }}
+            onStarted={() => {
+              setStepView(null);
+              void mutateRun();
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      <PageHeader
-        title={run.fileName}
-        backTo="/job-applies"
-        action={
-          <>
-            {run.screenedAt && (
-              <button
-                type="button"
-                className="btn-outline btn-sm"
-                aria-pressed={showScreening}
-                onClick={() => setShowScreening((v) => !v)}
-              >
-                <ListFilter className="h-4 w-4" aria-hidden />
-                {showScreening ? 'Hide screening' : 'Back to screening'}
-              </button>
-            )}
-            <button type="button" className="btn-outline btn-sm" onClick={() => setShowHelp(true)}>
-              <Keyboard className="h-4 w-4" aria-hidden />
-              Shortcuts
-            </button>
-            {active && (
-              <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
-                {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
-                Cancel run
-              </button>
-            )}
-          </>
-        }
-      />
-      <StepTrack
-        current={3}
-        hint={
-          active
-            ? 'Scoring your resumes against each job. Next: export to your sheet, tailor the rest, apply.'
-            : 'Export to your sheet, tailor the jobs that need it, then apply and mark them applied.'
-        }
-      />
-
-      {showScreening && <ScreeningReport runId={runId} readOnly assignments={run.assignments} />}
+      {header}
+      {track}
 
       <RunSummary
         run={run}

@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Download, ListChecks, Loader2 } from 'lucide-react';
@@ -67,6 +67,8 @@ export default function ScreeningReport({
   runId,
   readOnly,
   assignments,
+  checksOnly,
+  rescore,
   onStarted,
   onRunChanged,
 }: {
@@ -74,6 +76,10 @@ export default function ScreeningReport({
   readOnly?: boolean;
   /** Read-only view of a started run: what was picked. */
   assignments?: Record<string, string[]>;
+  /** Step ①: only what the check found, no profile picks or scoring. */
+  checksOnly?: boolean;
+  /** Back at step ② after scoring: start from these picks; scoring again replaces the run's scores. */
+  rescore?: { assignments: Record<string, string[]>; selection: { accountId: string; resumeIds: string[] }[]; threshold: number };
   onStarted?: () => void;
   /** The run's status changed from here (a retry): refresh it. */
   onRunChanged?: () => void;
@@ -85,12 +91,27 @@ export default function ScreeningReport({
 
   const [picks, setPicks] = useState<Record<string, Set<string>>>({});
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
-  const [threshold, setThreshold] = useState(readThreshold);
+  const [threshold, setThreshold] = useState(() => rescore?.threshold ?? readThreshold());
   const [open, setOpen] = useState<JobApplyScreenBucket | null>(null);
   const [starting, setStarting] = useState(false);
   const [checksOpen, setChecksOpen] = useState(false);
   const [savingAge, setSavingAge] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  // Scoring again: start from the picks used last time (a pick for every group, "*", shows in each group).
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!rescore || !report || !options.size || seeded.current) return;
+    seeded.current = true;
+    const every = rescore.assignments['*'] ?? [];
+    setPicks(Object.fromEntries(report.groups.map((g) => [g.key, new Set([...(rescore.assignments[g.key] ?? []), ...every])])));
+    const off = new Set<string>();
+    for (const sel of rescore.selection) {
+      if (!sel.resumeIds.length) continue; // empty = every resume
+      for (const r of options.get(sel.accountId)?.resumes ?? []) if (!sel.resumeIds.includes(r.id)) off.add(r.id);
+    }
+    setUnchecked(off);
+  }, [rescore, report, options]);
 
   if (!report) {
     return (
@@ -264,7 +285,7 @@ export default function ScreeningReport({
               {BUCKET_LABEL[b]} {report.buckets[b]}
             </button>
           ))}
-          {!readOnly && (
+          {!readOnly && !rescore && (
             <label htmlFor={ids.age} className="ml-auto inline-flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
               Posted within
               <select
@@ -286,61 +307,63 @@ export default function ScreeningReport({
         </div>
         {open && (
           <div className="mt-3">
-            <BucketJobs runId={runId} bucket={open} readOnly={readOnly} onChanged={() => void mutate()} onRetried={onRunChanged} />
+            <BucketJobs runId={runId} bucket={open} readOnly={readOnly || !!rescore} onChanged={() => void mutate()} onRetried={onRunChanged} />
           </div>
         )}
       </div>
 
-      <div>
-        <h3 className="form-label">Apply with — by candidate location</h3>
-        {report.worth === 0 && (
-          <p className="hint">No jobs worth applying to. Open the buckets above to see why, or include jobs anyway.</p>
-        )}
-        <ul className="mt-2 space-y-2">
-          {report.groups.map((g) => (
-            <MarketRow
-              key={g.key}
-              group={g}
-              profiles={profiles}
-              options={options}
-              picked={picked(g.key)}
-              unchecked={unchecked}
-              readOnly={readOnly}
-              onAdd={(id) => setPicked(g.key, id, true)}
-              onRemove={(id) => setPicked(g.key, id, false)}
-              onToggleResume={toggleResume}
-            />
-          ))}
-        </ul>
-        {report.others.length > 0 && (
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">Other locations</span> (not scored):{' '}
-            {report.others.map((o) => `${locationLabel(o.key)} ${o.jobs}`).join(' · ')}
-          </p>
-        )}
-        {profiles.length === 0 && !readOnly && (
-          <p className="hint mt-2">
-            No profiles yet.{' '}
-            <Link to="/accounts/new" className="font-medium text-sky-700 hover:underline dark:text-sky-400">
-              Add a profile
-            </Link>{' '}
-            with a resume or an HTML template.
-          </p>
-        )}
-        {profiles.some((p) => !p.country && !p.region) && !readOnly && (
-          <p className="hint mt-2">
-            Profiles without a country fit every group. Set {profiles.filter((p) => !p.country && !p.region).map((p) => p.name).join(', ')}’s
-            country for better suggestions.
-          </p>
-        )}
-      </div>
+      {!checksOnly && (
+        <div>
+          <h3 className="form-label">Apply with — by candidate location</h3>
+          {report.worth === 0 && (
+            <p className="hint">No jobs worth applying to. Open the buckets above to see why, or include jobs anyway.</p>
+          )}
+          <ul className="mt-2 space-y-2">
+            {report.groups.map((g) => (
+              <MarketRow
+                key={g.key}
+                group={g}
+                profiles={profiles}
+                options={options}
+                picked={picked(g.key)}
+                unchecked={unchecked}
+                readOnly={readOnly}
+                onAdd={(id) => setPicked(g.key, id, true)}
+                onRemove={(id) => setPicked(g.key, id, false)}
+                onToggleResume={toggleResume}
+              />
+            ))}
+          </ul>
+          {report.others.length > 0 && (
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <span className="font-medium text-zinc-800 dark:text-zinc-200">Other locations</span> (not scored):{' '}
+              {report.others.map((o) => `${locationLabel(o.key)} ${o.jobs}`).join(' · ')}
+            </p>
+          )}
+          {profiles.length === 0 && !readOnly && (
+            <p className="hint mt-2">
+              No profiles yet.{' '}
+              <Link to="/accounts/new" className="font-medium text-sky-700 hover:underline dark:text-sky-400">
+                Add a profile
+              </Link>{' '}
+              with a resume or an HTML template.
+            </p>
+          )}
+          {profiles.some((p) => !p.country && !p.region) && !readOnly && (
+            <p className="hint mt-2">
+              Profiles without a country fit every group. Set {profiles.filter((p) => !p.country && !p.region).map((p) => p.name).join(', ')}’s
+              country for better suggestions.
+            </p>
+          )}
+        </div>
+      )}
 
-      {!readOnly && (
+      {!readOnly && !checksOnly && (
         <div className="space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-800">
           {used.length > 0 && (
             <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 text-sm dark:border-sky-800 dark:bg-sky-950/20">
               <p className="font-semibold text-zinc-900 dark:text-zinc-50">
-                What “Score {plan.pairs} application{plan.pairs === 1 ? '' : 's'}” does
+                What “Score {plan.pairs} application{plan.pairs === 1 ? '' : 's'}{rescore ? ' again' : ''}” does
               </p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5 text-zinc-700 dark:text-zinc-300">
                 {used.map((p) => {
@@ -358,6 +381,9 @@ export default function ScreeningReport({
                     </li>
                   );
                 })}
+                {rescore && (
+                  <li>Replaces this run’s scores and suggestions. Your tailored resumes, sheet rows and applied marks stay.</li>
+                )}
                 <li>Next: step ③ lists the suggested jobs with their best resume; export to your sheet, tailor, mark applied.</li>
                 {[...plan.skipped.entries()].map(([m, n]) => (
                   <li key={m} className="text-amber-800 dark:text-amber-300">
@@ -387,6 +413,7 @@ export default function ScreeningReport({
               <button type="button" className="btn" onClick={start} disabled={!!blocker || starting || savingAge}>
                 {starting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 Score {plan.pairs} application{plan.pairs === 1 ? '' : 's'}
+                {rescore ? ' again' : ''}
                 {!starting && <ArrowRight className="h-4 w-4" aria-hidden />}
               </button>
             </div>
