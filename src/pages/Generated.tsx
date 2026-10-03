@@ -915,6 +915,8 @@ function ScreeningPanel({
       onChanged();
     } catch (err) {
       notify.error(err, 'Cover letter generation failed');
+      // A request that timed out client-side may still have saved on the server: refresh so it shows.
+      onChanged();
     } finally {
       setRegenerating(false);
     }

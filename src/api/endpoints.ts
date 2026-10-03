@@ -1298,9 +1298,10 @@ export interface CoverLetterRegenResult {
   coverLetterHistory: CoverLetterVersion[];
 }
 
-/** Writes the job's cover letter again (several model calls, so allow a long timeout). */
+/** Writes the job's cover letter again: up to four sequential model calls of up to 5 minutes each,
+ *  so the timeout is generous. The server finishes and saves even if the client gives up first. */
 export function regenerateCoverLetter(jobId: string, body: { model?: string; hook?: string }) {
-  return postJSON<CoverLetterRegenResult>(`/resume/jobs/${jobId}/cover-letter`, body, { timeoutMs: 180_000 });
+  return postJSON<CoverLetterRegenResult>(`/resume/jobs/${jobId}/cover-letter`, body, { timeoutMs: 600_000 });
 }
 
 export function generateScreeningAnswers(body: {
