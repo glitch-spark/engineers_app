@@ -21,7 +21,8 @@ function fieldErrorsFrom(err: unknown): FieldErrors | null {
   for (const item of detail as Array<{ loc?: unknown[]; msg?: string }>) {
     const field = item.loc?.[item.loc.length - 1];
     if (typeof field === 'string' && FIELDS.includes(field)) {
-      out[field as keyof api.BidderInput] = item.msg || 'Invalid value';
+      // Pydantic prefixes validator messages with "Value error, ".
+      out[field as keyof api.BidderInput] = (item.msg || '').replace(/^Value error, /, '') || 'Invalid value';
     }
   }
   return Object.keys(out).length ? out : null;
