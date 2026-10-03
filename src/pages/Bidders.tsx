@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import useSWR, { mutate as globalMutate } from 'swr';
 import * as api from '../api/endpoints';
-import { notify } from '../lib/notify';
+import { messageOf, notify } from '../lib/notify';
 import { countryFlag } from '../lib/countries';
 import { usd } from '../lib/money';
 import ActionMenu from '../components/ActionMenu';
@@ -21,7 +21,7 @@ export default function BiddersPage() {
   const [historyFor, setHistoryFor] = useState<api.Bidder | null>(null);
 
   const { data, mutate, isLoading } = useSWR(['bidders', showArchived] as const, () => api.listBidders(showArchived));
-  const { data: counts } = useSWR('bidder-live-counts', () => api.bidderLiveCounts(), { refreshInterval: 300_000 });
+  const { data: counts, error: countsError } = useSWR('bidder-live-counts', () => api.bidderLiveCounts(), { refreshInterval: 300_000 });
   const bidders = data?.bidders ?? [];
 
   // A new, edited or archived bidder changes the live-count map too.
@@ -52,7 +52,10 @@ export default function BiddersPage() {
   };
 
   const countCell = (b: api.Bidder, key: 'today' | 'week') => {
-    if (!counts) return <LoadingSpinner size="sm" />;
+    if (!counts) {
+      if (countsError) return <span title={messageOf(countsError, 'Failed to load live counts')}>⚠️</span>;
+      return <LoadingSpinner size="sm" />;
+    }
     const c = counts[b._id];
     if (!c) return <span className="text-muted">—</span>;
     if (c.error) return <span title={c.error}>⚠️</span>;
