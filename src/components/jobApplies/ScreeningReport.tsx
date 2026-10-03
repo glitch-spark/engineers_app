@@ -353,11 +353,12 @@ export default function ScreeningReport({
                       {p.resumes.length === 0
                         ? `tailored resumes for ${e?.jobs ?? 0} ${where} job${e?.jobs === 1 ? '' : 's'}`
                         : `best of ${k} resume${k === 1 ? '' : 's'} on ${e?.jobs ?? 0} ${where} job${e?.jobs === 1 ? '' : 's'}` +
-                          (p.hasTemplate ? `; tailor where none scores ≥ ${threshold}` : '')}
+                          `; jobs where none scores ≥ ${threshold} aren't suggested` +
+                          (p.hasTemplate ? ' (tailor them from “All”)' : '')}
                     </li>
                   );
                 })}
-                <li>Next: step ③ shows the best resume per job; tailor the rest, export to your sheet, mark applied.</li>
+                <li>Next: step ③ lists the suggested jobs with their best resume; export to your sheet, tailor, mark applied.</li>
                 {[...plan.skipped.entries()].map(([m, n]) => (
                   <li key={m} className="text-amber-800 dark:text-amber-300">
                     {n} {marketLabel(m)} job{n === 1 ? '' : 's'} {n === 1 ? 'has' : 'have'} no profile and will be skipped.
