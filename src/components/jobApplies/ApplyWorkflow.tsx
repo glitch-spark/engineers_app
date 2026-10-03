@@ -82,6 +82,7 @@ export default function ApplyWorkflow({
   const markReady = profileFilter
     ? counts.byProfile.find((p) => p.accountId === profileFilter.accountId)?.ready ?? 0
     : counts.ready;
+  const toExport = counts.toExport ?? counts.toGo;
 
   return (
     <section className="card-compact space-y-3" aria-label="Apply workflow">
@@ -113,15 +114,17 @@ export default function ApplyWorkflow({
           n={1}
           icon={FileSpreadsheet}
           title="Export to sheet"
-          todo={counts.toGo > 0}
-          disabled={busy || counts.toGo === 0}
+          todo={toExport > 0}
+          disabled={busy || toExport === 0}
           onClick={onExport}
           detail={
-            counts.toGo === 0
-              ? 'Nothing to export'
+            toExport === 0
+              ? counts.toGo > 0
+                ? `All ${counts.toGo} in the sheet`
+                : 'Nothing to export'
               : counts.needsResume + counts.tailoring > 0
-                ? `${counts.toGo} to export · ${counts.needsResume + counts.tailoring} links fill in after tailoring`
-                : `${counts.toGo} to export, with resume links`
+                ? `${toExport} to export · ${counts.needsResume + counts.tailoring} links fill in after tailoring`
+                : `${toExport} to export, with resume links`
           }
         />
         <Step

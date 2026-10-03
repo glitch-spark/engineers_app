@@ -185,6 +185,18 @@ export default function GeneratedResumesPage() {
     const fresh = jobs.find((j) => j._id === panelJob._id);
     if (fresh && fresh !== panelJob) setPanelJob(fresh);
   }, [jobs, panelJob]);
+  // A drawer opened from a Job Applies link may show a resume that isn't on this list page, so the list refresh
+  // alone won't update it: fetch it directly too.
+  const panelId = panelJob?._id;
+  const panelOffPage = !!panelId && !jobs.some((j) => j._id === panelId);
+  const refreshPanel = () => {
+    void mutate();
+    if (!panelId || !panelOffPage) return;
+    api
+      .getResumeJob(panelId)
+      .then((fresh) => setPanelJob((cur) => (cur?._id === panelId ? fresh : cur)))
+      .catch(() => {});
+  };
   const polling = jobs.some((j) => j.status === 'queued' || j.status === 'in_progress');
 
   // Auto-download newly-completed jobs (only newly-transitioned).
@@ -464,7 +476,7 @@ export default function GeneratedResumesPage() {
         <ScreeningPanel
           job={panelJob}
           onClose={() => setPanelJob(null)}
-          onChanged={mutate}
+          onChanged={refreshPanel}
         />
       )}
     </div>

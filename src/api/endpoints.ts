@@ -1699,6 +1699,8 @@ export interface JobApplyApplicationCounts {
   jobs: number;
   /** Applications not applied yet (ready + tailoring + needsResume). */
   toGo: number;
+  /** Applications to go that aren't in the shared sheet yet. */
+  toExport?: number;
   applied: number;
   /** Has a resume to apply with: the tailored one when done, else the matching uploaded one. */
   ready: number;
