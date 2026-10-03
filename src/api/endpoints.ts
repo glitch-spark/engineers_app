@@ -1638,6 +1638,8 @@ export interface JobApplyRun {
   maxAgeDays: number;
   counts: JobApplyCounts;
   suggested: number;
+  /** Failed jobs a retry can help (closed jobs excluded). */
+  retryable?: number;
   createdAt: string;
   finishedAt?: string | null;
   error?: string | null;

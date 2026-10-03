@@ -583,7 +583,7 @@ export default function JobApplyRun() {
           }
         />
         {run.status === 'screened' ? (
-          <ScreeningReport runId={runId} onStarted={() => void mutateRun()} />
+          <ScreeningReport runId={runId} onStarted={() => void mutateRun()} onRunChanged={() => void mutateRun()} />
         ) : active ? (
           <section className="panel space-y-3 p-6" aria-label="Checking jobs">
             <p className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300" role="status">

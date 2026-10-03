@@ -47,12 +47,15 @@ export default function ScreeningReport({
   readOnly,
   assignments,
   onStarted,
+  onRunChanged,
 }: {
   runId: string;
   readOnly?: boolean;
   /** Read-only view of a started run: what was picked. */
   assignments?: Record<string, string[]>;
   onStarted?: () => void;
+  /** The run's status changed from here (a retry): refresh it. */
+  onRunChanged?: () => void;
 }) {
   const ids = { age: useId(), threshold: useId() };
   const { data: report, mutate } = useSWR(['job-apply-screening', runId], () => api.getJobApplyScreening(runId));
@@ -123,7 +126,7 @@ export default function ScreeningReport({
   };
 
   const start = async () => {
-    if (blocker || starting) return;
+    if (blocker || starting || savingAge) return;
     setStarting(true);
     try {
       const chosen = Object.fromEntries(
@@ -198,7 +201,7 @@ export default function ScreeningReport({
         </div>
         {open && (
           <div className="mt-3">
-            <BucketJobs runId={runId} bucket={open} readOnly={readOnly} onChanged={() => void mutate()} />
+            <BucketJobs runId={runId} bucket={open} readOnly={readOnly} onChanged={() => void mutate()} onRetried={onRunChanged} />
           </div>
         )}
       </div>
@@ -303,7 +306,7 @@ export default function ScreeningReport({
               <p className="text-sm text-zinc-600 dark:text-zinc-400" aria-live="polite">
                 {blocker ?? used.map((p) => `${p.name}: ${jobsFor(p._id)}`).join(' · ')}
               </p>
-              <button type="button" className="btn" onClick={start} disabled={!!blocker || starting}>
+              <button type="button" className="btn" onClick={start} disabled={!!blocker || starting || savingAge}>
                 {starting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 Score &amp; continue
                 {!starting && <ArrowRight className="h-4 w-4" aria-hidden />}

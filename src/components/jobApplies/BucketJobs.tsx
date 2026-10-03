@@ -25,11 +25,14 @@ export default function BucketJobs({
   bucket,
   readOnly,
   onChanged,
+  onRetried,
 }: {
   runId: string;
   bucket: JobApplyScreenBucket;
   readOnly?: boolean;
   onChanged: () => void;
+  /** The run went back to checking jobs: refresh it so the page shows progress again. */
+  onRetried?: () => void;
 }) {
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
@@ -59,6 +62,7 @@ export default function BucketJobs({
       const res = await api.retryJobApplyRun(runId);
       notify.info(`Checking ${res.reset} job${res.reset === 1 ? '' : 's'} again`);
       onChanged();
+      onRetried?.();
     } catch (err) {
       notify.error(err, 'Could not retry');
     } finally {
@@ -75,7 +79,7 @@ export default function BucketJobs({
         {!readOnly && (bucket === 'not_fetched' || bucket === 'read_failed') && (data?.pagination.total ?? 0) > 0 && (
           <button type="button" className="btn-outline btn-sm" onClick={retry} disabled={busy !== null}>
             {busy === 'retry' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
-            Retry {data?.pagination.total}
+            Retry jobs that failed
           </button>
         )}
       </div>

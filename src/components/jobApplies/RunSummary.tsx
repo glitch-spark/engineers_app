@@ -87,10 +87,10 @@ export default function RunSummary({
           ) : (
             <span className={RUN_STATUS_BADGE[run.status]}>{RUN_STATUS_LABEL[run.status]}</span>
           )}
-          {!active && run.counts.failed > 0 && (
+          {!active && (run.retryable ?? run.counts.failed) > 0 && (
             <button type="button" className="btn-outline btn-sm" onClick={onRetry} disabled={retrying}>
               {retrying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
-              Retry {run.counts.failed} failed
+              Retry {run.retryable ?? run.counts.failed} failed
             </button>
           )}
         </div>
