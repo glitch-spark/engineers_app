@@ -209,7 +209,7 @@ export default function ExportSheetDialog({
           </button>
           <button type="button" className="btn" onClick={() => void exportNow()} disabled={saving || check.state !== 'ok' || ready === 0}>
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            {ready ? `Add ${ready} row${ready === 1 ? '' : 's'}` : 'Nothing to add'}
+            {check.state !== 'ok' ? 'Add rows' : ready ? `Add ${ready} row${ready === 1 ? '' : 's'}` : 'Nothing to add'}
           </button>
         </div>
       </div>

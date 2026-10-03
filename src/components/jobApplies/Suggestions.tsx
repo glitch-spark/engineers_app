@@ -118,7 +118,7 @@ export default function Suggestions({
           const n = s ? row.suggestions.indexOf(s) + 1 : 0;
           const t = row.tailored.find((x) => x.accountId === acc);
           return (
-            <li key={acc} className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-center gap-x-2 py-1">
+            <li key={acc} className="grid grid-cols-[7rem_minmax(7.5rem,1fr)_auto] items-center gap-x-2 py-1">
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100" title={name}>
                   {name}
@@ -167,8 +167,10 @@ export default function Suggestions({
                 )}
               </div>
 
-              {/* Tailored resume for this profile */}
-              <div className="flex items-center justify-end gap-1">
+              {/* Tailored resume for this profile; once done, its actions get their own line under the uploaded one */}
+              <div
+                className={`flex items-center gap-1 ${t?.status === 'completed' ? 'col-span-2 col-start-2 justify-start' : 'justify-end'}`}
+              >
                 {!t ? (
                   <button type="button" className="btn-outline btn-sm whitespace-nowrap py-0.5" onClick={() => onTailor(acc)}>
                     <Sparkles className="h-3.5 w-3.5" aria-hidden />
