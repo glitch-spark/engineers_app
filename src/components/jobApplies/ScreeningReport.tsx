@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Download, ListChecks, Loader2 } from 'lucide-react';
@@ -8,7 +8,7 @@ import { notify } from '../../lib/notify';
 import BucketJobs from './BucketJobs';
 import ExportSheetDialog from './ExportSheetDialog';
 import MarketRow from './MarketRow';
-import { selectionFor, toProfile, usable, type ProfileOption } from './ProfilePicker';
+import { selectionFor, toProfile, type ProfileOption } from './ProfilePicker';
 import { BUCKET_COLOR, BUCKET_LABEL, BUCKET_ORDER, locationLabel, marketLabel } from './format';
 
 const PREFS_KEY = 'jobApplies.newRun';
@@ -59,14 +59,9 @@ export function scorePlan(report: JobApplyScreening, picked: (key: string) => Se
   return { per, pairs, skipped };
 }
 
-/** Fitting, usable profiles per group: the starting picks. */
-function initialPicks(report: JobApplyScreening, usableIds: Set<string>): Record<string, Set<string>> {
-  return Object.fromEntries(report.groups.map((g) => [g.key, new Set(g.fits.filter((id) => usableIds.has(id)))]));
-}
-
 /**
  * Layout A (spec 2026-10-02 §5): how many jobs are worth applying to, why the rest were dropped, and the worthwhile
- * jobs by location with the profiles that fit each group ticked. "Score & continue" scores only the picked pairs.
+ * jobs by location. No profile starts picked: the user adds who applies in each location group. "Score & continue" scores only the picked pairs.
  */
 export default function ScreeningReport({
   runId,
@@ -96,16 +91,6 @@ export default function ScreeningReport({
   const [checksOpen, setChecksOpen] = useState(false);
   const [savingAge, setSavingAge] = useState(false);
   const [exporting, setExporting] = useState(false);
-
-  // Start from the fitting profiles; keep the user's picks for groups that still exist after a refresh.
-  const groupKeys = report?.groups.map((g) => g.key).join('|') ?? '';
-  useEffect(() => {
-    if (!report || readOnly || !options.size) return;
-    const usableIds = new Set([...options.values()].filter(usable).map((p) => p._id));
-    const fresh = initialPicks(report, usableIds);
-    setPicks((prev) => Object.fromEntries(Object.entries(fresh).map(([k, v]) => [k, prev[k] ?? v])));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupKeys, options, readOnly]);
 
   if (!report) {
     return (
