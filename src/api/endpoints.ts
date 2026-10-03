@@ -1891,6 +1891,8 @@ export interface JobApplyScreening {
   groups: JobApplyScreeningGroup[];
   /** Jobs open only to candidates outside the markets, per location group (counted, not scored). */
   others: { key: string; jobs: number }[];
+  /** Each worthwhile job once, by the set of markets it's in ('none' = no stated location). */
+  combos?: { markets: string[]; jobs: number; check: number }[];
   profiles: JobApplyScreeningProfile[];
 }
 

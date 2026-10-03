@@ -4,10 +4,10 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Download, Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket, JobApplyScreening } from '../../api/endpoints';
-import { countryFlag } from '../../lib/countries';
 import { notify } from '../../lib/notify';
 import BucketJobs from './BucketJobs';
-import { ResumeChecklist, selectionFor, toProfile, usable, type ProfileOption } from './ProfilePicker';
+import MarketRow from './MarketRow';
+import { selectionFor, toProfile, usable, type ProfileOption } from './ProfilePicker';
 import { BUCKET_COLOR, BUCKET_LABEL, BUCKET_ORDER, locationLabel, marketLabel } from './format';
 
 const PREFS_KEY = 'jobApplies.newRun';
@@ -31,6 +31,31 @@ function savePrefs(patch: Record<string, number>): void {
   } catch {
     /* storage unavailable: just don't remember */
   }
+}
+
+/**
+ * What "Score N applications" will do, from the picks: each profile's jobs (a job in two of its markets counts once),
+ * the markets it covers, and jobs nobody covers.
+ */
+export function scorePlan(report: JobApplyScreening, picked: (key: string) => Set<string>) {
+  const per = new Map<string, { jobs: number; markets: Set<string> }>();
+  const skipped = new Map<string, number>();
+  for (const c of report.combos ?? []) {
+    const who = new Set<string>();
+    for (const m of c.markets) for (const id of picked(m)) who.add(id);
+    if (who.size === 0) {
+      for (const m of c.markets) skipped.set(m, (skipped.get(m) ?? 0) + c.jobs);
+      continue;
+    }
+    for (const id of who) {
+      const e = per.get(id) ?? { jobs: 0, markets: new Set<string>() };
+      e.jobs += c.jobs;
+      c.markets.filter((m) => picked(m).has(id)).forEach((m) => e.markets.add(m));
+      per.set(id, e);
+    }
+  }
+  const pairs = [...per.values()].reduce((n, e) => n + e.jobs, 0);
+  return { per, pairs, skipped };
 }
 
 /** Fitting, usable profiles per group: the starting picks. */
@@ -91,8 +116,8 @@ export default function ScreeningReport({
   const profiles = report.profiles;
   const picked = (key: string): Set<string> =>
     readOnly ? new Set([...(assignments?.[key] ?? []), ...(assignments?.['*'] ?? [])]) : picks[key] ?? new Set();
-  const jobsFor = (profileId: string) =>
-    report.groups.reduce((n, g) => n + (picked(g.key).has(profileId) ? g.jobs : 0), 0);
+  const plan = scorePlan(report, picked);
+  const jobsFor = (profileId: string) => plan.per.get(profileId)?.jobs ?? 0;
   const used: ProfileOption[] = profiles
     .filter((p) => jobsFor(p.id) > 0)
     .map((p) => options.get(p.id))
@@ -105,12 +130,19 @@ export default function ScreeningReport({
         ? 'Pick at least one profile for a group'
         : null;
 
-  const toggle = (key: string, profileId: string) =>
+  const setPicked = (key: string, profileId: string, on: boolean) =>
     setPicks((prev) => {
       const next = new Set(prev[key] ?? []);
-      if (next.has(profileId)) next.delete(profileId);
-      else next.add(profileId);
+      if (on) next.add(profileId);
+      else next.delete(profileId);
       return { ...prev, [key]: next };
+    });
+  const toggleResume = (id: string) =>
+    setUnchecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
 
   const changeAge = async (days: number) => {
@@ -264,45 +296,22 @@ export default function ScreeningReport({
         {report.worth === 0 && (
           <p className="hint">No jobs worth applying to. Open the buckets above to see why, or include jobs anyway.</p>
         )}
-        {(
-
-          <ul className="mt-2 space-y-2">
-            {report.groups.map((g) => (
-              <li key={g.key} className="rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-700">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <p className="min-w-[12rem] text-sm">
-                    <span className="font-semibold text-zinc-900 dark:text-zinc-50">{marketLabel(g.key)}</span>
-                    <span className="text-zinc-600 dark:text-zinc-400"> · {g.jobs} job{g.jobs === 1 ? '' : 's'}</span>
-                    {g.check > 0 && <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">({g.check} need a check)</span>}
-                  </p>
-                  {g.jobs === 0 ? (
-                    <span className="hint">No jobs</span>
-                  ) : profiles.length === 0 ? (
-                    <span className="hint">No profiles</span>
-                  ) : (
-                    <div className="flex flex-wrap gap-x-4 gap-y-1">
-                      {profiles.map((p) => {
-                        const fits = g.fits.includes(p.id);
-                        const option = options.get(p.id);
-                        const disabled = readOnly || (option ? !usable(option) : true);
-                        return (
-                          <label key={p.id} className={`inline-flex items-center gap-1.5 text-sm ${disabled ? 'opacity-60' : 'cursor-pointer'}`}>
-                            <input type="checkbox" checked={picked(g.key).has(p.id)} disabled={disabled} onChange={() => toggle(g.key, p.id)} />
-                            <span className={fits ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-500'}>
-                              {p.country ? `${countryFlag(p.country)} ` : ''}
-                              {p.name}
-                            </span>
-                            {!fits && <span className="text-xs italic text-zinc-500">doesn’t fit</span>}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="mt-2 space-y-2">
+          {report.groups.map((g) => (
+            <MarketRow
+              key={g.key}
+              group={g}
+              profiles={profiles}
+              options={options}
+              picked={picked(g.key)}
+              unchecked={unchecked}
+              readOnly={readOnly}
+              onAdd={(id) => setPicked(g.key, id, true)}
+              onRemove={(id) => setPicked(g.key, id, false)}
+              onToggleResume={toggleResume}
+            />
+          ))}
+        </ul>
         {report.others.length > 0 && (
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             <span className="font-medium text-zinc-800 dark:text-zinc-200">Other locations</span> (not scored):{' '}
@@ -329,28 +338,33 @@ export default function ScreeningReport({
       {!readOnly && (
         <div className="space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-800">
           {used.length > 0 && (
-            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {used.map((p) => (
-                <li key={p._id} className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-700">
-                  <p className="mb-2 font-medium text-zinc-900 dark:text-zinc-50">
-                    {p.name} <span className="font-normal text-zinc-500">· {jobsFor(p._id)} jobs</span>
-                  </p>
-                  <ResumeChecklist
-                    profile={p}
-                    enabled
-                    unchecked={unchecked}
-                    onToggle={(id) =>
-                      setUnchecked((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(id)) next.delete(id);
-                        else next.add(id);
-                        return next;
-                      })
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
+            <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 text-sm dark:border-sky-800 dark:bg-sky-950/20">
+              <p className="font-semibold text-zinc-900 dark:text-zinc-50">
+                What “Score {plan.pairs} application{plan.pairs === 1 ? '' : 's'}” does
+              </p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-zinc-700 dark:text-zinc-300">
+                {used.map((p) => {
+                  const e = plan.per.get(p._id);
+                  const where = [...(e?.markets ?? [])].map(marketLabel).join(' + ');
+                  const k = p.resumes.filter((r) => !unchecked.has(r.id)).length;
+                  return (
+                    <li key={p._id}>
+                      <span className="font-medium">{p.name}</span>:{' '}
+                      {p.resumes.length === 0
+                        ? `tailored resumes for ${e?.jobs ?? 0} ${where} job${e?.jobs === 1 ? '' : 's'}`
+                        : `best of ${k} resume${k === 1 ? '' : 's'} on ${e?.jobs ?? 0} ${where} job${e?.jobs === 1 ? '' : 's'}` +
+                          (p.hasTemplate ? `; tailor where none scores ≥ ${threshold}` : '')}
+                    </li>
+                  );
+                })}
+                <li>Next: step ③ shows the best resume per job; tailor the rest, export to your sheet, mark applied.</li>
+                {[...plan.skipped.entries()].map(([m, n]) => (
+                  <li key={m} className="text-amber-800 dark:text-amber-300">
+                    {n} {marketLabel(m)} job{n === 1 ? '' : 's'} {n === 1 ? 'has' : 'have'} no profile and will be skipped.
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           <div className="flex flex-wrap items-end justify-between gap-4">
             <label htmlFor={ids.threshold} className="form-label w-64">
@@ -367,11 +381,11 @@ export default function ScreeningReport({
             </label>
             <div className="flex items-center gap-3">
               <p className="text-sm text-zinc-600 dark:text-zinc-400" aria-live="polite">
-                {blocker ?? used.map((p) => `${p.name}: ${jobsFor(p._id)}`).join(' · ')}
+                {blocker ?? `${used.length} profile${used.length === 1 ? '' : 's'}`}
               </p>
               <button type="button" className="btn" onClick={start} disabled={!!blocker || starting || savingAge}>
                 {starting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                Score &amp; continue
+                Score {plan.pairs} application{plan.pairs === 1 ? '' : 's'}
                 {!starting && <ArrowRight className="h-4 w-4" aria-hidden />}
               </button>
             </div>
