@@ -59,6 +59,13 @@ function shortModelName(model?: string | null): string {
   return slash >= 0 ? model.slice(slash + 1) : model;
 }
 
+const SHORT_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+
+/** "Oct 3, 9:20 PM": compact so the table fits; the full timestamp is in the tooltip. */
+function shortDate(d: Date | null): string {
+  return d ? d.toLocaleString(undefined, SHORT_DATE) : '—';
+}
+
 function LlmProviderBadge({
   provider,
   model,
@@ -350,7 +357,6 @@ export default function GeneratedResumesPage() {
                     aria-label="Select all"
                   />
                 </th>
-                <th className="px-3 py-2 font-medium">Created</th>
                 <th className="px-3 py-2 font-medium">Profile</th>
                 <th className="px-3 py-2 font-medium">Company</th>
                 <th className="px-3 py-2 font-medium">Status</th>
@@ -358,8 +364,9 @@ export default function GeneratedResumesPage() {
                 <th className="px-3 py-2 font-medium">Time</th>
                 <th className="px-3 py-2 font-medium">Tokens</th>
                 <th className="px-3 py-2 font-medium">File</th>
-                <th className="px-3 py-2 font-medium">Generated</th>
-                <th className="px-3 py-2 font-medium w-32 text-right">Actions</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap">Created</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap">Generated</th>
+                <th className="sticky right-0 z-10 bg-zinc-50 dark:bg-zinc-900/80 border-l border-zinc-200/80 dark:border-zinc-700/30 px-3 py-2 font-medium w-32 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="row-divider">
@@ -507,7 +514,7 @@ function JobRow({
 
   return (
     <>
-      <tr className="table-row reveal-scope cursor-pointer" onClick={onOpen}>
+      <tr className="table-row group reveal-scope cursor-pointer" onClick={onOpen}>
         <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
@@ -518,13 +525,10 @@ function JobRow({
             title={selectable ? 'Select for bulk download' : 'Not selectable until completed'}
           />
         </td>
-        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
-          {created ? created.toLocaleString() : '—'}
-        </td>
-        <td className="px-3 py-2 text-strong truncate reveal-on-focus max-w-[160px]" title={job.profileName}>
+        <td className="px-3 py-2 text-strong truncate reveal-on-focus max-w-[140px]" title={job.profileName}>
           {job.profileName}
         </td>
-        <td className="px-3 py-2 text-strong max-w-[280px]" title={job.jobUrl || job.companyName}>
+        <td className="px-3 py-2 text-strong max-w-[200px]" title={job.jobUrl || job.companyName}>
           <div className="truncate reveal-on-focus">
             {job.jobUrl ? (
               <a href={job.jobUrl} target="_blank" rel="noreferrer" className="link">
@@ -583,19 +587,25 @@ function JobRow({
             <div className="text-[11px] text-faint">{formatUsd(job.estimatedCostUsd)}</div>
           )}
         </td>
-        <td className="px-3 py-2 text-xs">
+        <td className="px-3 py-2 text-xs max-w-[150px]">
           {job.pdfFilename ? (
-            <span className="text-body font-mono break-all" title={job.pdfFilename}>
+            <span className="block truncate text-body font-mono" title={job.pdfFilename.split('/').pop()}>
               {job.pdfFilename.split('/').pop()}
             </span>
           ) : (
             <span className="text-faint">—</span>
           )}
         </td>
-        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
-          {generated ? generated.toLocaleString() : '—'}
+        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap" title={created ? created.toLocaleString() : undefined}>
+          {shortDate(created)}
         </td>
-        <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap" title={generated ? generated.toLocaleString() : undefined}>
+          {shortDate(generated)}
+        </td>
+        <td
+          className="sticky right-0 z-10 bg-white dark:bg-zinc-950 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-900 border-l border-zinc-200/80 dark:border-zinc-700/30 px-3 py-2 text-right"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="inline-flex gap-1 justify-end">
             {isFailed && (
               <button
