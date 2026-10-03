@@ -7,7 +7,8 @@ import Segmented from './Segmented';
 
 const PREFS_KEY = 'jobApplies.newRun';
 const LAST_SHEET_KEY = 'jobApplies.lastSheetUrl';
-const GSHEET_RE = /^https:\/\/docs\.google\.com\/spreadsheets\/(?:u\/\d+\/)?d\/[\w-]{10,}/;
+// Edit/view links, published links (/d/e/…) and links pasted without https:// (the backend accepts all three).
+const GSHEET_RE = /^(?:https:\/\/)?docs\.google\.com\/spreadsheets\/(?:u\/\d+\/)?d\/(?:e\/)?[\w-]{10,}/;
 const DEFAULT_MAX_AGE = 30;
 
 type SourceKind = 'gsheet' | 'file';
