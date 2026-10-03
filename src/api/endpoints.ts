@@ -1598,6 +1598,7 @@ export type JobApplyScreenBucket =
   | 'closed'
   | 'not_fetched'
   | 'read_failed'
+  | 'not_job'
   | 'clearance'
   | 'onsite'
   | 'too_old'

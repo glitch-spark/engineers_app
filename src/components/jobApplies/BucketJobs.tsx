@@ -11,6 +11,7 @@ const PAGE_SIZE = 25;
 
 function reason(row: api.JobApplyRow): string {
   if (row.status === 'fetch_failed' || row.status === 'llm_failed') return row.statusReason ?? '';
+  if (row.screen === 'not_job') return 'Not a single job posting (error page, job list or careers page)';
   const failing = (row.gates ?? []).filter((g) => g.result === 'fail').map((g) => g.reason || g.name);
   const unknown = (row.gates ?? []).filter((g) => g.result === 'unknown').map((g) => g.reason || g.name);
   if (row.forceInclude) return 'Included anyway';

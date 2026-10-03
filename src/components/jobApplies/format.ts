@@ -46,6 +46,7 @@ export const BUCKET_ORDER: JobApplyScreenBucket[] = [
   'other_location',
   'onsite',
   'clearance',
+  'not_job',
   'read_failed',
 ];
 
@@ -55,6 +56,7 @@ export const BUCKET_LABEL: Record<JobApplyScreenBucket, string> = {
   closed: 'Closed',
   not_fetched: 'Not fetched',
   read_failed: "Couldn't read",
+  not_job: 'Not a job page',
   clearance: 'Clearance required',
   onsite: 'On-site / hybrid',
   too_old: 'Too old',
@@ -68,6 +70,7 @@ export const BUCKET_COLOR: Record<JobApplyScreenBucket, string> = {
   closed: 'bg-zinc-400 dark:bg-zinc-500',
   not_fetched: 'bg-amber-500',
   read_failed: 'bg-amber-300 dark:bg-amber-700',
+  not_job: 'bg-zinc-200 dark:bg-zinc-700',
   clearance: 'bg-red-500',
   onsite: 'bg-red-300 dark:bg-red-700',
   too_old: 'bg-zinc-300 dark:bg-zinc-600',
