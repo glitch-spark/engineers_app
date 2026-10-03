@@ -3,14 +3,14 @@ import useSWR, { mutate as globalMutate } from 'swr';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import { countryFlag } from '../lib/countries';
+import { usd } from '../lib/money';
 import ActionMenu from '../components/ActionMenu';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PageHeader from '../components/PageHeader';
 import Switch from '../components/Switch';
 import BidderFormModal from '../components/bidders/BidderFormModal';
-
-const usd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import BidderHistoryPanel from '../components/bidders/BidderHistoryPanel';
 
 export default function BiddersPage() {
   const [showArchived, setShowArchived] = useState(false);
@@ -18,8 +18,7 @@ export default function BiddersPage() {
   const [editing, setEditing] = useState<api.Bidder | null>(null);
   const [pendingArchive, setPendingArchive] = useState<api.Bidder | null>(null);
   const [archiving, setArchiving] = useState(false);
-  // Opened by the History panel (added in a later task).
-  const [, setHistoryFor] = useState<api.Bidder | null>(null);
+  const [historyFor, setHistoryFor] = useState<api.Bidder | null>(null);
 
   const { data, mutate, isLoading } = useSWR(['bidders', showArchived] as const, () => api.listBidders(showArchived));
   const { data: counts } = useSWR('bidder-live-counts', () => api.bidderLiveCounts(), { refreshInterval: 300_000 });
@@ -146,6 +145,8 @@ export default function BiddersPage() {
           refresh();
         }}
       />
+
+      <BidderHistoryPanel bidder={historyFor} onClose={() => setHistoryFor(null)} />
 
       <ConfirmDialog
         open={!!pendingArchive}
