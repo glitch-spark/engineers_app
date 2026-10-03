@@ -18,6 +18,7 @@ import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import ModelSelect from '../components/ModelSelect';
 import { useModelChoice } from '../lib/useModelChoice';
+import { formatUsd } from '../lib/modelCost';
 import { useAuth } from '../auth/useAuth';
 
 const STEP_LABEL: Record<ResumeJobStep, string> = {
@@ -357,6 +358,7 @@ export default function GeneratedResumesPage() {
                 <th className="px-3 py-2 font-medium">Time</th>
                 <th className="px-3 py-2 font-medium">Tokens</th>
                 <th className="px-3 py-2 font-medium">File</th>
+                <th className="px-3 py-2 font-medium">Generated</th>
                 <th className="px-3 py-2 font-medium w-32 text-right">Actions</th>
               </tr>
             </thead>
@@ -456,6 +458,7 @@ function JobRow({
   const [deleting, setDeleting] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const created = job.createdAt ? new Date(job.createdAt) : null;
+  const generated = job.completedAt ? new Date(job.completedAt) : null;
   const elapsed = job.executionMs != null ? `${(job.executionMs / 1000).toFixed(1)}s` : '—';
   const inFlight = job.status === 'queued' || job.status === 'in_progress';
   const hasAnswers = job.screeningPairs && job.screeningPairs.length > 0;
@@ -569,12 +572,16 @@ function JobRow({
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{elapsed}</td>
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap tabular-nums" title={
           (job.inputTokens != null || job.outputTokens != null || job.reasoningTokens != null)
-            ? `input ${job.inputTokens ?? 0} · output ${job.outputTokens ?? 0} · reasoning ${job.reasoningTokens ?? 0}`
+            ? `input ${job.inputTokens ?? 0} · output ${job.outputTokens ?? 0} · reasoning ${job.reasoningTokens ?? 0}` +
+              (job.estimatedCostUsd != null ? ` · est. cost ${formatUsd(job.estimatedCostUsd)}` : '')
             : 'No usage recorded'
         }>
           {job.inputTokens != null || job.outputTokens != null
             ? `${(job.inputTokens ?? 0).toLocaleString()} / ${(job.outputTokens ?? 0).toLocaleString()}`
             : '—'}
+          {job.estimatedCostUsd != null && (
+            <div className="text-[11px] text-faint">{formatUsd(job.estimatedCostUsd)}</div>
+          )}
         </td>
         <td className="px-3 py-2 text-xs">
           {job.pdfFilename ? (
@@ -584,6 +591,9 @@ function JobRow({
           ) : (
             <span className="text-faint">—</span>
           )}
+        </td>
+        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
+          {generated ? generated.toLocaleString() : '—'}
         </td>
         <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
           <div className="inline-flex gap-1 justify-end">
@@ -848,6 +858,10 @@ function ScreeningPanel({
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetterCopied, setCoverLetterCopied] = useState(false);
   const screeningModel = useModelChoice('screening');
+  const coverLetterModel = useModelChoice('cover_letter');
+  const [regenerating, setRegenerating] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const coverLetterHistory = job.coverLetterHistory ?? [];
   const pairs = job.screeningPairs || [];
 
   useEffect(() => {
@@ -880,6 +894,29 @@ function ScreeningPanel({
       window.setTimeout(() => setCoverLetterCopied(false), 1200);
     } catch {
       notify.error('Failed to copy');
+    }
+  }
+
+  async function copyText(content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      notify.success('Cover letter copied');
+    } catch {
+      notify.error('Failed to copy');
+    }
+  }
+
+  async function regenerateCover() {
+    setRegenerating(true);
+    try {
+      // '' (model list unavailable) is omitted so the server picks its default.
+      await api.regenerateCoverLetter(job._id, { model: coverLetterModel.value || undefined });
+      notify.success('Cover letter written');
+      onChanged();
+    } catch (err) {
+      notify.error(err, 'Cover letter generation failed');
+    } finally {
+      setRegenerating(false);
     }
   }
 
@@ -989,8 +1026,10 @@ function ScreeningPanel({
             )}
           </section>
 
-          {job.coverLetterText && (
+          {(job.coverLetterText || job.status === 'completed') && (
             <section className="space-y-2">
+              {job.coverLetterText ? (
+              <>
               <button
                 type="button"
                 onClick={() => setCoverLetterOpen((v) => !v)}
@@ -1019,6 +1058,74 @@ function ScreeningPanel({
                 <pre id={`${titleId}-cover`} className="text-sm text-strong bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
                   {job.coverLetterText}
                 </pre>
+              )}
+              </>
+              ) : (
+                <p className="text-xs text-faint italic">No cover letter yet.</p>
+              )}
+
+              {job.coverLetterLlmProvider && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted">Written by:</span>
+                  <LlmProviderBadge
+                    provider={job.coverLetterLlmProvider}
+                    model={job.coverLetterLlmModel}
+                    fallbackUsed={job.coverLetterLlmFallbackUsed}
+                  />
+                </div>
+              )}
+              {job.coverLetterLlmFallbackReason && (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-snug">
+                  <span className="font-medium">Cover letter fallback:</span> {job.coverLetterLlmFallbackReason}
+                </p>
+              )}
+
+              <ModelSelect
+                label={job.coverLetterText ? 'Regenerate with' : 'Write with'}
+                options={coverLetterModel.options}
+                value={coverLetterModel.value}
+                onChange={coverLetterModel.setValue}
+                loading={coverLetterModel.loading}
+                disabled={regenerating}
+              />
+              <button type="button" className="btn" onClick={regenerateCover} disabled={regenerating}>
+                {regenerating ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Writing...</>
+                ) : job.coverLetterText ? (
+                  'Regenerate cover letter'
+                ) : (
+                  'Write cover letter'
+                )}
+              </button>
+
+              {coverLetterHistory.length > 0 && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen((v) => !v)}
+                    className="link-inline text-xs text-muted hover:text-sky-600 dark:hover:text-sky-400"
+                    aria-expanded={historyOpen}
+                    aria-controls={`${titleId}-cover-history`}
+                  >
+                    <span aria-hidden>{historyOpen ? '▾' : '▸'}</span> Previous versions ({coverLetterHistory.length})
+                  </button>
+                  {historyOpen && (
+                    <ul id={`${titleId}-cover-history`} className="space-y-2">
+                      {coverLetterHistory.map((v, i) => (
+                        <li key={`${v.createdAt}-${i}`} className="panel p-3 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+                            <span className="font-mono truncate" title={v.model}>{v.model || v.provider}</span>
+                            <span className="whitespace-nowrap">{new Date(v.createdAt).toLocaleString()}</span>
+                          </div>
+                          <pre className="text-xs text-strong whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">{v.text}</pre>
+                          <button type="button" className="link-inline text-xs" onClick={() => copyText(v.text)}>
+                            Copy
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </section>
           )}
