@@ -19,14 +19,29 @@ function writeStored(key: string, value: string): void {
   }
 }
 
+export interface ModelChoice {
+  /** Providers the server can use, in picker order. */
+  providers: api.ModelProviderInfo[];
+  /** Provider of the current pick ('' when no models could be loaded). */
+  provider: string;
+  /** Switch provider: selects that provider's recommended preset. */
+  setProvider: (id: string) => void;
+  /** The current provider's suggested models, best first. */
+  options: api.ModelOption[];
+  /** Selected model id; '' when the model list could not load (callers then omit it). */
+  value: string;
+  setValue: (id: string) => void;
+  loading: boolean;
+}
+
 /**
  * The selectable models for one task plus the user's current pick.
  *
  * `value` is the remembered choice if the server still offers it, else the server default, else the
- * first option. It is '' when the model list could not load: callers then omit the model from the
+ * first model. It is '' when the model list could not load: callers then omit the model from the
  * request and the server picks its default, so generation never depends on this endpoint.
  */
-export function useModelChoice(task: api.ModelTask) {
+export function useModelChoice(task: api.ModelTask): ModelChoice {
   const { user } = useAuth();
   const storageKey = `resume-model:${user?.id ?? 'anon'}:${task}`;
   const { data, isLoading } = useSWR(['resume-models', task], () => api.listResumeModels(task), {
@@ -36,11 +51,14 @@ export function useModelChoice(task: api.ModelTask) {
   const [stored, setStored] = useState<string | null>(() => readStored(storageKey));
   useEffect(() => setStored(readStored(storageKey)), [storageKey]);
 
-  const options = useMemo(() => data?.models ?? [], [data]);
+  const all = useMemo(() => data?.models ?? [], [data]);
+  const providers = useMemo(() => data?.providers ?? [], [data]);
   const value = useMemo(() => {
-    if (stored && options.some((o) => o.id === stored)) return stored;
-    return data?.defaultId ?? options[0]?.id ?? '';
-  }, [stored, options, data]);
+    if (stored && all.some((o) => o.id === stored)) return stored;
+    return data?.defaultId ?? all[0]?.id ?? '';
+  }, [stored, all, data]);
+  const provider = all.find((o) => o.id === value)?.provider ?? '';
+  const options = useMemo(() => all.filter((o) => o.provider === provider), [all, provider]);
 
   const setValue = useCallback(
     (id: string) => {
@@ -49,6 +67,13 @@ export function useModelChoice(task: api.ModelTask) {
     },
     [storageKey],
   );
+  const setProvider = useCallback(
+    (id: string) => {
+      const preset = all.find((o) => o.provider === id && o.recommended) ?? all.find((o) => o.provider === id);
+      if (preset) setValue(preset.id);
+    },
+    [all, setValue],
+  );
 
-  return { options, value, setValue, loading: isLoading };
+  return { providers, provider, setProvider, options, value, setValue, loading: isLoading };
 }

@@ -364,22 +364,8 @@ export default function ResumeGeneratorPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <ModelSelect
-            label="Resume model"
-            options={resumeModel.options}
-            value={resumeModel.value}
-            onChange={resumeModel.setValue}
-            loading={resumeModel.loading}
-          />
-          {generateCoverLetter && (
-            <ModelSelect
-              label="Cover letter model"
-              options={coverLetterModel.options}
-              value={coverLetterModel.value}
-              onChange={coverLetterModel.setValue}
-              loading={coverLetterModel.loading}
-            />
-          )}
+          <ModelSelect label="Resume model" choice={resumeModel} />
+          {generateCoverLetter && <ModelSelect label="Cover letter model" choice={coverLetterModel} />}
         </div>
 
         {generateCoverLetter && (

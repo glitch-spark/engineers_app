@@ -1261,7 +1261,12 @@ export interface ScreeningPair {
 
 export type LlmProvider = 'free' | 'openai' | 'anthropic';
 export type ModelTask = 'resume' | 'cover_letter' | 'screening';
-export type ModelTier = 'free' | 'budget' | 'balanced' | 'premium';
+export type ModelTier = 'budget' | 'balanced' | 'premium';
+
+export interface ModelProviderInfo {
+  id: LlmProvider;
+  label: string;
+}
 
 /** One selectable model from GET /resume/models (only models the server can run right now). */
 export interface ModelOption {
@@ -1273,10 +1278,14 @@ export interface ModelOption {
   /** Typical cost of one run in USD; null when the price is unknown. */
   estCostUsd: number | null;
   isDefault: boolean;
+  /** First suggestion for its provider and task. */
+  recommended: boolean;
+  /** Short label such as "Best value", "Max quality", "Older generation". */
+  tag: string;
 }
 
 export function listResumeModels(task: ModelTask) {
-  return apiFetch<{ task: ModelTask; defaultId: string | null; models: ModelOption[] }>(
+  return apiFetch<{ task: ModelTask; defaultId: string | null; providers: ModelProviderInfo[]; models: ModelOption[] }>(
     `/resume/models${qs({ task })}`
   );
 }

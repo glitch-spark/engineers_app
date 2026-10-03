@@ -1084,10 +1084,7 @@ function ScreeningPanel({
 
               <ModelSelect
                 label={job.coverLetterText ? 'Regenerate with' : 'Write with'}
-                options={coverLetterModel.options}
-                value={coverLetterModel.value}
-                onChange={coverLetterModel.setValue}
-                loading={coverLetterModel.loading}
+                choice={coverLetterModel}
                 disabled={regenerating}
               />
               <button type="button" className="btn" onClick={regenerateCover} disabled={regenerating}>
@@ -1152,13 +1149,7 @@ function ScreeningPanel({
             placeholder={'e.g.\n1. Why are you a fit for this role?\n2. Tell me about a recent challenging project.\n3. Where do you see yourself in 5 years?'}
             className="input w-full text-sm"
           />
-          <ModelSelect
-            label="Screening model"
-            options={screeningModel.options}
-            value={screeningModel.value}
-            onChange={screeningModel.setValue}
-            loading={screeningModel.loading}
-          />
+          <ModelSelect label="Screening model" choice={screeningModel} />
           <div className="flex justify-end">
             <button type="button" className="btn" onClick={ask} disabled={asking || !text.trim()}>
               {asking ? <><Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Asking...</> : 'Ask'}
