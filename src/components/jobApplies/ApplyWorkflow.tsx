@@ -59,8 +59,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /**
  * What's left to do in a run, counted in applications (one job × one profile), and the three actions: export to
- * the shared sheet (any time — rows without a resume get their link when it's tailored), tailor resumes for
- * applications without one, apply and mark applied.
+ * the shared sheet the applications with a resume to send (the ones waiting for tailoring go in a later export),
+ * tailor resumes for applications without one, apply and mark applied.
  */
 export default function ApplyWorkflow({
   counts,
@@ -83,6 +83,8 @@ export default function ApplyWorkflow({
     ? counts.byProfile.find((p) => p.accountId === profileFilter.accountId)?.ready ?? 0
     : counts.ready;
   const toExport = counts.toExport ?? counts.toGo;
+  // waiting for a tailored resume: exported once it's done
+  const waiting = counts.needsResume + counts.tailoring;
 
   return (
     <section className="card-compact space-y-3" aria-label="Apply workflow">
@@ -115,16 +117,16 @@ export default function ApplyWorkflow({
           icon={FileSpreadsheet}
           title="Export to sheet"
           todo={toExport > 0}
-          disabled={busy}
+          disabled={busy || toExport === 0}
           onClick={onExport}
           detail={
-            toExport === 0
-              ? counts.toGo > 0
-                ? `All ${counts.toGo} in the sheet · update the checks tab`
-                : 'Nothing to export · update the checks tab'
-              : counts.needsResume + counts.tailoring > 0
-                ? `${toExport} to export · ${counts.needsResume + counts.tailoring} links fill in after tailoring`
-                : `${toExport} to export, with resume links`
+            toExport > 0
+              ? `${toExport} ready to export` + (waiting > 0 ? ` · ${waiting} wait for tailoring` : '')
+              : waiting > 0
+                ? `${waiting} wait for tailoring, then export`
+                : counts.toGo > 0
+                  ? `All ${counts.toGo} in the sheet`
+                  : 'Nothing to export'
           }
         />
         <Step

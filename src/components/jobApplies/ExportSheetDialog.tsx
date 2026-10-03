@@ -8,14 +8,13 @@ import { notify } from '../../lib/notify';
 
 const GSHEET_RE = /^https:\/\/docs\.google\.com\/spreadsheets\/(?:u\/\d+\/)?d\/[\w-]{10,}/;
 
-/** What a dry run says the export will write: the run's Checks tab, plus application rows in "apply" mode. */
+/** What a dry run says the export will write: application rows ("apply") or the run's Checks tab ("checks"). */
 type Preview = {
   sheetUrl: string;
   sheetTitle: string;
   serviceAccount: string | null;
-  checksTab: string;
-  checksJobs: number;
   apply?: api.JobApplyExportResult;
+  checks?: { tab: string; jobs: number };
 };
 
 type Check =
@@ -29,17 +28,10 @@ const s = (n: number) => (n === 1 ? '' : 's');
 async function preview(mode: 'apply' | 'checks', runId: string, sheetUrl?: string): Promise<Preview> {
   if (mode === 'checks') {
     const r = await api.exportJobApplyChecks(runId, { sheetUrl, dryRun: true });
-    return { sheetUrl: r.sheetUrl, sheetTitle: r.sheetTitle, serviceAccount: r.serviceAccount, checksTab: r.tab, checksJobs: r.jobs };
+    return { sheetUrl: r.sheetUrl, sheetTitle: r.sheetTitle, serviceAccount: r.serviceAccount, checks: { tab: r.tab, jobs: r.jobs } };
   }
   const r = await api.exportJobApplySheet(runId, { sheetUrl, dryRun: true });
-  return {
-    sheetUrl: r.sheetUrl,
-    sheetTitle: r.sheetTitle,
-    serviceAccount: r.serviceAccount,
-    checksTab: r.checksTab ?? '',
-    checksJobs: r.checksJobs ?? 0,
-    apply: r,
-  };
+  return { sheetUrl: r.sheetUrl, sheetTitle: r.sheetTitle, serviceAccount: r.serviceAccount, apply: r };
 }
 
 function exportedToast(message: string, sheetUrl: string) {
@@ -63,10 +55,10 @@ function exportedToast(message: string, sheetUrl: string) {
 }
 
 /**
- * Export to the shared Google Sheet. "apply" (step ③): one row per job × profile still to apply to, with check
- * columns, to today's tab — and the run's Checks tab is refreshed. "checks" (step ② onward): only the Checks tab,
- * every job with its company, URL, title, posting date, location, clearance, work mode and status. The Checks tab is
- * replaced on each export.
+ * Export to the shared Google Sheet. "apply" (step ③): one row per job × profile with a resume to send (Profile,
+ * Company Name, Job Title, Job URL, Download Resume) to today's "Apply · <date>" tab; jobs waiting for a tailored
+ * resume are added by a later export. "checks" (step ② onward): the run's Checks tab, every job with its company, URL,
+ * title, posting date, location, clearance, work mode and status, replaced on each export.
  */
 export default function ExportSheetDialog({
   open,
@@ -85,8 +77,6 @@ export default function ExportSheetDialog({
   const [sheetUrl, setSheetUrl] = useState('');
   const [check, setCheck] = useState<Check>({ state: 'idle' });
   const [saving, setSaving] = useState(false);
-  // Rows without a resume are exported now; also queue their tailored resumes so the links actually fill in.
-  const [tailorMissing, setTailorMissing] = useState(true);
 
   // On open: dry run with the saved link (if any) to prefill it and show the counts.
   useEffect(() => {
@@ -139,12 +129,10 @@ export default function ExportSheetDialog({
         const res = await api.exportJobApplyChecks(runId, { sheetUrl: trimmed });
         exportedToast(`Wrote ${res.jobs} job${s(res.jobs)} to “${res.tab}”`, res.sheetUrl);
       } else {
-        const res = await api.exportJobApplySheet(runId, { sheetUrl: trimmed, tailorMissing });
+        const res = await api.exportJobApplySheet(runId, { sheetUrl: trimmed });
         exportedToast(
-          (res.added ? `Added ${res.added} row${s(res.added)} to “${res.tab}”` : 'No new rows') +
-            (res.tailorQueued ? ` · tailoring ${res.tailorQueued}` : '') +
-            (res.overLimit ? ` · ${res.overLimit} over today's tailoring limit` : '') +
-            (res.checksError ? ` · checks tab not updated: ${res.checksError}` : ` · checks tab updated`),
+          `Added ${res.added} row${s(res.added)} to “${res.tab}”` +
+            (res.waiting ? ` · ${res.waiting} wait for tailoring: export again when they’re ready` : ''),
           res.sheetUrl,
         );
       }
@@ -167,14 +155,14 @@ export default function ExportSheetDialog({
   );
   const buttonLabel =
     mode === 'checks'
-      ? ok
-        ? `Write ${ok.checksJobs} job${s(ok.checksJobs)} to the checks tab`
+      ? ok?.checks
+        ? `Write ${ok.checks.jobs} job${s(ok.checks.jobs)} to the checks tab`
         : 'Write the checks tab'
       : !ok
         ? 'Add rows'
         : ready
           ? `Add ${ready} row${s(ready)}`
-          : 'Update checks tab';
+          : 'Nothing to add';
 
   return (
     <Modal open={open} onClose={onClose} title={mode === 'checks' ? 'Export checks to Google Sheet' : 'Export to Google Sheet'}>
@@ -187,9 +175,9 @@ export default function ExportSheetDialog({
             </>
           ) : (
             <>
-              Adds one row per job and profile still to apply to, with a download link to the resume to send (the tailored one when
-              it’s ready, otherwise the matching uploaded one) and the job’s location, security clearance and work mode, to today’s
-              tab of your shared sheet. It also refreshes this run’s checks tab.
+              Adds one row per job and profile with a resume to send (Profile, Company Name, Job Title, Job URL, Download Resume) to
+              today’s tab of your shared sheet: the tailored resume when it’s done, otherwise the matching uploaded one. Jobs still
+              waiting for a tailored resume are added when you export again after tailoring.
             </>
           )}
         </p>
@@ -248,38 +236,26 @@ export default function ExportSheetDialog({
                     </span>
                   </p>
                   <ul className="hint list-disc space-y-0.5 pl-9">
-                    {(ok.apply.pendingLinks ?? 0) > 0 && (
-                      <li>
-                        {ok.apply.pendingLinks} without a resume yet: added now as “To tailor” / “Tailoring…”, and the link fills in
-                        when the tailored PDF is ready
-                      </li>
+                    {ok.apply.waiting > 0 && (
+                      <li>{ok.apply.waiting} wait for tailoring: export again when their resumes are ready</li>
                     )}
                     {ok.apply.alreadyExported > 0 && <li>{ok.apply.alreadyExported} already exported (skipped)</li>}
                     {ok.apply.noFile > 0 && <li>{ok.apply.noFile} uploaded resumes have no stored PDF to link to</li>}
                   </ul>
                 </>
               )}
-              <p className="flex items-center gap-2">
-                <ListChecks className="h-4 w-4 text-sky-600" aria-hidden />
-                <span>
-                  <span className="font-semibold">{ok.checksJobs}</span> job{s(ok.checksJobs)} to tab{' '}
-                  <span className="font-medium">“{ok.checksTab}”</span>
-                  {mode === 'checks' && <> in {sheetLink}</>} (replaced each export)
-                </span>
-              </p>
+              {ok.checks && (
+                <p className="flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-sky-600" aria-hidden />
+                  <span>
+                    <span className="font-semibold">{ok.checks.jobs}</span> job{s(ok.checks.jobs)} to tab{' '}
+                    <span className="font-medium">“{ok.checks.tab}”</span> in {sheetLink} (replaced each export)
+                  </span>
+                </p>
+              )}
             </div>
           )}
         </div>
-
-        {mode === 'apply' && ok?.apply && ok.apply.needsResume > 0 && (
-          <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-            <input type="checkbox" className="mt-0.5" checked={tailorMissing} onChange={(e) => setTailorMissing(e.target.checked)} />
-            <span>
-              Tailor the {ok.apply.needsResume} job{s(ok.apply.needsResume)} without a resume now
-              <span className="hint block">Their sheet rows get the download link as each tailored PDF is ready.</span>
-            </span>
-          </label>
-        )}
 
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-outline" onClick={onClose}>
@@ -289,7 +265,7 @@ export default function ExportSheetDialog({
             type="button"
             className="btn"
             onClick={() => void exportNow()}
-            disabled={saving || !ok || (mode === 'checks' && ok.checksJobs === 0)}
+            disabled={saving || !ok || (mode === 'checks' ? !ok.checks?.jobs : ready === 0)}
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
             {buttonLabel}

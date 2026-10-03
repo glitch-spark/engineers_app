@@ -1699,7 +1699,7 @@ export interface JobApplyApplicationCounts {
   jobs: number;
   /** Applications not applied yet (ready + tailoring + needsResume). */
   toGo: number;
-  /** Applications to go that aren't in the shared sheet yet. */
+  /** Applications with a resume to send that aren't in the shared sheet yet. */
   toExport?: number;
   applied: number;
   /** Has a resume to apply with: the tailored one when done, else the matching uploaded one. */
@@ -2006,18 +2006,11 @@ export const previewJobSheet = (source: JobApplySource) => {
 };
 
 export interface JobApplyExportResult {
-  /** Rows that would be / were added. */
+  /** Rows that would be / were added: applications with a resume to send. */
   ready: number;
   added: number;
-  /** Tailored resumes still generating (export them later). */
-  pending: number;
-  /** Open to a profile with nothing to apply with yet (tailor first). */
-  needsResume: number;
-  /** Rows exported with "To tailor" / "Tailoring…": their link is filled in when the tailored PDF is ready. */
-  pendingLinks?: number;
-  /** With tailorMissing: tailored resumes queued for those rows, and rows left over today's limit. */
-  tailorQueued?: number;
-  overLimit?: number;
+  /** Applications waiting for their tailored resume: a later export adds them. */
+  waiting: number;
   alreadyExported: number;
   /** Matching uploaded resumes whose original PDF isn't stored (no link possible). */
   noFile: number;
@@ -2025,11 +2018,6 @@ export interface JobApplyExportResult {
   tab: string;
   sheetUrl: string;
   serviceAccount: string | null;
-  /** The run's Checks tab (every job and what the checks found), rewritten by each export. */
-  checksTab?: string;
-  checksJobs?: number;
-  /** Set when the application rows were added but the Checks tab couldn't be written. */
-  checksError?: string | null;
 }
 
 export interface JobApplyChecksExport {
@@ -2048,13 +2036,11 @@ export const exportJobApplyChecks = (runId: string, body: { sheetUrl?: string; d
   postJSON<JobApplyChecksExport>(`/job-applies/runs/${runId}/export-checks`, body, { timeoutMs: 120_000 });
 
 /**
- * Append the run's jobs still to apply to (one row per job × profile, with a resume download link) to today's tab
- * of the shared Google Sheet. Without `sheetUrl` the last one used is reused; `dryRun` only counts and checks access.
+ * Append the run's applications with a resume to send (one row per job × profile: Profile, Company Name, Job Title,
+ * Job URL, Download Resume) to today's "Apply · <date>" tab of the shared Google Sheet. Without `sheetUrl` the last one
+ * used is reused; `dryRun` only counts and checks access.
  */
-export const exportJobApplySheet = (
-  runId: string,
-  body: { sheetUrl?: string; dryRun?: boolean; tailorMissing?: boolean } = {},
-) =>
+export const exportJobApplySheet = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>
   postJSON<JobApplyExportResult>(`/job-applies/runs/${runId}/export-sheet`, body, { timeoutMs: 120_000 });
 
 // ---------- bidders ----------
