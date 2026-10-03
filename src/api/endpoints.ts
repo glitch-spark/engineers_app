@@ -469,8 +469,8 @@ export const getPreviousWeekGoals = (weekStart: string) =>
 export const getTeamReport = (weekStart: string) =>
   apiFetch<{ weekStart: string; users: TeamRow[] }>(`/reports/team${qs({ weekStart })}`);
 
-export const askResumeJobScreening = (jobId: string, questions: string[]) =>
-  postJSON<{ pairs: { question: string; answer: string }[] }>(`/resume/jobs/${jobId}/ask`, { questions });
+export const askResumeJobScreening = (jobId: string, questions: string[], model?: string) =>
+  postJSON<{ pairs: { question: string; answer: string }[] }>(`/resume/jobs/${jobId}/ask`, { questions, model });
 
 // ---------- accounts lookup (filter dropdowns) ----------
 
@@ -1259,10 +1259,55 @@ export interface ScreeningPair {
   answer: string;
 }
 
+export type LlmProvider = 'free' | 'openai' | 'anthropic';
+export type ModelTask = 'resume' | 'cover_letter' | 'screening';
+export type ModelTier = 'free' | 'budget' | 'balanced' | 'premium';
+
+/** One selectable model from GET /resume/models (only models the server can run right now). */
+export interface ModelOption {
+  id: string;
+  label: string;
+  provider: LlmProvider;
+  tier: ModelTier;
+  bestFor: string;
+  /** Typical cost of one run in USD; null when the price is unknown. */
+  estCostUsd: number | null;
+  isDefault: boolean;
+}
+
+export function listResumeModels(task: ModelTask) {
+  return apiFetch<{ task: ModelTask; defaultId: string | null; models: ModelOption[] }>(
+    `/resume/models${qs({ task })}`
+  );
+}
+
+export interface CoverLetterVersion {
+  text: string;
+  provider: string;
+  model: string;
+  createdAt: string;
+}
+
+export interface CoverLetterRegenResult {
+  coverLetterText: string;
+  coverLetterLlmProvider: LlmProvider | null;
+  coverLetterLlmModel: string | null;
+  coverLetterLlmFallbackUsed: boolean | null;
+  coverLetterLlmFallbackReason: string | null;
+  estimatedCostUsd: number | null;
+  coverLetterHistory: CoverLetterVersion[];
+}
+
+/** Writes the job's cover letter again (several model calls, so allow a long timeout). */
+export function regenerateCoverLetter(jobId: string, body: { model?: string; hook?: string }) {
+  return postJSON<CoverLetterRegenResult>(`/resume/jobs/${jobId}/cover-letter`, body, { timeoutMs: 180_000 });
+}
+
 export function generateScreeningAnswers(body: {
   accountId: string;
   jobDescription?: string;
   questions: string[];
+  model?: string;
 }) {
   return postJSON<{ pairs: ScreeningPair[] }>('/resume/screening-answers', body);
 }
@@ -1306,16 +1351,27 @@ export interface ResumeJob {
   inputTokens?: number | null;
   outputTokens?: number | null;
   reasoningTokens?: number | null;
-  resumeLlmProvider?: 'free' | 'openai' | null;
+  resumeLlmProvider?: LlmProvider | null;
   resumeLlmModel?: string | null;
   resumeLlmFallbackUsed?: boolean | null;
   resumeLlmFallbackReason?: string | null;
-  screeningLlmProvider?: 'free' | 'openai' | null;
+  screeningLlmProvider?: LlmProvider | null;
   screeningLlmModel?: string | null;
   screeningLlmFallbackUsed?: boolean | null;
   screeningLlmFallbackReason?: string | null;
   matchSnippet?: string;
   coverLetterText?: string | null;
+  coverLetterLlmProvider?: LlmProvider | null;
+  coverLetterLlmModel?: string | null;
+  coverLetterLlmFallbackUsed?: boolean | null;
+  coverLetterLlmFallbackReason?: string | null;
+  coverLetterHistory?: CoverLetterVersion[];
+  coverLetterHook?: string | null;
+  resumeModelId?: string | null;
+  coverLetterModelId?: string | null;
+  screeningModelId?: string | null;
+  /** Running total of model spend for this job; null when no priced model ran. */
+  estimatedCostUsd?: number | null;
   createdAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -1329,6 +1385,11 @@ export function enqueueResumeJob(body: {
   questions?: string[];
   promptBody?: string;
   generateCoverLetter?: boolean;
+  /** Catalog ids from listResumeModels; omit to let the server choose. */
+  resumeModel?: string;
+  coverLetterModel?: string;
+  screeningModel?: string;
+  coverLetterHook?: string;
 }) {
   return postJSON<{ jobId: string; status: ResumeJobStatus }>('/resume/generate', body);
 }

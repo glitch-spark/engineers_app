@@ -61,7 +61,7 @@ function LlmProviderBadge({
   model,
   fallbackUsed,
 }: {
-  provider?: 'free' | 'openai' | null;
+  provider?: api.LlmProvider | null;
   model?: string | null;
   fallbackUsed?: boolean | null;
 }) {
@@ -70,12 +70,8 @@ function LlmProviderBadge({
   }
 
   const short = shortModelName(model);
-  const providerLabel =
-    provider === 'free'
-      ? 'Free'
-      : fallbackUsed
-        ? 'OpenAI (fallback)'
-        : 'OpenAI';
+  const baseLabel = provider === 'free' ? 'Free' : provider === 'anthropic' ? 'Anthropic' : 'OpenAI';
+  const providerLabel = provider !== 'free' && fallbackUsed ? `${baseLabel} (fallback)` : baseLabel;
   const badgeClass =
     provider === 'free'
       ? 'badge-info'
