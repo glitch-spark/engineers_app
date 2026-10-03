@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Square, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, ListFilter, Loader2, Square, X } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyMarkRef, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -14,6 +14,7 @@ import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import RunSummary from '../components/jobApplies/RunSummary';
+import ScreeningReport from '../components/jobApplies/ScreeningReport';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import Segmented from '../components/jobApplies/Segmented';
 import {
@@ -129,6 +130,7 @@ export default function JobApplyRun() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showScreening, setShowScreening] = useState(false);
   const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
   const [tailorProfiles, setTailorProfiles] = useState<Set<string>>(new Set());
   const [tailorPreview, setTailorPreview] = useState<{ queued: number; skippedCap: number } | null>(null);
@@ -561,6 +563,51 @@ export default function JobApplyRun() {
     );
   }
 
+  // Screen phase: progress while jobs are checked, then the report where profiles are picked per location group.
+  if (run.phase === 'screen') {
+    const c = run.counts;
+    const done = Math.min(c.total, c.extracted + c.failed);
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          title={run.fileName}
+          backTo="/job-applies"
+          action={
+            active ? (
+              <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
+                {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
+                Cancel
+              </button>
+            ) : undefined
+          }
+        />
+        {run.status === 'screened' ? (
+          <ScreeningReport runId={runId} onStarted={() => void mutateRun()} />
+        ) : active ? (
+          <section className="panel space-y-3 p-6" aria-label="Checking jobs">
+            <p className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300" role="status">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-600" aria-hidden />
+              Checking {done} / {c.total} jobs · {c.extracted} read · {c.failed} couldn’t be used so far
+            </p>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+              role="progressbar"
+              aria-valuenow={c.total ? Math.round((done / c.total) * 100) : 0}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Checking jobs"
+            >
+              <div className="h-full rounded-full bg-sky-600 dark:bg-sky-400" style={{ width: `${c.total ? (done / c.total) * 100 : 0}%` }} />
+            </div>
+            <p className="hint">You can leave this page: the check keeps running, and the run shows “Ready to review” when it’s done.</p>
+          </section>
+        ) : (
+          <RunSummary run={run} onView={() => undefined} onRetry={onRetry} retrying={busy === 'retry'} />
+        )}
+      </div>
+    );
+  }
+
   const profileOptions = [
     { value: '', label: 'All profiles' },
     ...(run.profiles ?? []).map((p) => ({ value: p.accountId, label: p.name })),
@@ -574,6 +621,17 @@ export default function JobApplyRun() {
         backTo="/job-applies"
         action={
           <>
+            {run.screenedAt && (
+              <button
+                type="button"
+                className="btn-outline btn-sm"
+                aria-pressed={showScreening}
+                onClick={() => setShowScreening((v) => !v)}
+              >
+                <ListFilter className="h-4 w-4" aria-hidden />
+                {showScreening ? 'Hide screening' : 'Back to screening'}
+              </button>
+            )}
             <button type="button" className="btn-outline btn-sm" onClick={() => setShowHelp(true)}>
               <Keyboard className="h-4 w-4" aria-hidden />
               Shortcuts
@@ -587,6 +645,8 @@ export default function JobApplyRun() {
           </>
         }
       />
+
+      {showScreening && <ScreeningReport runId={runId} readOnly assignments={run.assignments} />}
 
       <RunSummary
         run={run}

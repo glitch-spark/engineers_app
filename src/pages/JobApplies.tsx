@@ -88,7 +88,9 @@ export default function JobApplies() {
                       {expiresHint(run.expiresAt) && <span className="hint block">{expiresHint(run.expiresAt)}</span>}
                     </td>
                     <td className="px-3 py-2">
-                      <span className={RUN_STATUS_BADGE[run.status]}>{RUN_STATUS_LABEL[run.status]}</span>
+                      <span className={RUN_STATUS_BADGE[run.status]}>
+                        {run.phase === 'screen' && isActive(run.status) ? 'Checking…' : RUN_STATUS_LABEL[run.status]}
+                      </span>
                       {run.counts.failed > 0 && <span className="hint ml-2">{run.counts.failed} failed</span>}
                     </td>
                     <td className="px-3 py-2">
