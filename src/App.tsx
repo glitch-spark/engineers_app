@@ -21,6 +21,7 @@ import Resume from './pages/Resume';
 import InterviewPrep from './pages/InterviewPrep';
 import Generated from './pages/Generated';
 import JobApplies from './pages/JobApplies';
+import Bidders from './pages/Bidders';
 import JobApplyRun from './pages/JobApplyRun';
 import Pipeline from './pages/Pipeline';
 import Integrations from './pages/Integrations';
@@ -88,6 +89,7 @@ export default function App() {
       <Route path="/resume/generated" element={<Protected><Generated /></Protected>} />
       <Route path="/job-applies" element={<Protected><JobApplies /></Protected>} />
       <Route path="/job-applies/:runId" element={<Protected><JobApplyRun /></Protected>} />
+      <Route path="/bidders" element={<Protected><Bidders /></Protected>} />
       <Route path="/interview-prep" element={<Protected><InterviewPrep /></Protected>} />
       <Route path="/pipeline" element={<Protected><Pipeline /></Protected>} />
       <Route path="/integrations" element={<Protected><Integrations /></Protected>} />

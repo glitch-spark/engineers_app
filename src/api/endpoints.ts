@@ -1852,3 +1852,50 @@ export interface JobApplyExportResult {
  */
 export const exportJobApplySheet = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>
   postJSON<JobApplyExportResult>(`/job-applies/runs/${runId}/export-sheet`, body, { timeoutMs: 120_000 });
+
+// ---------- bidders ----------
+
+export interface Bidder {
+  _id: string;
+  name: string;
+  country: string | null;
+  profileId: string | null;
+  profileName: string | null;
+  rate: number;
+  screenshotFolderUrl: string;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export type BidderInput = Pick<Bidder, 'name' | 'country' | 'profileId' | 'rate' | 'screenshotFolderUrl'>;
+
+export interface BidderLiveCount {
+  today: number | null;
+  week: number | null;
+  error: string | null;
+}
+
+export interface BidReport {
+  kind: 'daily' | 'weekly';
+  periodKey: string;
+  periodStart: string;
+  periodEnd: string;
+  count: number | null;
+  rate: number;
+  amount: number | null;
+  error: string | null;
+}
+
+export const listBidders = (archived = false) =>
+  apiFetch<{ bidders: Bidder[] }>(`/bidders${qs({ archived })}`);
+
+export const createBidder = (body: BidderInput) => postJSON<Bidder>('/bidders', body);
+
+export const updateBidder = (id: string, body: BidderInput) => putJSON<Bidder>(`/bidders/${id}`, body);
+
+export const archiveBidder = (id: string) => del<null>(`/bidders/${id}`);
+
+export const bidderLiveCounts = () => apiFetch<Record<string, BidderLiveCount>>('/bidders/live-counts');
+
+export const bidderReports = (id: string, kind: 'daily' | 'weekly', limit = 30) =>
+  apiFetch<{ reports: BidReport[] }>(`/bidders/${id}/reports${qs({ kind, limit })}`);
