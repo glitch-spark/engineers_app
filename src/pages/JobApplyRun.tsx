@@ -634,6 +634,17 @@ export default function JobApplyRun() {
     ...(run.profiles ?? []).map((p) => ({ value: p.accountId, label: p.name })),
   ];
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selected.has(r._id));
+  // The profiles picked for a job's location group(s), for its Location cell.
+  const pickedFor = (row: JobApplyRow) =>
+    [
+      ...new Set([
+        ...(row.markets?.length ? row.markets : ['none']).flatMap((m) => run.assignments[m] ?? []),
+        ...(run.assignments['*'] ?? []),
+      ]),
+    ]
+      .map((id) => profileNames[id])
+      .filter(Boolean)
+      .join(', ');
 
   const header = (
     <PageHeader
@@ -883,8 +894,12 @@ export default function JobApplyRun() {
                             {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
                           </button>
                           <div className="min-w-0">
-                            <p className="truncate font-medium text-zinc-800 dark:text-zinc-100">{row.title || 'Untitled role'}</p>
-                            <p className="truncate text-xs text-zinc-500">
+                            {/* wrap rather than truncate: a one-line title holds the column at full width and pushes
+                                Apply with past the table's edge on narrower screens */}
+                            <p className="line-clamp-2 font-medium text-zinc-800 dark:text-zinc-100" title={row.title || undefined}>
+                              {row.title || 'Untitled role'}
+                            </p>
+                            <p className="line-clamp-1 text-xs text-zinc-500">
                               {row.company}
                               {row.url && (
                                 <a
@@ -927,16 +942,8 @@ export default function JobApplyRun() {
                           row.groupKey &&
                           run.screenedAt &&
                           !run.autoStart && (
-                            <p className="hint truncate">
-                              {[
-                                ...new Set([
-                                  ...(row.markets?.length ? row.markets : ['none']).flatMap((m) => run.assignments[m] ?? []),
-                                  ...(run.assignments['*'] ?? []),
-                                ]),
-                              ]
-                                .map((id) => profileNames[id])
-                                .filter(Boolean)
-                                .join(', ')}
+                            <p className="hint line-clamp-2" title={pickedFor(row)}>
+                              {pickedFor(row)}
                             </p>
                           )
                         )}

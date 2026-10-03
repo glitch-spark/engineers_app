@@ -118,7 +118,7 @@ export default function Suggestions({
           const n = s ? row.suggestions.indexOf(s) + 1 : 0;
           const t = row.tailored.find((x) => x.accountId === acc);
           return (
-            <li key={acc} className="grid grid-cols-[7rem_minmax(7.5rem,1fr)_auto] items-center gap-x-2 py-1">
+            <li key={acc} className="grid grid-cols-[7rem_1fr_auto] items-center gap-x-2 py-1">
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100" title={name}>
                   {name}
@@ -130,8 +130,8 @@ export default function Suggestions({
                 )}
               </span>
 
-              {/* Uploaded resume */}
-              <div className="flex min-w-0 items-center gap-1">
+              {/* Uploaded resume: a resume line keeps room for its checkbox, score and download; a note can wrap */}
+              <div className={`flex items-center gap-1 ${s ? 'min-w-[7.5rem]' : ''}`}>
                 {s ? (
                   <>
                     <AppliedToggle
