@@ -16,6 +16,7 @@ import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import RunSummary from '../components/jobApplies/RunSummary';
 import StepTrack, { type Step } from '../components/jobApplies/StepTrack';
 import ScreeningReport from '../components/jobApplies/ScreeningReport';
+import SourceLine from '../components/jobApplies/SourceLine';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import Segmented from '../components/jobApplies/Segmented';
 import {
@@ -598,6 +599,7 @@ export default function JobApplyRun() {
                 : 'Opening every link and reading each job. Next: you pick which profiles apply in each market.'
           }
         />
+        {(run.status !== 'screened' || stepView === 1) && <SourceLine run={run} />}
         {run.status === 'screened' && stepView === 1 ? (
           <ScreeningReport runId={runId} checksOnly onRunChanged={() => void mutateRun()} />
         ) : run.status === 'screened' ? (
@@ -683,7 +685,10 @@ export default function JobApplyRun() {
         </button>
 
         {stepView === 1 ? (
-          <ScreeningReport runId={runId} checksOnly readOnly />
+          <>
+            <SourceLine run={run} />
+            <ScreeningReport runId={runId} checksOnly readOnly />
+          </>
         ) : active ? (
           <ScreeningReport runId={runId} readOnly assignments={run.assignments} />
         ) : (

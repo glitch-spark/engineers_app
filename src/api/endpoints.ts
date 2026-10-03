@@ -1665,7 +1665,7 @@ export interface JobApplyRun {
   finishedAt?: string | null;
   error?: string | null;
   notes?: string[];
-  /** When this run's results are deleted (3 days after upload). Applied history is kept permanently. */
+  /** When this run's results are deleted (7 days after upload). Applied history is kept permanently. */
   expiresAt?: string | null;
   /** Only on GET /job-applies/runs/{id}: resumes marked applied in this run. */
   appliedInRun?: number;

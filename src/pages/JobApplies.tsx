@@ -6,16 +6,10 @@ import type { JobApplyRun } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
 import ConfirmDialog from '../components/ConfirmDialog';
 import NewRunPanel from '../components/jobApplies/NewRunPanel';
-import RunCard from '../components/jobApplies/RunCard';
+import RunsTable from '../components/jobApplies/RunsTable';
 import StepTrack from '../components/jobApplies/StepTrack';
-import { isActive, runGroup } from '../components/jobApplies/format';
+import { isActive } from '../components/jobApplies/format';
 import { notify } from '../lib/notify';
-
-const GROUPS: { key: ReturnType<typeof runGroup>; title: string }[] = [
-  { key: 'needs', title: 'Needs you' },
-  { key: 'progress', title: 'In progress' },
-  { key: 'finished', title: 'Finished' },
-];
 
 export default function JobApplies() {
   const { data, isLoading, mutate } = useSWR('job-apply-runs', api.listJobApplyRuns, {
@@ -69,22 +63,7 @@ export default function JobApplies() {
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading runs…
         </p>
       ) : (
-        GROUPS.map(({ key, title }) => {
-          const group = runs.filter((r) => runGroup(r) === key);
-          if (group.length === 0) return null;
-          return (
-            <section key={key} aria-labelledby={`runs-${key}`} className="space-y-2">
-              <h2 id={`runs-${key}`} className="section-title">
-                {title} <span className="font-normal text-zinc-500">· {group.length}</span>
-              </h2>
-              <ul className="grid gap-3 lg:grid-cols-2">
-                {group.map((run) => (
-                  <RunCard key={run._id} run={run} onDelete={setPendingDelete} />
-                ))}
-              </ul>
-            </section>
-          );
-        })
+        runs.length > 0 && <RunsTable runs={runs} onDelete={setPendingDelete} />
       )}
 
       <ConfirmDialog

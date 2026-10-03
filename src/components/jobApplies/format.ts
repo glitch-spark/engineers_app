@@ -191,6 +191,15 @@ export function formatDate(iso?: string | null): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/** "Oct 3, 2026, 4:13 PM" in the viewer's time zone (API date-times are UTC, sometimes without a zone). */
+export function formatDateTime(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 export function ageDays(iso?: string | null): number | null {
   if (!iso) return null;
   const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);

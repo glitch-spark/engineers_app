@@ -17,6 +17,7 @@ export default function Pagination({
   onPage,
   pageSize,
   onPageSize,
+  sizes = PAGE_SIZES,
   label,
 }: {
   info: PaginationInfo | undefined;
@@ -24,6 +25,8 @@ export default function Pagination({
   /** Shows the per-page picker when given. */
   pageSize?: number;
   onPageSize?: (size: number) => void;
+  /** Choices in the per-page picker. */
+  sizes?: number[];
   /** Distinguishes the top and bottom bars for screen readers. */
   label: string;
 }) {
@@ -69,9 +72,9 @@ export default function Pagination({
           className="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-6 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
           value={pageSize}
           onChange={(e) => onPageSize(Number(e.target.value))}
-          aria-label="Jobs per page"
+          aria-label="Per page"
         >
-          {PAGE_SIZES.map((n) => (
+          {sizes.map((n) => (
             <option key={n} value={n}>
               {n}
             </option>
