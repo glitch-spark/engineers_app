@@ -7,7 +7,9 @@ export function formatInviteDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const INSTRUCTIONS = 'Install Bid Track → click the icon → Register → enter this code and choose a username and password.';
+const INSTRUCTIONS =
+  'Install Bid Track → click the icon → Register → enter this code and choose a username and password.' +
+  ' Remove any older "Bid Track Local" extension first.';
 
 async function copy(text: string) {
   try {
