@@ -155,7 +155,7 @@ export default function BidderFormModal({
           <input
             id="bidder-folder"
             className="input w-full text-sm"
-            placeholder="s3://bucket/bids/ana-silva/"
+            placeholder="s3://bid-screenshots/puma/"
             value={folderUrl}
             onChange={(e) => setFolderUrl(e.target.value)}
             required
