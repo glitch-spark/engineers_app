@@ -16,6 +16,8 @@ import { useDialog } from '../lib/useDialog';
 import ResumeTabs from '../components/ResumeTabs';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
+import ModelSelect from '../components/ModelSelect';
+import { useModelChoice } from '../lib/useModelChoice';
 import { useAuth } from '../auth/useAuth';
 
 const STEP_LABEL: Record<ResumeJobStep, string> = {
@@ -845,6 +847,7 @@ function ScreeningPanel({
   const [jdCopied, setJdCopied] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetterCopied, setCoverLetterCopied] = useState(false);
+  const screeningModel = useModelChoice('screening');
   const pairs = job.screeningPairs || [];
 
   useEffect(() => {
@@ -888,7 +891,8 @@ function ScreeningPanel({
     }
     setAsking(true);
     try {
-      await api.askResumeJobScreening(job._id, questions);
+      // '' (model list unavailable) is omitted so the server picks its default.
+      await api.askResumeJobScreening(job._id, questions, screeningModel.value || undefined);
       setText('');
       notify.success(`Answered ${questions.length} question${questions.length === 1 ? '' : 's'}`);
       onChanged();
@@ -1038,6 +1042,13 @@ function ScreeningPanel({
             rows={3}
             placeholder={'e.g.\n1. Why are you a fit for this role?\n2. Tell me about a recent challenging project.\n3. Where do you see yourself in 5 years?'}
             className="input w-full text-sm"
+          />
+          <ModelSelect
+            label="Screening model"
+            options={screeningModel.options}
+            value={screeningModel.value}
+            onChange={screeningModel.setValue}
+            loading={screeningModel.loading}
           />
           <div className="flex justify-end">
             <button type="button" className="btn" onClick={ask} disabled={asking || !text.trim()}>

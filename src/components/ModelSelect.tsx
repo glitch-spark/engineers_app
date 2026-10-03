@@ -22,10 +22,19 @@ interface ModelSelectProps {
   onChange: (id: string) => void;
   loading?: boolean;
   disabled?: boolean;
+  labelClassName?: string;
 }
 
 /** Model dropdown with a one-line "best for" hint. Renders nothing when no model can be offered. */
-export default function ModelSelect({ label, options, value, onChange, loading = false, disabled = false }: ModelSelectProps) {
+export default function ModelSelect({
+  label,
+  options,
+  value,
+  onChange,
+  loading = false,
+  disabled = false,
+  labelClassName = 'block text-xs font-medium mb-1 text-muted',
+}: ModelSelectProps) {
   const hintId = useId();
   if (!loading && options.length === 0) return null;
   const selected = options.find((o) => o.id === value);
@@ -33,6 +42,7 @@ export default function ModelSelect({ label, options, value, onChange, loading =
     <div>
       <Select
         label={label}
+        labelClassName={labelClassName}
         value={value}
         onChange={onChange}
         options={options.map((o) => ({ value: o.id, label: optionLabel(o) }))}

@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { FileDown, Loader2, AlertTriangle } from 'lucide-react';
 import ResumeTabs from '../components/ResumeTabs';
 import PageHeader from '../components/PageHeader';
+import ModelSelect from '../components/ModelSelect';
+import { useModelChoice } from '../lib/useModelChoice';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -85,6 +87,9 @@ export default function ResumeGeneratorPage() {
   const [errors, setErrors] = useState<{ profiles?: string; company?: string; jd?: string }>({});
   const fid = useId();
   const [generateCoverLetter, setGenerateCoverLetter] = useState(false);
+  const [coverLetterHook, setCoverLetterHook] = useState('');
+  const resumeModel = useModelChoice('resume');
+  const coverLetterModel = useModelChoice('cover_letter');
   // Collapsed by default after picking — long list eats vertical space.
   const [profilesOpen, setProfilesOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('resume-gen-profiles-open') !== '0'; } catch { return true; }
@@ -153,6 +158,10 @@ export default function ResumeGeneratorPage() {
             jobDescription,
             jobUrl: jobUrl.trim() || undefined,
             generateCoverLetter,
+            // '' (model list unavailable) is omitted so the server picks its default.
+            resumeModel: resumeModel.value || undefined,
+            coverLetterModel: generateCoverLetter ? coverLetterModel.value || undefined : undefined,
+            coverLetterHook: generateCoverLetter ? coverLetterHook.trim() || undefined : undefined,
           }),
         ),
       );
@@ -353,6 +362,43 @@ export default function ResumeGeneratorPage() {
           )}
           <p id={`${fid}-jd-count`} className="text-xs text-faint mt-1">{jobDescription.length.toLocaleString()} characters</p>
         </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ModelSelect
+            label="Resume model"
+            options={resumeModel.options}
+            value={resumeModel.value}
+            onChange={resumeModel.setValue}
+            loading={resumeModel.loading}
+          />
+          {generateCoverLetter && (
+            <ModelSelect
+              label="Cover letter model"
+              options={coverLetterModel.options}
+              value={coverLetterModel.value}
+              onChange={coverLetterModel.setValue}
+              loading={coverLetterModel.loading}
+            />
+          )}
+        </div>
+
+        {generateCoverLetter && (
+          <div>
+            <label htmlFor={`${fid}-hook`} className="block text-xs font-medium mb-1 text-muted">
+              Cover letter hook <span className="text-xs text-faint font-normal">(optional)</span>
+            </label>
+            <input
+              id={`${fid}-hook`}
+              type="text"
+              value={coverLetterHook}
+              onChange={(e) => setCoverLetterHook(e.target.value)}
+              maxLength={500}
+              placeholder="e.g. I mentored three interns on a Kafka stack like yours"
+              className="input focus-ring w-full text-sm"
+            />
+            <p className="mt-1 text-xs text-faint">One true line the letter should work in naturally.</p>
+          </div>
+        )}
 
         <div className="flex items-center justify-between flex-wrap gap-3">
           <label className="inline-flex items-center gap-2 text-sm text-body cursor-pointer">
