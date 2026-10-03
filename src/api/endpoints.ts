@@ -1343,6 +1343,10 @@ export interface ResumeJob {
   _id: string;
   /** Where it was queued from; Job Applies tailoring is tagged and not auto-downloaded. */
   source?: 'generator' | 'job_applies';
+  /** Job Applies: the job row and run it was tailored for (run fields null once the run expired). */
+  jobApplyRowId?: string | null;
+  jobApplyRunId?: string | null;
+  jobApplyRunName?: string | null;
   userId: string;
   accountId: string;
   profileName: string;
@@ -1414,6 +1418,10 @@ export function listResumeJobs(params?: {
   return apiFetch<{ jobs: ResumeJob[]; pagination: Pagination }>(
     `/resume/jobs${qs(params)}`
   );
+}
+
+export function getResumeJob(id: string) {
+  return apiFetch<ResumeJob>(`/resume/jobs/${id}`);
 }
 
 export function deleteResumeJob(id: string) {
