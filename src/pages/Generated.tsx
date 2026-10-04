@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Loader2,
   RefreshCw,
@@ -106,6 +107,30 @@ export default function GeneratedResumesPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [panelJob, setPanelJob] = useState<ResumeJob | null>(null);
+  // ?job=<id> (from Job Applies' Q&A link): open that resume's drawer.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepJob = searchParams.get('job');
+  useEffect(() => {
+    if (!deepJob) return;
+    let cancelled = false;
+    api
+      .getResumeJob(deepJob)
+      .then((job) => !cancelled && setPanelJob(job))
+      .catch(() => {
+        if (cancelled) return;
+        notify.error(new Error("That resume isn't available"), "That resume isn't available");
+        setSearchParams({}, { replace: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deepJob, setSearchParams]);
+  // Closing the drawer (open -> closed) drops ?job= so a reload doesn't reopen it.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !panelJob && searchParams.has('job')) setSearchParams({}, { replace: true });
+    wasOpen.current = !!panelJob;
+  }, [panelJob, searchParams, setSearchParams]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -160,6 +185,18 @@ export default function GeneratedResumesPage() {
     const fresh = jobs.find((j) => j._id === panelJob._id);
     if (fresh && fresh !== panelJob) setPanelJob(fresh);
   }, [jobs, panelJob]);
+  // A drawer opened from a Job Applies link may show a resume that isn't on this list page, so the list refresh
+  // alone won't update it: fetch it directly too.
+  const panelId = panelJob?._id;
+  const panelOffPage = !!panelId && !jobs.some((j) => j._id === panelId);
+  const refreshPanel = () => {
+    void mutate();
+    if (!panelId || !panelOffPage) return;
+    api
+      .getResumeJob(panelId)
+      .then((fresh) => setPanelJob((cur) => (cur?._id === panelId ? fresh : cur)))
+      .catch(() => {});
+  };
   const polling = jobs.some((j) => j.status === 'queued' || j.status === 'in_progress');
 
   // Auto-download newly-completed jobs (only newly-transitioned).
@@ -439,7 +476,7 @@ export default function GeneratedResumesPage() {
         <ScreeningPanel
           job={panelJob}
           onClose={() => setPanelJob(null)}
-          onChanged={mutate}
+          onChanged={refreshPanel}
         />
       )}
     </div>
@@ -537,11 +574,21 @@ function JobRow({
             ) : (
               job.companyName
             )}
-            {job.source === 'job_applies' && (
-              <span className="badge-neutral ml-2 align-middle text-[10px]" title="Tailored from a Job Applies run">
-                Job Applies
-              </span>
-            )}
+            {job.source === 'job_applies' &&
+              (job.jobApplyRunId ? (
+                <Link
+                  to={`/job-applies/${job.jobApplyRunId}`}
+                  className="badge-neutral ml-2 align-middle text-[10px] hover:underline"
+                  title="Open the Job Applies run this resume was tailored in"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  From run: {job.jobApplyRunName} ↗
+                </Link>
+              ) : (
+                <span className="badge-neutral ml-2 align-middle text-[10px]" title="Tailored from a Job Applies run">
+                  From a Job Applies run
+                </span>
+              ))}
           </div>
           {job.matchSnippet && (
             <div className="text-[11px] text-muted italic mt-0.5 line-clamp-2 reveal-on-focus" title={job.matchSnippet}>

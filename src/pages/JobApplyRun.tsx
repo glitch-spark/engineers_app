@@ -14,6 +14,9 @@ import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import RunSummary from '../components/jobApplies/RunSummary';
+import StepTrack, { type Step } from '../components/jobApplies/StepTrack';
+import ScreeningReport from '../components/jobApplies/ScreeningReport';
+import SourceLine from '../components/jobApplies/SourceLine';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import Segmented from '../components/jobApplies/Segmented';
 import {
@@ -23,6 +26,8 @@ import {
   formatDate,
   gateChip,
   isActive,
+  runStep,
+  locationLabel,
 } from '../components/jobApplies/format';
 import { notify } from '../lib/notify';
 
@@ -129,6 +134,8 @@ export default function JobApplyRun() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  // An earlier step opened from the step track (null: the run's own step).
+  const [stepView, setStepView] = useState<Step | null>(null);
   const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
   const [tailorProfiles, setTailorProfiles] = useState<Set<string>>(new Set());
   const [tailorPreview, setTailorPreview] = useState<{ queued: number; skippedCap: number } | null>(null);
@@ -443,6 +450,7 @@ export default function JobApplyRun() {
   // Keyboard flow for fast applying (see SHORTCUTS).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (stepView !== null) return; // an earlier step is shown: the shortcuts act on step 3's table
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target)) return;
       if (e.key === '?') {
         e.preventDefault();
@@ -561,32 +569,157 @@ export default function JobApplyRun() {
     );
   }
 
+  // Screen phase: progress while jobs are checked, then the report where profiles are picked per location group.
+  if (run.phase === 'screen') {
+    const c = run.counts;
+    const done = Math.min(c.total, c.extracted + c.failed);
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          title={run.fileName}
+          backTo="/job-applies"
+          action={
+            active ? (
+              <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
+                {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
+                Cancel
+              </button>
+            ) : undefined
+          }
+        />
+        <StepTrack
+          current={stepView ?? runStep(run)}
+          reached={runStep(run)}
+          onStep={(s) => setStepView(s === runStep(run) ? null : s)}
+          hint={
+            stepView === 1
+              ? 'Every job and what the check found. Go to ② to pick who applies.'
+              : run.status === 'screened'
+                ? 'Pick who applies in each market, then score. Next: the best resume per job, ready to tailor and apply.'
+                : 'Opening every link and reading each job. Next: you pick which profiles apply in each market.'
+          }
+        />
+        {(run.status !== 'screened' || stepView === 1) && <SourceLine run={run} />}
+        {run.status === 'screened' && stepView === 1 ? (
+          <ScreeningReport runId={runId} checksOnly onRunChanged={() => void mutateRun()} />
+        ) : run.status === 'screened' ? (
+          <ScreeningReport runId={runId} onStarted={() => void mutateRun()} onRunChanged={() => void mutateRun()} />
+        ) : active ? (
+          <section className="panel space-y-3 p-6" aria-label="Checking jobs">
+            <p className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300" role="status">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-600" aria-hidden />
+              Checking {done} / {c.total} jobs · {c.extracted} read · {c.failed} couldn’t be used so far
+            </p>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+              role="progressbar"
+              aria-valuenow={c.total ? Math.round((done / c.total) * 100) : 0}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Checking jobs"
+            >
+              <div className="h-full rounded-full bg-sky-600 dark:bg-sky-400" style={{ width: `${c.total ? (done / c.total) * 100 : 0}%` }} />
+            </div>
+            <p className="hint">You can leave this page: the check keeps running, and the run shows “Ready to review” when it’s done.</p>
+          </section>
+        ) : (
+          <RunSummary run={run} onView={() => undefined} onRetry={onRetry} retrying={busy === 'retry'} />
+        )}
+      </div>
+    );
+  }
+
   const profileOptions = [
     { value: '', label: 'All profiles' },
     ...(run.profiles ?? []).map((p) => ({ value: p.accountId, label: p.name })),
   ];
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selected.has(r._id));
+  // The profiles picked for a job's location group(s), for its Location cell.
+  const pickedFor = (row: JobApplyRow) =>
+    [
+      ...new Set([
+        ...(row.markets?.length ? row.markets : ['none']).flatMap((m) => run.assignments[m] ?? []),
+        ...(run.assignments['*'] ?? []),
+      ]),
+    ]
+      .map((id) => profileNames[id])
+      .filter(Boolean)
+      .join(', ');
+
+  const header = (
+    <PageHeader
+      title={run.fileName}
+      backTo="/job-applies"
+      action={
+        <>
+          <button type="button" className="btn-outline btn-sm" onClick={() => setShowHelp(true)}>
+            <Keyboard className="h-4 w-4" aria-hidden />
+            Shortcuts
+          </button>
+          {active && (
+            <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
+              {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
+              Cancel run
+            </button>
+          )}
+        </>
+      }
+    />
+  );
+  const track = (
+    <StepTrack
+      current={stepView ?? 3}
+      reached={run.screenedAt ? 3 : undefined}
+      onStep={(s) => setStepView(s === 3 ? null : s)}
+      hint={
+        stepView === 1
+          ? 'Every job and what the check found.'
+          : stepView === 2
+            ? active
+              ? 'Scoring is running with these picks. You can change them once it’s done.'
+              : 'Change who applies in each location group, then score again. Your tailored resumes, sheet rows and applied marks stay.'
+            : active
+              ? 'Scoring your resumes against each job. Next: export to your sheet, tailor the rest, apply.'
+              : 'Export to your sheet, tailor the jobs that need it, then apply and mark them applied.'
+      }
+    />
+  );
+
+  // An earlier step, opened from the step track: ① what the check found, ② the picks (change them, score again).
+  if (stepView !== null) {
+    return (
+      <div className="space-y-5">
+        {header}
+        {track}
+        <button type="button" className="btn-outline btn-sm" onClick={() => setStepView(null)}>
+          <ChevronRight className="h-4 w-4 rotate-180" aria-hidden /> Back to ③ Tailor &amp; apply
+        </button>
+
+        {stepView === 1 ? (
+          <>
+            <SourceLine run={run} />
+            <ScreeningReport runId={runId} checksOnly readOnly />
+          </>
+        ) : active ? (
+          <ScreeningReport runId={runId} readOnly assignments={run.assignments} />
+        ) : (
+          <ScreeningReport
+            runId={runId}
+            rescore={{ assignments: run.assignments, selection: run.selection, threshold: run.threshold }}
+            onStarted={() => {
+              setStepView(null);
+              void mutateRun();
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title={run.fileName}
-        backTo="/job-applies"
-        action={
-          <>
-            <button type="button" className="btn-outline btn-sm" onClick={() => setShowHelp(true)}>
-              <Keyboard className="h-4 w-4" aria-hidden />
-              Shortcuts
-            </button>
-            {active && (
-              <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
-                {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
-                Cancel run
-              </button>
-            )}
-          </>
-        }
-      />
+      {header}
+      {track}
 
       <RunSummary
         run={run}
@@ -761,8 +894,12 @@ export default function JobApplyRun() {
                             {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
                           </button>
                           <div className="min-w-0">
-                            <p className="truncate font-medium text-zinc-800 dark:text-zinc-100">{row.title || 'Untitled role'}</p>
-                            <p className="truncate text-xs text-zinc-500">
+                            {/* wrap rather than truncate: a one-line title holds the column at full width and pushes
+                                Apply with past the table's edge on narrower screens */}
+                            <p className="line-clamp-2 font-medium text-zinc-800 dark:text-zinc-100" title={row.title || undefined}>
+                              {row.title || 'Untitled role'}
+                            </p>
+                            <p className="line-clamp-1 text-xs text-zinc-500">
                               {row.company}
                               {row.url && (
                                 <a
@@ -792,7 +929,24 @@ export default function JobApplyRun() {
                       </td>
                       <td className="px-3 py-2">{capitalize(row.workMode) || <span className="hint">—</span>}</td>
                       <td className="max-w-[10rem] px-3 py-2">
-                        {row.allowedLocations.length ? row.allowedLocations.map((l) => l.value).join(', ') : <span className="hint">Not stated</span>}
+                        {row.groupKey ? (
+                          locationLabel(row.groupKey)
+                        ) : row.allowedLocations.length ? (
+                          row.allowedLocations.map((l) => l.value).join(', ')
+                        ) : (
+                          <span className="hint">Not stated</span>
+                        )}
+                        {row.status === 'unassigned' ? (
+                          <p className="hint">No profile picked</p>
+                        ) : (
+                          row.groupKey &&
+                          run.screenedAt &&
+                          !run.autoStart && (
+                            <p className="hint line-clamp-2" title={pickedFor(row)}>
+                              {pickedFor(row)}
+                            </p>
+                          )
+                        )}
                       </td>
                       <td className="max-w-[14rem] px-3 py-2">
                         <Flags row={row} profileNames={profileNames} />

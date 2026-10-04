@@ -1,14 +1,17 @@
 import type {
+  JobApplyRun,
   JobApplyCounts,
   JobApplyGate,
   JobApplyRowStatus,
   JobApplyRunStatus,
+  JobApplyScreenBucket,
   ScoreBand,
 } from '../../api/endpoints';
 
 export const RUN_STATUS_LABEL: Record<JobApplyRunStatus, string> = {
   queued: 'Queued',
   running: 'Running',
+  screened: 'Ready to review',
   done: 'Done',
   failed: 'Failed',
   cancelled: 'Cancelled',
@@ -17,6 +20,7 @@ export const RUN_STATUS_LABEL: Record<JobApplyRunStatus, string> = {
 export const RUN_STATUS_BADGE: Record<JobApplyRunStatus, string> = {
   queued: 'badge-neutral',
   running: 'badge-info',
+  screened: 'badge-warning',
   done: 'badge-success',
   failed: 'badge-danger',
   cancelled: 'badge-neutral',
@@ -30,9 +34,93 @@ export const ROW_STATUS_LABEL: Record<JobApplyRowStatus, string> = {
   excluded: 'Excluded',
   fetch_failed: 'Fetch failed',
   llm_failed: 'Extraction failed',
+  unassigned: 'No profile picked',
 };
 
+/** Screening buckets in display order: worth applying to first, then why the others were dropped. */
+export const BUCKET_ORDER: JobApplyScreenBucket[] = [
+  'valid',
+  'check',
+  'closed',
+  'too_old',
+  'not_fetched',
+  'other_location',
+  'onsite',
+  'clearance',
+  'not_job',
+  'read_failed',
+];
+
+export const BUCKET_LABEL: Record<JobApplyScreenBucket, string> = {
+  valid: 'Worth applying',
+  check: 'Needs a check',
+  closed: 'Closed',
+  not_fetched: 'Not fetched',
+  read_failed: "Couldn't read",
+  not_job: 'Not a job page',
+  clearance: 'Clearance required',
+  onsite: 'On-site / hybrid',
+  too_old: 'Too old',
+  other_location: 'Other locations',
+};
+
+/** Bar colour per bucket (Tailwind background classes). */
+export const BUCKET_COLOR: Record<JobApplyScreenBucket, string> = {
+  valid: 'bg-emerald-600',
+  check: 'bg-emerald-300 dark:bg-emerald-700',
+  closed: 'bg-zinc-400 dark:bg-zinc-500',
+  not_fetched: 'bg-amber-500',
+  read_failed: 'bg-amber-300 dark:bg-amber-700',
+  not_job: 'bg-zinc-200 dark:bg-zinc-700',
+  clearance: 'bg-red-500',
+  onsite: 'bg-red-300 dark:bg-red-700',
+  too_old: 'bg-zinc-300 dark:bg-zinc-600',
+  other_location: 'bg-violet-300 dark:bg-violet-700',
+};
+
+const MARKET_LABEL: Record<string, string> = {
+  US: 'United States',
+  UKEU: 'UK / EU',
+  LATAM: 'Latam',
+  none: 'Location not stated',
+};
+
+/** A candidate market card's title. */
+export const marketLabel = (key: string) => MARKET_LABEL[key] ?? locationLabel(key);
+
+export const FORCEABLE_BUCKETS: JobApplyScreenBucket[] = ['clearance', 'onsite', 'too_old'];
+
+let _regionNames: Intl.DisplayNames | null = null;
+
+/** 'none' → 'Location not stated'; 'GB' → 'United Kingdom'; 'EU+US' → 'EU · United States'. */
+export function locationLabel(key: string | null | undefined): string {
+  if (!key || key === 'none') return 'Location not stated';
+  try {
+    _regionNames ??= new Intl.DisplayNames(['en'], { type: 'region' });
+  } catch {
+    _regionNames = null;
+  }
+  return key
+    .split('+')
+    .map((part) => (/^[A-Z]{2}$/.test(part) && part !== 'EU' && _regionNames ? _regionNames.of(part) ?? part : part))
+    .join(' · ');
+}
+
 export const isActive = (status: JobApplyRunStatus) => status === 'queued' || status === 'running';
+
+/** Which of the 3 steps a run is at: ① checking, ② waiting for profiles, ③ suggestions / tailoring / applying. */
+export function runStep(run: JobApplyRun): 1 | 2 | 3 {
+  if (run.phase === 'screen') return run.status === 'screened' ? 2 : 1;
+  return 3;
+}
+
+/** Landing-page group: waiting on the user, still working, or finished. */
+export function runGroup(run: JobApplyRun): 'needs' | 'progress' | 'finished' {
+  if (isActive(run.status)) return 'progress';
+  if (run.status === 'screened') return 'needs';
+  if (run.status === 'done' && run.phase === 'score' && (run.summary?.toApply ?? run.suggested) > 0) return 'needs';
+  return 'finished';
+}
 
 export function bandClass(band: ScoreBand): string {
   switch (band) {
@@ -101,6 +189,15 @@ export function formatDate(iso?: string | null): string {
   if (!iso) return '';
   const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** "Oct 3, 2026, 4:13 PM" in the viewer's time zone (API date-times are UTC, sometimes without a zone). */
+export function formatDateTime(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 export function ageDays(iso?: string | null): number | null {

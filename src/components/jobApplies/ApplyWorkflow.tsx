@@ -58,8 +58,9 @@ function Step({
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * What's left to do in a run, counted in applications (one job × one profile), and the three steps to get it
- * done: tailor resumes for applications without one, export the ready ones to the shared sheet, mark them applied.
+ * What's left to do in a run, counted in applications (one job × one profile), and the three actions: export to
+ * the shared sheet the applications with a resume to send (the ones waiting for tailoring go in a later export),
+ * tailor resumes for applications without one, apply and mark applied.
  */
 export default function ApplyWorkflow({
   counts,
@@ -81,6 +82,9 @@ export default function ApplyWorkflow({
   const markReady = profileFilter
     ? counts.byProfile.find((p) => p.accountId === profileFilter.accountId)?.ready ?? 0
     : counts.ready;
+  const toExport = counts.toExport ?? counts.toGo;
+  // waiting for a tailored resume: exported once it's done
+  const waiting = counts.needsResume + counts.tailoring;
 
   return (
     <section className="card-compact space-y-3" aria-label="Apply workflow">
@@ -110,14 +114,31 @@ export default function ApplyWorkflow({
       <ol className="grid gap-2 sm:grid-cols-3">
         <Step
           n={1}
+          icon={FileSpreadsheet}
+          title="Export to sheet"
+          todo={toExport > 0}
+          disabled={busy || toExport === 0}
+          onClick={onExport}
+          detail={
+            toExport > 0
+              ? `${toExport} ready to export` + (waiting > 0 ? ` · ${waiting} wait for tailoring` : '')
+              : waiting > 0
+                ? `${waiting} wait for tailoring, then export`
+                : counts.toGo > 0
+                  ? `All ${counts.toGo} in the sheet`
+                  : 'Nothing to export'
+          }
+        />
+        <Step
+          n={2}
           icon={Sparkles}
-          title="Tailor resumes"
+          title={counts.needsResume > 0 ? `Tailor ${counts.needsResume}` : 'Tailor resumes'}
           todo={counts.needsResume > 0}
           disabled={busy}
           onClick={onTailor}
           detail={
             <>
-              {counts.needsResume > 0 ? `${counts.needsResume} need a resume` : 'Every application has a resume'}
+              {counts.needsResume > 0 ? `${plural(counts.needsResume, 'application')} without a resume` : 'Every application has a resume'}
               {counts.tailoring > 0 && (
                 <span className="ml-1 inline-flex items-center gap-1">
                   · <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> {counts.tailoring} tailoring
@@ -127,23 +148,14 @@ export default function ApplyWorkflow({
           }
         />
         <Step
-          n={2}
-          icon={FileSpreadsheet}
-          title="Export to Google Sheet"
-          todo={counts.ready > 0}
-          disabled={busy || counts.ready === 0}
-          onClick={onExport}
-          detail={counts.ready ? `${counts.ready} ready, with resume links` : 'Nothing ready yet'}
-        />
-        <Step
           n={3}
           icon={CheckCheck}
-          title="Mark as applied"
+          title="Apply"
           todo={markReady > 0}
           disabled={busy || markReady === 0}
           busy={busy}
           onClick={onMark}
-          detail={markReady ? `${markReady} ready${profileFilter ? ` · ${profileFilter.name}` : ''}` : 'Nothing ready yet'}
+          detail={`${markReady} ready now${profileFilter ? ` · ${profileFilter.name}` : ''} · ${counts.applied} applied · click to mark the ready ones applied`}
         />
       </ol>
     </section>
