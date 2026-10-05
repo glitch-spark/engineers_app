@@ -1773,14 +1773,16 @@ export interface JobApplyRow {
   /** Candidate markets the job is open to: 'US', 'UKEU', 'LATAM'. */
   markets?: string[];
   forceInclude?: boolean;
-  jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | null;
+  jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | 'manual' | null;
   /** false: read from the page's text only (no job-site API or posting data), so it needs a check. */
   jdStructured?: boolean | null;
   postedDate?: string | null;
   workMode?: 'remote' | 'hybrid' | 'onsite' | 'unknown' | null;
   allowedLocations: { kind: 'country' | 'region'; value: string }[];
   timezoneNote?: string | null;
-  extractionSource?: 'llm' | 'rules' | 'cache' | null;
+  extractionSource?: 'llm' | 'rules' | 'cache' | 'human' | null;
+  /** A person corrected this job's info (shared by everyone who uses the link). */
+  humanEdited?: boolean;
   gates: JobApplyGate[];
   profileGates: { accountId: string; gates: JobApplyGate[] }[];
   topScore: number | null;
@@ -1828,6 +1830,20 @@ export interface JobApplyRowDetail extends JobApplyRow {
   scores: JobApplyResumeScore[];
   extraction: Record<string, unknown> | null;
   jdText: string | null;
+  /** Who last corrected this job's URL; null when nobody did. */
+  info: { editedBy: string; editedAt: string } | null;
+}
+
+/** What a person corrected; only the fields sent change. null clears postedDate / timezoneNote. */
+export interface JobApplyInfoPatch {
+  title?: string;
+  company?: string;
+  workMode?: 'remote' | 'hybrid' | 'onsite' | 'unknown';
+  allowedLocations?: { kind: 'country' | 'region'; value: string }[];
+  postedDate?: string | null;
+  clearance?: 'required' | 'preferred' | 'none';
+  timezoneNote?: string | null;
+  jdText?: string;
 }
 
 /** The job sheet: an uploaded .xlsx/.csv, or a Google Sheets link shared as "Anyone with the link". */
@@ -1870,6 +1886,13 @@ export const listJobApplyRows = (
 ) => apiFetch<{ rows: JobApplyRow[]; pagination: Pagination }>(`/job-applies/runs/${id}/rows${qs(params)}`);
 
 export const getJobApplyRow = (rowId: string) => apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}`);
+
+/** Correct a job's parsed info and/or description. Saved for the URL, so everyone sees it. */
+export const updateJobApplyRowInfo = (rowId: string, patch: JobApplyInfoPatch) =>
+  apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}/info`, { method: 'PUT', body: JSON.stringify(patch) });
+
+/** Drop the correction and read the job again with the AI (the run goes back to checking). */
+export const resetJobApplyRowInfo = (rowId: string) => del<{ ok: boolean }>(`/job-applies/rows/${rowId}/info`);
 
 export const updateJobApplyRun = (id: string, body: { threshold?: number; maxAgeDays?: number }) =>
   apiFetch<JobApplyRun>(`/job-applies/runs/${id}`, { method: 'PATCH', body: JSON.stringify(body) });

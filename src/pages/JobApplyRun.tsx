@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Square, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, FileText, Keyboard, Loader2, Square, X } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyMarkRef, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -18,6 +18,8 @@ import StepTrack, { type Step } from '../components/jobApplies/StepTrack';
 import ScreeningReport from '../components/jobApplies/ScreeningReport';
 import SourceLine from '../components/jobApplies/SourceLine';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
+import JobInfoModal from '../components/jobApplies/JobInfoModal';
+import { useAuth } from '../auth/useAuth';
 import Segmented from '../components/jobApplies/Segmented';
 import {
   ROW_STATUS_LABEL,
@@ -134,6 +136,8 @@ export default function JobApplyRun() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [infoRow, setInfoRow] = useState<string | null>(null);
+  const { user } = useAuth();
   // An earlier step opened from the step track (null: the run's own step).
   const [stepView, setStepView] = useState<Step | null>(null);
   const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
@@ -913,6 +917,16 @@ export default function JobApplyRun() {
                                   <span className="sr-only">(opens in a new tab)</span>
                                 </a>
                               )}
+                              <button
+                                type="button"
+                                className="btn-icon ml-1 inline-flex align-middle"
+                                onClick={() => setInfoRow(row._id)}
+                                aria-label="Job info and description"
+                                title="Job info and description"
+                              >
+                                <FileText className="h-3.5 w-3.5" aria-hidden />
+                              </button>
+                              {row.humanEdited && <span className="badge-info ml-1 align-middle">Edited</span>}
                             </p>
                           </div>
                         </div>
@@ -1074,6 +1088,14 @@ export default function JobApplyRun() {
           void mutateRows();
           void mutateRun();
         }}
+      />
+
+      <JobInfoModal
+        rowId={infoRow}
+        runId={runId}
+        open={infoRow !== null}
+        onClose={() => setInfoRow(null)}
+        canEdit={user?.role === 'admin' || user?.role === 'staff'}
       />
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)} title="Keyboard shortcuts" size="sm">
