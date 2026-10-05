@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
-import { Loader2, RotateCcw, X } from 'lucide-react';
+import { Check, Loader2, RotateCcw, Undo2, X } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyInfoPatch } from '../../api/endpoints';
 import Select from '../Select';
 import { COUNTRIES } from '../../lib/countries';
 import { notify } from '../../lib/notify';
-import { formatDate } from './format';
+import { APPROVABLE_BUCKETS, BUCKET_LABEL, formatDate } from './format';
+import { useApproveJob } from './useApproveJob';
 import { useRunRefresh } from './useRunRefresh';
 
 const WORK_MODES = [
@@ -52,19 +53,27 @@ interface Form {
  * fetched needs its description pasted here.
  *
  * A panel beside the list, not a dialog: the list stays usable, and choosing another job swaps what it shows.
+ * Whoever owns the run (`canApprove`) can also approve the job here, moving it to Worth applying.
  */
 export default function JobInfoPanel({
   rowId,
   runId,
   onClose,
   canEdit,
+  canApprove = false,
+  onChanged,
 }: {
   rowId: string;
   runId: string;
   onClose: () => void;
   canEdit: boolean;
+  /** Show the approve action (before scoring starts). */
+  canApprove?: boolean;
+  /** The job moved between buckets: the counts changed. */
+  onChanged?: () => void;
 }) {
   const refresh = useRunRefresh(runId);
+  const { setApproved, busyId } = useApproveJob(runId, onChanged);
   const { data, isLoading, error } = useSWR(['job-apply-row', rowId], () => api.getJobApplyRow(rowId));
   const [form, setForm] = useState<Form | null>(null);
   const [base, setBase] = useState<Form | null>(null);
@@ -153,6 +162,14 @@ export default function JobInfoPanel({
   const labelCls = 'block text-xs font-medium text-muted mb-1';
   const ro = !canEdit;
 
+  // Approval: a job that was read can be approved from any bucket in APPROVABLE_BUCKETS; one that wasn't has no
+  // description to go on yet, so it is pasted below first (saving reads the job again).
+  const screen = data?.screen ?? null;
+  const approved = !!data?.forceInclude && screen === 'valid';
+  const approvable = !!screen && APPROVABLE_BUCKETS.includes(screen);
+  const unread = !!screen && screen !== 'valid' && !approvable;
+  const approving = busyId === rowId;
+
   return (
     <aside
       ref={panelRef}
@@ -183,6 +200,51 @@ export default function JobInfoPanel({
         )
       ) : (
         <form onSubmit={save} className="space-y-3">
+          {canApprove && screen && (approved || approvable || unread) && (
+            <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-zinc-800 dark:text-zinc-100">
+                  {approved ? (
+                    <>
+                      <span className="badge-success mr-2 align-middle">Approved</span>Counted as Worth applying
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium">{BUCKET_LABEL[screen]}</span>
+                      <span className="text-muted"> · not yet Worth applying</span>
+                    </>
+                  )}
+                </p>
+                {(approved || approvable) && (
+                  <button
+                    type="button"
+                    className={approved ? 'btn-outline btn-sm' : 'btn btn-sm'}
+                    onClick={() => void setApproved(rowId, !approved)}
+                    disabled={approving || (!approved && !!dirty)}
+                  >
+                    {approving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : approved ? (
+                      <Undo2 className="h-3.5 w-3.5" aria-hidden />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" aria-hidden />
+                    )}
+                    {approved ? 'Undo approval' : 'Approve'}
+                  </button>
+                )}
+              </div>
+              {!approved && approvable && (
+                <p className="hint">
+                  {dirty ? 'Save your changes first, then approve.' : 'Checked it? Approve to move this job to Worth applying.'}
+                </p>
+              )}
+              {unread && (
+                <p className="hint">
+                  There is no readable description yet. Paste it below and save: the job is read again, and then it can be approved.
+                </p>
+              )}
+            </div>
+          )}
           <p className="hint">
             {data?.info && !data.info.applied
               ? 'Someone corrected this job after it was read. Updating…'
