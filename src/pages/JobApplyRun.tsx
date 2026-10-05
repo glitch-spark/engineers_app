@@ -18,7 +18,8 @@ import StepTrack, { type Step } from '../components/jobApplies/StepTrack';
 import ScreeningReport from '../components/jobApplies/ScreeningReport';
 import SourceLine from '../components/jobApplies/SourceLine';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
-import JobInfoModal from '../components/jobApplies/JobInfoModal';
+import JobInfoPanel from '../components/jobApplies/JobInfoPanel';
+import { useRunRefresh } from '../components/jobApplies/useRunRefresh';
 import { useAuth } from '../auth/useAuth';
 import Segmented from '../components/jobApplies/Segmented';
 import {
@@ -153,6 +154,23 @@ export default function JobApplyRun() {
     { refreshInterval: (latest) => (latest && (isActive(latest.status) || tailoringPending(latest)) ? 3000 : 0) },
   );
   const active = run ? isActive(run.status) : false;
+  const refreshRun = useRunRefresh(runId);
+  // Jobs other people corrected since this run read them: bring them up to date once per status (no fetch, no AI call).
+  const syncedFor = useRef('');
+  useEffect(() => {
+    if (!run || active) return;
+    const mark = `${runId}:${run.status}`;
+    if (syncedFor.current === mark) return;
+    syncedFor.current = mark;
+    api
+      .syncJobApplyRunInfo(runId)
+      .then(async (res) => {
+        if (!res.updated) return;
+        await refreshRun();
+        notify.info(`${res.updated} job${res.updated === 1 ? '' : 's'} updated from corrections made by others`);
+      })
+      .catch(() => undefined);
+  }, [run, active, runId, refreshRun]);
   const polling = active || tailoringPending(run);
 
   const { data: rowsData, isLoading: rowsLoading, mutate: mutateRows } = useSWR(
@@ -802,203 +820,215 @@ export default function JobApplyRun() {
         />
       )}
 
-      <div className="flex min-h-[2rem] flex-wrap items-center justify-between gap-3">
-        {selected.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Selected jobs">
-            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{selected.size} selected</span>
-            <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
-              {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
-              Mark applied
-            </button>
-            <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
-              <X className="h-4 w-4" aria-hidden />
-              Clear
-            </button>
-          </div>
-        ) : (
-          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-            {pagination ? pagination.total : '…'} job{pagination?.total === 1 ? '' : 's'}
-            {appliedFilter === 'no' ? ' to apply to' : appliedFilter === 'yes' ? ' applied' : ''}
-          </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        {infoRow && (
+          <JobInfoPanel
+            rowId={infoRow}
+            runId={runId}
+            onClose={() => setInfoRow(null)}
+            canEdit={user?.role === 'admin' || user?.role === 'staff'}
+          />
         )}
-        <Pagination info={pagination} onPage={goToPage} label="Pages (top)" />
-      </div>
+        <div className="min-w-0 flex-1 space-y-5">
+          <div className="flex min-h-[2rem] flex-wrap items-center justify-between gap-3">
+            {selected.size > 0 ? (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Selected jobs">
+                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{selected.size} selected</span>
+                <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
+                  {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
+                  Mark applied
+                </button>
+                <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
+                  <X className="h-4 w-4" aria-hidden />
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                {pagination ? pagination.total : '…'} job{pagination?.total === 1 ? '' : 's'}
+                {appliedFilter === 'no' ? ' to apply to' : appliedFilter === 'yes' ? ' applied' : ''}
+              </p>
+            )}
+            <Pagination info={pagination} onPage={goToPage} label="Pages (top)" />
+          </div>
 
-      <div className="table-wrap">
-        {rowsLoading && rows.length === 0 ? (
-          <p role="status" className="flex items-center gap-2 p-6 text-sm text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading jobs…
-          </p>
-        ) : rows.length === 0 ? (
-          <p className="p-6 text-sm text-muted">
-            {active
-              ? 'Jobs appear here as they are processed.'
-              : appliedFilter === 'no' && view === 'suggested'
-                ? 'Nothing left to apply to here. Switch to “All” or lower the minimum score.'
-                : 'No jobs match this view.'}
-          </p>
-        ) : (
-          <table className="min-w-full text-sm">
-            <thead className="table-head whitespace-nowrap">
-              <tr>
-                <th className="w-8 px-3 py-2 font-medium">
-                  <input
-                    type="checkbox"
-                    checked={allOnPageSelected}
-                    onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r._id)) : new Set())}
-                    aria-label="Select all jobs on this page"
-                  />
-                </th>
-                <th className="w-10 px-3 py-2 font-medium">#</th>
-                <th className="px-3 py-2 font-medium">Job</th>
-                <th className="px-3 py-2 font-medium">Posted</th>
-                <th className="px-3 py-2 font-medium">Work mode</th>
-                <th className="px-3 py-2 font-medium">Location</th>
-                <th className="px-3 py-2 font-medium">Flags</th>
-                <th className="px-3 py-2 font-medium">Apply with</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const isOpen = expanded === row._id;
-                const isFocused = focusedId === row._id;
-                const age = ageDays(row.postedDate);
-                return (
-                  <Fragment key={row._id}>
-                    <tr
-                      ref={(el) => {
-                        if (el) rowRefs.current.set(row._id, el);
-                        else rowRefs.current.delete(row._id);
-                      }}
-                      onClick={() => setFocusedId(row._id)}
-                      className={`table-row align-top ${row.applied ? 'opacity-60' : ''} ${
-                        isFocused ? 'bg-sky-50/70 shadow-[inset_3px_0_0_0] shadow-sky-600 dark:bg-sky-950/30 dark:shadow-sky-400' : ''
-                      }`}
-                      aria-current={isFocused ? 'true' : undefined}
-                    >
-                      <td className="px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(row._id)}
-                          onChange={() => toggleSelected(row._id)}
-                          aria-label={`Select ${row.title || 'job'}`}
-                        />
-                      </td>
-                      <td className="px-3 py-2 tabular-nums text-zinc-500">{row.rowIndex}</td>
-                      <td className="max-w-xs px-3 py-2">
-                        <div className="flex items-start gap-1.5">
-                          <button
-                            type="button"
-                            className="btn-icon -ml-1.5"
-                            aria-expanded={isOpen}
-                            aria-label={isOpen ? 'Hide score breakdown' : 'Show score breakdown'}
-                            onClick={() => setExpanded(isOpen ? null : row._id)}
-                            disabled={!row.topScore && row.status !== 'scored' && row.status !== 'excluded'}
-                          >
-                            {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
-                          </button>
-                          <div className="min-w-0">
-                            {/* wrap rather than truncate: a one-line title holds the column at full width and pushes
-                                Apply with past the table's edge on narrower screens */}
-                            <p className="line-clamp-2 font-medium text-zinc-800 dark:text-zinc-100" title={row.title || undefined}>
-                              {row.title || 'Untitled role'}
-                            </p>
-                            <p className="line-clamp-1 text-xs text-zinc-500">
-                              {row.company}
-                              {row.url && (
-                                <a
-                                  href={row.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="ml-1 inline-flex items-center gap-0.5 text-sky-700 hover:underline dark:text-sky-400"
-                                >
-                                  {row.company ? 'open' : hostOf(row.url)}
-                                  <ExternalLink className="h-3 w-3" aria-hidden />
-                                  <span className="sr-only">(opens in a new tab)</span>
-                                </a>
-                              )}
+          <div className="table-wrap">
+            {rowsLoading && rows.length === 0 ? (
+              <p role="status" className="flex items-center gap-2 p-6 text-sm text-muted">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading jobs…
+              </p>
+            ) : rows.length === 0 ? (
+              <p className="p-6 text-sm text-muted">
+                {active
+                  ? 'Jobs appear here as they are processed.'
+                  : appliedFilter === 'no' && view === 'suggested'
+                    ? 'Nothing left to apply to here. Switch to “All” or lower the minimum score.'
+                    : 'No jobs match this view.'}
+              </p>
+            ) : (
+              <table className="min-w-full text-sm">
+                <thead className="table-head whitespace-nowrap">
+                  <tr>
+                    <th className="w-8 px-3 py-2 font-medium">
+                      <input
+                        type="checkbox"
+                        checked={allOnPageSelected}
+                        onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r._id)) : new Set())}
+                        aria-label="Select all jobs on this page"
+                      />
+                    </th>
+                    <th className="w-10 px-3 py-2 font-medium">#</th>
+                    <th className="px-3 py-2 font-medium">Job</th>
+                    <th className="px-3 py-2 font-medium">Posted</th>
+                    <th className="px-3 py-2 font-medium">Work mode</th>
+                    <th className="px-3 py-2 font-medium">Location</th>
+                    <th className="px-3 py-2 font-medium">Flags</th>
+                    <th className="px-3 py-2 font-medium">Apply with</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const isOpen = expanded === row._id;
+                    const isFocused = focusedId === row._id;
+                    const age = ageDays(row.postedDate);
+                    return (
+                      <Fragment key={row._id}>
+                        <tr
+                          ref={(el) => {
+                            if (el) rowRefs.current.set(row._id, el);
+                            else rowRefs.current.delete(row._id);
+                          }}
+                          onClick={() => setFocusedId(row._id)}
+                          className={`table-row align-top ${row.applied ? 'opacity-60' : ''} ${
+                            isFocused ? 'bg-sky-50/70 shadow-[inset_3px_0_0_0] shadow-sky-600 dark:bg-sky-950/30 dark:shadow-sky-400' : ''
+                          }`}
+                          aria-current={isFocused ? 'true' : undefined}
+                        >
+                          <td className="px-3 py-2">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(row._id)}
+                              onChange={() => toggleSelected(row._id)}
+                              aria-label={`Select ${row.title || 'job'}`}
+                            />
+                          </td>
+                          <td className="px-3 py-2 tabular-nums text-zinc-500">{row.rowIndex}</td>
+                          <td className="max-w-xs px-3 py-2">
+                            <div className="flex items-start gap-1.5">
                               <button
                                 type="button"
-                                className="btn-icon ml-1 inline-flex align-middle"
-                                onClick={() => setInfoRow(row._id)}
-                                aria-label="Job info and description"
-                                title="Job info and description"
+                                className="btn-icon -ml-1.5"
+                                aria-expanded={isOpen}
+                                aria-label={isOpen ? 'Hide score breakdown' : 'Show score breakdown'}
+                                onClick={() => setExpanded(isOpen ? null : row._id)}
+                                disabled={!row.topScore && row.status !== 'scored' && row.status !== 'excluded'}
                               >
-                                <FileText className="h-3.5 w-3.5" aria-hidden />
+                                {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
                               </button>
-                              {row.humanEdited && <span className="badge-info ml-1 align-middle">Edited</span>}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        {row.postedDate ? (
-                          <>
-                            {formatDate(row.postedDate)}
-                            {age !== null && <span className="hint block">{age === 0 ? 'today' : `${age}d ago`}</span>}
-                          </>
-                        ) : (
-                          <span className="hint">Unknown</span>
+                              <div className="min-w-0">
+                                {/* wrap rather than truncate: a one-line title holds the column at full width and pushes
+                                    Apply with past the table's edge on narrower screens */}
+                                <p className="line-clamp-2 font-medium text-zinc-800 dark:text-zinc-100" title={row.title || undefined}>
+                                  {row.title || 'Untitled role'}
+                                </p>
+                                <p className="line-clamp-1 text-xs text-zinc-500">
+                                  {row.company}
+                                  {row.url && (
+                                    <a
+                                      href={row.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="ml-1 inline-flex items-center gap-0.5 text-sky-700 hover:underline dark:text-sky-400"
+                                    >
+                                      {row.company ? 'open' : hostOf(row.url)}
+                                      <ExternalLink className="h-3 w-3" aria-hidden />
+                                      <span className="sr-only">(opens in a new tab)</span>
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn-icon ml-1 inline-flex align-middle"
+                                    onClick={() => setInfoRow(row._id)}
+                                    aria-label="Job info and description"
+                                    title="Job info and description"
+                                  >
+                                    <FileText className="h-3.5 w-3.5" aria-hidden />
+                                  </button>
+                                  {row.humanEdited && <span className="badge-info ml-1 align-middle">Edited</span>}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2">
+                            {row.postedDate ? (
+                              <>
+                                {formatDate(row.postedDate)}
+                                {age !== null && <span className="hint block">{age === 0 ? 'today' : `${age}d ago`}</span>}
+                              </>
+                            ) : (
+                              <span className="hint">Unknown</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">{capitalize(row.workMode) || <span className="hint">—</span>}</td>
+                          <td className="max-w-[10rem] px-3 py-2">
+                            {row.groupKey ? (
+                              locationLabel(row.groupKey)
+                            ) : row.allowedLocations.length ? (
+                              row.allowedLocations.map((l) => l.value).join(', ')
+                            ) : (
+                              <span className="hint">Not stated</span>
+                            )}
+                            {row.status === 'unassigned' ? (
+                              <p className="hint">No profile picked</p>
+                            ) : (
+                              row.groupKey &&
+                              run.screenedAt &&
+                              !run.autoStart && (
+                                <p className="hint line-clamp-2" title={pickedFor(row)}>
+                                  {pickedFor(row)}
+                                </p>
+                              )
+                            )}
+                          </td>
+                          <td className="max-w-[14rem] px-3 py-2">
+                            <Flags row={row} profileNames={profileNames} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <Suggestions
+                              row={row}
+                              threshold={run.threshold}
+                              profileNames={profileNames}
+                              hasFile={(id) => !!resumesById.get(id)?.hasFile}
+                              onToggle={(file, applied, label) => void toggleFile(row, file, applied, label)}
+                              onDownload={(s) => void download(s)}
+                              onTailor={(acc) => void tailor(row, acc)}
+                              onTailorAll={() => void tailorRow(row)}
+                              onDownloadTailored={(t) => void downloadTailored(row, t)}
+                            />
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr>
+                            <td colSpan={8} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
+                              <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="px-3 py-2">{capitalize(row.workMode) || <span className="hint">—</span>}</td>
-                      <td className="max-w-[10rem] px-3 py-2">
-                        {row.groupKey ? (
-                          locationLabel(row.groupKey)
-                        ) : row.allowedLocations.length ? (
-                          row.allowedLocations.map((l) => l.value).join(', ')
-                        ) : (
-                          <span className="hint">Not stated</span>
-                        )}
-                        {row.status === 'unassigned' ? (
-                          <p className="hint">No profile picked</p>
-                        ) : (
-                          row.groupKey &&
-                          run.screenedAt &&
-                          !run.autoStart && (
-                            <p className="hint line-clamp-2" title={pickedFor(row)}>
-                              {pickedFor(row)}
-                            </p>
-                          )
-                        )}
-                      </td>
-                      <td className="max-w-[14rem] px-3 py-2">
-                        <Flags row={row} profileNames={profileNames} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <Suggestions
-                          row={row}
-                          threshold={run.threshold}
-                          profileNames={profileNames}
-                          hasFile={(id) => !!resumesById.get(id)?.hasFile}
-                          onToggle={(file, applied, label) => void toggleFile(row, file, applied, label)}
-                          onDownload={(s) => void download(s)}
-                          onTailor={(acc) => void tailor(row, acc)}
-                          onTailorAll={() => void tailorRow(row)}
-                          onDownloadTailored={(t) => void downloadTailored(row, t)}
-                        />
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr>
-                        <td colSpan={8} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
-                          <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (bottom)" />
-        <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
-          Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for keyboard shortcuts
-        </button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (bottom)" />
+            <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
+              Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for keyboard shortcuts
+            </button>
+          </div>
+        </div>
       </div>
 
       <ConfirmDialog
@@ -1088,14 +1118,6 @@ export default function JobApplyRun() {
           void mutateRows();
           void mutateRun();
         }}
-      />
-
-      <JobInfoModal
-        rowId={infoRow}
-        runId={runId}
-        open={infoRow !== null}
-        onClose={() => setInfoRow(null)}
-        canEdit={user?.role === 'admin' || user?.role === 'staff'}
       />
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)} title="Keyboard shortcuts" size="sm">
