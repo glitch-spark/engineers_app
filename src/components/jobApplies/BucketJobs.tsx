@@ -77,15 +77,8 @@ export default function BucketJobs({
   };
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      {infoRow && (
-        <JobInfoPanel
-          rowId={infoRow}
-          runId={runId}
-          onClose={() => setInfoRow(null)}
-          canEdit={user?.role === 'admin' || user?.role === 'staff'}
-        />
-      )}
+    // The job's details open beside the list, on the right (above it on narrow screens).
+    <div className="flex flex-col-reverse gap-4 lg:flex-row lg:items-start">
       <div className="min-w-0 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
           <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
@@ -107,7 +100,14 @@ export default function BucketJobs({
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {rows.map((row) => (
-              <li key={row._id} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-4 py-2 text-sm">
+              <li
+                key={row._id}
+                onClick={() => setInfoRow(row._id)}
+                aria-current={infoRow === row._id ? 'true' : undefined}
+                className={`flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-sm ${
+                  infoRow === row._id ? 'bg-sky-50/70 dark:bg-sky-950/30' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40'
+                }`}
+              >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">
                     {row.title || row.url}
@@ -121,7 +121,13 @@ export default function BucketJobs({
                   </p>
                 </div>
                 {row.url && (
-                  <a href={row.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-700 hover:underline dark:text-sky-400">
+                  <a
+                    href={row.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 text-sky-700 hover:underline dark:text-sky-400"
+                  >
                     Open <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                   </a>
                 )}
@@ -130,13 +136,29 @@ export default function BucketJobs({
                   View / edit
                 </button>
                 {canInclude && (
-                  <button type="button" className="btn-outline btn-sm" onClick={() => include(row, true)} disabled={busy !== null}>
+                  <button
+                    type="button"
+                    className="btn-outline btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void include(row, true);
+                    }}
+                    disabled={busy !== null}
+                  >
                     {busy === row._id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                     Include anyway
                   </button>
                 )}
                 {includedView && row.forceInclude && !readOnly && (
-                  <button type="button" className="btn-outline btn-sm" onClick={() => include(row, false)} disabled={busy !== null}>
+                  <button
+                    type="button"
+                    className="btn-outline btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void include(row, false);
+                    }}
+                    disabled={busy !== null}
+                  >
                     Undo include
                   </button>
                 )}
@@ -150,6 +172,14 @@ export default function BucketJobs({
           </div>
         )}
       </div>
+      {infoRow && (
+        <JobInfoPanel
+          rowId={infoRow}
+          runId={runId}
+          onClose={() => setInfoRow(null)}
+          canEdit={user?.role === 'admin' || user?.role === 'staff'}
+        />
+      )}
     </div>
   );
 }
