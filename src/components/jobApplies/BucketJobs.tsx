@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import useSWR from 'swr';
-import { ExternalLink, Loader2, RotateCcw } from 'lucide-react';
+import { ExternalLink, Loader2, Pencil, RotateCcw } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket } from '../../api/endpoints';
+import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
+import JobInfoModal from './JobInfoModal';
 import Pagination from './Pagination';
 import { BUCKET_LABEL, FORCEABLE_BUCKETS, formatDate, locationLabel } from './format';
 
@@ -38,6 +40,8 @@ export default function BucketJobs({
 }) {
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
+  const [infoRow, setInfoRow] = useState<string | null>(null);
+  const { user } = useAuth();
   const { data, isLoading, mutate } = useSWR(['job-apply-bucket', runId, bucket, page], () =>
     api.listJobApplyRows(runId, { screen: bucket, page, limit: PAGE_SIZE }),
   );
@@ -99,6 +103,7 @@ export default function BucketJobs({
                 <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">
                   {row.title || row.url}
                   {row.company && <span className="font-normal text-zinc-500"> · {row.company}</span>}
+                  {row.humanEdited && <span className="badge-info ml-2 align-middle">Edited</span>}
                 </p>
                 <p className="hint">
                   {[reason(row), row.groupKey ? locationLabel(row.groupKey) : '', row.postedDate ? `posted ${formatDate(row.postedDate)}` : '']
@@ -111,6 +116,10 @@ export default function BucketJobs({
                   Open <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                 </a>
               )}
+              <button type="button" className="btn-outline btn-sm" onClick={() => setInfoRow(row._id)} disabled={busy !== null}>
+                <Pencil className="h-3.5 w-3.5" aria-hidden />
+                View / edit
+              </button>
               {canInclude && (
                 <button type="button" className="btn-outline btn-sm" onClick={() => include(row, true)} disabled={busy !== null}>
                   {busy === row._id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
@@ -126,6 +135,13 @@ export default function BucketJobs({
           ))}
         </ul>
       )}
+      <JobInfoModal
+        rowId={infoRow}
+        runId={runId}
+        open={infoRow !== null}
+        onClose={() => setInfoRow(null)}
+        canEdit={user?.role === 'admin' || user?.role === 'staff'}
+      />
       {(data?.pagination.totalPages ?? 1) > 1 && (
         <div className="border-t border-zinc-200 px-4 py-2 dark:border-zinc-800">
           <Pagination info={data?.pagination} onPage={setPage} label={`${BUCKET_LABEL[bucket]} pages`} />
