@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
-import { Loader2, RotateCcw } from 'lucide-react';
+import { Loader2, RotateCcw, X } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyInfoPatch } from '../../api/endpoints';
-import Modal from '../Modal';
 import Select from '../Select';
 import { COUNTRIES } from '../../lib/countries';
 import { notify } from '../../lib/notify';
@@ -49,33 +48,42 @@ interface Form {
 
 /**
  * A job as it was read, with its description, for anyone to check; admin and staff can correct it. A correction is
- * saved for the link, so everyone who uses the link sees it (and the AI isn't asked again). The description is
- * needed for a job that couldn't be fetched: paste it here.
+ * saved for the link, so everyone who uses the link sees it (and the AI isn't asked again). A job that couldn't be
+ * fetched needs its description pasted here.
+ *
+ * A panel beside the list, not a dialog: the list stays usable, and choosing another job swaps what it shows.
  */
-export default function JobInfoModal({
+export default function JobInfoPanel({
   rowId,
   runId,
-  open,
   onClose,
   canEdit,
 }: {
-  rowId: string | null;
+  rowId: string;
   runId: string;
-  open: boolean;
   onClose: () => void;
   canEdit: boolean;
 }) {
   const refresh = useRunRefresh(runId);
-  const { data, isLoading, error } = useSWR(open && rowId ? ['job-apply-row', rowId] : null, () => api.getJobApplyRow(rowId!));
+  const { data, isLoading, error } = useSWR(['job-apply-row', rowId], () => api.getJobApplyRow(rowId));
   const [form, setForm] = useState<Form | null>(null);
   const [base, setBase] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const syncedRow = useRef<string | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
+
+  // A different job: start from its data, not the previous one's.
+  useEffect(() => {
+    setForm(null);
+    setBase(null);
+    setConfirmReset(false);
+    panelRef.current?.focus({ preventScroll: true });
+  }, [rowId]);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || data._id !== rowId) return;
     const ex = (data.extraction ?? {}) as { clearance?: { level?: string } };
     const f: Form = {
       title: data.title ?? '',
@@ -89,31 +97,24 @@ export default function JobInfoModal({
     };
     setForm(f);
     setBase(f);
-  }, [data]);
+  }, [data, rowId]);
 
-  // Corrected by someone after this job was read: bring the run up to date, then this window shows the correction.
+  // Corrected by someone after this job was read: bring the run up to date, then this panel shows the correction.
   useEffect(() => {
-    if (!open || !rowId || !data?.info || data.info.applied || syncedRow.current === rowId) return;
+    if (!data?.info || data.info.applied || syncedRow.current === rowId) return;
     syncedRow.current = rowId;
     api
       .syncJobApplyRunInfo(runId)
       .then((res) => (res.updated ? refresh() : undefined))
       .catch(() => undefined);
-  }, [open, rowId, data, runId, refresh]);
-
-  useEffect(() => {
-    if (!open) {
-      syncedRow.current = null;
-      setConfirmReset(false);
-    }
-  }, [open]);
+  }, [data, rowId, runId, refresh]);
 
   const dirty = form && base && (Object.keys(form) as (keyof Form)[]).some((k) => form[k] !== base[k]);
   const set = (k: keyof Form) => (v: string) => setForm((f) => (f ? { ...f, [k]: v } : f));
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form || !base || !rowId) return;
+    if (!form || !base) return;
     const patch: JobApplyInfoPatch = {};
     if (form.title !== base.title) patch.title = form.title.trim();
     if (form.company !== base.company) patch.company = form.company.trim();
@@ -127,8 +128,7 @@ export default function JobInfoModal({
     try {
       await api.updateJobApplyRowInfo(rowId, patch);
       notify.success('Saved for everyone who uses this link');
-      await refresh();
-      onClose();
+      await refresh(); // the panel stays open on the job, now showing the saved info
     } catch (err) {
       notify.error(err, 'Could not save the correction');
     } finally {
@@ -137,7 +137,6 @@ export default function JobInfoModal({
   };
 
   const reset = async () => {
-    if (!rowId) return;
     setResetting(true);
     try {
       await api.resetJobApplyRowInfo(rowId);
@@ -155,7 +154,25 @@ export default function JobInfoModal({
   const ro = !canEdit;
 
   return (
-    <Modal open={open} onClose={onClose} title="Job info" size="lg">
+    <aside
+      ref={panelRef}
+      tabIndex={-1}
+      aria-label="Job info"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      className="panel w-full shrink-0 overflow-y-auto p-4 outline-none lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:w-[26rem] lg:self-start"
+    >
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Job info</h3>
+        <button type="button" className="btn-icon -mr-1 -mt-1" onClick={onClose} aria-label="Close job info">
+          <X className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+
       {isLoading || !form ? (
         error ? (
           <p className="text-sm text-red-700 dark:text-red-400">Could not load this job.</p>
@@ -165,15 +182,15 @@ export default function JobInfoModal({
           </p>
         )
       ) : (
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="space-y-3">
           <p className="hint">
             {data?.info && !data.info.applied
               ? 'Someone corrected this job after it was read. Updating…'
               : data?.info
-              ? `Corrected by ${data.info.editedBy || 'someone'} · ${formatDate(data.info.editedAt)}. Everyone who uses this link sees it.`
-              : data?.extractionSource === 'rules'
-                ? 'Read by rules (the AI was unavailable), so check it.'
-                : 'Read by the AI. If something is wrong, correct it: it is saved for everyone who uses this link.'}
+                ? `Corrected by ${data.info.editedBy || 'someone'} · ${formatDate(data.info.editedAt)}. Everyone who uses this link sees it.`
+                : data?.extractionSource === 'rules'
+                  ? 'Read by rules (the AI was unavailable), so check it.'
+                  : 'Read by the AI. If something is wrong, correct it: it is saved for everyone who uses this link.'}
             {data?.url && (
               <>
                 {' '}
@@ -189,68 +206,65 @@ export default function JobInfoModal({
             </p>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls} htmlFor="ji-title">Title</label>
-                <input id="ji-title" className="input w-full text-sm" value={form.title} onChange={(e) => set('title')(e.target.value)} readOnly={ro} />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="ji-company">Company</label>
-                <input id="ji-company" className="input w-full text-sm" value={form.company} onChange={(e) => set('company')(e.target.value)} readOnly={ro} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Select id="ji-mode" label="Work mode" labelClassName={labelCls} value={form.workMode} onChange={set('workMode')} options={WORK_MODES} disabled={ro} />
-                <div>
-                  <label className={labelCls} htmlFor="ji-date">Posted</label>
-                  <input id="ji-date" type="date" className="input w-full text-sm" value={form.postedDate} onChange={(e) => set('postedDate')(e.target.value)} readOnly={ro} />
-                </div>
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="ji-loc">Open to (countries or regions)</label>
-                <input
-                  id="ji-loc"
-                  className="input w-full text-sm"
-                  placeholder="US, GB, EU, Worldwide"
-                  value={form.locations}
-                  onChange={(e) => set('locations')(e.target.value)}
-                  readOnly={ro}
-                />
-                <p className="hint mt-1">Two-letter country codes (US, GB) or regions (EU, LATAM, Worldwide), separated by commas. Empty: not stated.</p>
-              </div>
-              <Select id="ji-clr" label="Security clearance" labelClassName={labelCls} value={form.clearance} onChange={set('clearance')} options={CLEARANCE} disabled={ro} />
-              <div>
-                <label className={labelCls} htmlFor="ji-tz">Time zone note</label>
-                <input id="ji-tz" className="input w-full text-sm" value={form.timezoneNote} onChange={(e) => set('timezoneNote')(e.target.value)} readOnly={ro} />
-              </div>
+          <div>
+            <label className={labelCls} htmlFor="ji-title">Title</label>
+            <input id="ji-title" className="input w-full text-sm" value={form.title} onChange={(e) => set('title')(e.target.value)} readOnly={ro} />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="ji-company">Company</label>
+            <input id="ji-company" className="input w-full text-sm" value={form.company} onChange={(e) => set('company')(e.target.value)} readOnly={ro} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Select id="ji-mode" label="Work mode" labelClassName={labelCls} value={form.workMode} onChange={set('workMode')} options={WORK_MODES} disabled={ro} />
+            <div>
+              <label className={labelCls} htmlFor="ji-date">Posted</label>
+              <input id="ji-date" type="date" className="input w-full text-sm" value={form.postedDate} onChange={(e) => set('postedDate')(e.target.value)} readOnly={ro} />
             </div>
-
-            <div className="flex min-h-[18rem] flex-col">
-              <label className={labelCls} htmlFor="ji-jd">Job description</label>
-              <textarea
-                id="ji-jd"
-                className="input w-full flex-1 resize-y font-mono text-xs leading-relaxed"
-                rows={18}
-                value={form.jdText}
-                onChange={(e) => set('jdText')(e.target.value)}
-                readOnly={ro}
-                placeholder={ro ? 'No description' : 'Paste the job description here'}
-              />
-            </div>
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="ji-loc">Open to (countries or regions)</label>
+            <input
+              id="ji-loc"
+              className="input w-full text-sm"
+              placeholder="US, GB, EU, Worldwide"
+              value={form.locations}
+              onChange={(e) => set('locations')(e.target.value)}
+              readOnly={ro}
+            />
+            <p className="hint mt-1">Two-letter country codes (US, GB) or regions (EU, LATAM, Worldwide), separated by commas. Empty: not stated.</p>
+          </div>
+          <Select id="ji-clr" label="Security clearance" labelClassName={labelCls} value={form.clearance} onChange={set('clearance')} options={CLEARANCE} disabled={ro} />
+          <div>
+            <label className={labelCls} htmlFor="ji-tz">Time zone note</label>
+            <input id="ji-tz" className="input w-full text-sm" value={form.timezoneNote} onChange={(e) => set('timezoneNote')(e.target.value)} readOnly={ro} />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="ji-jd">Job description</label>
+            <textarea
+              id="ji-jd"
+              className="input w-full resize-y font-mono text-xs leading-relaxed"
+              rows={14}
+              value={form.jdText}
+              onChange={(e) => set('jdText')(e.target.value)}
+              readOnly={ro}
+              placeholder={ro ? 'No description' : 'Paste the job description here'}
+            />
           </div>
 
           {confirmReset && (
-            <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-              <span className="min-w-0 flex-1">
+            <div role="alert" className="space-y-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+              <p>
                 This removes the correction for <strong>everyone</strong> who uses this link, and the AI reads the job again.
-              </span>
-              <button type="button" className="btn-outline btn-sm" onClick={() => setConfirmReset(false)} disabled={resetting}>
-                Keep it
-              </button>
-              <button type="button" className="btn btn-sm" onClick={reset} disabled={resetting}>
-                {resetting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                Remove for everyone
-              </button>
+              </p>
+              <div className="flex gap-2">
+                <button type="button" className="btn-outline btn-sm" onClick={() => setConfirmReset(false)} disabled={resetting}>
+                  Keep it
+                </button>
+                <button type="button" className="btn btn-sm" onClick={reset} disabled={resetting}>
+                  {resetting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                  Remove for everyone
+                </button>
+              </div>
             </div>
           )}
 
@@ -263,19 +277,14 @@ export default function JobInfoModal({
                 </button>
               )}
             </div>
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
-                {canEdit ? 'Cancel' : 'Close'}
+            {canEdit && (
+              <button type="submit" className="btn" disabled={saving || !dirty}>
+                {saving ? 'Saving...' : 'Save for everyone'}
               </button>
-              {canEdit && (
-                <button type="submit" className="btn" disabled={saving || !dirty}>
-                  {saving ? 'Saving...' : 'Save for everyone'}
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </form>
       )}
-    </Modal>
+    </aside>
   );
 }

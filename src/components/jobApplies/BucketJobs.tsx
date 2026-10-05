@@ -5,7 +5,7 @@ import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
-import JobInfoModal from './JobInfoModal';
+import JobInfoPanel from './JobInfoPanel';
 import Pagination from './Pagination';
 import { BUCKET_LABEL, FORCEABLE_BUCKETS, formatDate, locationLabel } from './format';
 
@@ -77,76 +77,79 @@ export default function BucketJobs({
   };
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          {BUCKET_LABEL[bucket]} · {data?.pagination.total ?? '…'}
-        </h4>
-        {!readOnly && (bucket === 'not_fetched' || bucket === 'read_failed') && (data?.pagination.total ?? 0) > 0 && (
-          <button type="button" className="btn-outline btn-sm" onClick={retry} disabled={busy !== null}>
-            {busy === 'retry' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
-            Retry jobs that failed
-          </button>
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      {infoRow && (
+        <JobInfoPanel
+          rowId={infoRow}
+          runId={runId}
+          onClose={() => setInfoRow(null)}
+          canEdit={user?.role === 'admin' || user?.role === 'staff'}
+        />
+      )}
+      <div className="min-w-0 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+          <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            {BUCKET_LABEL[bucket]} · {data?.pagination.total ?? '…'}
+          </h4>
+          {!readOnly && (bucket === 'not_fetched' || bucket === 'read_failed') && (data?.pagination.total ?? 0) > 0 && (
+            <button type="button" className="btn-outline btn-sm" onClick={retry} disabled={busy !== null}>
+              {busy === 'retry' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
+              Retry jobs that failed
+            </button>
+          )}
+        </div>
+        {isLoading ? (
+          <p role="status" className="flex items-center gap-2 p-4 text-sm text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading jobs…
+          </p>
+        ) : rows.length === 0 ? (
+          <p className="hint p-4">No jobs here.</p>
+        ) : (
+          <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            {rows.map((row) => (
+              <li key={row._id} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-4 py-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">
+                    {row.title || row.url}
+                    {row.company && <span className="font-normal text-zinc-500"> · {row.company}</span>}
+                    {row.humanEdited && <span className="badge-info ml-2 align-middle">Edited</span>}
+                  </p>
+                  <p className="hint">
+                    {[reason(row), row.groupKey ? locationLabel(row.groupKey) : '', row.postedDate ? `posted ${formatDate(row.postedDate)}` : '']
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </div>
+                {row.url && (
+                  <a href={row.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-700 hover:underline dark:text-sky-400">
+                    Open <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </a>
+                )}
+                <button type="button" className="btn-outline btn-sm" onClick={() => setInfoRow(row._id)} disabled={busy !== null}>
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  View / edit
+                </button>
+                {canInclude && (
+                  <button type="button" className="btn-outline btn-sm" onClick={() => include(row, true)} disabled={busy !== null}>
+                    {busy === row._id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                    Include anyway
+                  </button>
+                )}
+                {includedView && row.forceInclude && !readOnly && (
+                  <button type="button" className="btn-outline btn-sm" onClick={() => include(row, false)} disabled={busy !== null}>
+                    Undo include
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {(data?.pagination.totalPages ?? 1) > 1 && (
+          <div className="border-t border-zinc-200 px-4 py-2 dark:border-zinc-800">
+            <Pagination info={data?.pagination} onPage={setPage} label={`${BUCKET_LABEL[bucket]} pages`} />
+          </div>
         )}
       </div>
-      {isLoading ? (
-        <p role="status" className="flex items-center gap-2 p-4 text-sm text-muted">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading jobs…
-        </p>
-      ) : rows.length === 0 ? (
-        <p className="hint p-4">No jobs here.</p>
-      ) : (
-        <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {rows.map((row) => (
-            <li key={row._id} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-4 py-2 text-sm">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">
-                  {row.title || row.url}
-                  {row.company && <span className="font-normal text-zinc-500"> · {row.company}</span>}
-                  {row.humanEdited && <span className="badge-info ml-2 align-middle">Edited</span>}
-                </p>
-                <p className="hint">
-                  {[reason(row), row.groupKey ? locationLabel(row.groupKey) : '', row.postedDate ? `posted ${formatDate(row.postedDate)}` : '']
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-              </div>
-              {row.url && (
-                <a href={row.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-700 hover:underline dark:text-sky-400">
-                  Open <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                </a>
-              )}
-              <button type="button" className="btn-outline btn-sm" onClick={() => setInfoRow(row._id)} disabled={busy !== null}>
-                <Pencil className="h-3.5 w-3.5" aria-hidden />
-                View / edit
-              </button>
-              {canInclude && (
-                <button type="button" className="btn-outline btn-sm" onClick={() => include(row, true)} disabled={busy !== null}>
-                  {busy === row._id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                  Include anyway
-                </button>
-              )}
-              {includedView && row.forceInclude && !readOnly && (
-                <button type="button" className="btn-outline btn-sm" onClick={() => include(row, false)} disabled={busy !== null}>
-                  Undo include
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <JobInfoModal
-        rowId={infoRow}
-        runId={runId}
-        open={infoRow !== null}
-        onClose={() => setInfoRow(null)}
-        canEdit={user?.role === 'admin' || user?.role === 'staff'}
-      />
-      {(data?.pagination.totalPages ?? 1) > 1 && (
-        <div className="border-t border-zinc-200 px-4 py-2 dark:border-zinc-800">
-          <Pagination info={data?.pagination} onPage={setPage} label={`${BUCKET_LABEL[bucket]} pages`} />
-        </div>
-      )}
     </div>
   );
 }
