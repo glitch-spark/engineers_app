@@ -1943,6 +1943,10 @@ export const startJobApplyRun = (
   },
 ) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/start`, body);
 
+/**
+ * Approve a job (`include: true`) so it moves to Worth applying whatever the checks said, or undo the approval.
+ * Only jobs that were read can be approved; the server answers 400 otherwise.
+ */
 export const setJobApplyRowInclude = (rowId: string, include: boolean) =>
   apiFetch<JobApplyRow>(`/job-applies/rows/${rowId}/include`, { method: 'PUT', body: JSON.stringify({ include }) });
 
@@ -1985,12 +1989,12 @@ export const tailorJobApplyRow = (rowId: string, body: { accountId?: string; cov
   postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
 
 /**
- * Queue a tailored resume for each job still to apply to × each chosen profile it's open to (skipping ones that
- * already have one), up to the daily cap. `dryRun` only returns the counts.
+ * Queue a tailored resume for each job still to apply to (or only the `rowIds` given) × each chosen profile it's
+ * open to (skipping ones that already have one), up to the daily cap. `dryRun` only returns the counts.
  */
 export const tailorAllJobApplies = (
   runId: string,
-  body: { accountIds?: string[]; coverLetter?: boolean; dryRun?: boolean } = {},
+  body: { accountIds?: string[]; rowIds?: string[]; coverLetter?: boolean; dryRun?: boolean } = {},
 ) =>
   postJSON<{ queued: number; skippedCap: number; skipped: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
 

@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, FileText, Keyboard, Loader2, Square, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, Copy, ExternalLink, FileText, Keyboard, Loader2, Sparkles, Square, X } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyMarkRef, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -26,6 +26,7 @@ import {
   ROW_STATUS_LABEL,
   TONE_CLASS,
   ageDays,
+  collectLinks,
   formatDate,
   gateChip,
   isActive,
@@ -47,7 +48,8 @@ const SHORTCUTS: [string, string][] = [
   ['d', 'Download the first ready tailored PDF, otherwise the top uploaded PDF'],
   ['1 – 9', 'Toggle “applied” for suggestion 1–9'],
   ['a', 'Mark the job applied for every profile with a resume ready (tailored, else the matching upload), and go to the next job'],
-  ['x', 'Select / unselect the job (for bulk marking)'],
+  ['x', 'Select / unselect the job (for copying links, tailoring or marking several at once)'],
+  ['c', 'Copy the links of the selected jobs (or of this job when none are selected)'],
   ['Enter', 'Show / hide the score breakdown'],
   ['?', 'Show this list'],
 ];
@@ -143,6 +145,8 @@ export default function JobApplyRun() {
   const [stepView, setStepView] = useState<Step | null>(null);
   const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
   const [tailorProfiles, setTailorProfiles] = useState<Set<string>>(new Set());
+  // The jobs the open tailor dialog is for: the ones that were selected when it opened, or null for every suggested job.
+  const [tailorRowIds, setTailorRowIds] = useState<string[] | null>(null);
   const [tailorPreview, setTailorPreview] = useState<{ queued: number; skippedCap: number } | null>(null);
   const [since] = useState(localMidnightIso);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
@@ -499,6 +503,7 @@ export default function JobApplyRun() {
         else if (row.suggestions[0]) void download(row.suggestions[0]);
       }
       else if (key === 'x') toggleSelected(row._id);
+      else if (key === 'c') void copyLinks(selectedRows.length ? selectedRows : [row]);
       else if (e.key === 'Enter') setExpanded((cur) => (cur === row._id ? null : row._id));
       else if (key === 'a') {
         // Every profile with a resume ready; ones already applied are left (no second application / bid).
@@ -515,7 +520,9 @@ export default function JobApplyRun() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const openTailorAll = () => {
+  /** Open the tailor dialog for the given jobs (the selected ones), or for every suggested job with `null`. */
+  const openTailor = (rowIds: string[] | null) => {
+    setTailorRowIds(rowIds);
     setTailorProfiles(new Set((run?.profiles ?? []).map((p) => p.accountId)));
     setTailorPreview(null);
     setConfirmTailorAll(true);
@@ -526,19 +533,41 @@ export default function JobApplyRun() {
     let cancelled = false;
     setTailorPreview(null);
     api
-      .tailorAllJobApplies(runId, { accountIds: [...tailorProfiles], dryRun: true })
+      .tailorAllJobApplies(runId, { accountIds: [...tailorProfiles], ...(tailorRowIds && { rowIds: tailorRowIds }), dryRun: true })
       .then((res) => !cancelled && setTailorPreview(res))
       .catch(() => !cancelled && setTailorPreview({ queued: 0, skippedCap: 0 }));
     return () => {
       cancelled = true;
     };
-  }, [confirmTailorAll, tailorProfiles, runId]);
+  }, [confirmTailorAll, tailorProfiles, tailorRowIds, runId]);
+
+  const selectedRows = rows.filter((r) => selected.has(r._id));
+
+  /** Copy these jobs' posting links, one per line (each link once). */
+  const copyLinks = useCallback(async (jobs: JobApplyRow[]) => {
+    const { links, skipped } = collectLinks(jobs);
+    if (!links.length) {
+      notify.info('None of those jobs has a link to copy');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(links.join('\n'));
+      notify.success(`Copied ${links.length} link${links.length === 1 ? '' : 's'}${skipped ? ` · ${skipped} left out (no link, or repeated)` : ''}`);
+    } catch (err) {
+      notify.error(err, 'Could not copy the links');
+    }
+  }, []);
 
   const tailorAll = async () => {
     setConfirmTailorAll(false);
     setBusy('bulk');
     try {
-      const res = await api.tailorAllJobApplies(runId, { accountIds: [...tailorProfiles], coverLetter: tailorCoverLetter });
+      const res = await api.tailorAllJobApplies(runId, {
+        accountIds: [...tailorProfiles],
+        ...(tailorRowIds && { rowIds: tailorRowIds }),
+        coverLetter: tailorCoverLetter,
+      });
+      if (tailorRowIds) setSelected(new Set());
       notify.success(
         res.queued
           ? `Tailoring ${res.queued} resume${res.queued === 1 ? '' : 's'}${res.skippedCap ? ` · ${res.skippedCap} skipped (daily limit)` : ''}${res.skipped ? ` · ${res.skipped} skipped (profile has no HTML template?)` : ''}`
@@ -814,26 +843,27 @@ export default function JobApplyRun() {
           counts={run.applications}
           profileFilter={accountId ? { accountId, name: profileNames[accountId] ?? 'this profile' } : undefined}
           busy={busy !== null}
-          onTailor={openTailorAll}
+          onTailor={() => openTailor(null)}
           onExport={() => setShowExport(true)}
           onMark={() => setConfirmAll(true)}
         />
       )}
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        {infoRow && (
-          <JobInfoPanel
-            rowId={infoRow}
-            runId={runId}
-            onClose={() => setInfoRow(null)}
-            canEdit={user?.role === 'admin' || user?.role === 'staff'}
-          />
-        )}
+      {/* The job's info opens beside the table, on the right (above it on narrow screens), as in the step-2 lists. */}
+      <div className="flex flex-col-reverse gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1 space-y-5">
           <div className="flex min-h-[2rem] flex-wrap items-center justify-between gap-3">
             {selected.size > 0 ? (
               <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Selected jobs">
                 <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{selected.size} selected</span>
+                <button type="button" className="btn-outline btn-sm" onClick={() => void copyLinks(selectedRows)}>
+                  <Copy className="h-4 w-4" aria-hidden />
+                  Copy links
+                </button>
+                <button type="button" className="btn-outline btn-sm" onClick={() => openTailor([...selected])} disabled={busy !== null}>
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  Tailor
+                </button>
                 <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
                   {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
                   Mark applied
@@ -1029,6 +1059,14 @@ export default function JobApplyRun() {
             </button>
           </div>
         </div>
+        {infoRow && (
+          <JobInfoPanel
+            rowId={infoRow}
+            runId={runId}
+            onClose={() => setInfoRow(null)}
+            canEdit={user?.role === 'admin' || user?.role === 'staff'}
+          />
+        )}
       </div>
 
       <ConfirmDialog
@@ -1058,7 +1096,7 @@ export default function JobApplyRun() {
 
       <ConfirmDialog
         open={confirmTailorAll}
-        title="Tailor resumes"
+        title={tailorRowIds ? `Tailor resumes for ${tailorRowIds.length} selected job${tailorRowIds.length === 1 ? '' : 's'}` : 'Tailor resumes'}
         body={
           <div className="space-y-4">
             <fieldset className="space-y-1.5">
@@ -1093,7 +1131,7 @@ export default function JobApplyRun() {
                   {tailorPreview.skippedCap ? `; ${tailorPreview.skippedCap} more are over today’s limit` : ''}.
                 </>
               ) : (
-                'Nothing to tailor: those jobs already have tailored resumes for these profiles, or today’s limit is reached.'
+                'Nothing to tailor: these jobs already have tailored resumes or were already applied to for these profiles, aren’t open to them, or today’s limit is reached.'
               )}
             </p>
             <label className="flex items-center gap-2 text-sm">

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import useSWR from 'swr';
-import { ExternalLink, Loader2, Pencil, RotateCcw } from 'lucide-react';
+import { Check, ExternalLink, Loader2, RotateCcw, Undo2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
 import JobInfoPanel from './JobInfoPanel';
 import Pagination from './Pagination';
-import { BUCKET_LABEL, FORCEABLE_BUCKETS, formatDate, locationLabel } from './format';
+import { useApproveJob } from './useApproveJob';
+import { APPROVABLE_BUCKETS, BUCKET_LABEL, formatDate, locationLabel } from './format';
 
 const PAGE_SIZE = 25;
 
@@ -16,14 +17,14 @@ function reason(row: api.JobApplyRow): string {
   if (row.screen === 'not_job') return 'Not a single job posting (error page, job list or careers page)';
   const failing = (row.gates ?? []).filter((g) => g.result === 'fail').map((g) => g.reason || g.name);
   const unknown = (row.gates ?? []).filter((g) => g.result === 'unknown').map((g) => g.reason || g.name);
-  if (row.forceInclude) return 'Included anyway';
+  if (row.forceInclude) return failing.length ? `Approved despite: ${failing.join(' · ')}` : 'Approved';
   if (failing.length) return failing.join(' · ');
   if (row.groupKey === 'none') unknown.push('location not stated');
   if (row.jdStructured === false) unknown.push('read from page text, not job-site data');
   return unknown.join(' · ');
 }
 
-/** The jobs in one screening bucket, with why they're there; Include anyway / Retry where that helps. */
+/** The jobs in one screening bucket, with why they're there; Approve / Retry where that helps. */
 export default function BucketJobs({
   runId,
   bucket,
@@ -42,25 +43,14 @@ export default function BucketJobs({
   const [busy, setBusy] = useState<string | null>(null);
   const [infoRow, setInfoRow] = useState<string | null>(null);
   const { user } = useAuth();
-  const { data, isLoading, mutate } = useSWR(['job-apply-bucket', runId, bucket, page], () =>
+  const { data, isLoading } = useSWR(['job-apply-bucket', runId, bucket, page], () =>
     api.listJobApplyRows(runId, { screen: bucket, page, limit: PAGE_SIZE }),
   );
   const rows = data?.rows ?? [];
-  const canInclude = !readOnly && FORCEABLE_BUCKETS.includes(bucket);
-  const includedView = bucket === 'check';
-
-  const include = async (row: api.JobApplyRow, on: boolean) => {
-    setBusy(row._id);
-    try {
-      await api.setJobApplyRowInclude(row._id, on);
-      await mutate();
-      onChanged();
-    } catch (err) {
-      notify.error(err, 'Could not update the job');
-    } finally {
-      setBusy(null);
-    }
-  };
+  const { setApproved, busyId: approvingId } = useApproveJob(runId, onChanged);
+  // A person can approve the jobs in these buckets into Worth applying, and undo an approval there.
+  const canApprove = !readOnly && APPROVABLE_BUCKETS.includes(bucket);
+  const anyBusy = busy !== null || approvingId !== null;
 
   const retry = async () => {
     setBusy('retry');
@@ -99,71 +89,68 @@ export default function BucketJobs({
           <p className="hint p-4">No jobs here.</p>
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {rows.map((row) => (
-              <li
-                key={row._id}
-                onClick={() => setInfoRow(row._id)}
-                aria-current={infoRow === row._id ? 'true' : undefined}
-                className={`flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-sm ${
-                  infoRow === row._id ? 'bg-sky-50/70 dark:bg-sky-950/30' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40'
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">
-                    {row.title || row.url}
-                    {row.company && <span className="font-normal text-zinc-500"> · {row.company}</span>}
-                    {row.humanEdited && <span className="badge-info ml-2 align-middle">Edited</span>}
-                  </p>
-                  <p className="hint">
-                    {[reason(row), row.groupKey ? locationLabel(row.groupKey) : '', row.postedDate ? `posted ${formatDate(row.postedDate)}` : '']
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-                {row.url && (
-                  <a
-                    href={row.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1 text-sky-700 hover:underline dark:text-sky-400"
-                  >
-                    Open <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                  </a>
-                )}
-                <button type="button" className="btn-outline btn-sm" onClick={() => setInfoRow(row._id)} disabled={busy !== null}>
-                  <Pencil className="h-3.5 w-3.5" aria-hidden />
-                  View / edit
-                </button>
-                {canInclude && (
+            {rows.map((row) => {
+              const isOpen = infoRow === row._id;
+              const undoable = !readOnly && bucket === 'valid' && row.forceInclude;
+              return (
+                // The whole row is one button that opens the job's info. It is stretched over the row from its
+                // ::after, so the link and the action below (z-10) stay separate controls rather than nested ones.
+                <li
+                  key={row._id}
+                  className={`relative flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-sm ${
+                    isOpen ? 'bg-sky-50/70 dark:bg-sky-950/30' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40'
+                  }`}
+                >
                   <button
                     type="button"
-                    className="btn-outline btn-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void include(row, true);
-                    }}
-                    disabled={busy !== null}
+                    onClick={() => setInfoRow(row._id)}
+                    aria-current={isOpen ? 'true' : undefined}
+                    className="min-w-0 flex-1 cursor-pointer text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-sky-600 dark:focus-visible:after:ring-sky-400"
                   >
-                    {busy === row._id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                    Include anyway
+                    <span className="block truncate font-medium text-zinc-900 dark:text-zinc-50">
+                      {row.title || row.url}
+                      {row.company && <span className="font-normal text-zinc-500"> · {row.company}</span>}
+                      {row.humanEdited && <span className="badge-info ml-2 align-middle">Edited</span>}
+                      {row.forceInclude && bucket === 'valid' && <span className="badge-success ml-2 align-middle">Approved</span>}
+                    </span>
+                    <span className="hint block">
+                      {[reason(row), row.groupKey ? locationLabel(row.groupKey) : '', row.postedDate ? `posted ${formatDate(row.postedDate)}` : '']
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
                   </button>
-                )}
-                {includedView && row.forceInclude && !readOnly && (
-                  <button
-                    type="button"
-                    className="btn-outline btn-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void include(row, false);
-                    }}
-                    disabled={busy !== null}
-                  >
-                    Undo include
-                  </button>
-                )}
-              </li>
-            ))}
+                  {row.url && (
+                    <a
+                      href={row.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="relative z-10 inline-flex items-center gap-1 text-sky-700 hover:underline dark:text-sky-400"
+                    >
+                      Open <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                      <span className="sr-only">(opens in a new tab)</span>
+                    </a>
+                  )}
+                  {(canApprove || undoable) && (
+                    <button
+                      type="button"
+                      className="btn-outline btn-sm relative z-10"
+                      title={undoable ? 'Take it out of Worth applying again' : 'Checked it: move it to Worth applying'}
+                      onClick={() => void setApproved(row._id, !undoable)}
+                      disabled={anyBusy}
+                    >
+                      {approvingId === row._id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      ) : undoable ? (
+                        <Undo2 className="h-3.5 w-3.5" aria-hidden />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {undoable ? 'Undo approval' : 'Approve'}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
         {(data?.pagination.totalPages ?? 1) > 1 && (
@@ -178,6 +165,8 @@ export default function BucketJobs({
           runId={runId}
           onClose={() => setInfoRow(null)}
           canEdit={user?.role === 'admin' || user?.role === 'staff'}
+          canApprove={!readOnly}
+          onChanged={onChanged}
         />
       )}
     </div>

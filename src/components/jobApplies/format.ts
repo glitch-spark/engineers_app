@@ -88,7 +88,11 @@ const MARKET_LABEL: Record<string, string> = {
 /** A candidate market card's title. */
 export const marketLabel = (key: string) => MARKET_LABEL[key] ?? locationLabel(key);
 
-export const FORCEABLE_BUCKETS: JobApplyScreenBucket[] = ['clearance', 'onsite', 'too_old'];
+/**
+ * Buckets whose jobs a person can approve into Worth applying. The others (closed, not fetched, couldn't read, not a
+ * job page) have no readable description yet: it has to be pasted in Job info first, which reads the job again.
+ */
+export const APPROVABLE_BUCKETS: JobApplyScreenBucket[] = ['check', 'clearance', 'onsite', 'too_old', 'other_location'];
 
 let _regionNames: Intl.DisplayNames | null = null;
 
@@ -104,6 +108,15 @@ export function locationLabel(key: string | null | undefined): string {
     .split('+')
     .map((part) => (/^[A-Z]{2}$/.test(part) && part !== 'EU' && _regionNames ? _regionNames.of(part) ?? part : part))
     .join(' · ');
+}
+
+/**
+ * The posting links of these jobs, in order, each once. `skipped` counts the jobs left out because they have no link
+ * (a sheet row can be pasted text only) or repeat one already listed.
+ */
+export function collectLinks(jobs: { url?: string | null }[]): { links: string[]; skipped: number } {
+  const links = [...new Set(jobs.map((j) => j.url?.trim()).filter((u): u is string => !!u))];
+  return { links, skipped: jobs.length - links.length };
 }
 
 export const isActive = (status: JobApplyRunStatus) => status === 'queued' || status === 'running';
