@@ -1984,9 +1984,11 @@ export const markTopJobApplied = (runId: string, body: { rowIds?: string[]; all?
 export const unmarkJobApplied = (runId: string, marks: JobApplyMarkRef[]) =>
   postJSON<{ unmarked: number }>(`/job-applies/runs/${runId}/unmark-applied`, { marks });
 
-/** Queue a tailored resume for one job (default: the best-scoring profile). */
-export const tailorJobApplyRow = (rowId: string, body: { accountId?: string; coverLetter?: boolean } = {}) =>
-  postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
+/** Queue a tailored resume for one job (default: the best-scoring profile). Blank models = server default. */
+export const tailorJobApplyRow = (
+  rowId: string,
+  body: { accountId?: string; coverLetter?: boolean; resumeModel?: string; coverLetterModel?: string } = {},
+) => postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
 
 /**
  * Queue a tailored resume for each job still to apply to (or only the `rowIds` given) × each chosen profile it's
@@ -1994,7 +1996,14 @@ export const tailorJobApplyRow = (rowId: string, body: { accountId?: string; cov
  */
 export const tailorAllJobApplies = (
   runId: string,
-  body: { accountIds?: string[]; rowIds?: string[]; coverLetter?: boolean; dryRun?: boolean } = {},
+  body: {
+    accountIds?: string[];
+    rowIds?: string[];
+    coverLetter?: boolean;
+    resumeModel?: string;
+    coverLetterModel?: string;
+    dryRun?: boolean;
+  } = {},
 ) =>
   postJSON<{ queued: number; skippedCap: number; skipped: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
 

@@ -66,6 +66,7 @@ export default function ApplyWorkflow({
   counts,
   profileFilter,
   busy,
+  tailorModel,
   onTailor,
   onExport,
   onMark,
@@ -74,6 +75,8 @@ export default function ApplyWorkflow({
   /** With a profile filter, Mark as applied only covers that profile's applications. */
   profileFilter?: { accountId: string; name: string };
   busy: boolean;
+  /** Name of the model tailoring uses (picked in the tailor dialog); unknown until the model list loads. */
+  tailorModel?: string;
   onTailor: () => void;
   onExport: () => void;
   onMark: () => void;
@@ -139,6 +142,7 @@ export default function ApplyWorkflow({
           detail={
             <>
               {counts.needsResume > 0 ? `${plural(counts.needsResume, 'application')} without a resume` : 'Every application has a resume'}
+              {tailorModel && ` · ${tailorModel}`}
               {counts.tailoring > 0 && (
                 <span className="ml-1 inline-flex items-center gap-1">
                   · <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> {counts.tailoring} tailoring
