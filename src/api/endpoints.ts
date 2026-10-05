@@ -1831,7 +1831,7 @@ export interface JobApplyRowDetail extends JobApplyRow {
   extraction: Record<string, unknown> | null;
   jdText: string | null;
   /** Who last corrected this job's URL; null when nobody did. */
-  info: { editedBy: string; editedAt: string } | null;
+  info: { editedBy: string; editedAt: string; /** false: this job was read before the correction (sync the run). */ applied: boolean } | null;
 }
 
 /** What a person corrected; only the fields sent change. null clears postedDate / timezoneNote. */
@@ -1890,6 +1890,9 @@ export const getJobApplyRow = (rowId: string) => apiFetch<JobApplyRowDetail>(`/j
 /** Correct a job's parsed info and/or description. Saved for the URL, so everyone sees it. */
 export const updateJobApplyRowInfo = (rowId: string, patch: JobApplyInfoPatch) =>
   apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}/info`, { method: 'PUT', body: JSON.stringify(patch) });
+
+/** Re-read the run's jobs whose link was corrected by someone after they were read (no fetch, no AI call). */
+export const syncJobApplyRunInfo = (runId: string) => postJSON<{ updated: number }>(`/job-applies/runs/${runId}/sync-info`, {});
 
 /** Drop the correction and read the job again with the AI (the run goes back to checking). */
 export const resetJobApplyRowInfo = (rowId: string) => del<{ ok: boolean }>(`/job-applies/rows/${rowId}/info`);

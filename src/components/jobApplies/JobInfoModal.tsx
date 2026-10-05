@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import useSWR, { useSWRConfig } from 'swr';
+import { useEffect, useRef, useState } from 'react';
+import useSWR from 'swr';
 import { Loader2, RotateCcw } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyInfoPatch } from '../../api/endpoints';
@@ -8,6 +8,7 @@ import Select from '../Select';
 import { COUNTRIES } from '../../lib/countries';
 import { notify } from '../../lib/notify';
 import { formatDate } from './format';
+import { useRunRefresh } from './useRunRefresh';
 
 const WORK_MODES = [
   { value: 'remote', label: 'Remote' },
@@ -64,12 +65,14 @@ export default function JobInfoModal({
   onClose: () => void;
   canEdit: boolean;
 }) {
-  const { mutate: mutateAll } = useSWRConfig();
+  const refresh = useRunRefresh(runId);
   const { data, isLoading, error } = useSWR(open && rowId ? ['job-apply-row', rowId] : null, () => api.getJobApplyRow(rowId!));
   const [form, setForm] = useState<Form | null>(null);
   const [base, setBase] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const syncedRow = useRef<string | null>(null);
 
   useEffect(() => {
     if (!data) return;
@@ -88,15 +91,22 @@ export default function JobInfoModal({
     setBase(f);
   }, [data]);
 
-  // An edit can move a job between buckets and change the run's counts: refresh everything this run shows.
-  const refresh = () =>
-    mutateAll(
-      (key) =>
-        Array.isArray(key) &&
-        typeof key[0] === 'string' &&
-        key[0].startsWith('job-apply') &&
-        (key[0] === 'job-apply-row' || key[1] === runId),
-    );
+  // Corrected by someone after this job was read: bring the run up to date, then this window shows the correction.
+  useEffect(() => {
+    if (!open || !rowId || !data?.info || data.info.applied || syncedRow.current === rowId) return;
+    syncedRow.current = rowId;
+    api
+      .syncJobApplyRunInfo(runId)
+      .then((res) => (res.updated ? refresh() : undefined))
+      .catch(() => undefined);
+  }, [open, rowId, data, runId, refresh]);
+
+  useEffect(() => {
+    if (!open) {
+      syncedRow.current = null;
+      setConfirmReset(false);
+    }
+  }, [open]);
 
   const dirty = form && base && (Object.keys(form) as (keyof Form)[]).some((k) => form[k] !== base[k]);
   const set = (k: keyof Form) => (v: string) => setForm((f) => (f ? { ...f, [k]: v } : f));
@@ -157,7 +167,9 @@ export default function JobInfoModal({
       ) : (
         <form onSubmit={save} className="space-y-4">
           <p className="hint">
-            {data?.info
+            {data?.info && !data.info.applied
+              ? 'Someone corrected this job after it was read. Updating…'
+              : data?.info
               ? `Corrected by ${data.info.editedBy || 'someone'} · ${formatDate(data.info.editedAt)}. Everyone who uses this link sees it.`
               : data?.extractionSource === 'rules'
                 ? 'Read by rules (the AI was unavailable), so check it.'
@@ -227,11 +239,26 @@ export default function JobInfoModal({
             </div>
           </div>
 
+          {confirmReset && (
+            <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+              <span className="min-w-0 flex-1">
+                This removes the correction for <strong>everyone</strong> who uses this link, and the AI reads the job again.
+              </span>
+              <button type="button" className="btn-outline btn-sm" onClick={() => setConfirmReset(false)} disabled={resetting}>
+                Keep it
+              </button>
+              <button type="button" className="btn btn-sm" onClick={reset} disabled={resetting}>
+                {resetting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                Remove for everyone
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <div>
               {canEdit && data?.info && (
-                <button type="button" className="btn-outline btn-sm" onClick={reset} disabled={saving || resetting}>
-                  {resetting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
+                <button type="button" className="btn-outline btn-sm" onClick={() => setConfirmReset(true)} disabled={saving || resetting}>
+                  <RotateCcw className="h-4 w-4" aria-hidden />
                   Re-read with AI
                 </button>
               )}

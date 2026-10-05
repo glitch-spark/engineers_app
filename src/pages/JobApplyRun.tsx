@@ -19,6 +19,7 @@ import ScreeningReport from '../components/jobApplies/ScreeningReport';
 import SourceLine from '../components/jobApplies/SourceLine';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import JobInfoModal from '../components/jobApplies/JobInfoModal';
+import { useRunRefresh } from '../components/jobApplies/useRunRefresh';
 import { useAuth } from '../auth/useAuth';
 import Segmented from '../components/jobApplies/Segmented';
 import {
@@ -153,6 +154,23 @@ export default function JobApplyRun() {
     { refreshInterval: (latest) => (latest && (isActive(latest.status) || tailoringPending(latest)) ? 3000 : 0) },
   );
   const active = run ? isActive(run.status) : false;
+  const refreshRun = useRunRefresh(runId);
+  // Jobs other people corrected since this run read them: bring them up to date once per status (no fetch, no AI call).
+  const syncedFor = useRef('');
+  useEffect(() => {
+    if (!run || active) return;
+    const mark = `${runId}:${run.status}`;
+    if (syncedFor.current === mark) return;
+    syncedFor.current = mark;
+    api
+      .syncJobApplyRunInfo(runId)
+      .then(async (res) => {
+        if (!res.updated) return;
+        await refreshRun();
+        notify.info(`${res.updated} job${res.updated === 1 ? '' : 's'} updated from corrections made by others`);
+      })
+      .catch(() => undefined);
+  }, [run, active, runId, refreshRun]);
   const polling = active || tailoringPending(run);
 
   const { data: rowsData, isLoading: rowsLoading, mutate: mutateRows } = useSWR(
