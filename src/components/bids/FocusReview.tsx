@@ -25,6 +25,8 @@ interface UndoEntry {
 }
 
 const UNDO_MAX = 50;
+/** A press this soon after a "Changed by" notice appeared doesn't count as having seen it. */
+const NOTICE_GRACE_MS = 600;
 
 // Same key and data as the list's screenshot panel, so the two share the cache.
 const shotsKey = (id: string) => ['bid-screenshots', id] as const;
@@ -33,16 +35,24 @@ const fetchShots = ([, id]: readonly [string, string]) => api.bidScreenshots(id)
 const titleOf = (b: Bid) => b.jobTitle || b.jobDomain || 'Untitled job';
 const changedText = (b: Bid) => `Changed by ${b.reviewedByName || 'another reviewer'} to ${b.status}`;
 
-/** The bid to show once `id` leaves `nav`: the one after it, else the oldest left. */
-function nextAfter(nav: Bid[], id: string): string | null {
-  const i = nav.findIndex((b) => b.id === id);
-  const rest = nav.filter((b) => b.id !== id);
-  return (rest[i] ?? rest[0])?.id ?? null;
+/** The pending bid to show after `from`: the next one in order, else the oldest left (`from` itself excluded). */
+function nextPending(bids: Bid[], from: Bid): string | null {
+  const left = bids.filter((b) => b.status === 'pending' && b.id !== from.id).sort(byFirstAt);
+  return (left.find((b) => byFirstAt(b, from) > 0) ?? left[0])?.id ?? null;
+}
+
+interface Notice {
+  bidId: string;
+  text: string;
+  at: number;
 }
 
 /** One pending bid at a time, oldest first, decided from the keyboard. */
 export default function FocusReview({ day, bidderId, onExit }: { day: string; bidderId: string; onExit: () => void }) {
-  const { data, error, mutate } = useSWR(['bid-focus', day, bidderId] as const, () =>
+  // A key per visit: a cached list from an earlier visit is out of date (bids decided in the list since), and pinning a
+  // bid from it would start the viewer on one that is no longer pending.
+  const [visit] = useState(() => Date.now());
+  const { data, error, mutate } = useSWR(['bid-focus', day, bidderId, visit] as const, () =>
     api.listBids({ day: day || undefined, bidderId: bidderId || undefined }),
   );
 
@@ -60,9 +70,10 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
     [pending, current],
   );
   const pos = current ? nav.findIndex((b) => b.id === current.id) : -1;
-  const nextId = current ? nextAfter(nav, current.id) : null;
+  const nextId = current ? nextPending(all, current) : null;
 
-  const [notice, setNotice] = useState<{ bidId: string; text: string } | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const noticeRef = useRef<Notice | null>(null);
   const [rejectFor, setRejectFor] = useState<string | null>(null);
   const [otherFor, setOtherFor] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -81,8 +92,27 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
     if (!currentId && current) setCurrentId(current.id);
   }, [currentId, current]);
 
+  // The status the reviewer has seen for the shown bid; a decision is checked against this, not against whatever a
+  // background refresh has put on screen since. Only a "Changed by" notice (or this viewer's own decision) moves it.
+  const shownRef = useRef<{ bidId: string; status: api.BidStatus } | null>(null);
+  const showChanged = useCallback((b: Bid) => {
+    shownRef.current = { bidId: b.id, status: b.status };
+    noticeRef.current = { bidId: b.id, text: changedText(b), at: Date.now() };
+    setNotice(noticeRef.current);
+  }, []);
+  const expectStatus = (bidId: string, status: api.BidStatus) => {
+    if (shownRef.current?.bidId === bidId) shownRef.current = { bidId, status };
+  };
+  useEffect(() => {
+    if (!current) return;
+    const shown = shownRef.current;
+    if (!shown || shown.bidId !== current.id) shownRef.current = { bidId: current.id, status: current.status };
+    else if (shown.status !== current.status) showChanged(current); // a refresh changed it: say so
+  }, [current, showChanged]);
+
   const go = useCallback((id: string | null) => {
     setCurrentId(id);
+    noticeRef.current = null;
     setNotice(null);
     setRejectFor(null);
     setOtherFor(null);
@@ -137,24 +167,27 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
   // The toast's Undo button outlives this render, so it calls the latest undo through a ref.
   const undoRef = useRef<(entry?: UndoEntry) => void>(() => {});
 
-  const decide = (bid: Bid, next: api.BidStatus, rejection?: { reason: api.RejectReason; note: string | null }) =>
-    run(async () => {
+  const decide = (bid: Bid, next: api.BidStatus, rejection?: { reason: api.RejectReason; note: string | null }) => {
+    const pressedAt = Date.now();
+    return run(async () => {
       try {
         // Someone else may have decided it since it was shown: show that and wait for the action again.
+        const seen = shownRef.current?.bidId === bid.id ? shownRef.current.status : bid.status;
         const fresh = await api.getBid(bid.id);
+        const changed = fresh.status !== seen;
+        if (changed) showChanged(fresh);
         await putBid(fresh);
+        // A notice that appeared just before (or during) this press hasn't been read yet: the press doesn't count.
+        const n = noticeRef.current;
+        if (changed || (n && n.bidId === bid.id && n.at > pressedAt - NOTICE_GRACE_MS)) return;
         if (fresh.screenshotCount !== bid.screenshotCount) void globalMutate(shotsKey(bid.id));
-        if (fresh.status !== bid.status) {
-          setNotice({ bidId: bid.id, text: changedText(fresh) });
-          setCurrentId(bid.id);
-          return;
-        }
         const updated = await api.reviewBid(bid.id, {
           status: next,
           note: rejection?.note ?? null,
           ...(rejection ? { reason: rejection.reason } : {}),
         });
-        await putBid(updated);
+        expectStatus(bid.id, updated.status);
+        const latest = await putBid(updated);
         void globalMutate('bidder-live-counts');
         const entry: UndoEntry = {
           bidId: bid.id,
@@ -183,11 +216,13 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
           ),
           { id: entry.toastId, duration: 6000, style: { fontSize: '0.875rem' } },
         );
-        go(nextAfter(nav, bid.id));
+        // From the latest data, so a bid decided elsewhere in the meantime is skipped.
+        go(nextPending(latest?.bids ?? [], bid));
       } catch (err) {
         notify.error(err, `Failed to ${next === 'approved' ? 'approve' : 'reject'} bid`);
       }
     });
+  };
 
   const undo = (entry?: UndoEntry) => {
     const target = entry ?? undoStack[undoStack.length - 1];
@@ -209,6 +244,7 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
           note: prev.note,
           ...(prev.status === 'rejected' && prev.reason ? { reason: prev.reason } : {}),
         });
+        expectStatus(target.bidId, restored.status);
         await putBid(restored);
         drop();
         void globalMutate('bidder-live-counts');
