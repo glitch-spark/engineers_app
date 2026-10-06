@@ -1733,6 +1733,18 @@ export interface JobApplyTailored {
   step: ResumeJobStep;
   hasPdf: boolean;
   error?: string | null;
+  /** The tailored resume scored against this job, the way uploaded resumes are; null until scored. */
+  match?: JobApplyTailoredMatch | null;
+  /** This profile's best uploaded resume on this job (even below the threshold), to compare with. */
+  uploadedScore?: number | null;
+}
+
+export interface JobApplyTailoredMatch {
+  total: number;
+  band: ScoreBand;
+  knockouts: string[];
+  /** The job's terms the resume doesn't show, heaviest first. */
+  missing: string[];
 }
 
 export interface JobApplyPreviousApplication {

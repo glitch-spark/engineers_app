@@ -44,6 +44,35 @@ function AppliedToggle({
   );
 }
 
+/** A finished tailored resume's match score with this job, and how far it moved from the uploaded resume's. */
+function TailoredScore({ t }: { t: JobApplyTailored }) {
+  const m = t.match;
+  if (!m) return null;
+  const delta = t.uploadedScore != null ? m.total - t.uploadedScore : null;
+  const title = [
+    `Tailored resume vs this job: ${m.total} (${m.band})`,
+    t.uploadedScore != null ? `Best uploaded resume: ${t.uploadedScore}` : 'No uploaded resume scored on this job',
+    m.missing.length ? `Not in the resume: ${m.missing.join(', ')}` : 'Every job term is in the resume',
+    ...m.knockouts,
+  ].join('\n');
+  return (
+    <span className="inline-flex items-center gap-1" title={title}>
+      <span className={bandClass(m.band)} aria-label={`Match score ${m.total}`}>
+        {m.total}
+      </span>
+      {delta != null && delta !== 0 && (
+        <span
+          className={`text-xs font-medium tabular-nums ${delta > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-500 dark:text-zinc-400'}`}
+          aria-label={`${delta > 0 ? 'up' : 'down'} ${Math.abs(delta)} from the uploaded resume`}
+        >
+          {delta > 0 ? '+' : '−'}
+          {Math.abs(delta)}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /**
  * "Apply with" for one job: one line per profile the job is open to. Each line has that profile's best uploaded
  * resume (when it scores at or above the threshold) and its own tailored resume (Tailor → Generating → Tailored).
@@ -194,6 +223,7 @@ export default function Suggestions({
                     >
                       <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
                       <span className="text-sm font-medium">Tailored</span>
+                      <TailoredScore t={t} />
                     </AppliedToggle>
                     <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${name})`}>
                       <Download className="h-3.5 w-3.5" aria-hidden />
