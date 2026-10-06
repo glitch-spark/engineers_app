@@ -469,8 +469,8 @@ export const getPreviousWeekGoals = (weekStart: string) =>
 export const getTeamReport = (weekStart: string) =>
   apiFetch<{ weekStart: string; users: TeamRow[] }>(`/reports/team${qs({ weekStart })}`);
 
-export const askResumeJobScreening = (jobId: string, questions: string[]) =>
-  postJSON<{ pairs: { question: string; answer: string }[] }>(`/resume/jobs/${jobId}/ask`, { questions });
+export const askResumeJobScreening = (jobId: string, questions: string[], model?: string) =>
+  postJSON<{ pairs: { question: string; answer: string }[] }>(`/resume/jobs/${jobId}/ask`, { questions, model });
 
 // ---------- accounts lookup (filter dropdowns) ----------
 
@@ -1259,10 +1259,65 @@ export interface ScreeningPair {
   answer: string;
 }
 
+export type LlmProvider = 'free' | 'openai' | 'anthropic';
+export type ModelTask = 'resume' | 'cover_letter' | 'screening';
+export type ModelTier = 'budget' | 'balanced' | 'premium';
+
+export interface ModelProviderInfo {
+  id: LlmProvider;
+  label: string;
+}
+
+/** One selectable model from GET /resume/models (only models the server can run right now). */
+export interface ModelOption {
+  id: string;
+  label: string;
+  provider: LlmProvider;
+  tier: ModelTier;
+  bestFor: string;
+  /** Typical cost of one run in USD; null when the price is unknown. */
+  estCostUsd: number | null;
+  isDefault: boolean;
+  /** First suggestion for its provider and task. */
+  recommended: boolean;
+  /** Short label such as "Best value", "Max quality", "Older generation". */
+  tag: string;
+}
+
+export function listResumeModels(task: ModelTask) {
+  return apiFetch<{ task: ModelTask; defaultId: string | null; providers: ModelProviderInfo[]; models: ModelOption[] }>(
+    `/resume/models${qs({ task })}`
+  );
+}
+
+export interface CoverLetterVersion {
+  text: string;
+  provider: string;
+  model: string;
+  createdAt: string;
+}
+
+export interface CoverLetterRegenResult {
+  coverLetterText: string;
+  coverLetterLlmProvider: LlmProvider | null;
+  coverLetterLlmModel: string | null;
+  coverLetterLlmFallbackUsed: boolean | null;
+  coverLetterLlmFallbackReason: string | null;
+  estimatedCostUsd: number | null;
+  coverLetterHistory: CoverLetterVersion[];
+}
+
+/** Writes the job's cover letter again: up to four sequential model calls of up to 5 minutes each,
+ *  so the timeout is generous. The server finishes and saves even if the client gives up first. */
+export function regenerateCoverLetter(jobId: string, body: { model?: string; hook?: string }) {
+  return postJSON<CoverLetterRegenResult>(`/resume/jobs/${jobId}/cover-letter`, body, { timeoutMs: 600_000 });
+}
+
 export function generateScreeningAnswers(body: {
   accountId: string;
   jobDescription?: string;
   questions: string[];
+  model?: string;
 }) {
   return postJSON<{ pairs: ScreeningPair[] }>('/resume/screening-answers', body);
 }
@@ -1288,6 +1343,10 @@ export interface ResumeJob {
   _id: string;
   /** Where it was queued from; Job Applies tailoring is tagged and not auto-downloaded. */
   source?: 'generator' | 'job_applies';
+  /** Job Applies: the job row and run it was tailored for (run fields null once the run expired). */
+  jobApplyRowId?: string | null;
+  jobApplyRunId?: string | null;
+  jobApplyRunName?: string | null;
   userId: string;
   accountId: string;
   profileName: string;
@@ -1306,16 +1365,27 @@ export interface ResumeJob {
   inputTokens?: number | null;
   outputTokens?: number | null;
   reasoningTokens?: number | null;
-  resumeLlmProvider?: 'free' | 'openai' | null;
+  resumeLlmProvider?: LlmProvider | null;
   resumeLlmModel?: string | null;
   resumeLlmFallbackUsed?: boolean | null;
   resumeLlmFallbackReason?: string | null;
-  screeningLlmProvider?: 'free' | 'openai' | null;
+  screeningLlmProvider?: LlmProvider | null;
   screeningLlmModel?: string | null;
   screeningLlmFallbackUsed?: boolean | null;
   screeningLlmFallbackReason?: string | null;
   matchSnippet?: string;
   coverLetterText?: string | null;
+  coverLetterLlmProvider?: LlmProvider | null;
+  coverLetterLlmModel?: string | null;
+  coverLetterLlmFallbackUsed?: boolean | null;
+  coverLetterLlmFallbackReason?: string | null;
+  coverLetterHistory?: CoverLetterVersion[];
+  coverLetterHook?: string | null;
+  resumeModelId?: string | null;
+  coverLetterModelId?: string | null;
+  screeningModelId?: string | null;
+  /** Running total of model spend for this job; null when no priced model ran. */
+  estimatedCostUsd?: number | null;
   createdAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -1329,6 +1399,11 @@ export function enqueueResumeJob(body: {
   questions?: string[];
   promptBody?: string;
   generateCoverLetter?: boolean;
+  /** Catalog ids from listResumeModels; omit to let the server choose. */
+  resumeModel?: string;
+  coverLetterModel?: string;
+  screeningModel?: string;
+  coverLetterHook?: string;
 }) {
   return postJSON<{ jobId: string; status: ResumeJobStatus }>('/resume/generate', body);
 }
@@ -1343,6 +1418,10 @@ export function listResumeJobs(params?: {
   return apiFetch<{ jobs: ResumeJob[]; pagination: Pagination }>(
     `/resume/jobs${qs(params)}`
   );
+}
+
+export function getResumeJob(id: string) {
+  return apiFetch<ResumeJob>(`/resume/jobs/${id}`);
 }
 
 export function deleteResumeJob(id: string) {
@@ -1510,7 +1589,7 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
 
 // ---------- job applies ----------
 
-export type JobApplyRunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+export type JobApplyRunStatus = 'queued' | 'running' | 'screened' | 'done' | 'failed' | 'cancelled';
 export type JobApplyRowStatus =
   | 'pending'
   | 'fetched'
@@ -1518,7 +1597,20 @@ export type JobApplyRowStatus =
   | 'scored'
   | 'excluded'
   | 'fetch_failed'
-  | 'llm_failed';
+  | 'llm_failed'
+  | 'unassigned';
+/** Where screening put a job: worth applying to (valid / check) or why not. */
+export type JobApplyScreenBucket =
+  | 'valid'
+  | 'check'
+  | 'closed'
+  | 'not_fetched'
+  | 'read_failed'
+  | 'not_job'
+  | 'clearance'
+  | 'onsite'
+  | 'too_old'
+  | 'other_location';
 export type JobApplyView = 'all' | 'suggested' | 'excluded' | 'failed';
 export type ScoreBand = 'strong' | 'good' | 'fair' | 'weak';
 
@@ -1538,6 +1630,15 @@ export interface JobApplyProfile {
   region?: string | null;
 }
 
+export interface JobApplyRunSummary {
+  worth: number;
+  closed: number;
+  markets: { US: number; UKEU: number; LATAM: number };
+  toApply: number;
+  applied: number;
+  tailoring: number;
+}
+
 export interface JobApplyRun {
   _id: string;
   /** Uploaded file name, or the Google Sheet's title. */
@@ -1545,15 +1646,26 @@ export interface JobApplyRun {
   /** Google Sheets link when the run came from one. */
   sourceUrl?: string | null;
   status: JobApplyRunStatus;
+  /** 'screen': fetching and checking jobs (then waits at 'screened'); 'score': scoring the picked profiles. */
+  phase: 'screen' | 'score';
+  /** Location group key → profile ids its jobs are scored against; '*' = every group. */
+  assignments: Record<string, string[]>;
+  /** Created with profiles up front: scored right after screening, every group against every profile. */
+  autoStart?: boolean;
+  screenedAt?: string | null;
   threshold: number;
   maxAgeDays: number;
   counts: JobApplyCounts;
   suggested: number;
+  /** Failed jobs a retry can help (closed jobs excluded). */
+  retryable?: number;
+  /** Only on GET /job-applies/runs: the numbers its card shows (per job); null when they couldn't be computed. */
+  summary?: JobApplyRunSummary | null;
   createdAt: string;
   finishedAt?: string | null;
   error?: string | null;
   notes?: string[];
-  /** When this run's results are deleted (3 days after upload). Applied history is kept permanently. */
+  /** When this run's results are deleted (7 days after upload). Applied history is kept permanently. */
   expiresAt?: string | null;
   /** Only on GET /job-applies/runs/{id}: resumes marked applied in this run. */
   appliedInRun?: number;
@@ -1587,6 +1699,8 @@ export interface JobApplyApplicationCounts {
   jobs: number;
   /** Applications not applied yet (ready + tailoring + needsResume). */
   toGo: number;
+  /** Applications with a resume to send that aren't in the shared sheet yet. */
+  toExport?: number;
   applied: number;
   /** Has a resume to apply with: the tailored one when done, else the matching uploaded one. */
   ready: number;
@@ -1653,12 +1767,22 @@ export interface JobApplyRow {
   company: string;
   status: JobApplyRowStatus;
   statusReason?: string | null;
-  jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | null;
+  screen?: JobApplyScreenBucket | null;
+  /** Normalised allowed locations, e.g. 'GB', 'EU+US', 'none'. */
+  groupKey?: string | null;
+  /** Candidate markets the job is open to: 'US', 'UKEU', 'LATAM'. */
+  markets?: string[];
+  forceInclude?: boolean;
+  jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | 'manual' | null;
+  /** false: read from the page's text only (no job-site API or posting data), so it needs a check. */
+  jdStructured?: boolean | null;
   postedDate?: string | null;
   workMode?: 'remote' | 'hybrid' | 'onsite' | 'unknown' | null;
   allowedLocations: { kind: 'country' | 'region'; value: string }[];
   timezoneNote?: string | null;
-  extractionSource?: 'llm' | 'rules' | 'cache' | null;
+  extractionSource?: 'llm' | 'rules' | 'cache' | 'human' | null;
+  /** A person corrected this job's info (shared by everyone who uses the link). */
+  humanEdited?: boolean;
   gates: JobApplyGate[];
   profileGates: { accountId: string; gates: JobApplyGate[] }[];
   topScore: number | null;
@@ -1706,23 +1830,36 @@ export interface JobApplyRowDetail extends JobApplyRow {
   scores: JobApplyResumeScore[];
   extraction: Record<string, unknown> | null;
   jdText: string | null;
+  /** Who last corrected this job's URL; null when nobody did. */
+  info: { editedBy: string; editedAt: string; /** false: this job was read before the correction (sync the run). */ applied: boolean } | null;
+}
+
+/** What a person corrected; only the fields sent change. null clears postedDate / timezoneNote. */
+export interface JobApplyInfoPatch {
+  title?: string;
+  company?: string;
+  workMode?: 'remote' | 'hybrid' | 'onsite' | 'unknown';
+  allowedLocations?: { kind: 'country' | 'region'; value: string }[];
+  postedDate?: string | null;
+  clearance?: 'required' | 'preferred' | 'none';
+  timezoneNote?: string | null;
+  jdText?: string;
 }
 
 /** The job sheet: an uploaded .xlsx/.csv, or a Google Sheets link shared as "Anyone with the link". */
 export type JobApplySource = { file: File } | { sheetUrl: string };
 
+/** Without `selection` the run checks the jobs and waits at 'screened' for profiles per location group. */
 export const createJobApplyRun = (
   source: JobApplySource,
-  selection: { accountId: string; resumeIds: string[] }[],
-  threshold: number,
-  maxAgeDays: number,
+  opts: { maxAgeDays: number; selection?: { accountId: string; resumeIds: string[] }[]; threshold?: number },
 ) => {
   const form = new FormData();
   if ('file' in source) form.append('file', source.file);
   else form.append('sheetUrl', source.sheetUrl);
-  form.append('selection', JSON.stringify(selection));
-  form.append('threshold', String(threshold));
-  form.append('maxAgeDays', String(maxAgeDays));
+  if (opts.selection) form.append('selection', JSON.stringify(opts.selection));
+  if (opts.threshold !== undefined) form.append('threshold', String(opts.threshold));
+  form.append('maxAgeDays', String(opts.maxAgeDays));
   return apiFetch<{ runId: string; status: JobApplyRunStatus; total: number }>('/job-applies/runs', {
     method: 'POST',
     body: form,
@@ -1744,13 +1881,74 @@ export const listJobApplyRows = (
     minScore?: number;
     page?: number;
     limit?: number;
+    screen?: JobApplyScreenBucket;
   } = {},
 ) => apiFetch<{ rows: JobApplyRow[]; pagination: Pagination }>(`/job-applies/runs/${id}/rows${qs(params)}`);
 
 export const getJobApplyRow = (rowId: string) => apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}`);
 
-export const updateJobApplyRun = (id: string, body: { threshold: number }) =>
+/** Correct a job's parsed info and/or description. Saved for the URL, so everyone sees it. */
+export const updateJobApplyRowInfo = (rowId: string, patch: JobApplyInfoPatch) =>
+  apiFetch<JobApplyRowDetail>(`/job-applies/rows/${rowId}/info`, { method: 'PUT', body: JSON.stringify(patch) });
+
+/** Re-read the run's jobs whose link was corrected by someone after they were read (no fetch, no AI call). */
+export const syncJobApplyRunInfo = (runId: string) => postJSON<{ updated: number }>(`/job-applies/runs/${runId}/sync-info`, {});
+
+/** Drop the correction and read the job again with the AI (the run goes back to checking). */
+export const resetJobApplyRowInfo = (rowId: string) => del<{ ok: boolean }>(`/job-applies/rows/${rowId}/info`);
+
+export const updateJobApplyRun = (id: string, body: { threshold?: number; maxAgeDays?: number }) =>
   apiFetch<JobApplyRun>(`/job-applies/runs/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export interface JobApplyScreeningGroup {
+  /** Candidate market: 'US', 'UKEU', 'LATAM', or 'none' (no stated location). */
+  key: string;
+  jobs: number;
+  /** Of `jobs`, how many need a check (no date, work mode or location not stated, or included anyway). */
+  check: number;
+  /** Profile ids whose country/region fits this group. */
+  fits: string[];
+}
+
+export interface JobApplyScreeningProfile {
+  id: string;
+  name: string;
+  country: string | null;
+  region: string | null;
+  resumes: number;
+}
+
+export interface JobApplyScreening {
+  total: number;
+  worth: number;
+  check: number;
+  buckets: Record<JobApplyScreenBucket, number>;
+  maxAgeDays: number;
+  groups: JobApplyScreeningGroup[];
+  /** Jobs open only to candidates outside the markets, per location group (counted, not scored). */
+  others: { key: string; jobs: number }[];
+  /** Each worthwhile job once, by the set of markets it's in ('none' = no stated location). */
+  combos?: { markets: string[]; jobs: number; check: number }[];
+  profiles: JobApplyScreeningProfile[];
+}
+
+export const getJobApplyScreening = (id: string) => apiFetch<JobApplyScreening>(`/job-applies/runs/${id}/screening`);
+
+export const startJobApplyRun = (
+  id: string,
+  body: {
+    assignments: Record<string, string[]>;
+    selection: { accountId: string; resumeIds: string[] }[];
+    threshold: number;
+  },
+) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/start`, body);
+
+/**
+ * Approve a job (`include: true`) so it moves to Worth applying whatever the checks said, or undo the approval.
+ * Only jobs that were read can be approved; the server answers 400 otherwise.
+ */
+export const setJobApplyRowInclude = (rowId: string, include: boolean) =>
+  apiFetch<JobApplyRow>(`/job-applies/rows/${rowId}/include`, { method: 'PUT', body: JSON.stringify({ include }) });
 
 export const cancelJobApplyRun = (id: string) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/cancel`, {});
 
@@ -1786,17 +1984,25 @@ export const markTopJobApplied = (runId: string, body: { rowIds?: string[]; all?
 export const unmarkJobApplied = (runId: string, marks: JobApplyMarkRef[]) =>
   postJSON<{ unmarked: number }>(`/job-applies/runs/${runId}/unmark-applied`, { marks });
 
-/** Queue a tailored resume for one job (default: the best-scoring profile). */
-export const tailorJobApplyRow = (rowId: string, body: { accountId?: string; coverLetter?: boolean } = {}) =>
-  postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
+/** Queue a tailored resume for one job (default: the best-scoring profile). Blank models = server default. */
+export const tailorJobApplyRow = (
+  rowId: string,
+  body: { accountId?: string; coverLetter?: boolean; coverLetterModel?: string } = {},
+) => postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
 
 /**
- * Queue a tailored resume for each job still to apply to × each chosen profile it's open to (skipping ones that
- * already have one), up to the daily cap. `dryRun` only returns the counts.
+ * Queue a tailored resume for each job still to apply to (or only the `rowIds` given) × each chosen profile it's
+ * open to (skipping ones that already have one), up to the daily cap. `dryRun` only returns the counts.
  */
 export const tailorAllJobApplies = (
   runId: string,
-  body: { accountIds?: string[]; coverLetter?: boolean; dryRun?: boolean } = {},
+  body: {
+    accountIds?: string[];
+    rowIds?: string[];
+    coverLetter?: boolean;
+    coverLetterModel?: string;
+    dryRun?: boolean;
+  } = {},
 ) =>
   postJSON<{ queued: number; skippedCap: number; skipped: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
 
@@ -1816,9 +2022,17 @@ export async function downloadTailoredResume(jobId: string, filename: string): P
 
 export interface JobSheetPreview {
   title: string;
+  /** Unique jobs (links after cleaning and de-duplication). */
   total: number;
   withDescription: number;
   urlOnly: number;
+  /** Links found in the sheet, before de-duplication. */
+  links?: number;
+  duplicates?: number;
+  /** Links whose URL was cleaned (tracking params, apply pages…). */
+  cleaned?: number;
+  /** Link-only jobs on sites that block automated access (LinkedIn, Indeed, Glassdoor…). */
+  blocked?: number;
 }
 
 /** Read a job sheet (link or file) without starting a run: job counts, or a 400 explaining the problem. */
@@ -1830,13 +2044,11 @@ export const previewJobSheet = (source: JobApplySource) => {
 };
 
 export interface JobApplyExportResult {
-  /** Rows that would be / were added. */
+  /** Rows that would be / were added: applications with a resume to send. */
   ready: number;
   added: number;
-  /** Tailored resumes still generating (export them later). */
-  pending: number;
-  /** Open to a profile with nothing to apply with yet (tailor first). */
-  needsResume: number;
+  /** Applications waiting for their tailored resume: a later export adds them. */
+  waiting: number;
   alreadyExported: number;
   /** Matching uploaded resumes whose original PDF isn't stored (no link possible). */
   noFile: number;
@@ -1846,9 +2058,25 @@ export interface JobApplyExportResult {
   serviceAccount: string | null;
 }
 
+export interface JobApplyChecksExport {
+  tab: string;
+  jobs: number;
+  sheetTitle: string;
+  sheetUrl: string;
+  serviceAccount: string | null;
+}
+
 /**
- * Append the run's jobs still to apply to (one row per job × profile, with a resume download link) to today's tab
- * of the shared Google Sheet. Without `sheetUrl` the last one used is reused; `dryRun` only counts and checks access.
+ * Write every job in the run with what the checks found to the run's own "Checks · …" tab of the shared Google
+ * Sheet (replacing what an earlier export wrote there). Available once the jobs are checked; `dryRun` only counts.
+ */
+export const exportJobApplyChecks = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>
+  postJSON<JobApplyChecksExport>(`/job-applies/runs/${runId}/export-checks`, body, { timeoutMs: 120_000 });
+
+/**
+ * Append the run's applications with a resume to send (one row per job × profile: Profile, Company Name, Job Title,
+ * Job URL, Download Resume) to today's "Apply · <date>" tab of the shared Google Sheet. Without `sheetUrl` the last one
+ * used is reused; `dryRun` only counts and checks access.
  */
 export const exportJobApplySheet = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>
   postJSON<JobApplyExportResult>(`/job-applies/runs/${runId}/export-sheet`, body, { timeoutMs: 120_000 });

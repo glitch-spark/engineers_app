@@ -1,4 +1,4 @@
-import { Check, Download, Loader2, RotateCcw, Sparkles } from 'lucide-react';
+import { Check, Download, ExternalLink, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyRow, JobApplySuggestion, JobApplyTailored } from '../../api/endpoints';
 import { bandClass, formatDate } from './format';
 
@@ -53,6 +53,7 @@ export default function Suggestions({
   threshold,
   profileNames,
   hasFile,
+  tailorModel,
   onToggle,
   onDownload,
   onTailor,
@@ -63,6 +64,8 @@ export default function Suggestions({
   threshold: number;
   profileNames: Record<string, string>;
   hasFile: (resumeId: string) => boolean;
+  /** Name of the model the Tailor buttons use, shown on hover. */
+  tailorModel?: string;
   onToggle: (file: AppliedFile, applied: boolean, label: string) => void;
   onDownload: (s: JobApplySuggestion) => void;
   onTailor: (accountId: string) => void;
@@ -71,6 +74,7 @@ export default function Suggestions({
 }) {
   const marked = (f: AppliedFile) =>
     row.appliedResumes.some((m) => (f.tailoredJobId ? m.tailoredJobId === f.tailoredJobId : m.resumeId === f.resumeId));
+  const withModel = tailorModel ? `Tailor with ${tailorModel}` : undefined;
   const profiles = orderedProfiles(row);
   const untailored = profiles.filter((acc) => {
     const t = row.tailored.find((x) => x.accountId === acc);
@@ -85,6 +89,16 @@ export default function Suggestions({
 
   return (
     <div className="min-w-[20rem] space-y-1">
+      {row.url && (
+        <a
+          href={row.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"
+        >
+          <ExternalLink className="h-3 w-3" aria-hidden /> Open posting
+        </a>
+      )}
       {previous && (
         <p
           className="badge-info"
@@ -108,7 +122,7 @@ export default function Suggestions({
           const n = s ? row.suggestions.indexOf(s) + 1 : 0;
           const t = row.tailored.find((x) => x.accountId === acc);
           return (
-            <li key={acc} className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-center gap-x-2 py-1">
+            <li key={acc} className="grid grid-cols-[7rem_1fr_auto] items-center gap-x-2 py-1">
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100" title={name}>
                   {name}
@@ -120,8 +134,8 @@ export default function Suggestions({
                 )}
               </span>
 
-              {/* Uploaded resume */}
-              <div className="flex min-w-0 items-center gap-1">
+              {/* Uploaded resume: a resume line keeps room for its checkbox, score and download; a note can wrap */}
+              <div className={`flex items-center gap-1 ${s ? 'min-w-[7.5rem]' : ''}`}>
                 {s ? (
                   <>
                     <AppliedToggle
@@ -157,10 +171,12 @@ export default function Suggestions({
                 )}
               </div>
 
-              {/* Tailored resume for this profile */}
-              <div className="flex items-center justify-end gap-1">
+              {/* Tailored resume for this profile; once done, its actions get their own line under the uploaded one */}
+              <div
+                className={`flex items-center gap-1 ${t?.status === 'completed' ? 'col-span-2 col-start-2 justify-start' : 'justify-end'}`}
+              >
                 {!t ? (
-                  <button type="button" className="btn-outline btn-sm whitespace-nowrap py-0.5" onClick={() => onTailor(acc)}>
+                  <button type="button" className="btn-outline btn-sm whitespace-nowrap py-0.5" onClick={() => onTailor(acc)} title={withModel}>
                     <Sparkles className="h-3.5 w-3.5" aria-hidden />
                     Tailor
                   </button>
@@ -182,8 +198,18 @@ export default function Suggestions({
                     <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${name})`}>
                       <Download className="h-3.5 w-3.5" aria-hidden />
                     </button>
+                    <a
+                      href={`/resume/generated?job=${t.jobId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-icon"
+                      title="Screening Q&A, job description and cover letter (Generated Resumes)"
+                      aria-label={`Screening Q&A for ${name}'s tailored resume (opens in a new tab)`}
+                    >
+                      <MessageSquareText className="h-3.5 w-3.5" aria-hidden />
+                    </a>
                     {!marked({ accountId: acc, tailoredJobId: t.jobId }) && (
-                      <button type="button" className="btn-icon" onClick={() => onTailor(acc)} title="Generate again" aria-label={`Re-tailor for ${name}`}>
+                      <button type="button" className="btn-icon" onClick={() => onTailor(acc)} title={tailorModel ? `Generate again with ${tailorModel}` : 'Generate again'} aria-label={`Re-tailor for ${name}`}>
                         <RotateCcw className="h-3.5 w-3.5" aria-hidden />
                       </button>
                     )}
@@ -200,13 +226,18 @@ export default function Suggestions({
                   </button>
                 )}
               </div>
+              {t?.status === 'failed' && (
+                <p className="col-span-3 line-clamp-3 break-words pb-1 text-xs text-red-700 dark:text-red-400" title={t.error ?? undefined}>
+                  {t.error || 'Generation failed (no details recorded).'}
+                </p>
+              )}
             </li>
           );
         })}
       </ul>
 
       {untailored.length > 1 && (
-        <button type="button" className="text-xs font-medium text-violet-700 hover:underline dark:text-violet-300" onClick={onTailorAll}>
+        <button type="button" className="text-xs font-medium text-violet-700 hover:underline dark:text-violet-300" onClick={onTailorAll} title={withModel}>
           <Sparkles className="mr-1 inline h-3 w-3" aria-hidden />
           Tailor all {untailored.length} profiles
         </button>

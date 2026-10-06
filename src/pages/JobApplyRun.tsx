@@ -2,29 +2,41 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink, Keyboard, Loader2, Square, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, Copy, ExternalLink, FileText, Keyboard, Loader2, Sparkles, Square, X } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyMarkRef, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import ModelSelect from '../components/ModelSelect';
 import RowDetail from '../components/jobApplies/RowDetail';
 import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import RunSummary from '../components/jobApplies/RunSummary';
+import StepTrack, { type Step } from '../components/jobApplies/StepTrack';
+import ScreeningReport from '../components/jobApplies/ScreeningReport';
+import SourceLine from '../components/jobApplies/SourceLine';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
+import JobInfoPanel from '../components/jobApplies/JobInfoPanel';
+import { useRunRefresh } from '../components/jobApplies/useRunRefresh';
+import { useAuth } from '../auth/useAuth';
 import Segmented from '../components/jobApplies/Segmented';
 import {
   ROW_STATUS_LABEL,
   TONE_CLASS,
   ageDays,
+  collectLinks,
   formatDate,
   gateChip,
   isActive,
+  runStep,
+  locationLabel,
 } from '../components/jobApplies/format';
 import { notify } from '../lib/notify';
+import { formatUsd } from '../lib/modelCost';
+import { useModelChoice, type ModelChoice } from '../lib/useModelChoice';
 
 const APPLIED_FILTERS: { value: JobApplyAppliedFilter; label: string }[] = [
   { value: 'no', label: 'To apply' },
@@ -39,7 +51,8 @@ const SHORTCUTS: [string, string][] = [
   ['d', 'Download the first ready tailored PDF, otherwise the top uploaded PDF'],
   ['1 – 9', 'Toggle “applied” for suggestion 1–9'],
   ['a', 'Mark the job applied for every profile with a resume ready (tailored, else the matching upload), and go to the next job'],
-  ['x', 'Select / unselect the job (for bulk marking)'],
+  ['x', 'Select / unselect the job (for copying links, tailoring or marking several at once)'],
+  ['c', 'Copy the links of the selected jobs (or of this job when none are selected)'],
   ['Enter', 'Show / hide the score breakdown'],
   ['?', 'Show this list'],
 ];
@@ -66,6 +79,11 @@ function hostOf(url: string): string {
     return 'open';
   }
 }
+
+const pickedModel = (c: ModelChoice) => c.options.find((o) => o.id === c.value);
+
+/** Job Applies always tailors resumes with this model (the server enforces it); only the cover letter model is picked. */
+const RESUME_MODEL = { id: 'openai:gpt-4o-mini', label: 'GPT-4o mini' };
 
 function capitalize(s?: string | null): string {
   return s ? s[0].toUpperCase() + s.slice(1) : '';
@@ -129,9 +147,23 @@ export default function JobApplyRun() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [infoRow, setInfoRow] = useState<string | null>(null);
+  const { user } = useAuth();
+  // An earlier step opened from the step track (null: the run's own step).
+  const [stepView, setStepView] = useState<Step | null>(null);
   const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
   const [tailorProfiles, setTailorProfiles] = useState<Set<string>>(new Set());
+  // The jobs the open tailor dialog is for: the ones that were selected when it opened, or null for every suggested job.
+  const [tailorRowIds, setTailorRowIds] = useState<string[] | null>(null);
   const [tailorPreview, setTailorPreview] = useState<{ queued: number; skippedCap: number } | null>(null);
+  // Picked in the tailor dialog and remembered (shared with the Resume page). '' when the model list can't load: the
+  // server then uses its default.
+  const coverLetterModel = useModelChoice('cover_letter');
+  // Only for RESUME_MODEL's cost estimate in the tailor dialog (same request and cache as the Resume page's picker).
+  const { data: resumeModels } = useSWR(['resume-models', 'resume'], () => api.listResumeModels('resume'), {
+    shouldRetryOnError: false,
+    revalidateOnFocus: false,
+  });
   const [since] = useState(localMidnightIso);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 
@@ -142,6 +174,24 @@ export default function JobApplyRun() {
     { refreshInterval: (latest) => (latest && (isActive(latest.status) || tailoringPending(latest)) ? 3000 : 0) },
   );
   const active = run ? isActive(run.status) : false;
+  const refreshRun = useRunRefresh(runId);
+  // Jobs other people corrected or approved since this run read them: bring them up to date once per status (no fetch,
+  // no AI call).
+  const syncedFor = useRef('');
+  useEffect(() => {
+    if (!run || active) return;
+    const mark = `${runId}:${run.status}`;
+    if (syncedFor.current === mark) return;
+    syncedFor.current = mark;
+    api
+      .syncJobApplyRunInfo(runId)
+      .then(async (res) => {
+        if (!res.updated) return;
+        await refreshRun();
+        notify.info(`${res.updated} job${res.updated === 1 ? '' : 's'} updated from corrections and approvals made by others`);
+      })
+      .catch(() => undefined);
+  }, [run, active, runId, refreshRun]);
   const polling = active || tailoringPending(run);
 
   const { data: rowsData, isLoading: rowsLoading, mutate: mutateRows } = useSWR(
@@ -443,6 +493,7 @@ export default function JobApplyRun() {
   // Keyboard flow for fast applying (see SHORTCUTS).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (stepView !== null) return; // an earlier step is shown: the shortcuts act on step 3's table
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target)) return;
       if (e.key === '?') {
         e.preventDefault();
@@ -469,6 +520,7 @@ export default function JobApplyRun() {
         else if (row.suggestions[0]) void download(row.suggestions[0]);
       }
       else if (key === 'x') toggleSelected(row._id);
+      else if (key === 'c') void copyLinks(selectedRows.length ? selectedRows : [row]);
       else if (e.key === 'Enter') setExpanded((cur) => (cur === row._id ? null : row._id));
       else if (key === 'a') {
         // Every profile with a resume ready; ones already applied are left (no second application / bid).
@@ -485,7 +537,9 @@ export default function JobApplyRun() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const openTailorAll = () => {
+  /** Open the tailor dialog for the given jobs (the selected ones), or for every suggested job with `null`. */
+  const openTailor = (rowIds: string[] | null) => {
+    setTailorRowIds(rowIds);
     setTailorProfiles(new Set((run?.profiles ?? []).map((p) => p.accountId)));
     setTailorPreview(null);
     setConfirmTailorAll(true);
@@ -496,19 +550,47 @@ export default function JobApplyRun() {
     let cancelled = false;
     setTailorPreview(null);
     api
-      .tailorAllJobApplies(runId, { accountIds: [...tailorProfiles], dryRun: true })
+      .tailorAllJobApplies(runId, { accountIds: [...tailorProfiles], ...(tailorRowIds && { rowIds: tailorRowIds }), dryRun: true })
       .then((res) => !cancelled && setTailorPreview(res))
       .catch(() => !cancelled && setTailorPreview({ queued: 0, skippedCap: 0 }));
     return () => {
       cancelled = true;
     };
-  }, [confirmTailorAll, tailorProfiles, runId]);
+  }, [confirmTailorAll, tailorProfiles, tailorRowIds, runId]);
+
+  const selectedRows = rows.filter((r) => selected.has(r._id));
+
+  /** Copy these jobs' posting links, one per line (each link once). */
+  const copyLinks = useCallback(async (jobs: JobApplyRow[]) => {
+    const { links, skipped } = collectLinks(jobs);
+    if (!links.length) {
+      notify.info('None of those jobs has a link to copy');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(links.join('\n'));
+      notify.success(`Copied ${links.length} link${links.length === 1 ? '' : 's'}${skipped ? ` · ${skipped} left out (no link, or repeated)` : ''}`);
+    } catch (err) {
+      notify.error(err, 'Could not copy the links');
+    }
+  }, []);
+
+  // Typical LLM spend of one tailored resume (plus its cover letter when asked) with these models; null if unknown.
+  const resumeCostUsd = resumeModels?.models.find((m) => m.id === RESUME_MODEL.id)?.estCostUsd;
+  const letterCostUsd = tailorCoverLetter ? pickedModel(coverLetterModel)?.estCostUsd : 0;
+  const perTailorUsd = resumeCostUsd == null || letterCostUsd == null ? null : resumeCostUsd + letterCostUsd;
 
   const tailorAll = async () => {
     setConfirmTailorAll(false);
     setBusy('bulk');
     try {
-      const res = await api.tailorAllJobApplies(runId, { accountIds: [...tailorProfiles], coverLetter: tailorCoverLetter });
+      const res = await api.tailorAllJobApplies(runId, {
+        accountIds: [...tailorProfiles],
+        ...(tailorRowIds && { rowIds: tailorRowIds }),
+        coverLetter: tailorCoverLetter,
+        coverLetterModel: tailorCoverLetter ? coverLetterModel.value || undefined : undefined,
+      });
+      if (tailorRowIds) setSelected(new Set());
       notify.success(
         res.queued
           ? `Tailoring ${res.queued} resume${res.queued === 1 ? '' : 's'}${res.skippedCap ? ` · ${res.skippedCap} skipped (daily limit)` : ''}${res.skipped ? ` · ${res.skipped} skipped (profile has no HTML template?)` : ''}`
@@ -561,32 +643,157 @@ export default function JobApplyRun() {
     );
   }
 
+  // Screen phase: progress while jobs are checked, then the report where profiles are picked per location group.
+  if (run.phase === 'screen') {
+    const c = run.counts;
+    const done = Math.min(c.total, c.extracted + c.failed);
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          title={run.fileName}
+          backTo="/job-applies"
+          action={
+            active ? (
+              <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
+                {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
+                Cancel
+              </button>
+            ) : undefined
+          }
+        />
+        <StepTrack
+          current={stepView ?? runStep(run)}
+          reached={runStep(run)}
+          onStep={(s) => setStepView(s === runStep(run) ? null : s)}
+          hint={
+            stepView === 1
+              ? 'Every job and what the check found. Go to ② to pick who applies.'
+              : run.status === 'screened'
+                ? 'Pick who applies in each market, then score. Next: the best resume per job, ready to tailor and apply.'
+                : 'Opening every link and reading each job. Next: you pick which profiles apply in each market.'
+          }
+        />
+        {(run.status !== 'screened' || stepView === 1) && <SourceLine run={run} />}
+        {run.status === 'screened' && stepView === 1 ? (
+          <ScreeningReport runId={runId} checksOnly onRunChanged={() => void mutateRun()} />
+        ) : run.status === 'screened' ? (
+          <ScreeningReport runId={runId} onStarted={() => void mutateRun()} onRunChanged={() => void mutateRun()} />
+        ) : active ? (
+          <section className="panel space-y-3 p-6" aria-label="Checking jobs">
+            <p className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300" role="status">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-600" aria-hidden />
+              Checking {done} / {c.total} jobs · {c.extracted} read · {c.failed} couldn’t be used so far
+            </p>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+              role="progressbar"
+              aria-valuenow={c.total ? Math.round((done / c.total) * 100) : 0}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Checking jobs"
+            >
+              <div className="h-full rounded-full bg-sky-600 dark:bg-sky-400" style={{ width: `${c.total ? (done / c.total) * 100 : 0}%` }} />
+            </div>
+            <p className="hint">You can leave this page: the check keeps running, and the run shows “Ready to review” when it’s done.</p>
+          </section>
+        ) : (
+          <RunSummary run={run} onView={() => undefined} onRetry={onRetry} retrying={busy === 'retry'} />
+        )}
+      </div>
+    );
+  }
+
   const profileOptions = [
     { value: '', label: 'All profiles' },
     ...(run.profiles ?? []).map((p) => ({ value: p.accountId, label: p.name })),
   ];
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selected.has(r._id));
+  // The profiles picked for a job's location group(s), for its Location cell.
+  const pickedFor = (row: JobApplyRow) =>
+    [
+      ...new Set([
+        ...(row.markets?.length ? row.markets : ['none']).flatMap((m) => run.assignments[m] ?? []),
+        ...(run.assignments['*'] ?? []),
+      ]),
+    ]
+      .map((id) => profileNames[id])
+      .filter(Boolean)
+      .join(', ');
+
+  const header = (
+    <PageHeader
+      title={run.fileName}
+      backTo="/job-applies"
+      action={
+        <>
+          <button type="button" className="btn-outline btn-sm" onClick={() => setShowHelp(true)}>
+            <Keyboard className="h-4 w-4" aria-hidden />
+            Shortcuts
+          </button>
+          {active && (
+            <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
+              {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
+              Cancel run
+            </button>
+          )}
+        </>
+      }
+    />
+  );
+  const track = (
+    <StepTrack
+      current={stepView ?? 3}
+      reached={run.screenedAt ? 3 : undefined}
+      onStep={(s) => setStepView(s === 3 ? null : s)}
+      hint={
+        stepView === 1
+          ? 'Every job and what the check found.'
+          : stepView === 2
+            ? active
+              ? 'Scoring is running with these picks. You can change them once it’s done.'
+              : 'Change who applies in each location group, then score again. Your tailored resumes, sheet rows and applied marks stay.'
+            : active
+              ? 'Scoring your resumes against each job. Next: export to your sheet, tailor the rest, apply.'
+              : 'Export to your sheet, tailor the jobs that need it, then apply and mark them applied.'
+      }
+    />
+  );
+
+  // An earlier step, opened from the step track: ① what the check found, ② the picks (change them, score again).
+  if (stepView !== null) {
+    return (
+      <div className="space-y-5">
+        {header}
+        {track}
+        <button type="button" className="btn-outline btn-sm" onClick={() => setStepView(null)}>
+          <ChevronRight className="h-4 w-4 rotate-180" aria-hidden /> Back to ③ Tailor &amp; apply
+        </button>
+
+        {stepView === 1 ? (
+          <>
+            <SourceLine run={run} />
+            <ScreeningReport runId={runId} checksOnly readOnly />
+          </>
+        ) : active ? (
+          <ScreeningReport runId={runId} readOnly assignments={run.assignments} />
+        ) : (
+          <ScreeningReport
+            runId={runId}
+            rescore={{ assignments: run.assignments, selection: run.selection, threshold: run.threshold }}
+            onStarted={() => {
+              setStepView(null);
+              void mutateRun();
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title={run.fileName}
-        backTo="/job-applies"
-        action={
-          <>
-            <button type="button" className="btn-outline btn-sm" onClick={() => setShowHelp(true)}>
-              <Keyboard className="h-4 w-4" aria-hidden />
-              Shortcuts
-            </button>
-            {active && (
-              <button type="button" className="btn-outline btn-sm" onClick={onCancel} disabled={busy !== null}>
-                {busy === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Square className="h-4 w-4" aria-hidden />}
-                Cancel run
-              </button>
-            )}
-          </>
-        }
-      />
+      {header}
+      {track}
 
       <RunSummary
         run={run}
@@ -659,178 +866,232 @@ export default function JobApplyRun() {
           counts={run.applications}
           profileFilter={accountId ? { accountId, name: profileNames[accountId] ?? 'this profile' } : undefined}
           busy={busy !== null}
-          onTailor={openTailorAll}
+          tailorModel={RESUME_MODEL.label}
+          onTailor={() => openTailor(null)}
           onExport={() => setShowExport(true)}
           onMark={() => setConfirmAll(true)}
         />
       )}
 
-      <div className="flex min-h-[2rem] flex-wrap items-center justify-between gap-3">
-        {selected.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Selected jobs">
-            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{selected.size} selected</span>
-            <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
-              {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
-              Mark applied
-            </button>
-            <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
-              <X className="h-4 w-4" aria-hidden />
-              Clear
+      {/* The job's info opens beside the table, on the right (above it on narrow screens), as in the step-2 lists. */}
+      <div className="flex flex-col-reverse gap-4 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1 space-y-5">
+          <div className="flex min-h-[2rem] flex-wrap items-center justify-between gap-3">
+            {selected.size > 0 ? (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Selected jobs">
+                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{selected.size} selected</span>
+                <button type="button" className="btn-outline btn-sm" onClick={() => void copyLinks(selectedRows)}>
+                  <Copy className="h-4 w-4" aria-hidden />
+                  Copy links
+                </button>
+                <button type="button" className="btn-outline btn-sm" onClick={() => openTailor([...selected])} disabled={busy !== null}>
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  Tailor
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
+                  {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
+                  Mark applied
+                </button>
+                <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
+                  <X className="h-4 w-4" aria-hidden />
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                {pagination ? pagination.total : '…'} job{pagination?.total === 1 ? '' : 's'}
+                {appliedFilter === 'no' ? ' to apply to' : appliedFilter === 'yes' ? ' applied' : ''}
+              </p>
+            )}
+            <Pagination info={pagination} onPage={goToPage} label="Pages (top)" />
+          </div>
+
+          <div className="table-wrap">
+            {rowsLoading && rows.length === 0 ? (
+              <p role="status" className="flex items-center gap-2 p-6 text-sm text-muted">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading jobs…
+              </p>
+            ) : rows.length === 0 ? (
+              <p className="p-6 text-sm text-muted">
+                {active
+                  ? 'Jobs appear here as they are processed.'
+                  : appliedFilter === 'no' && view === 'suggested'
+                    ? 'Nothing left to apply to here. Switch to “All” or lower the minimum score.'
+                    : 'No jobs match this view.'}
+              </p>
+            ) : (
+              <table className="min-w-full text-sm">
+                <thead className="table-head whitespace-nowrap">
+                  <tr>
+                    <th className="w-8 px-3 py-2 font-medium">
+                      <input
+                        type="checkbox"
+                        checked={allOnPageSelected}
+                        onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r._id)) : new Set())}
+                        aria-label="Select all jobs on this page"
+                      />
+                    </th>
+                    <th className="w-10 px-3 py-2 font-medium">#</th>
+                    <th className="px-3 py-2 font-medium">Job</th>
+                    <th className="px-3 py-2 font-medium">Posted</th>
+                    <th className="px-3 py-2 font-medium">Work mode</th>
+                    <th className="px-3 py-2 font-medium">Location</th>
+                    <th className="px-3 py-2 font-medium">Flags</th>
+                    <th className="px-3 py-2 font-medium">Apply with</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const isOpen = expanded === row._id;
+                    const isFocused = focusedId === row._id;
+                    const age = ageDays(row.postedDate);
+                    return (
+                      <Fragment key={row._id}>
+                        <tr
+                          ref={(el) => {
+                            if (el) rowRefs.current.set(row._id, el);
+                            else rowRefs.current.delete(row._id);
+                          }}
+                          onClick={() => setFocusedId(row._id)}
+                          className={`table-row align-top ${row.applied ? 'opacity-60' : ''} ${
+                            isFocused ? 'bg-sky-50/70 shadow-[inset_3px_0_0_0] shadow-sky-600 dark:bg-sky-950/30 dark:shadow-sky-400' : ''
+                          }`}
+                          aria-current={isFocused ? 'true' : undefined}
+                        >
+                          <td className="px-3 py-2">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(row._id)}
+                              onChange={() => toggleSelected(row._id)}
+                              aria-label={`Select ${row.title || 'job'}`}
+                            />
+                          </td>
+                          <td className="px-3 py-2 tabular-nums text-zinc-500">{row.rowIndex}</td>
+                          <td className="max-w-xs px-3 py-2">
+                            <div className="flex items-start gap-1.5">
+                              <button
+                                type="button"
+                                className="btn-icon -ml-1.5"
+                                aria-expanded={isOpen}
+                                aria-label={isOpen ? 'Hide score breakdown' : 'Show score breakdown'}
+                                onClick={() => setExpanded(isOpen ? null : row._id)}
+                                disabled={!row.topScore && row.status !== 'scored' && row.status !== 'excluded'}
+                              >
+                                {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
+                              </button>
+                              <div className="min-w-0">
+                                {/* wrap rather than truncate: a one-line title holds the column at full width and pushes
+                                    Apply with past the table's edge on narrower screens */}
+                                <p className="line-clamp-2 font-medium text-zinc-800 dark:text-zinc-100" title={row.title || undefined}>
+                                  {row.title || 'Untitled role'}
+                                </p>
+                                <p className="line-clamp-1 text-xs text-zinc-500">
+                                  {row.company}
+                                  {row.url && (
+                                    <a
+                                      href={row.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="ml-1 inline-flex items-center gap-0.5 text-sky-700 hover:underline dark:text-sky-400"
+                                    >
+                                      {row.company ? 'open' : hostOf(row.url)}
+                                      <ExternalLink className="h-3 w-3" aria-hidden />
+                                      <span className="sr-only">(opens in a new tab)</span>
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn-icon ml-1 inline-flex align-middle"
+                                    onClick={() => setInfoRow(row._id)}
+                                    aria-label="Job info and description"
+                                    title="Job info and description"
+                                  >
+                                    <FileText className="h-3.5 w-3.5" aria-hidden />
+                                  </button>
+                                  {row.humanEdited && <span className="badge-info ml-1 align-middle">Edited</span>}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2">
+                            {row.postedDate ? (
+                              <>
+                                {formatDate(row.postedDate)}
+                                {age !== null && <span className="hint block">{age === 0 ? 'today' : `${age}d ago`}</span>}
+                              </>
+                            ) : (
+                              <span className="hint">Unknown</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">{capitalize(row.workMode) || <span className="hint">—</span>}</td>
+                          <td className="max-w-[10rem] px-3 py-2">
+                            {row.groupKey ? (
+                              locationLabel(row.groupKey)
+                            ) : row.allowedLocations.length ? (
+                              row.allowedLocations.map((l) => l.value).join(', ')
+                            ) : (
+                              <span className="hint">Not stated</span>
+                            )}
+                            {row.status === 'unassigned' ? (
+                              <p className="hint">No profile picked</p>
+                            ) : (
+                              row.groupKey &&
+                              run.screenedAt &&
+                              !run.autoStart && (
+                                <p className="hint line-clamp-2" title={pickedFor(row)}>
+                                  {pickedFor(row)}
+                                </p>
+                              )
+                            )}
+                          </td>
+                          <td className="max-w-[14rem] px-3 py-2">
+                            <Flags row={row} profileNames={profileNames} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <Suggestions
+                              row={row}
+                              threshold={run.threshold}
+                              profileNames={profileNames}
+                              hasFile={(id) => !!resumesById.get(id)?.hasFile}
+                              onToggle={(file, applied, label) => void toggleFile(row, file, applied, label)}
+                              onDownload={(s) => void download(s)}
+                              tailorModel={RESUME_MODEL.label}
+                              onTailor={(acc) => void tailor(row, acc)}
+                              onTailorAll={() => void tailorRow(row)}
+                              onDownloadTailored={(t) => void downloadTailored(row, t)}
+                            />
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr>
+                            <td colSpan={8} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
+                              <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (bottom)" />
+            <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
+              Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for keyboard shortcuts
             </button>
           </div>
-        ) : (
-          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-            {pagination ? pagination.total : '…'} job{pagination?.total === 1 ? '' : 's'}
-            {appliedFilter === 'no' ? ' to apply to' : appliedFilter === 'yes' ? ' applied' : ''}
-          </p>
+        </div>
+        {infoRow && (
+          <JobInfoPanel
+            rowId={infoRow}
+            runId={runId}
+            onClose={() => setInfoRow(null)}
+            canEdit={user?.role === 'admin' || user?.role === 'staff'}
+          />
         )}
-        <Pagination info={pagination} onPage={goToPage} label="Pages (top)" />
-      </div>
-
-      <div className="table-wrap">
-        {rowsLoading && rows.length === 0 ? (
-          <p role="status" className="flex items-center gap-2 p-6 text-sm text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading jobs…
-          </p>
-        ) : rows.length === 0 ? (
-          <p className="p-6 text-sm text-muted">
-            {active
-              ? 'Jobs appear here as they are processed.'
-              : appliedFilter === 'no' && view === 'suggested'
-                ? 'Nothing left to apply to here. Switch to “All” or lower the minimum score.'
-                : 'No jobs match this view.'}
-          </p>
-        ) : (
-          <table className="min-w-full text-sm">
-            <thead className="table-head whitespace-nowrap">
-              <tr>
-                <th className="w-8 px-3 py-2 font-medium">
-                  <input
-                    type="checkbox"
-                    checked={allOnPageSelected}
-                    onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r._id)) : new Set())}
-                    aria-label="Select all jobs on this page"
-                  />
-                </th>
-                <th className="w-10 px-3 py-2 font-medium">#</th>
-                <th className="px-3 py-2 font-medium">Job</th>
-                <th className="px-3 py-2 font-medium">Posted</th>
-                <th className="px-3 py-2 font-medium">Work mode</th>
-                <th className="px-3 py-2 font-medium">Location</th>
-                <th className="px-3 py-2 font-medium">Flags</th>
-                <th className="px-3 py-2 font-medium">Apply with</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const isOpen = expanded === row._id;
-                const isFocused = focusedId === row._id;
-                const age = ageDays(row.postedDate);
-                return (
-                  <Fragment key={row._id}>
-                    <tr
-                      ref={(el) => {
-                        if (el) rowRefs.current.set(row._id, el);
-                        else rowRefs.current.delete(row._id);
-                      }}
-                      onClick={() => setFocusedId(row._id)}
-                      className={`table-row align-top ${row.applied ? 'opacity-60' : ''} ${
-                        isFocused ? 'bg-sky-50/70 shadow-[inset_3px_0_0_0] shadow-sky-600 dark:bg-sky-950/30 dark:shadow-sky-400' : ''
-                      }`}
-                      aria-current={isFocused ? 'true' : undefined}
-                    >
-                      <td className="px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(row._id)}
-                          onChange={() => toggleSelected(row._id)}
-                          aria-label={`Select ${row.title || 'job'}`}
-                        />
-                      </td>
-                      <td className="px-3 py-2 tabular-nums text-zinc-500">{row.rowIndex}</td>
-                      <td className="max-w-xs px-3 py-2">
-                        <div className="flex items-start gap-1.5">
-                          <button
-                            type="button"
-                            className="btn-icon -ml-1.5"
-                            aria-expanded={isOpen}
-                            aria-label={isOpen ? 'Hide score breakdown' : 'Show score breakdown'}
-                            onClick={() => setExpanded(isOpen ? null : row._id)}
-                            disabled={!row.topScore && row.status !== 'scored' && row.status !== 'excluded'}
-                          >
-                            {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
-                          </button>
-                          <div className="min-w-0">
-                            <p className="truncate font-medium text-zinc-800 dark:text-zinc-100">{row.title || 'Untitled role'}</p>
-                            <p className="truncate text-xs text-zinc-500">
-                              {row.company}
-                              {row.url && (
-                                <a
-                                  href={row.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="ml-1 inline-flex items-center gap-0.5 text-sky-700 hover:underline dark:text-sky-400"
-                                >
-                                  {row.company ? 'open' : hostOf(row.url)}
-                                  <ExternalLink className="h-3 w-3" aria-hidden />
-                                  <span className="sr-only">(opens in a new tab)</span>
-                                </a>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        {row.postedDate ? (
-                          <>
-                            {formatDate(row.postedDate)}
-                            {age !== null && <span className="hint block">{age === 0 ? 'today' : `${age}d ago`}</span>}
-                          </>
-                        ) : (
-                          <span className="hint">Unknown</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">{capitalize(row.workMode) || <span className="hint">—</span>}</td>
-                      <td className="max-w-[10rem] px-3 py-2">
-                        {row.allowedLocations.length ? row.allowedLocations.map((l) => l.value).join(', ') : <span className="hint">Not stated</span>}
-                      </td>
-                      <td className="max-w-[14rem] px-3 py-2">
-                        <Flags row={row} profileNames={profileNames} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <Suggestions
-                          row={row}
-                          threshold={run.threshold}
-                          profileNames={profileNames}
-                          hasFile={(id) => !!resumesById.get(id)?.hasFile}
-                          onToggle={(file, applied, label) => void toggleFile(row, file, applied, label)}
-                          onDownload={(s) => void download(s)}
-                          onTailor={(acc) => void tailor(row, acc)}
-                          onTailorAll={() => void tailorRow(row)}
-                          onDownloadTailored={(t) => void downloadTailored(row, t)}
-                        />
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr>
-                        <td colSpan={8} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
-                          <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (bottom)" />
-        <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
-          Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for keyboard shortcuts
-        </button>
       </div>
 
       <ConfirmDialog
@@ -860,7 +1121,7 @@ export default function JobApplyRun() {
 
       <ConfirmDialog
         open={confirmTailorAll}
-        title="Tailor resumes"
+        title={tailorRowIds ? `Tailor resumes for ${tailorRowIds.length} selected job${tailorRowIds.length === 1 ? '' : 's'}` : 'Tailor resumes'}
         body={
           <div className="space-y-4">
             <fieldset className="space-y-1.5">
@@ -883,6 +1144,19 @@ export default function JobApplyRun() {
                 </label>
               ))}
             </fieldset>
+            <div>
+              <span className="form-label mb-1 block">Resume model</span>
+              <p className="text-sm">
+                {RESUME_MODEL.label} <span className="text-zinc-500">· always used for tailoring in Job Applies</span>
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={tailorCoverLetter} onChange={(e) => setTailorCoverLetter(e.target.checked)} />
+              Also write a cover letter for each (doubles the AI calls)
+            </label>
+            {tailorCoverLetter && (
+              <ModelSelect label="Cover letter model" choice={coverLetterModel} labelClassName="form-label mb-1 block" />
+            )}
             <p className="text-sm">
               {tailorPreview === null ? (
                 <span className="inline-flex items-center gap-1.5 text-zinc-500">
@@ -893,15 +1167,14 @@ export default function JobApplyRun() {
                   <span className="font-semibold">{tailorPreview.queued}</span> tailored resume{tailorPreview.queued === 1 ? '' : 's'} will be
                   generated (one per job and profile, skipping ones that already have one)
                   {tailorPreview.skippedCap ? `; ${tailorPreview.skippedCap} more are over today’s limit` : ''}.
+                  {perTailorUsd != null && (
+                    <span className="hint block mt-1">About {formatUsd(perTailorUsd * tailorPreview.queued)} in AI costs.</span>
+                  )}
                 </>
               ) : (
-                'Nothing to tailor: those jobs already have tailored resumes for these profiles, or today’s limit is reached.'
+                'Nothing to tailor: these jobs already have tailored resumes or were already applied to for these profiles, aren’t open to them, or today’s limit is reached.'
               )}
             </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={tailorCoverLetter} onChange={(e) => setTailorCoverLetter(e.target.checked)} />
-              Also write a cover letter for each (doubles the AI calls)
-            </label>
           </div>
         }
         confirmLabel={tailorPreview?.queued ? `Tailor ${tailorPreview.queued}` : 'Start tailoring'}
