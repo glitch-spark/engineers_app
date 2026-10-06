@@ -54,9 +54,7 @@ export default function MarketRow({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <p className="min-w-[11rem] text-sm">
           <span className="font-semibold text-zinc-900 dark:text-zinc-50">{marketLabel(group.key)}</span>
-          <span className="text-zinc-600 dark:text-zinc-400"> · {group.jobs} job{group.jobs === 1 ? '' : 's'}</span>
-          {group.check > 0 && <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">({group.check} need a check)</span>}
-        </p>
+          <span className="text-zinc-600 dark:text-zinc-400"> · {group.jobs} job{group.jobs === 1 ? '' : 's'}</span>        </p>
         {group.jobs === 0 ? (
           <span className="hint">No jobs</span>
         ) : (
