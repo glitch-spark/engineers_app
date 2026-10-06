@@ -1599,7 +1599,7 @@ export type JobApplyRowStatus =
   | 'fetch_failed'
   | 'llm_failed'
   | 'unassigned';
-/** Where screening put a job: worth applying to (valid / check) or why not. */
+/** Where screening put a job: worth applying to (valid; scored) or why not. A 'check' job is scored once approved. */
 export type JobApplyScreenBucket =
   | 'valid'
   | 'check'
@@ -1904,8 +1904,6 @@ export interface JobApplyScreeningGroup {
   /** Candidate market: 'US', 'UKEU', 'LATAM', or 'none' (no stated location). */
   key: string;
   jobs: number;
-  /** Of `jobs`, how many need a check (no date, work mode or location not stated, or included anyway). */
-  check: number;
   /** Profile ids whose country/region fits this group. */
   fits: string[];
 }
@@ -1920,7 +1918,9 @@ export interface JobApplyScreeningProfile {
 
 export interface JobApplyScreening {
   total: number;
+  /** Jobs that will be scored: Worth applying (passed every check, or approved). */
   worth: number;
+  /** Jobs that need a check: not scored until approved. */
   check: number;
   buckets: Record<JobApplyScreenBucket, number>;
   maxAgeDays: number;
@@ -1928,7 +1928,7 @@ export interface JobApplyScreening {
   /** Jobs open only to candidates outside the markets, per location group (counted, not scored). */
   others: { key: string; jobs: number }[];
   /** Each worthwhile job once, by the set of markets it's in ('none' = no stated location). */
-  combos?: { markets: string[]; jobs: number; check: number }[];
+  combos?: { markets: string[]; jobs: number }[];
   profiles: JobApplyScreeningProfile[];
 }
 
