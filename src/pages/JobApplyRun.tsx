@@ -175,7 +175,8 @@ export default function JobApplyRun() {
   );
   const active = run ? isActive(run.status) : false;
   const refreshRun = useRunRefresh(runId);
-  // Jobs other people corrected since this run read them: bring them up to date once per status (no fetch, no AI call).
+  // Jobs other people corrected or approved since this run read them: bring them up to date once per status (no fetch,
+  // no AI call).
   const syncedFor = useRef('');
   useEffect(() => {
     if (!run || active) return;
@@ -187,7 +188,7 @@ export default function JobApplyRun() {
       .then(async (res) => {
         if (!res.updated) return;
         await refreshRun();
-        notify.info(`${res.updated} job${res.updated === 1 ? '' : 's'} updated from corrections made by others`);
+        notify.info(`${res.updated} job${res.updated === 1 ? '' : 's'} updated from corrections and approvals made by others`);
       })
       .catch(() => undefined);
   }, [run, active, runId, refreshRun]);
