@@ -7,6 +7,7 @@ import { countryFlag } from '../../lib/countries';
 import { usd } from '../../lib/money';
 import ConfirmDialog from '../ConfirmDialog';
 import Tabs from '../Tabs';
+import BidPanel from '../bids/BidPanel';
 import RejectDialog from '../bids/RejectDialog';
 import { byFirstAt, reasonLabel } from '../bids/util';
 import BidderActions from './BidderActions';
@@ -27,7 +28,7 @@ type Patch = Partial<Record<'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid', 
 
 /**
  * One bidder's pay week: header, tiles, and tabs This week (one row per day; a day expands to its bids, a bid opens
- * the focus viewer) and History (past weekly reports).
+ * in a side panel) and History (past weekly reports).
  */
 export default function BidderView({
   row,
@@ -35,6 +36,7 @@ export default function BidderView({
   weekKey,
   bidder,
   day,
+  bid,
   tab,
   isCurrent,
   onParam,
@@ -47,6 +49,8 @@ export default function BidderView({
   /** The full record when the viewer owns this bidder (for the ⋯ menu). */
   bidder?: api.Bidder;
   day: string | null;
+  /** The bid open in the side panel (a bid of `day`). */
+  bid: string | null;
   tab: string | null;
   isCurrent: boolean;
   onParam: (patch: Patch) => void;
@@ -186,8 +190,8 @@ export default function BidderView({
                 error={shownDay === d.day ? dayBids.error : undefined}
                 expanded={shownDay === d.day}
                 busyId={busyId}
-                onToggle={() => onParam({ day: shownDay === d.day ? null : d.day })}
-                onOpenBid={(id) => onParam({ mode: 'focus', bid: id, day: d.day })}
+                onToggle={() => onParam({ day: shownDay === d.day ? null : d.day, bid: null })}
+                onOpenBid={(id) => onParam({ bid: id, day: d.day })}
                 onDecide={decide}
                 onApproveAllComplete={setApproveAll}
               />
@@ -195,6 +199,15 @@ export default function BidderView({
           </ul>
         )}
       </Tabs>
+
+      <BidPanel
+        bids={sorted}
+        bidId={shownDay ? bid : null}
+        busy={!!busyId}
+        onClose={() => onParam({ bid: null })}
+        onSelect={(id) => onParam({ bid: id })}
+        onDecide={decide}
+      />
 
       <RejectDialog
         bid={rejecting}

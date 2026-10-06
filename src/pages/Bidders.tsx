@@ -172,6 +172,7 @@ export default function BiddersPage() {
             weekKey={weekKey}
             bidder={byId[row.id]}
             day={params.get('day')}
+            bid={params.get('bid')}
             tab={params.get('tab')}
             isCurrent={isCurrent}
             onParam={(patch) => setParam({ week: weekKey, ...patch })}
