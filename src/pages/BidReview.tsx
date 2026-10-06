@@ -21,6 +21,36 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+/** A point in time in the report time zone, e.g. "Oct 5 6:30 PM" (parts, so the locale's odd spaces don't leak in). */
+function fmtInZone(iso: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).formatToParts(new Date(iso));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('month')} ${part('day')} ${part('hour')}:${part('minute')} ${part('dayPeriod')}`;
+}
+
+/** "Oct 5 6:30 PM → Oct 6 6:30 PM Chicago"; viewer-local times if the zone key is unusable. */
+function fmtWindow(start: string, end: string, timeZone: string): string {
+  try {
+    const city = (timeZone.split('/').pop() ?? timeZone).replace(/_/g, ' ');
+    return `${fmtInZone(start, timeZone)} → ${fmtInZone(end, timeZone)} ${city}`;
+  } catch {
+    return `${fmtTime(start)} → ${fmtTime(end)}`;
+  }
+}
+
+/** 'YYYY-MM-DD' minus one calendar day. */
+function dayBefore(day: string): string {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+}
+
+const REASON_LABELS: Record<string, string> = Object.fromEntries(api.REJECT_REASONS.map((r) => [r.value, r.label]));
+
+/** Ready to approve without a look at the gaps: still pending, Submit captured, every upload confirmed. */
+const isComplete = (b: api.BidReviewItem) => b.status === 'pending' && !!b.submittedAt && b.missingUploads === 0;
+
 const STATUS_BADGE: Record<api.BidStatus, string> = {
   pending: 'badge-neutral',
   approved: 'badge-success',
@@ -82,13 +112,14 @@ export default function BidReviewPage() {
   const bidder = params.get('bidder') ?? '';
   const status = params.get('status') ?? 'pending';
 
-  const setParam = (key: string, value: string) =>
+  // Filters replace the history entry; switching mode pushes one so Back returns to the list.
+  const setParam = (key: string, value: string, replace = true) =>
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       if (value) next.set(key, value);
       else next.delete(key);
       return next;
-    }, { replace: true });
+    }, { replace });
 
   const filterKey = `${day}|${bidder}|${status}`;
   const { data, error, mutate } = useSWR(
@@ -111,14 +142,24 @@ export default function BidReviewPage() {
   const bids = useMemo(() => view?.bids ?? [], [view]);
   const summary = view?.summary ?? {};
 
+  // The day tabs are relative to the open window, whatever day is selected: its response (no `day`) says which day
+  // is "today" (the period key of the window's end), and the previous day is the one before it.
+  const { data: openWindow } = useSWR(['bid-open-window'] as const, () => api.listBids({}));
+  const openDay = openWindow?.day ?? '';
+  const previousDay = openDay ? dayBefore(openDay) : '';
+  const onToday = day === '' || day === openDay;
+  const onPrevious = previousDay !== '' && day === previousDay;
+
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [cursor, setCursor] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<api.BidReviewItem | null>(null);
+  const [reason, setReason] = useState<api.RejectReason | null>(null);
   const [note, setNote] = useState('');
   const [confirmAll, setConfirmAll] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const rowRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const noteRef = useRef<HTMLTextAreaElement>(null);
 
   // Rows disappear after a decision (status filter), so keep the cursor in range.
   const current = bids.length === 0 ? -1 : Math.max(0, Math.min(cursor, bids.length - 1));
@@ -133,11 +174,19 @@ export default function BidReviewPage() {
     globalMutate('bidder-live-counts');
   }, [mutate]);
 
-  const decide = useCallback(async (bid: api.BidReviewItem, next: api.BidStatus, reason: string | null = null) => {
+  const decide = useCallback(async (
+    bid: api.BidReviewItem,
+    next: api.BidStatus,
+    rejection?: { reason: api.RejectReason; note: string | null },
+  ) => {
     if (busyId) return false;
     setBusyId(bid.id);
     try {
-      await api.reviewBid(bid.id, { status: next, note: reason });
+      await api.reviewBid(bid.id, {
+        status: next,
+        note: rejection?.note ?? null,
+        ...(rejection ? { reason: rejection.reason } : {}),
+      });
       notify.success(next === 'approved' ? 'Bid approved' : 'Bid rejected');
       await refresh();
       return true;
@@ -150,24 +199,31 @@ export default function BidReviewPage() {
   }, [busyId, refresh]);
 
   const openReject = useCallback((bid: api.BidReviewItem) => {
-    setNote(bid.status === 'rejected' ? bid.note ?? '' : '');
+    const again = bid.status === 'rejected';
+    setReason(again ? bid.rejectReason : null);
+    setNote(again ? bid.note ?? '' : '');
     setRejecting(bid);
   }, []);
 
+  // Other has to be explained; the other reasons take an optional note.
+  const canReject = reason !== null && (reason !== 'other' || note.trim() !== '');
+
   const submitReject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rejecting) return;
-    if (await decide(rejecting, 'rejected', note.trim() || null)) setRejecting(null);
+    if (!rejecting || reason === null || !canReject) return;
+    if (await decide(rejecting, 'rejected', { reason, note: note.trim() || null })) setRejecting(null);
   };
 
-  const approvable = bids.filter((b) => b.status !== 'approved');
+  // Approve all complete: only pending bids with a Submit screenshot and every upload confirmed. The server checks
+  // that again (onlyComplete), so a bid that changed since the list loaded is skipped rather than approved.
+  const completeBids = useMemo(() => bids.filter(isComplete), [bids]);
   const approveAll = async () => {
     setBulkBusy(true);
-    const ids = approvable.map((b) => b.id);
+    const ids = completeBids.map((b) => b.id);
     const total = { updated: 0, skipped: 0 };
     try {
       for (let i = 0; i < ids.length; i += BULK_MAX) {
-        const res = await api.reviewBids({ ids: ids.slice(i, i + BULK_MAX), status: 'approved' });
+        const res = await api.reviewBids({ ids: ids.slice(i, i + BULK_MAX), status: 'approved', onlyComplete: true });
         total.updated += res.updated;
         total.skipped += res.skipped;
       }
@@ -229,21 +285,35 @@ export default function BidReviewPage() {
       <PageHeader title="Bid review" backTo="/bidders" />
 
       <div className="flex flex-wrap items-end gap-3">
+        <div role="group" aria-label="Report window" className="flex gap-2">
+          <button
+            type="button"
+            className={`${onToday ? 'btn' : 'btn-outline'} btn-sm`}
+            aria-pressed={onToday}
+            onClick={() => setParam('day', '')}
+          >
+            Today (in progress)
+          </button>
+          <button
+            type="button"
+            className={`${onPrevious ? 'btn' : 'btn-outline'} btn-sm`}
+            aria-pressed={onPrevious}
+            disabled={!previousDay}
+            onClick={() => setParam('day', previousDay)}
+          >
+            Previous day (reported)
+          </button>
+        </div>
         <div>
           <label htmlFor="bid-day" className="mb-1 block text-xs font-medium text-muted">Report day</label>
           <input
             id="bid-day"
             type="date"
             className="input text-sm"
-            value={day || data?.day || ''}
+            value={day || view?.day || openDay}
             onChange={(e) => setParam('day', e.target.value)}
           />
         </div>
-        {day && (
-          <button type="button" className="btn-outline btn-sm" onClick={() => setParam('day', '')}>
-            Current window
-          </button>
-        )}
         <div className="w-48">
           <Select
             label="Bidder"
@@ -262,14 +332,24 @@ export default function BidReviewPage() {
             options={STATUS_FILTERS}
           />
         </div>
-        <button
-          type="button"
-          className="btn ml-auto"
-          disabled={approvable.length === 0 || bulkBusy}
-          onClick={() => setConfirmAll(true)}
-        >
-          Approve all shown{approvable.length > 0 ? ` (${approvable.length})` : ''}
-        </button>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn-outline"
+            disabled={totals.pending === 0}
+            onClick={() => setParam('mode', 'focus', false)}
+          >
+            Review pending ({totals.pending})
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={completeBids.length === 0 || bulkBusy}
+            onClick={() => setConfirmAll(true)}
+          >
+            Approve all complete ({completeBids.length})
+          </button>
+        </div>
       </div>
 
       {error && <p role="alert" className="text-sm text-red-600">{messageOf(error, 'Failed to load bids')}</p>}
@@ -278,7 +358,7 @@ export default function BidReviewPage() {
           {view && (
             <section aria-label="Summary" className="panel space-y-3 p-4 text-sm">
               <p className="text-muted">
-                Window for <strong className="text-body">{view.day}</strong>: {fmtTime(view.start)} → {fmtTime(view.end)}
+                Window for <strong className="text-body">{view.day}</strong>: {fmtWindow(view.start, view.end, view.timezone)}
               </p>
               <p>
                 <strong>Total</strong> · Approved {totals.approved} · Pending {totals.pending} · Rejected {totals.rejected}
@@ -357,12 +437,23 @@ export default function BidReviewPage() {
                               <span className="font-medium">{b.jobTitle || 'Untitled job'}</span>
                             )}
                             <span className={STATUS_BADGE[b.status]}>{b.status}</span>
+                            {b.status === 'rejected' && b.rejectReason && (
+                              <span className="badge-danger">{REASON_LABELS[b.rejectReason] ?? b.rejectReason}</span>
+                            )}
                           </div>
                           <p className="text-xs text-muted">
-                            {b.bidderName} · {fmtTime(b.firstAt)} · {b.screenshotCount} {b.screenshotCount === 1 ? 'screenshot' : 'screenshots'}
+                            {b.bidderName}
+                            {b.jobDomain ? ` · ${b.jobDomain}` : ''} · {fmtTime(b.firstAt)} · {b.screenshotCount} {b.screenshotCount === 1 ? 'screenshot' : 'screenshots'}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {b.profileName ? <>Profile: <span className="text-body">{b.profileName}</span></> : 'No profile assigned'}
                           </p>
                           <div className="flex flex-wrap gap-1.5">
-                            {!b.submittedAt && <span className="badge-warning">No submit screenshot</span>}
+                            {b.submittedAt ? (
+                              <span className="badge-success" title={`Submit screenshot at ${fmtTime(b.submittedAt)}`}>Submit</span>
+                            ) : (
+                              <span className="badge-warning">No submit screenshot</span>
+                            )}
                             {b.missingUploads > 0 && <span className="badge-warning">Missing upload{b.missingUploads > 1 ? ` (${b.missingUploads})` : ''}</span>}
                             {b.changedSinceReview && <span className="badge-info">New screenshots since review</span>}
                           </div>
@@ -412,30 +503,56 @@ export default function BidReviewPage() {
           <p className="text-sm text-body">
             {rejecting?.jobTitle || rejecting?.jobUrl || 'This bid'} · {rejecting?.bidderName}
           </p>
+          <fieldset>
+            <legend className="mb-1 block text-xs font-medium text-muted">Reason</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {api.REJECT_REASONS.map((r) => (
+                <label key={r.value} className="cursor-pointer">
+                  <input
+                    type="radio"
+                    name="bid-reject-reason"
+                    value={r.value}
+                    checked={reason === r.value}
+                    onChange={() => {
+                      setReason(r.value);
+                      if (r.value === 'other') noteRef.current?.focus();
+                    }}
+                    className="peer sr-only"
+                  />
+                  <span className="flex h-full items-center justify-center rounded-lg border border-zinc-200 bg-white px-2 py-2 text-center text-sm font-medium text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50 peer-checked:border-red-600 peer-checked:bg-red-50 peer-checked:text-red-800 peer-focus-visible:ring-2 peer-focus-visible:ring-sky-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:peer-checked:border-red-500 dark:peer-checked:bg-red-950/40 dark:peer-checked:text-red-300 dark:peer-focus-visible:ring-sky-400">
+                    {r.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <div>
-            <label htmlFor="bid-reject-note" className="mb-1 block text-xs font-medium text-muted">Reason (optional)</label>
+            <label htmlFor="bid-reject-note" className="mb-1 block text-xs font-medium text-muted">
+              {reason === 'other' ? 'Note (required for Other)' : 'Note (optional)'}
+            </label>
             <textarea
               id="bid-reject-note"
+              ref={noteRef}
               className="input w-full resize-y text-sm"
               rows={3}
               maxLength={NOTE_MAX}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              autoFocus
+              required={reason === 'other'}
             />
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-outline text-sm" onClick={() => setRejecting(null)} disabled={!!busyId}>Cancel</button>
-            <button type="submit" className="btn-danger text-sm" disabled={!!busyId}>{busyId ? 'Working…' : 'Reject'}</button>
+            <button type="submit" className="btn-danger text-sm" disabled={!canReject || !!busyId}>{busyId ? 'Working…' : 'Reject'}</button>
           </div>
         </form>
       </Modal>
 
       <ConfirmDialog
         open={confirmAll}
-        title="Approve all shown"
-        body={`Approve ${approvable.length} ${approvable.length === 1 ? 'bid' : 'bids'} shown? Any notes on them are cleared.`}
-        confirmLabel="Approve all"
+        title="Approve all complete"
+        body={`Approve ${completeBids.length} complete ${completeBids.length === 1 ? 'bid' : 'bids'}? Complete means pending, with a Submit screenshot and every upload confirmed. Rejected and incomplete bids are not touched, and any notes on these bids are cleared.`}
+        confirmLabel={`Approve ${completeBids.length}`}
         tone="default"
         busy={bulkBusy}
         onConfirm={approveAll}

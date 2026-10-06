@@ -2164,6 +2164,18 @@ export const bidderReports = (id: string, kind: 'daily' | 'weekly', limit = 30) 
 
 export type BidStatus = 'pending' | 'approved' | 'rejected';
 
+export type RejectReason = 'no_submission' | 'wrong_profile' | 'not_job_page' | 'duplicate' | 'incomplete' | 'other';
+
+/** Reject reasons in display order; `key` is the shortcut digit in the focus viewer. */
+export const REJECT_REASONS: { value: RejectReason; label: string; key: '1' | '2' | '3' | '4' | '5' | '6' }[] = [
+  { value: 'no_submission', label: 'No submission', key: '1' },
+  { value: 'wrong_profile', label: 'Wrong profile/resume', key: '2' },
+  { value: 'not_job_page', label: 'Not a job page', key: '3' },
+  { value: 'duplicate', label: 'Duplicate', key: '4' },
+  { value: 'incomplete', label: 'Incomplete', key: '5' },
+  { value: 'other', label: 'Other', key: '6' },
+];
+
 export interface BidReviewItem {
   id: string;
   bidderId: string;
@@ -2179,6 +2191,16 @@ export interface BidReviewItem {
   reviewedAt: string | null;
   note: string | null;
   changedSinceReview: boolean;
+  /** Host of jobUrl without `www.`. */
+  jobDomain: string | null;
+  /** Seconds from the first to the last screenshot. */
+  durationSec: number;
+  /** The bidder's assigned profile; null if none. */
+  profileName: string | null;
+  resumeNames: string[];
+  /** Newest completed tailored resume for this job URL on that profile. */
+  tailoredResumeName: string | null;
+  rejectReason: RejectReason | null;
 }
 
 export interface BidDaySummary {
@@ -2195,6 +2217,8 @@ export interface BidDay {
   day: string;
   start: string;
   end: string;
+  /** IANA key of the report time zone (BID_REPORT_TIMEZONE), e.g. `America/Chicago`. */
+  timezone: string;
   bids: BidReviewItem[];
   /** Per bidder id; counts ignore the status filter. */
   summary: Record<string, BidDaySummary>;
@@ -2204,6 +2228,8 @@ export interface BidScreenshot {
   key: string;
   step: string | number | null;
   trigger: string | null;
+  /** True for the Submit screenshot (`trigger === 'submit'`). */
+  isSubmit: boolean;
   capturedAt: string;
   /** Short-lived signed link; null while the upload is unconfirmed. */
   url: string | null;
@@ -2212,10 +2238,17 @@ export interface BidScreenshot {
 export const listBids = (params: { day?: string; bidderId?: string; status?: BidStatus }) =>
   apiFetch<BidDay>(`/bids${qs(params)}`);
 
+export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
+
 export const bidScreenshots = (id: string) => apiFetch<BidScreenshot[]>(`/bids/${id}/screenshots`);
 
-export const reviewBid = (id: string, body: { status: BidStatus; note?: string | null }) =>
+/** `reason` only goes with `status: 'rejected'`; `other` needs a non-empty note. */
+export const reviewBid = (id: string, body: { status: BidStatus; note?: string | null; reason?: RejectReason }) =>
   putJSON<BidReviewItem>(`/bids/${id}/review`, body);
 
-export const reviewBids = (body: { ids: string[]; status: BidStatus }) =>
-  postJSON<{ updated: number; skipped: number }>('/bids/review', body);
+/** `onlyComplete` only goes with `status: 'approved'`: the server then skips bids that are not complete. */
+export const reviewBids = (
+  body:
+    | { ids: string[]; status: BidStatus; reason?: RejectReason; onlyComplete?: false }
+    | { ids: string[]; status: 'approved'; onlyComplete: true },
+) => postJSON<{ updated: number; skipped: number }>('/bids/review', body);
