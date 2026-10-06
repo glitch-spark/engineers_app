@@ -2213,8 +2213,10 @@ export interface BidDaySummary {
 }
 
 export interface BidDay {
-  /** Period key of the window's end cutoff (not necessarily today's date). */
-  day: string;
+  /** Period key of the window's end cutoff (not necessarily today's date); null for a `week` query. */
+  day: string | null;
+  /** Period key of the pay week's cutoff for a `week` query; null for a day. */
+  week?: string | null;
   start: string;
   end: string;
   /** IANA key of the report time zone (BID_REPORT_TIMEZONE), e.g. `America/Chicago`. */
@@ -2235,8 +2237,73 @@ export interface BidScreenshot {
   url: string | null;
 }
 
-export const listBids = (params: { day?: string; bidderId?: string; status?: BidStatus }) =>
+/** `day` and `week` are exclusive; neither means the open daily window. */
+export const listBids = (params: { day?: string; week?: string; bidderId?: string; status?: BidStatus }) =>
   apiFetch<BidDay>(`/bids${qs(params)}`);
+
+// ---------- pay-week board ----------
+
+/** Counts of one bidder (or the team) in a window; pending/rejected are null on folder-counted days. */
+export interface BidCounts {
+  approved: number | null;
+  pending: number | null;
+  rejected: number | null;
+}
+
+export interface BidWeekDay {
+  /** Period key of the day's end cutoff. */
+  day: string;
+  start: string;
+  end: string;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+export interface BidderWeekDay extends BidCounts {
+  day: string;
+  /** `folders`: Backblaze folder count before BID_RECORDS_START, not reviewed. */
+  source: 'records' | 'folders';
+  /** Folder listing failed; counts are null. */
+  error: string | null;
+}
+
+export interface BidderWeekTotals extends BidCounts {
+  /** approved × rate over the pay-week window (the weekly report's number). */
+  pay: number | null;
+  /** Pending in the pay week; null on folder weeks. */
+  toReview: number | null;
+  source: 'records' | 'folders';
+  error: string | null;
+}
+
+export interface BidWeekRow {
+  id: string;
+  name: string;
+  status: Bidder['status'];
+  country: string | null;
+  profileName: string | null;
+  rate: number;
+  /** One per `week.days`, same order. */
+  days: BidderWeekDay[];
+  week: BidderWeekTotals;
+}
+
+export interface BidWeek {
+  week: {
+    start: string;
+    end: string;
+    /** e.g. "Week ending Sat Oct 10". */
+    label: string;
+    timezone: string;
+    days: BidWeekDay[];
+  };
+  bidders: BidWeekRow[];
+  totals: BidCounts & { pay: number | null; toReview: number | null; days: (BidCounts & { day: string })[] };
+}
+
+/** The pay week holding `week` (YYYY-MM-DD; default the current one). */
+export const bidsWeek = (params: { week?: string; includeArchived?: boolean }) =>
+  apiFetch<BidWeek>(`/bids/week${qs(params)}`);
 
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
 

@@ -57,7 +57,7 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
   const latchedDay = useRef('');
   const { data, error, mutate } = useSWR(['bid-focus', day, bidderId, visit] as const, async () => {
     const res = await api.listBids({ day: day || latchedDay.current || undefined, bidderId: bidderId || undefined });
-    if (!day && !latchedDay.current) latchedDay.current = res.day;
+    if (!day && !latchedDay.current) latchedDay.current = res.day ?? '';
     return res;
   });
 
