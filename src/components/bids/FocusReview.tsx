@@ -10,6 +10,7 @@ import FocusToolbar from './FocusToolbar';
 import Kbd from './Kbd';
 import ReviewActions from './ReviewActions';
 import StepViewer, { defaultStep } from './StepViewer';
+import { dayParts } from '../bidders/weekDates';
 import { byFirstAt, dialogIsOpen, isTypingTarget, reasonLabel } from './util';
 
 type Bid = api.BidReviewItem;
@@ -47,19 +48,39 @@ interface Notice {
   at: number;
 }
 
-/** One pending bid at a time, oldest first, decided from the keyboard. */
-export default function FocusReview({ day, bidderId, onExit }: { day: string; bidderId: string; onExit: () => void }) {
+export type FocusScope = { day: string } | { week: string };
+
+/** "Sun Oct 4" for a day scope, "Week ending Sat Oct 10" for a week scope. */
+const scopeLabel = (scope: FocusScope) => {
+  const key = 'day' in scope ? scope.day : scope.week;
+  const p = dayParts(key);
+  return 'day' in scope ? `${p.weekday} ${p.date}` : `Week ending ${p.weekday} ${p.date}`;
+};
+
+/**
+ * Bids of a fixed day or pay week (one bidder or all), oldest first, decided from the keyboard. `set: 'pending'` walks
+ * the pending bids; `set: 'all'` walks every bid of the scope, decided ones too, starting at `startAt`.
+ */
+export default function FocusReview({
+  scope,
+  bidderId,
+  startAt,
+  set,
+  onExit,
+}: {
+  scope: FocusScope;
+  bidderId?: string;
+  startAt?: string;
+  set: 'pending' | 'all';
+  onExit: () => void;
+}) {
   // A key per visit: a cached list from an earlier visit is out of date (bids decided in the list since), and pinning a
   // bid from it would start the viewer on one that is no longer pending.
   const [visit] = useState(() => Date.now());
-  // Given no day, the first response says which one the open window is, and the viewer stays on it: a refetch after
-  // the cutoff must not swap in the next window under the reviewer.
-  const latchedDay = useRef('');
-  const { data, error, mutate } = useSWR(['bid-focus', day, bidderId, visit] as const, async () => {
-    const res = await api.listBids({ day: day || latchedDay.current || undefined, bidderId: bidderId || undefined });
-    if (!day && !latchedDay.current) latchedDay.current = res.day ?? '';
-    return res;
-  });
+  const scopeKey = 'day' in scope ? `day:${scope.day}` : `week:${scope.week}`;
+  const { data, error, mutate } = useSWR(['bid-focus', scopeKey, bidderId ?? '', visit] as const, () =>
+    api.listBids({ ...scope, bidderId: bidderId || undefined }),
+  );
 
   const all = useMemo(() => [...(data?.bids ?? [])].sort(byFirstAt), [data]);
   const pending = useMemo(() => all.filter((b) => b.status === 'pending'), [all]);
@@ -68,11 +89,15 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
 
   // The shown bid is pinned by id, so it stays on screen when it stops being pending (changed by someone else).
   const [currentId, setCurrentId] = useState<string | null>(null);
-  const current = (currentId ? all.find((b) => b.id === currentId) : undefined) ?? pending[0] ?? null;
-  // J/K and auto-advance move through the pending bids, plus the shown one if it no longer is.
+  const current =
+    (currentId ? all.find((b) => b.id === currentId) : undefined) ??
+    (!currentId && startAt ? all.find((b) => b.id === startAt) : undefined) ??
+    pending[0] ??
+    null;
+  // J/K move through every bid ('all'), or the pending bids plus the shown one if it no longer is ('pending').
   const nav = useMemo(
-    () => (current && current.status !== 'pending' ? [...pending, current].sort(byFirstAt) : pending),
-    [pending, current],
+    () => (set === 'all' ? all : current && current.status !== 'pending' ? [...pending, current].sort(byFirstAt) : pending),
+    [set, all, pending, current],
   );
   const pos = current ? nav.findIndex((b) => b.id === current.id) : -1;
   const nextId = current ? nextPending(all, current) : null;
@@ -198,7 +223,6 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
         });
         expectStatus(bid.id, updated.status);
         const latest = await putBid(updated);
-        void globalMutate('bidder-live-counts');
         const entry: UndoEntry = {
           bidId: bid.id,
           title: titleOf(bid),
@@ -257,7 +281,6 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
         expectStatus(target.bidId, restored.status);
         await putBid(restored);
         drop();
-        void globalMutate('bidder-live-counts');
         go(target.bidId);
         notify.info(`Undone: back to ${prev.status}`);
       } catch (err) {
@@ -338,7 +361,7 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
       <div role="alert" className="panel flex flex-col items-center gap-3 px-6 py-12 text-center text-sm">
         <p className="text-red-600">{messageOf(error, 'Failed to load bids')}</p>
         <div className="flex gap-2">
-          <button type="button" className="btn-outline btn-sm" onClick={onExit}>Back to list</button>
+          <button type="button" className="btn-outline btn-sm" onClick={onExit}>Back</button>
           <button type="button" className="btn btn-sm" onClick={() => void mutate()}>Try again</button>
         </div>
       </div>
@@ -350,13 +373,20 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
   }
 
   const pendingPos = current ? pending.findIndex((b) => b.id === current.id) : -1;
-  const bidderName = bidderId ? data.summary[bidderId]?.name : undefined;
+  const bidderName = bidderId ? data.summary[bidderId]?.name : 'All bidders';
+  const label = scopeLabel(scope);
+  const progress =
+    set === 'all' && pos >= 0
+      ? `Bid ${pos + 1} of ${all.length} · ${pending.length} pending`
+      : pendingPos >= 0
+        ? `Bid ${pendingPos + 1} of ${pending.length} pending`
+        : `${pending.length} pending`;
   const toolbar = (
     <FocusToolbar
-      progress={pendingPos >= 0 ? `Bid ${pendingPos + 1} of ${pending.length} pending` : `${pending.length} pending`}
+      progress={progress}
       approved={approved}
       rejected={rejected}
-      scope={`${data.day}${bidderName ? ` · ${bidderName}` : ''}`}
+      scope={`${label}${bidderName ? ` · ${bidderName}` : ''}`}
       canPrev={!busy && pos > 0}
       canNext={!busy && pos >= 0 && pos < nav.length - 1}
       canUndo={!busy && undoStack.length > 0}
@@ -372,9 +402,9 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
         {toolbar}
         <div className="panel flex flex-col items-center gap-3 px-6 py-12 text-center">
           <CheckCircle2 size={32} aria-hidden className="text-emerald-600 dark:text-emerald-400" />
-          <p className="text-lg font-semibold">All bids for {data.day} reviewed</p>
+          <p className="text-lg font-semibold">All bids for {label} reviewed</p>
           <p className="text-sm text-muted">{approved} approved · {rejected} rejected</p>
-          <button type="button" className="btn" onClick={onExit}>Back to the list</button>
+          <button type="button" className="btn" onClick={onExit}>Back</button>
         </div>
       </div>
     );

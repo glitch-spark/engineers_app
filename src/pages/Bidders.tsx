@@ -7,6 +7,7 @@ import PageHeader from '../components/PageHeader';
 import Switch from '../components/Switch';
 import BidderActions from '../components/bidders/BidderActions';
 import BidderView from '../components/bidders/BidderView';
+import FocusReview, { type FocusScope } from '../components/bids/FocusReview';
 import BidderFormModal from '../components/bidders/BidderFormModal';
 import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDialog';
 import SummaryTiles, { type Tile } from '../components/bidders/SummaryTiles';
@@ -76,6 +77,24 @@ export default function BiddersPage() {
 
   const row = bidderId ? data?.bidders.find((b) => b.id === bidderId) : undefined;
 
+  // Focus viewer: a bid row opens its day at that bid (every bid of the day); the Review buttons open the pay week's
+  // pending bids. The scope is fixed by the URL, so the viewer never follows a later window.
+  const focusDay = params.get('day');
+  const focusBid = params.get('bid');
+  const focusWeek = week ?? weekKey;
+  const focus: { scope: FocusScope; startAt?: string; set: 'pending' | 'all' } | null =
+    params.get('mode') !== 'focus'
+      ? null
+      : focusBid && focusDay
+        ? { scope: { day: focusDay }, startAt: focusBid, set: 'all' }
+        : focusWeek
+          ? { scope: { week: focusWeek }, set: 'pending' }
+          : null;
+  const exitFocus = () => {
+    setParam({ mode: null, bid: null });
+    refresh();
+  };
+
   const tiles = (): Tile[] => {
     if (!data) return [];
     const t = data.totals;
@@ -96,6 +115,22 @@ export default function BiddersPage() {
         : []),
     ];
   };
+
+  if (focus) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="Bidders" />
+        <FocusReview
+          key={`${'day' in focus.scope ? focus.scope.day : focus.scope.week}|${bidderId ?? ''}|${focus.startAt ?? ''}`}
+          scope={focus.scope}
+          bidderId={bidderId ?? undefined}
+          startAt={focus.startAt}
+          set={focus.set}
+          onExit={exitFocus}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
