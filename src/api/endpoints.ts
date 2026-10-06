@@ -1599,7 +1599,7 @@ export type JobApplyRowStatus =
   | 'fetch_failed'
   | 'llm_failed'
   | 'unassigned';
-/** Where screening put a job: worth applying to (valid / check) or why not. */
+/** Where screening put a job: worth applying to (valid; scored) or why not. A 'check' job is scored once approved. */
 export type JobApplyScreenBucket =
   | 'valid'
   | 'check'
@@ -1699,8 +1699,10 @@ export interface JobApplyApplicationCounts {
   jobs: number;
   /** Applications not applied yet (ready + tailoring + needsResume). */
   toGo: number;
-  /** Applications with a resume to send that aren't in the shared sheet yet. */
+  /** Applications with a resume to send that aren't in your saved sheet yet. */
   toExport?: number;
+  /** Applications with a resume to send already in a sheet: they can still be exported to another sheet. */
+  exportedReady?: number;
   applied: number;
   /** Has a resume to apply with: the tailored one when done, else the matching uploaded one. */
   ready: number;
@@ -1733,6 +1735,18 @@ export interface JobApplyTailored {
   step: ResumeJobStep;
   hasPdf: boolean;
   error?: string | null;
+  /** The tailored resume scored against this job, the way uploaded resumes are; null until scored. */
+  match?: JobApplyTailoredMatch | null;
+  /** This profile's best uploaded resume on this job (even below the threshold), to compare with. */
+  uploadedScore?: number | null;
+}
+
+export interface JobApplyTailoredMatch {
+  total: number;
+  band: ScoreBand;
+  knockouts: string[];
+  /** The job's terms the resume doesn't show, heaviest first. */
+  missing: string[];
 }
 
 export interface JobApplyPreviousApplication {
@@ -1904,8 +1918,6 @@ export interface JobApplyScreeningGroup {
   /** Candidate market: 'US', 'UKEU', 'LATAM', or 'none' (no stated location). */
   key: string;
   jobs: number;
-  /** Of `jobs`, how many need a check (no date, work mode or location not stated, or included anyway). */
-  check: number;
   /** Profile ids whose country/region fits this group. */
   fits: string[];
 }
@@ -1920,7 +1932,9 @@ export interface JobApplyScreeningProfile {
 
 export interface JobApplyScreening {
   total: number;
+  /** Jobs that will be scored: Worth applying (passed every check, or approved). */
   worth: number;
+  /** Jobs that need a check: not scored until approved. */
   check: number;
   buckets: Record<JobApplyScreenBucket, number>;
   maxAgeDays: number;
@@ -1928,7 +1942,7 @@ export interface JobApplyScreening {
   /** Jobs open only to candidates outside the markets, per location group (counted, not scored). */
   others: { key: string; jobs: number }[];
   /** Each worthwhile job once, by the set of markets it's in ('none' = no stated location). */
-  combos?: { markets: string[]; jobs: number; check: number }[];
+  combos?: { markets: string[]; jobs: number }[];
   profiles: JobApplyScreeningProfile[];
 }
 

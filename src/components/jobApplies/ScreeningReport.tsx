@@ -171,12 +171,10 @@ export default function ScreeningReport({
     setExporting(true);
     try {
       const rows: api.JobApplyRow[] = [];
-      for (const screen of ['valid', 'check'] as const) {
-        for (let page = 1; ; page += 1) {
-          const res = await api.listJobApplyRows(runId, { screen, page, limit: 200 });
-          rows.push(...res.rows);
-          if (page >= (res.pagination.totalPages || 1)) break;
-        }
+      for (let page = 1; ; page += 1) {
+        const res = await api.listJobApplyRows(runId, { screen: 'valid', page, limit: 200 });
+        rows.push(...res.rows);
+        if (page >= (res.pagination.totalPages || 1)) break;
       }
       const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       const lines = [
@@ -256,7 +254,11 @@ export default function ScreeningReport({
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           <span className="text-3xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{report.worth}</span>{' '}
           of {report.total} jobs worth applying to
-          {report.check > 0 && <span className="ml-2 text-amber-700 dark:text-amber-400">· {report.check} need a check</span>}
+          {report.check > 0 && (
+            <span className="ml-2 text-amber-700 dark:text-amber-400">
+              · {report.check} need a check (not scored unless you approve them)
+            </span>
+          )}
         </p>
         <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800" aria-hidden>
           {nonZero.map((b) => (
