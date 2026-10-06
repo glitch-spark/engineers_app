@@ -17,7 +17,7 @@ export default function WeekNav({
   onChange: (week: string | null) => void;
 }) {
   return (
-    <div className="toolbar flex flex-wrap items-center gap-2">
+    <div className="toolbar flex items-center gap-2">
       <button
         type="button"
         className="btn-icon"
@@ -27,9 +27,9 @@ export default function WeekNav({
       >
         <ChevronLeft size={18} aria-hidden />
       </button>
-      <span className="min-w-[13rem] text-center font-medium text-strong" aria-live="polite">
+      <span className="min-w-0 flex-1 text-center font-medium text-strong sm:min-w-[13rem] sm:flex-none" aria-live="polite">
         {label ?? <span className="skeleton inline-block h-4 w-40 align-middle" />}
-        {label && <span className="font-normal text-muted"> · pay week</span>}
+        {label && <span className="hidden font-normal text-muted sm:inline"> · pay week</span>}
       </span>
       <button
         type="button"

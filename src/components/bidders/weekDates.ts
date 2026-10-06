@@ -30,9 +30,9 @@ export function dateInZone(iso: string, timeZone: string): string {
   }
 }
 
-/** "6:30 PM" in the report time zone (viewer-local if the zone key is unusable). */
-export function timeInZone(iso: string, timeZone: string): string {
-  const opts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+/** "6:30 PM" (or "Sat 6:30 PM" with `weekday`) in the report time zone (viewer-local if the zone key is unusable). */
+export function timeInZone(iso: string, timeZone: string, weekday = false): string {
+  const opts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', ...(weekday ? { weekday: 'short' } : {}) };
   try {
     return new Date(iso).toLocaleTimeString('en-US', { ...opts, timeZone });
   } catch {

@@ -83,7 +83,7 @@ export default function TeamWeekTable({
               className={`table-row cursor-pointer ${row.status === 'archived' ? 'opacity-60' : ''}`}
               onClick={() => onOpenBidder(row.id)}
             >
-              <th scope="row" className="px-4 py-2.5 text-left font-medium">
+              <th scope="row" className="whitespace-nowrap px-4 py-2.5 text-left font-medium">
                 <button
                   type="button"
                   className="text-left text-strong underline-offset-2 hover:underline focus-ring"

@@ -44,6 +44,7 @@ export default function DayRow({
   const p = dayParts(day.day);
   const folder = counts.source === 'folders';
   const complete = (bids ?? []).filter(isComplete);
+  const anyPending = (bids ?? []).some((b) => b.status === 'pending');
   const panelId = `day-${day.day}`;
 
   return (
@@ -65,8 +66,8 @@ export default function DayRow({
           <span className="font-medium text-strong">{p.weekday} {p.date}</span>
           {day.isToday && <span className="badge-info ml-2 py-0">Today</span>}
         </span>
-        <span className="hidden w-40 shrink-0 text-xs text-muted sm:inline">
-          {timeInZone(day.start, timezone)} → {timeInZone(day.end, timezone)}
+        <span className="hidden w-48 shrink-0 text-xs text-muted sm:inline">
+          {timeInZone(day.start, timezone, true)} → {timeInZone(day.end, timezone, true)}
         </span>
         <span className="ml-auto flex flex-wrap items-center gap-1.5">
           {day.isFuture ? (
@@ -102,15 +103,17 @@ export default function DayRow({
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs text-muted">
                 <span>{bids.length} {bids.length === 1 ? 'bid' : 'bids'} · click a bid to review it</span>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  disabled={complete.length === 0}
-                  title="Pending bids with a Submit screenshot and every upload confirmed"
-                  onClick={() => onApproveAllComplete(complete)}
-                >
-                  Approve all complete ({complete.length})
-                </button>
+                {anyPending && (
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={complete.length === 0}
+                    title="Pending bids with a Submit screenshot and every upload confirmed"
+                    onClick={() => onApproveAllComplete(complete)}
+                  >
+                    Approve all complete ({complete.length})
+                  </button>
+                )}
               </div>
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {bids.map((b) => (

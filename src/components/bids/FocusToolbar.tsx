@@ -1,7 +1,7 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
 import Kbd from './Kbd';
 
-/** Back to the list, the progress line, previous/next and Undo. */
+/** Back, the progress line, previous/next and Undo. */
 export default function FocusToolbar({
   progress,
   approved,
@@ -28,7 +28,7 @@ export default function FocusToolbar({
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <button type="button" className="btn-outline btn-sm" onClick={onExit}>
-        <ArrowLeft size={14} aria-hidden /> Back to list
+        <ArrowLeft size={14} aria-hidden /> Back
       </button>
       <p className="text-sm" aria-live="polite">
         <span className="font-medium">{progress}</span>
