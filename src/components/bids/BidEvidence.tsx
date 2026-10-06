@@ -21,7 +21,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 /** What the reviewer checks a bid against: who bid, which profile/resume the form should show, and the job. */
 export default function BidEvidence({ bid }: { bid: BidReviewItem }) {
   const flags = [
-    !bid.submittedAt && 'No submit screenshot',
+    !bid.submittedAt && 'Not marked submitted',
     bid.missingUploads > 0 && `Missing upload${bid.missingUploads > 1 ? ` (${bid.missingUploads})` : ''}`,
   ].filter((f): f is string => !!f);
   const reason = bid.status === 'rejected' ? reasonLabel(bid.rejectReason) : null;

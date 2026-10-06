@@ -6,6 +6,7 @@ import { usd } from '../lib/money';
 import PageHeader from '../components/PageHeader';
 import Switch from '../components/Switch';
 import BidderActions from '../components/bidders/BidderActions';
+import BidderView from '../components/bidders/BidderView';
 import BidderFormModal from '../components/bidders/BidderFormModal';
 import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDialog';
 import SummaryTiles, { type Tile } from '../components/bidders/SummaryTiles';
@@ -45,8 +46,10 @@ export default function BiddersPage() {
     [setParams],
   );
 
-  const board = useSWR(['bids-week', week, showArchived] as const, () =>
-    api.bidsWeek({ week: week ?? undefined, includeArchived: showArchived || undefined }),
+  // A bidder view always finds its bidder, archived or not.
+  const includeArchived = showArchived || !!bidderId;
+  const board = useSWR(['bids-week', week, includeArchived] as const, () =>
+    api.bidsWeek({ week: week ?? undefined, includeArchived: includeArchived || undefined }),
   );
   // Full bidder records (own bidders) for the status details and the ⋯ menu; an admin's view of other owners'
   // bidders has none, so those rows get no management menu.
@@ -70,6 +73,8 @@ export default function BiddersPage() {
 
   const openBidder = (id: string, day?: string) => setParam({ bidder: id, day: day ?? null, tab: null, week: weekKey });
   const review = (id?: string) => setParam({ mode: 'focus', bidder: id ?? null, bid: null, week: weekKey });
+
+  const row = bidderId ? data?.bidders.find((b) => b.id === bidderId) : undefined;
 
   const tiles = (): Tile[] => {
     if (!data) return [];
@@ -101,7 +106,7 @@ export default function BiddersPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <WeekNav week={weekKey} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />
-        <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />
+        {!bidderId && <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />}
       </div>
 
       {board.error ? (
@@ -119,9 +124,24 @@ export default function BiddersPage() {
           </div>
         </div>
       ) : bidderId ? (
-        <div className="panel p-4 text-sm">
-          <button type="button" className="underline" onClick={() => setParam({ bidder: null, day: null, tab: null })}>← Team</button>
-        </div>
+        row && weekKey ? (
+          <BidderView
+            row={row}
+            board={data}
+            weekKey={weekKey}
+            bidder={byId[row.id]}
+            day={params.get('day')}
+            tab={params.get('tab')}
+            isCurrent={isCurrent}
+            onParam={(patch) => setParam({ week: weekKey, ...patch })}
+            onChanged={refresh}
+          />
+        ) : (
+          <div className="panel p-4 text-sm text-muted">
+            Bidder not found.{' '}
+            <button type="button" className="underline" onClick={() => setParam({ bidder: null, day: null, tab: null })}>Back to the team</button>
+          </div>
+        )
       ) : data.bidders.length === 0 ? (
         <div className="empty-state">
           <p className="font-medium text-strong">{showArchived ? 'No bidders this week.' : 'No bidders yet'}</p>

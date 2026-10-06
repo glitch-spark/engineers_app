@@ -66,7 +66,7 @@ export default function StepViewer({
       {!hasSubmit && (
         <p className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
           <TriangleAlert size={16} aria-hidden className="shrink-0" />
-          No submit screenshot. Showing the last step.
+          Not marked submitted: no screenshot was taken with Submit screenshot. Showing the last step.
         </p>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">

@@ -12,6 +12,10 @@ export function fmtDuration(sec: number): string {
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
+/** Tooltip of the "Not marked submitted" badge. */
+export const NOT_SUBMITTED_TIP =
+  'No screenshot was taken with Submit screenshot — the application may not have been submitted';
+
 export const reasonLabel = (reason: RejectReason | null): string | null =>
   reason ? REJECT_REASONS.find((r) => r.value === reason)?.label ?? reason : null;
 
@@ -28,3 +32,6 @@ export function isTypingTarget(t: EventTarget | null): boolean {
 /** A modal (useDialog marks the document) or a popover dialog is open. */
 export const dialogIsOpen = () =>
   document.documentElement.classList.contains('dialog-open') || document.querySelector('[role="dialog"]') !== null;
+
+/** Ready to approve without a look at the gaps: still pending, Submit captured, every upload confirmed. */
+export const isComplete = (b: BidReviewItem) => b.status === 'pending' && !!b.submittedAt && b.missingUploads === 0;
