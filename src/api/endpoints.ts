@@ -2121,6 +2121,9 @@ export interface BidReport {
   count: number | null;
   rate: number;
   amount: number | null;
+  /** Bid-record days only; null for days still counted by Backblaze folders. */
+  pending?: number | null;
+  rejected?: number | null;
   error: string | null;
 }
 
@@ -2142,3 +2145,63 @@ export const bidderLiveCounts = () => apiFetch<Record<string, BidderLiveCount>>(
 
 export const bidderReports = (id: string, kind: 'daily' | 'weekly', limit = 30) =>
   apiFetch<{ reports: BidReport[] }>(`/bidders/${id}/reports${qs({ kind, limit })}`);
+
+// ---------- bid review ----------
+
+export type BidStatus = 'pending' | 'approved' | 'rejected';
+
+export interface BidReviewItem {
+  id: string;
+  bidderId: string;
+  bidderName: string;
+  jobUrl: string | null;
+  jobTitle: string | null;
+  firstAt: string;
+  submittedAt: string | null;
+  screenshotCount: number;
+  missingUploads: number;
+  status: BidStatus;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  note: string | null;
+  changedSinceReview: boolean;
+}
+
+export interface BidDaySummary {
+  name: string;
+  approved: number;
+  pending: number;
+  rejected: number;
+  /** Backblaze job folders in the window with no bid record; null if the folder couldn't be read. */
+  foldersWithoutRecord: number | null;
+}
+
+export interface BidDay {
+  /** Period key of the window's end cutoff (not necessarily today's date). */
+  day: string;
+  start: string;
+  end: string;
+  bids: BidReviewItem[];
+  /** Per bidder id; counts ignore the status filter. */
+  summary: Record<string, BidDaySummary>;
+}
+
+export interface BidScreenshot {
+  key: string;
+  step: string | number | null;
+  trigger: string | null;
+  capturedAt: string;
+  /** Short-lived signed link; null while the upload is unconfirmed. */
+  url: string | null;
+}
+
+export const listBids = (params: { day?: string; bidderId?: string; status?: BidStatus }) =>
+  apiFetch<BidDay>(`/bids${qs(params)}`);
+
+export const bidScreenshots = (id: string) => apiFetch<BidScreenshot[]>(`/bids/${id}/screenshots`);
+
+export const reviewBid = (id: string, body: { status: BidStatus; note?: string | null }) =>
+  putJSON<BidReviewItem>(`/bids/${id}/review`, body);
+
+export const reviewBids = (body: { ids: string[]; status: BidStatus }) =>
+  postJSON<{ updated: number; skipped: number }>('/bids/review', body);

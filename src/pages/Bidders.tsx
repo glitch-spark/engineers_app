@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import useSWR, { mutate as globalMutate } from 'swr';
 import * as api from '../api/endpoints';
 import { messageOf, notify } from '../lib/notify';
@@ -125,7 +126,12 @@ export default function BiddersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Bidders"
-        action={<button type="button" className="btn" onClick={() => openForm(null)}>Add bidder</button>}
+        action={(
+          <>
+            <Link to="/bids/review" className="btn-outline">Review bids</Link>
+            <button type="button" className="btn" onClick={() => openForm(null)}>Add bidder</button>
+          </>
+        )}
       />
 
       <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />
