@@ -28,6 +28,8 @@ const STATUS_BADGE: Record<api.BidStatus, string> = {
 };
 
 const NOTE_MAX = 500;
+/** POST /bids/review accepts 1..500 ids. */
+const BULK_MAX = 500;
 
 /** Keys must not fire while the user is typing or choosing in a form control. */
 function isTypingTarget(t: EventTarget | null): boolean {
@@ -88,18 +90,26 @@ export default function BidReviewPage() {
       return next;
     }, { replace: true });
 
-  const { data, error, isLoading, mutate } = useSWR(
+  const filterKey = `${day}|${bidder}|${status}`;
+  const { data, error, mutate } = useSWR(
     ['bids', day, bidder, status] as const,
-    () => api.listBids({
-      day: day || undefined,
-      bidderId: bidder || undefined,
-      status: status === 'all' ? undefined : (status as api.BidStatus),
+    async () => ({
+      ...(await api.listBids({
+        day: day || undefined,
+        bidderId: bidder || undefined,
+        status: status === 'all' ? undefined : (status as api.BidStatus),
+      })),
+      filterKey,
     }),
     { keepPreviousData: true },
   );
 
-  const bids = useMemo(() => data?.bids ?? [], [data]);
-  const summary = data?.summary ?? {};
+  // keepPreviousData keeps the last filters' response around while the new key loads or after it fails. Its rows
+  // must not be shown or acted on (Approve all, per-row buttons, a/r keys), so `view` is empty until the response
+  // is for the current filters.
+  const view = data && data.filterKey === filterKey ? data : undefined;
+  const bids = useMemo(() => view?.bids ?? [], [view]);
+  const summary = view?.summary ?? {};
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [cursor, setCursor] = useState(0);
@@ -153,15 +163,22 @@ export default function BidReviewPage() {
   const approvable = bids.filter((b) => b.status !== 'approved');
   const approveAll = async () => {
     setBulkBusy(true);
+    const ids = approvable.map((b) => b.id);
+    const total = { updated: 0, skipped: 0 };
     try {
-      const res = await api.reviewBids({ ids: approvable.map((b) => b.id), status: 'approved' });
+      for (let i = 0; i < ids.length; i += BULK_MAX) {
+        const res = await api.reviewBids({ ids: ids.slice(i, i + BULK_MAX), status: 'approved' });
+        total.updated += res.updated;
+        total.skipped += res.skipped;
+      }
       notify.success(
-        res.skipped > 0 ? `Approved ${res.updated} bids (${res.skipped} skipped)` : `Approved ${res.updated} bids`,
+        total.skipped > 0 ? `Approved ${total.updated} bids (${total.skipped} skipped)` : `Approved ${total.updated} bids`,
       );
       setConfirmAll(false);
       await refresh();
     } catch (err) {
-      notify.error(err, 'Failed to approve bids');
+      notify.error(err, total.updated > 0 ? `Approved ${total.updated} bids, then failed` : 'Failed to approve bids');
+      await refresh();
     } finally {
       setBulkBusy(false);
     }
@@ -255,14 +272,13 @@ export default function BidReviewPage() {
         </button>
       </div>
 
-      {error && !data ? (
-        <p role="alert" className="text-sm text-red-600">{messageOf(error, 'Failed to load bids')}</p>
-      ) : (
+      {error && <p role="alert" className="text-sm text-red-600">{messageOf(error, 'Failed to load bids')}</p>}
+      {(view || !error) && (
         <>
-          {data && (
+          {view && (
             <section aria-label="Summary" className="panel space-y-3 p-4 text-sm">
               <p className="text-muted">
-                Window for <strong className="text-body">{data.day}</strong>: {fmtTime(data.start)} → {fmtTime(data.end)}
+                Window for <strong className="text-body">{view.day}</strong>: {fmtTime(view.start)} → {fmtTime(view.end)}
               </p>
               <p>
                 <strong>Total</strong> · Approved {totals.approved} · Pending {totals.pending} · Rejected {totals.rejected}
@@ -288,7 +304,7 @@ export default function BidReviewPage() {
             </section>
           )}
 
-          {isLoading && !data ? (
+          {!view ? (
             <div role="status" className="flex items-center justify-center py-10 text-muted">
               <div className="spinner spinner-md mr-3" aria-hidden></div>
               Loading bids...
