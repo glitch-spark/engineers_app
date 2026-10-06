@@ -1987,7 +1987,7 @@ export const unmarkJobApplied = (runId: string, marks: JobApplyMarkRef[]) =>
 /** Queue a tailored resume for one job (default: the best-scoring profile). Blank models = server default. */
 export const tailorJobApplyRow = (
   rowId: string,
-  body: { accountId?: string; coverLetter?: boolean; resumeModel?: string; coverLetterModel?: string } = {},
+  body: { accountId?: string; coverLetter?: boolean; coverLetterModel?: string } = {},
 ) => postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
 
 /**
@@ -2000,7 +2000,6 @@ export const tailorAllJobApplies = (
     accountIds?: string[];
     rowIds?: string[];
     coverLetter?: boolean;
-    resumeModel?: string;
     coverLetterModel?: string;
     dryRun?: boolean;
   } = {},

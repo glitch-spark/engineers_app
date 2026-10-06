@@ -82,6 +82,9 @@ function hostOf(url: string): string {
 
 const pickedModel = (c: ModelChoice) => c.options.find((o) => o.id === c.value);
 
+/** Job Applies always tailors resumes with this model (the server enforces it); only the cover letter model is picked. */
+const RESUME_MODEL = { id: 'openai:gpt-4o-mini', label: 'GPT-4o mini' };
+
 function capitalize(s?: string | null): string {
   return s ? s[0].toUpperCase() + s.slice(1) : '';
 }
@@ -153,11 +156,14 @@ export default function JobApplyRun() {
   // The jobs the open tailor dialog is for: the ones that were selected when it opened, or null for every suggested job.
   const [tailorRowIds, setTailorRowIds] = useState<string[] | null>(null);
   const [tailorPreview, setTailorPreview] = useState<{ queued: number; skippedCap: number } | null>(null);
-  // Picked in the tailor dialog and remembered (shared with the Resume page); the one-click Tailor buttons and `t` use
-  // the same pick. '' when the model list can't load: the server then uses its default.
-  const resumeModel = useModelChoice('resume');
+  // Picked in the tailor dialog and remembered (shared with the Resume page). '' when the model list can't load: the
+  // server then uses its default.
   const coverLetterModel = useModelChoice('cover_letter');
-  const resumeModelLabel = pickedModel(resumeModel)?.label;
+  // Only for RESUME_MODEL's cost estimate in the tailor dialog (same request and cache as the Resume page's picker).
+  const { data: resumeModels } = useSWR(['resume-models', 'resume'], () => api.listResumeModels('resume'), {
+    shouldRetryOnError: false,
+    revalidateOnFocus: false,
+  });
   const [since] = useState(localMidnightIso);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 
@@ -331,7 +337,7 @@ export default function JobApplyRun() {
       if (tailoringNow.current.has(key)) return;
       tailoringNow.current.add(key);
       try {
-        const { tailored } = await api.tailorJobApplyRow(row._id, { accountId, resumeModel: resumeModel.value || undefined });
+        const { tailored } = await api.tailorJobApplyRow(row._id, { accountId });
         await mutateRows(
           (prev: RowsPage | undefined) =>
             prev && {
@@ -349,7 +355,7 @@ export default function JobApplyRun() {
         tailoringNow.current.delete(key);
       }
     },
-    [mutateRows, mutateRun, resumeModel.value],
+    [mutateRows, mutateRun],
   );
 
   /** Tailor for every profile this job is open to that has no tailored resume yet (or only a failed one). */
@@ -568,8 +574,8 @@ export default function JobApplyRun() {
     }
   }, []);
 
-  // Typical LLM spend of one tailored resume (plus its cover letter when asked) with the picked models; null if unknown.
-  const resumeCostUsd = pickedModel(resumeModel)?.estCostUsd;
+  // Typical LLM spend of one tailored resume (plus its cover letter when asked) with these models; null if unknown.
+  const resumeCostUsd = resumeModels?.models.find((m) => m.id === RESUME_MODEL.id)?.estCostUsd;
   const letterCostUsd = tailorCoverLetter ? pickedModel(coverLetterModel)?.estCostUsd : 0;
   const perTailorUsd = resumeCostUsd == null || letterCostUsd == null ? null : resumeCostUsd + letterCostUsd;
 
@@ -581,7 +587,6 @@ export default function JobApplyRun() {
         accountIds: [...tailorProfiles],
         ...(tailorRowIds && { rowIds: tailorRowIds }),
         coverLetter: tailorCoverLetter,
-        resumeModel: resumeModel.value || undefined,
         coverLetterModel: tailorCoverLetter ? coverLetterModel.value || undefined : undefined,
       });
       if (tailorRowIds) setSelected(new Set());
@@ -860,7 +865,7 @@ export default function JobApplyRun() {
           counts={run.applications}
           profileFilter={accountId ? { accountId, name: profileNames[accountId] ?? 'this profile' } : undefined}
           busy={busy !== null}
-          tailorModel={resumeModelLabel}
+          tailorModel={RESUME_MODEL.label}
           onTailor={() => openTailor(null)}
           onExport={() => setShowExport(true)}
           onMark={() => setConfirmAll(true)}
@@ -1049,7 +1054,7 @@ export default function JobApplyRun() {
                               hasFile={(id) => !!resumesById.get(id)?.hasFile}
                               onToggle={(file, applied, label) => void toggleFile(row, file, applied, label)}
                               onDownload={(s) => void download(s)}
-                              tailorModel={resumeModelLabel}
+                              tailorModel={RESUME_MODEL.label}
                               onTailor={(acc) => void tailor(row, acc)}
                               onTailorAll={() => void tailorRow(row)}
                               onDownloadTailored={(t) => void downloadTailored(row, t)}
@@ -1138,7 +1143,12 @@ export default function JobApplyRun() {
                 </label>
               ))}
             </fieldset>
-            <ModelSelect label="Resume model" choice={resumeModel} labelClassName="form-label mb-1 block" />
+            <div>
+              <span className="form-label mb-1 block">Resume model</span>
+              <p className="text-sm">
+                {RESUME_MODEL.label} <span className="text-zinc-500">· always used for tailoring in Job Applies</span>
+              </p>
+            </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={tailorCoverLetter} onChange={(e) => setTailorCoverLetter(e.target.checked)} />
               Also write a cover letter for each (doubles the AI calls)
