@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import * as api from '../api/endpoints';
@@ -21,7 +21,9 @@ type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid';
 function statusText(b: api.Bidder | undefined, row: api.BidWeekRow) {
   if (row.status === 'archived') return 'Archived';
   if (row.status === 'active') return b?.username ? `Active · @${b.username}` : 'Active';
-  if (!b?.inviteExpiresAt) return 'Invited · no code yet';
+  // Another owner's bidder (admin view): no invite details to show.
+  if (!b) return 'Invited';
+  if (!b.inviteExpiresAt) return 'Invited · no code yet';
   const expired = new Date(b.inviteExpiresAt).getTime() < Date.now();
   return <span className={expired ? 'text-red-600' : undefined}>Invited · expires {formatInviteDate(b.inviteExpiresAt)}</span>;
 }
@@ -90,10 +92,14 @@ export default function BiddersPage() {
         : focusWeek
           ? { scope: { week: focusWeek }, set: 'pending' }
           : null;
-  const exitFocus = () => {
-    setParam({ mode: null, bid: null });
-    refresh();
-  };
+  const exitFocus = () => setParam({ mode: null, bid: null });
+  // Decisions in the viewer change the counts: reload them however the viewer is left (its Back, or the browser's).
+  const wasFocus = useRef(false);
+  const inFocus = !!focus;
+  useEffect(() => {
+    if (wasFocus.current && !inFocus) refresh();
+    wasFocus.current = inFocus;
+  });
 
   const tiles = (): Tile[] => {
     if (!data) return [];

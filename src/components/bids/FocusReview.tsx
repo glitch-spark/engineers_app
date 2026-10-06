@@ -89,9 +89,11 @@ export default function FocusReview({
 
   // The shown bid is pinned by id, so it stays on screen when it stops being pending (changed by someone else).
   const [currentId, setCurrentId] = useState<string | null>(null);
+  // startAt only picks the first bid shown: once the reviewer moves on (or runs out of pending bids), it's spent.
+  const seed = useRef(startAt);
   const current =
     (currentId ? all.find((b) => b.id === currentId) : undefined) ??
-    (!currentId && startAt ? all.find((b) => b.id === startAt) : undefined) ??
+    (!currentId && seed.current ? all.find((b) => b.id === seed.current) : undefined) ??
     pending[0] ??
     null;
   // J/K move through every bid ('all'), or the pending bids plus the shown one if it no longer is ('pending').
@@ -146,6 +148,7 @@ export default function FocusReview({
     // A button clicked with the mouse keeps focus across the move, and Enter/Space would then act on the next bid unseen.
     const active = document.activeElement;
     if (active instanceof HTMLElement && rootRef.current?.contains(active)) rootRef.current.focus({ preventScroll: true });
+    seed.current = undefined;
     setCurrentId(id);
     noticeRef.current = null;
     setNotice(null);
