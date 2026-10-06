@@ -226,6 +226,11 @@ export default function Suggestions({
                   </button>
                 )}
               </div>
+              {t?.status === 'failed' && (
+                <p className="col-span-3 line-clamp-3 break-words pb-1 text-xs text-red-700 dark:text-red-400" title={t.error ?? undefined}>
+                  {t.error || 'Generation failed (no details recorded).'}
+                </p>
+              )}
             </li>
           );
         })}
