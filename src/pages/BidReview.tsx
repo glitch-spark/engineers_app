@@ -9,6 +9,8 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
+import FocusReview from '../components/bids/FocusReview';
+import { isTypingTarget } from '../components/bids/util';
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -61,12 +63,6 @@ const NOTE_MAX = 500;
 /** POST /bids/review accepts 1..500 ids. */
 const BULK_MAX = 500;
 
-/** Keys must not fire while the user is typing or choosing in a form control. */
-function isTypingTarget(t: EventTarget | null): boolean {
-  if (!(t instanceof HTMLElement)) return false;
-  return t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName);
-}
-
 function Screenshots({ bidId }: { bidId: string }) {
   // Signed links live 5 minutes, so don't revalidate on focus.
   const { data, error, isLoading } = useSWR(['bid-screenshots', bidId] as const, () => api.bidScreenshots(bidId), {
@@ -111,6 +107,7 @@ export default function BidReviewPage() {
   const day = params.get('day') ?? '';
   const bidder = params.get('bidder') ?? '';
   const status = params.get('status') ?? 'pending';
+  const focus = params.get('mode') === 'focus';
 
   // Filters replace the history entry; switching mode pushes one so Back returns to the list.
   const setParam = (key: string, value: string, replace = true) =>
@@ -122,8 +119,9 @@ export default function BidReviewPage() {
     }, { replace });
 
   const filterKey = `${day}|${bidder}|${status}`;
+  // Not loaded while the focus viewer is open; it reloads (fresh decisions) on the way back.
   const { data, error, mutate } = useSWR(
-    ['bids', day, bidder, status] as const,
+    focus ? null : (['bids', day, bidder, status] as const),
     async () => ({
       ...(await api.listBids({
         day: day || undefined,
@@ -242,9 +240,9 @@ export default function BidReviewPage() {
 
   const dialogOpen = !!rejecting || confirmAll;
 
-  // Keyboard: j/k move, a approves, r rejects the current row.
+  // Keyboard: j/k move, a approves, r rejects the current row. The focus viewer has its own keys.
   useEffect(() => {
-    if (dialogOpen) return;
+    if (dialogOpen || focus) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTypingTarget(e.target)) return;
       const key = e.key.toLowerCase();
@@ -258,7 +256,7 @@ export default function BidReviewPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialogOpen, current, bids, decide, openReject]);
+  }, [dialogOpen, focus, current, bids, decide, openReject]);
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -279,6 +277,15 @@ export default function BidReviewPage() {
     ...summaryEntries.map(([id, s]) => ({ value: id, label: s.name })),
     ...(bidder && !summary[bidder] ? [{ value: bidder, label: 'Selected bidder' }] : []),
   ];
+
+  if (focus) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Bid review" backTo="/bidders" />
+        <FocusReview day={day} bidderId={bidder} onExit={() => setParam('mode', '')} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
