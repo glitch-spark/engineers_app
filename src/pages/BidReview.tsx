@@ -10,7 +10,7 @@ import Modal from '../components/Modal';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import FocusReview from '../components/bids/FocusReview';
-import { isTypingTarget } from '../components/bids/util';
+import { isTypingTarget, reasonLabel } from '../components/bids/util';
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -47,8 +47,6 @@ function dayBefore(day: string): string {
   const [y, m, d] = day.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
 }
-
-const REASON_LABELS: Record<string, string> = Object.fromEntries(api.REJECT_REASONS.map((r) => [r.value, r.label]));
 
 /** Ready to approve without a look at the gaps: still pending, Submit captured, every upload confirmed. */
 const isComplete = (b: api.BidReviewItem) => b.status === 'pending' && !!b.submittedAt && b.missingUploads === 0;
@@ -117,6 +115,16 @@ export default function BidReviewPage() {
       else next.delete(key);
       return next;
     }, { replace });
+
+  // Focus works on one fixed day: the list's current day goes into the URL, so the viewer doesn't follow the open
+  // window past the cutoff (it would jump to the next day and leave this day's pending bids behind).
+  const enterFocus = (resolvedDay: string) =>
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (resolvedDay) next.set('day', resolvedDay);
+      next.set('mode', 'focus');
+      return next;
+    });
 
   const filterKey = `${day}|${bidder}|${status}`;
   // Not loaded while the focus viewer is open; it reloads (fresh decisions) on the way back.
@@ -344,7 +352,7 @@ export default function BidReviewPage() {
             type="button"
             className="btn-outline"
             disabled={totals.pending === 0}
-            onClick={() => setParam('mode', 'focus', false)}
+            onClick={() => enterFocus(view?.day || day || openDay)}
           >
             Review pending ({totals.pending})
           </button>
@@ -445,7 +453,7 @@ export default function BidReviewPage() {
                             )}
                             <span className={STATUS_BADGE[b.status]}>{b.status}</span>
                             {b.status === 'rejected' && b.rejectReason && (
-                              <span className="badge-danger">{REASON_LABELS[b.rejectReason] ?? b.rejectReason}</span>
+                              <span className="badge-danger">{reasonLabel(b.rejectReason)}</span>
                             )}
                           </div>
                           <p className="text-xs text-muted">

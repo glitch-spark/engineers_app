@@ -94,7 +94,7 @@ export default function BidEvidence({ bid }: { bid: BidReviewItem }) {
             {reason && <span className="badge-danger">{reason}</span>}
           </span>
         </Row>
-        {bid.reviewedByName && (
+        {bid.status !== 'pending' && bid.reviewedByName && (
           <Row label="Reviewer">
             {bid.reviewedByName}
             {bid.reviewedAt ? <span className="text-muted"> · {fmtTime(bid.reviewedAt)}</span> : null}

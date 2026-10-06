@@ -52,9 +52,14 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
   // A key per visit: a cached list from an earlier visit is out of date (bids decided in the list since), and pinning a
   // bid from it would start the viewer on one that is no longer pending.
   const [visit] = useState(() => Date.now());
-  const { data, error, mutate } = useSWR(['bid-focus', day, bidderId, visit] as const, () =>
-    api.listBids({ day: day || undefined, bidderId: bidderId || undefined }),
-  );
+  // Given no day, the first response says which one the open window is, and the viewer stays on it: a refetch after
+  // the cutoff must not swap in the next window under the reviewer.
+  const latchedDay = useRef('');
+  const { data, error, mutate } = useSWR(['bid-focus', day, bidderId, visit] as const, async () => {
+    const res = await api.listBids({ day: day || latchedDay.current || undefined, bidderId: bidderId || undefined });
+    if (!day && !latchedDay.current) latchedDay.current = res.day;
+    return res;
+  });
 
   const all = useMemo(() => [...(data?.bids ?? [])].sort(byFirstAt), [data]);
   const pending = useMemo(() => all.filter((b) => b.status === 'pending'), [all]);
@@ -110,7 +115,12 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
     else if (shown.status !== current.status) showChanged(current); // a refresh changed it: say so
   }, [current, showChanged]);
 
+  // The viewer's own root: focus parks here when the shown bid changes (see go).
+  const rootRef = useRef<HTMLDivElement>(null);
   const go = useCallback((id: string | null) => {
+    // A button clicked with the mouse keeps focus across the move, and Enter/Space would then act on the next bid unseen.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && rootRef.current?.contains(active)) rootRef.current.focus({ preventScroll: true });
     setCurrentId(id);
     noticeRef.current = null;
     setNotice(null);
@@ -371,7 +381,7 @@ export default function FocusReview({ day, bidderId, onExit }: { day: string; bi
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={rootRef} tabIndex={-1} className="space-y-4 outline-none">
       {toolbar}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)]">
         <div className="panel min-w-0 p-3 sm:p-4">
