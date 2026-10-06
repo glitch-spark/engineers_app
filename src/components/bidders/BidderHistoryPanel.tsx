@@ -56,7 +56,12 @@ function ReportList({ bidder, kind }: { bidder: api.Bidder; kind: Kind }) {
                 <td className="px-4 py-2.5" colSpan={daily ? 1 : 3}>⚠️ {r.error}</td>
               ) : (
                 <>
-                  <td className="px-4 py-2.5">{r.count ?? '—'}</td>
+                  <td className="px-4 py-2.5">
+                    {r.count ?? '—'}
+                    {r.pending != null && r.rejected != null && (
+                      <span className="ml-2 text-xs text-muted">{r.pending} pending · {r.rejected} rejected</span>
+                    )}
+                  </td>
                   {!daily && <td className="px-4 py-2.5">{usd(r.rate)}</td>}
                   {!daily && <td className="px-4 py-2.5">{r.amount == null ? '—' : usd(r.amount)}</td>}
                 </>

@@ -10,7 +10,7 @@ import Select from '../Select';
 
 type FieldErrors = Partial<Record<keyof api.BidderInput, string>>;
 
-const FIELDS: ReadonlyArray<string> = ['name', 'country', 'profileId', 'rate', 'screenshotFolderUrl'];
+const FIELDS: ReadonlyArray<string> = ['name', 'country', 'profileId', 'rate'];
 
 /** Map FastAPI's 422 `detail` list onto form fields (the last `loc` entry names the field). */
 function fieldErrorsFrom(err: unknown): FieldErrors | null {
@@ -37,14 +37,13 @@ export default function BidderFormModal({
   open: boolean;
   bidder: api.Bidder | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (invite: api.BidderInvite | null, bidder: api.Bidder) => void;
 }) {
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [country, setCountry] = useState('');
   const [profileId, setProfileId] = useState('');
   const [rate, setRate] = useState('');
-  const [folderUrl, setFolderUrl] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
 
@@ -56,7 +55,6 @@ export default function BidderFormModal({
     setCountry(bidder?.country ?? '');
     setProfileId(bidder?.profileId ?? '');
     setRate(bidder ? String(bidder.rate) : '');
-    setFolderUrl(bidder?.screenshotFolderUrl ?? '');
     setErrors({});
   }, [open, bidder]);
 
@@ -81,13 +79,19 @@ export default function BidderFormModal({
       country: country || null,
       profileId: profileId || null,
       rate: Number(rate),
-      screenshotFolderUrl: folderUrl.trim(),
     };
     try {
-      if (bidder) await api.updateBidder(bidder._id, body);
-      else await api.createBidder(body);
+      let invite: api.BidderInvite | null = null;
+      let saved: api.Bidder;
+      if (bidder) {
+        saved = await api.updateBidder(bidder._id, body);
+      } else {
+        const created = await api.createBidder(body);
+        saved = created.bidder;
+        invite = created.invite;
+      }
       notify.success('Bidder saved');
-      onSaved();
+      onSaved(invite, saved);
     } catch (err) {
       const fieldErrors = fieldErrorsFrom(err);
       if (fieldErrors) setErrors(fieldErrors);
@@ -148,20 +152,11 @@ export default function BidderFormModal({
           </div>
           {errorText(errors.rate)}
         </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1" htmlFor="bidder-folder">
-            Screenshot folder URL
-          </label>
-          <input
-            id="bidder-folder"
-            className="input w-full text-sm"
-            placeholder="s3://bucket/bids/ana-silva/"
-            value={folderUrl}
-            onChange={(e) => setFolderUrl(e.target.value)}
-            required
-          />
-          {errorText(errors.screenshotFolderUrl)}
-        </div>
+        {bidder && (
+          <p className="text-xs text-muted">
+            Folder: {bidder.folder ?? '—'} ({bidder.screenshotFolderUrl})
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
           <button type="submit" className="btn" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
