@@ -86,6 +86,8 @@ export default function ApplyWorkflow({
     ? counts.byProfile.find((p) => p.accountId === profileFilter.accountId)?.ready ?? 0
     : counts.ready;
   const toExport = counts.toExport ?? counts.toGo;
+  // already in a sheet: still exportable, to another sheet
+  const exportedReady = counts.exportedReady ?? 0;
   // waiting for a tailored resume: exported once it's done
   const waiting = counts.needsResume + counts.tailoring;
 
@@ -120,16 +122,18 @@ export default function ApplyWorkflow({
           icon={FileSpreadsheet}
           title="Export to sheet"
           todo={toExport > 0}
-          disabled={busy || toExport === 0}
+          disabled={busy || (toExport === 0 && exportedReady === 0)}
           onClick={onExport}
           detail={
             toExport > 0
               ? `${toExport} ready to export` + (waiting > 0 ? ` · ${waiting} wait for tailoring` : '')
               : waiting > 0
-                ? `${waiting} wait for tailoring, then export`
-                : counts.toGo > 0
-                  ? `All ${counts.toGo} in the sheet`
-                  : 'Nothing to export'
+                ? `${waiting} wait for tailoring, then export` + (exportedReady > 0 ? ' · or export to another sheet' : '')
+                : exportedReady > 0
+                  ? `All ${exportedReady} ready in your sheet · export to another sheet`
+                  : counts.toGo > 0
+                    ? `All ${counts.toGo} in the sheet`
+                    : 'Nothing to export'
           }
         />
         <Step

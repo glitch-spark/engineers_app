@@ -177,7 +177,8 @@ export default function ExportSheetDialog({
             <>
               Adds one row per job and profile with a resume to send (Profile, Company Name, Job Title, Job URL, Download Resume) to
               today’s tab of your shared sheet: the tailored resume when it’s done, otherwise the matching uploaded one. Jobs still
-              waiting for a tailored resume are added when you export again after tailoring.
+              waiting for a tailored resume are added when you export again after tailoring. To send the same rows to another
+              sheet, paste its link: rows are skipped only if they’re already in that sheet.
             </>
           )}
         </p>
@@ -239,7 +240,7 @@ export default function ExportSheetDialog({
                     {ok.apply.waiting > 0 && (
                       <li>{ok.apply.waiting} wait for tailoring: export again when their resumes are ready</li>
                     )}
-                    {ok.apply.alreadyExported > 0 && <li>{ok.apply.alreadyExported} already exported (skipped)</li>}
+                    {ok.apply.alreadyExported > 0 && <li>{ok.apply.alreadyExported} already in this sheet (skipped)</li>}
                     {ok.apply.noFile > 0 && <li>{ok.apply.noFile} uploaded resumes have no stored PDF to link to</li>}
                   </ul>
                 </>
