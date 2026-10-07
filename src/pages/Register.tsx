@@ -32,7 +32,8 @@ export default function RegisterPage() {
     if (!email.trim()) next.email = 'Enter your email address.';
     else if (!/^[^\s@]+@[^\s@]+$/.test(email.trim())) next.email = 'Enter a valid email address, like you@company.com.';
     if (!password) next.password = 'Enter a password.';
-    else if (password.length < 6) next.password = 'Password must be at least 6 characters.';
+    else if (password.length < 8) next.password = 'Password must be at least 8 characters.';
+    else if (new TextEncoder().encode(password).length > 72) next.password = 'Password is too long (72 bytes max).';
     if (!confirmPassword) next.confirmPassword = 'Re-enter your password.';
     else if (password && password !== confirmPassword) next.confirmPassword = 'Passwords do not match.';
 
@@ -124,7 +125,7 @@ export default function RegisterPage() {
             <input
               id="password"
               className="auth-input"
-              placeholder="Min. 6 characters"
+              placeholder="Min. 8 characters"
               type="password"
               autoComplete="new-password"
               value={password}
@@ -134,7 +135,7 @@ export default function RegisterPage() {
               aria-describedby={errors.password ? 'password-hint password-error' : 'password-hint'}
               disabled={loading}
             />
-            <p id="password-hint" className="auth-muted text-xs">At least 6 characters.</p>
+            <p id="password-hint" className="auth-muted text-xs">At least 8 characters.</p>
             <FieldError id="password-error" message={errors.password} />
           </div>
           <div className="space-y-1.5">

@@ -1,6 +1,7 @@
 import { Check, Download, ExternalLink, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyRow, JobApplySuggestion, JobApplyTailored } from '../../api/endpoints';
 import { bandClass, formatDate } from './format';
+import { safeHref } from '../../lib/safeHref';
 
 /** The file applied with: an uploaded resume or one of the job's tailored resumes. */
 export type AppliedFile = { accountId: string; resumeId?: string; tailoredJobId?: string };
@@ -118,9 +119,9 @@ export default function Suggestions({
 
   return (
     <div className="min-w-[20rem] space-y-1">
-      {row.url && (
+      {safeHref(row.url) && (
         <a
-          href={row.url}
+          href={safeHref(row.url)}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"

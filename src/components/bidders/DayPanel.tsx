@@ -6,6 +6,7 @@ import Modal from '../Modal';
 import SidePanel from '../SidePanel';
 import SubmittedBadge from '../bids/SubmittedBadge';
 import { isComplete, reasonLabel } from '../bids/util';
+import { safeHref } from '../../lib/safeHref';
 
 type Filter = 'pending' | 'approved' | 'rejected' | 'all';
 type View = 'table' | 'shots';
@@ -254,9 +255,9 @@ export default function DayPanel({
                       >
                         {b.jobTitle || 'Untitled job'}
                       </button>
-                      {b.jobUrl ? (
+                      {safeHref(b.jobUrl) ? (
                         <a
-                          href={b.jobUrl}
+                          href={safeHref(b.jobUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
@@ -266,7 +267,7 @@ export default function DayPanel({
                           <ExternalLink size={10} aria-hidden className="shrink-0" />
                         </a>
                       ) : (
-                        <span className="text-xs text-muted">{b.jobDomain}</span>
+                        <span className="text-xs text-muted">{b.jobDomain || b.jobUrl}</span>
                       )}
                     </td>
                     <td className="px-2 py-1.5">

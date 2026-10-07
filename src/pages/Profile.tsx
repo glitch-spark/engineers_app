@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
-import { Loader2, Save, Zap, CheckCircle2, KeyRound, AlertCircle } from 'lucide-react';
+import { Loader2, Save, Zap, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
-import type { FreeLlmModelPreset } from '../api/endpoints';
 import { messageOf, notify } from '../lib/notify';
 import {
   listTimeZones,
@@ -54,9 +53,6 @@ async function readResizedDataURL(file: File, maxDim = 256): Promise<string> {
     URL.revokeObjectURL(objectUrl);
   }
 }
-
-/** The "Resume LLM (free tier)" card is hidden for now; set true to show it again. */
-const SHOW_FREE_LLM_SETTINGS = false;
 
 /** Account timestamps come from /auth/me; show "—" when the backend hasn't recorded one yet. */
 function formatAccountDate(iso: string | null | undefined, opts: Intl.DateTimeFormatOptions): string {
@@ -154,9 +150,15 @@ export default function ProfilePage() {
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      notify.error('New password must be at least 6 characters long');
-      setPasswordError({ field: 'newPassword', message: 'New password must be at least 6 characters long' });
+    const newPasswordProblem =
+      passwordData.newPassword.length < 8
+        ? 'New password must be at least 8 characters long'
+        : new TextEncoder().encode(passwordData.newPassword).length > 72
+          ? 'New password is too long (72 bytes max)'
+          : null;
+    if (newPasswordProblem) {
+      notify.error(newPasswordProblem);
+      setPasswordError({ field: 'newPassword', message: newPasswordProblem });
       document.getElementById('newPassword')?.focus();
       return;
     }
@@ -371,8 +373,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {SHOW_FREE_LLM_SETTINGS && <FreeLlmSettingsCard />}
-
       <SlackAlertsCard />
 
       <div className="card mt-4">
@@ -420,12 +420,12 @@ export default function ProfilePage() {
                   onChange={handlePasswordChange}
                   className="input focus-ring"
                   placeholder="Enter your new password"
-                  minLength={6}
+                  minLength={8}
                   required
                   aria-invalid={passwordError?.field === 'newPassword' || undefined}
                   aria-describedby={`newPassword-hint${passwordError?.field === 'newPassword' ? ' password-error' : ''}`}
                 />
-                <p id="newPassword-hint" className="text-xs text-muted mt-1">Minimum 6 characters</p>
+                <p id="newPassword-hint" className="text-xs text-muted mt-1">Minimum 8 characters</p>
                 {passwordError?.field === 'newPassword' && (
                   <p id="password-error" className="text-xs text-red-700 dark:text-red-400 mt-1">{passwordError.message}</p>
                 )}
@@ -441,7 +441,7 @@ export default function ProfilePage() {
                   onChange={handlePasswordChange}
                   className="input focus-ring"
                   placeholder="Confirm your new password"
-                  minLength={6}
+                  minLength={8}
                   required
                   aria-invalid={passwordError?.field === 'confirmPassword' || undefined}
                   aria-describedby={passwordError?.field === 'confirmPassword' ? 'password-error' : undefined}
@@ -510,264 +510,6 @@ export default function ProfilePage() {
               Active
             </span>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FreeLlmSettingsCard() {
-  const { data: profile, mutate: mutateProfile } = useSWR('profile-free-llm', () => api.getProfile());
-  const { data: modelsData } = useSWR('free-llm-models', () => api.listFreeLlmModels());
-  const models = modelsData?.models ?? [];
-
-  const [modelId, setModelId] = useState('');
-  const [maxTokens, setMaxTokens] = useState<number>(8192);
-  const [apiKey, setApiKey] = useState('');
-  const [keyHint, setKeyHint] = useState('');
-  const [keySet, setKeySet] = useState(false);
-  const [verified, setVerified] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testStatus, setTestStatus] = useState('');
-
-  useEffect(() => {
-    if (profile && !loaded) {
-      const u = profile.user;
-      setModelId(u.freeLlmModelId || '');
-      setMaxTokens(u.freeLlmMaxTokens ?? 8192);
-      setKeyHint(u.freeLlmApiKeyHint || '');
-      setKeySet(!!u.freeLlmApiKeySet);
-      setVerified(!!u.freeLlmKeyVerified);
-      setLoaded(true);
-    }
-  }, [profile, loaded]);
-
-  function applyFreeLlmFields(res: {
-    freeLlmApiKeySet: boolean;
-    freeLlmApiKeyHint: string;
-    freeLlmKeyVerified?: boolean;
-  }) {
-    setKeySet(res.freeLlmApiKeySet);
-    setKeyHint(res.freeLlmApiKeyHint);
-    if (res.freeLlmKeyVerified !== undefined) {
-      setVerified(res.freeLlmKeyVerified);
-    }
-    setApiKey('');
-  }
-
-  function onModelChange(id: string) {
-    setModelId(id);
-    const preset = models.find((m) => m.id === id);
-    if (preset) setMaxTokens(preset.defaultMaxTokens);
-  }
-
-  const connected = verified && keySet && !!modelId;
-  const pendingVerify = keySet && !verified;
-
-  async function handleSave() {
-    if (!modelId) return;
-    setSaving(true);
-    try {
-      const res = await api.updateFreeLlmSettings({
-        freeLlmModelId: modelId,
-        freeLlmMaxTokens: maxTokens,
-        ...(apiKey.trim() ? { freeLlmApiKey: apiKey.trim() } : {}),
-      });
-      applyFreeLlmFields(res);
-      if (apiKey.trim()) {
-        setVerified(false);
-        notify.success('API key saved — run Test connection to verify');
-      } else {
-        notify.success('Free LLM settings saved');
-      }
-      mutateProfile();
-    } catch (err) {
-      notify.error(err, 'Failed to save free LLM settings');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleTest() {
-    if (!modelId) return;
-    setTesting(true);
-    setTestStatus('');
-    try {
-      if (apiKey.trim() || !keySet) {
-        setTestStatus('Saving API key…');
-        const saveRes = await api.updateFreeLlmSettings({
-          freeLlmModelId: modelId,
-          freeLlmMaxTokens: maxTokens,
-          ...(apiKey.trim() ? { freeLlmApiKey: apiKey.trim() } : {}),
-        });
-        applyFreeLlmFields(saveRes);
-      }
-      setTestStatus('Contacting NVIDIA — this can take a few minutes…');
-      const res = await api.testFreeLlm();
-      applyFreeLlmFields(res);
-      setVerified(true);
-      setTestStatus('');
-      notify.success(`Connected to ${res.model}`);
-      mutateProfile();
-    } catch (err) {
-      setVerified(false);
-      setTestStatus('');
-      notify.error(err, 'Free LLM test failed');
-      mutateProfile();
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  return (
-    <div className="panel mt-4 p-0 overflow-hidden">
-      <div className="border-b border-zinc-200/80 px-5 py-4 dark:border-zinc-800">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="section-title flex items-center gap-2">
-              <Zap className="h-5 w-5 text-sky-600 dark:text-sky-400" aria-hidden />
-              Resume LLM (free tier)
-            </h2>
-            <p className="section-desc mt-1 max-w-2xl">
-              NVIDIA Integrate models for resume generation and screening. OpenAI is used when the free tier is unavailable.
-            </p>
-          </div>
-          {connected ? (
-            <span className="badge-success inline-flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-              Connected
-            </span>
-          ) : pendingVerify ? (
-            <span className="badge-warning inline-flex items-center gap-1.5">
-              <KeyRound className="h-3.5 w-3.5" aria-hidden />
-              Key saved
-            </span>
-          ) : (
-            <span className="badge-neutral inline-flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5" aria-hidden />
-              Not configured
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-5 p-5">
-        {connected && (
-          <div className="banner-info text-sm text-body">
-            Free tier is active. Model <span className="font-mono text-xs">{models.find((m) => m.id === modelId)?.model}</span> will be used for resume and screening tasks.
-          </div>
-        )}
-        {pendingVerify && !testing && (
-          <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-            Key saved as <span className="font-mono">{keyHint}</span>. Run <strong>Test connection</strong> to verify and enable the free tier.
-          </div>
-        )}
-        {/* Persistent live region so progress of the (slow) test is announced. */}
-        <div role="status" className="sr-only">{testing ? testStatus : ''}</div>
-        {testing && testStatus && (
-          <div className="banner-info flex items-center gap-2 text-sm text-body" aria-hidden>
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-600 dark:text-sky-400" aria-hidden />
-            {testStatus}
-          </div>
-        )}
-
-        <div>
-          <span id="freeLlmModel-label" className="form-label">Model</span>
-          <div role="radiogroup" aria-labelledby="freeLlmModel-label" className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {models.map((m: FreeLlmModelPreset) => {
-              const selected = modelId === m.id;
-              const active = selected && connected;
-              return (
-                <label
-                  key={m.id}
-                  className={`choice-card flex flex-col gap-1.5 p-4 transition ${
-                    active
-                      ? 'choice-card-selected ring-2 ring-emerald-500/25 dark:ring-emerald-400/30'
-                      : selected
-                        ? 'choice-card-selected'
-                        : ''
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="freeLlmModel"
-                    value={m.id}
-                    checked={selected}
-                    onChange={() => onModelChange(m.id)}
-                    className="sr-only"
-                  />
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-strong">{m.label}</span>
-                    {active && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />}
-                  </div>
-                  <span className="font-mono text-xs text-muted">{m.model}</span>
-                  <span className="text-xs text-faint">
-                    Default {m.defaultMaxTokens.toLocaleString()} tokens
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="form-group">
-            <label htmlFor="freeLlmApiKey" className="form-label">NVIDIA API key</label>
-            <input
-              id="freeLlmApiKey"
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className="input focus-ring font-mono text-sm"
-              placeholder={keySet ? `${keyHint} (leave blank to keep)` : 'nvapi-...'}
-              autoComplete="off"
-              aria-describedby="freeLlmApiKey-hint"
-            />
-            <p id="freeLlmApiKey-hint" className="mt-1 text-xs text-muted">
-              Saved securely on your profile. Only the last four characters are shown after saving.
-            </p>
-          </div>
-          <div className="form-group">
-            <label htmlFor="freeLlmMaxTokens" className="form-label">Max tokens</label>
-            <input
-              id="freeLlmMaxTokens"
-              type="number"
-              min={512}
-              max={16384}
-              value={maxTokens}
-              onChange={(e) => setMaxTokens(Number(e.target.value))}
-              className="input focus-ring"
-              aria-describedby="freeLlmMaxTokens-hint"
-            />
-            <p id="freeLlmMaxTokens-hint" className="mt-1 text-xs text-muted">Higher values allow longer resumes; the free lane also caps output length.</p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
-          <button type="button" onClick={handleSave} disabled={saving || !modelId} className="btn">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
-            Save settings
-          </button>
-          <button
-            type="button"
-            onClick={handleTest}
-            disabled={testing || !modelId || (!keySet && !apiKey.trim())}
-            className="btn-accent"
-          >
-            {testing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Testing…
-              </>
-            ) : (
-              <>
-                <Zap className="h-4 w-4" aria-hidden />
-                Test connection
-              </>
-            )}
-          </button>
         </div>
       </div>
     </div>

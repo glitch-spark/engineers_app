@@ -5,6 +5,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { notify } from '../lib/notify';
 import { MAX_RESUME_BYTES, parseResume } from '../lib/resumeParser';
 import { openResumeInNewTab } from '../lib/resumeViewer';
+import { safeHref } from '../lib/safeHref';
 
 /** Mirrors the backend limits in app/routers/accounts.py. */
 const MAX_RESUMES = 20;
@@ -121,7 +122,9 @@ export default function ResumesSection({ accountId }: { accountId: string }) {
   async function download(r: StoredResume) {
     try {
       const { url } = await api.getAccountResumeFileUrl(accountId, r.id);
-      window.open(url, '_blank', 'noopener');
+      const href = safeHref(url);
+      if (!href) throw new Error('The file link is not a web address');
+      window.open(href, '_blank', 'noopener');
     } catch (err) {
       notify.error(err, 'Could not download the original file');
     }

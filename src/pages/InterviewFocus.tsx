@@ -35,6 +35,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { TranscriptUploadButton } from '../components/interview/TranscriptUploadButton';
 import { formatScheduledDate } from '../components/interview/format';
 import type { Interview } from '../components/interview/types';
+import { safeHref } from '../lib/safeHref';
 
 type StepTone = 'done' | 'failed' | 'muted' | 'pending';
 
@@ -182,8 +183,8 @@ export default function InterviewFocusPage() {
             <h1 className="page-title mt-1 truncate">{iv.companyName || 'Untitled company'}</h1>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-body">
               <span className="font-medium">{iv.appliedPosition || 'Position not set'}</span>
-              {iv.jobUrl && (
-                <a href={iv.jobUrl} target="_blank" rel="noopener noreferrer" className="link-inline text-sm">
+              {safeHref(iv.jobUrl) && (
+                <a href={safeHref(iv.jobUrl)} target="_blank" rel="noopener noreferrer" className="link-inline text-sm">
                   Job description <ExternalLink size={13} aria-hidden />
                 </a>
               )}

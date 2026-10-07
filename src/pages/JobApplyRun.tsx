@@ -36,6 +36,7 @@ import {
 import { notify } from '../lib/notify';
 import { formatUsd } from '../lib/modelCost';
 import { useModelChoice, type ModelChoice } from '../lib/useModelChoice';
+import { safeHref } from '../lib/safeHref';
 
 const APPLIED_FILTERS: { value: JobApplyAppliedFilter; label: string }[] = [
   { value: 'no', label: 'To apply' },
@@ -388,8 +389,10 @@ export default function JobApplyRun() {
       const tab = window.open('', '_blank'); // opened now, while this is still a user action, so it isn't blocked
       try {
         const { url } = await api.getAccountResumeFileUrl(s.accountId, s.resumeId);
-        if (tab) tab.location.href = url;
-        else window.location.href = url;
+        const href = safeHref(url);
+        if (!href) throw new Error('The file link is not a web address');
+        if (tab) tab.location.href = href;
+        else window.location.href = href;
       } catch (err) {
         tab?.close();
         notify.error(err, 'Could not download the resume');
@@ -510,7 +513,7 @@ export default function JobApplyRun() {
       const key = e.key.toLowerCase();
       if (key === 'j') move(1);
       else if (key === 'k') move(-1);
-      else if (key === 'o' && row.url) window.open(row.url, '_blank', 'noopener');
+      else if (key === 'o' && safeHref(row.url)) window.open(safeHref(row.url), '_blank', 'noopener');
       else if (key === 't') void tailorRow(row);
       else if (key === 'd') {
         const ready = firstReadyTailored(row);
@@ -985,14 +988,14 @@ export default function JobApplyRun() {
                                 </p>
                                 <p className="line-clamp-1 text-xs text-zinc-500">
                                   {row.company}
-                                  {row.url && (
+                                  {safeHref(row.url) && (
                                     <a
-                                      href={row.url}
+                                      href={safeHref(row.url)}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="ml-1 inline-flex items-center gap-0.5 text-sky-700 hover:underline dark:text-sky-400"
                                     >
-                                      {row.company ? 'open' : hostOf(row.url)}
+                                      {row.company ? 'open' : hostOf(row.url ?? '')}
                                       <ExternalLink className="h-3 w-3" aria-hidden />
                                       <span className="sr-only">(opens in a new tab)</span>
                                     </a>

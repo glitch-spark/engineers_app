@@ -469,7 +469,8 @@ export default function TransactionsPage() {
                 const amt = Number(t.amount || 0);
                 const isPayer = txPayerId(t) === user?.id;
                 const isOwner = t.userId?._id === user?.id;
-                const canApprove = isPending && (isAdmin || isPayer);
+                // The server rejects a non-admin approving their own self-paid transaction.
+                const canApprove = isPending && (isAdmin || (isPayer && !isOwner));
                 // Everyone sees every row; only show actions the server allows.
                 const showEdit = isAdmin || isOwner || isPayer;
                 const showDelete = isAdmin || isOwner;

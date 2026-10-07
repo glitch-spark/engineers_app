@@ -5,6 +5,7 @@ import type { JobApplyRun } from '../../api/endpoints';
 import Pagination from './Pagination';
 import Segmented from './Segmented';
 import { expiresHint, formatDateTime, isActive, runGroup, runStep } from './format';
+import { safeHref } from '../../lib/safeHref';
 
 type Tab = ReturnType<typeof runGroup> | 'all';
 const TABS: { value: Tab; label: string }[] = [
@@ -91,13 +92,13 @@ export default function RunsTable({ runs, onDelete }: { runs: JobApplyRun[]; onD
                 return (
                   <tr key={run._id} className="table-row align-middle">
                     <td className="max-w-xs px-3 py-2">
-                      {run.sourceUrl ? (
+                      {safeHref(run.sourceUrl) ? (
                         <a
-                          href={run.sourceUrl}
+                          href={safeHref(run.sourceUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex max-w-full items-center gap-1 font-medium text-sky-700 hover:underline dark:text-sky-400"
-                          title={run.sourceUrl}
+                          title={run.sourceUrl ?? undefined}
                         >
                           <span className="truncate">{run.fileName}</span>
                           <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { BidReviewItem, BidStatus } from '../../api/endpoints';
 import { fmtDuration, fmtTime, reasonLabel } from './util';
+import { safeHref } from '../../lib/safeHref';
 
 const STATUS_BADGE: Record<BidStatus, string> = {
   pending: 'badge-neutral',
@@ -61,9 +62,9 @@ export default function BidEvidence({ bid }: { bid: BidReviewItem }) {
       <dl className="space-y-1.5">
         <Row label="Job">{bid.jobTitle || <span className="text-muted">Untitled job</span>}</Row>
         <Row label="Site">
-          {bid.jobUrl ? (
+          {safeHref(bid.jobUrl) ? (
             <a
-              href={bid.jobUrl}
+              href={safeHref(bid.jobUrl)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex max-w-full items-center gap-1 text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
@@ -71,6 +72,8 @@ export default function BidEvidence({ bid }: { bid: BidReviewItem }) {
               <span className="truncate">{bid.jobDomain || bid.jobUrl}</span>
               <ExternalLink size={12} aria-hidden className="shrink-0" />
             </a>
+          ) : bid.jobUrl ? (
+            <span className="break-all">{bid.jobDomain || bid.jobUrl}</span>
           ) : (
             <span className="text-muted">No job URL</span>
           )}

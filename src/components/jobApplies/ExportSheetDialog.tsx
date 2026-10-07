@@ -5,6 +5,7 @@ import * as api from '../../api/endpoints';
 import { ApiError } from '../../api/client';
 import Modal from '../Modal';
 import { notify } from '../../lib/notify';
+import { safeHref } from '../../lib/safeHref';
 
 const GSHEET_RE = /^https:\/\/docs\.google\.com\/spreadsheets\/(?:u\/\d+\/)?d\/[\w-]{10,}/;
 
@@ -40,7 +41,7 @@ function exportedToast(message: string, sheetUrl: string) {
       <span className="flex items-center gap-3">
         <span>{message}</span>
         <a
-          href={sheetUrl}
+          href={safeHref(sheetUrl)}
           target="_blank"
           rel="noopener noreferrer"
           className="font-semibold text-sky-700 underline dark:text-sky-400"
@@ -149,7 +150,7 @@ export default function ExportSheetDialog({
   const shareEmail = ok ? ok.serviceAccount : check.state === 'error' ? check.message.match(/[\w.+-]+@[\w-]+\.iam\.gserviceaccount\.com/)?.[0] : null;
   const ready = ok?.apply?.ready ?? 0;
   const sheetLink = ok && (
-    <a href={ok.sheetUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-sky-700 hover:underline dark:text-sky-400">
+    <a href={safeHref(ok.sheetUrl)} target="_blank" rel="noopener noreferrer" className="font-medium text-sky-700 hover:underline dark:text-sky-400">
       {ok.sheetTitle || 'your sheet'} <ExternalLink className="inline h-3 w-3" aria-hidden />
     </a>
   );

@@ -39,24 +39,12 @@ export interface ProfileShape {
   resumePromptBody?: string;
   screeningPromptBody?: string;
   coverLetterPromptBody?: string;
-  freeLlmModelId?: string;
-  freeLlmMaxTokens?: number | null;
-  freeLlmApiKeySet?: boolean;
-  freeLlmApiKeyHint?: string;
-  freeLlmKeyVerified?: boolean;
   slackConnected?: boolean;
   slackAlertsEnabled?: boolean;
   slackTimezone?: string;
   slackDigestHour?: number;
   slackDigestMinute?: number;
   slackBotConfigured?: boolean;
-}
-
-export interface FreeLlmModelPreset {
-  id: string;
-  label: string;
-  model: string;
-  defaultMaxTokens: number;
 }
 
 export interface TransactionListParams {
@@ -142,32 +130,6 @@ export const updateProfile = (body: {
 
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
   putJSON<{ message: string }>('/profile/password', body);
-
-export const listFreeLlmModels = () =>
-  apiFetch<{ models: FreeLlmModelPreset[] }>('/profile/free-llm-models');
-
-export const updateFreeLlmSettings = (body: {
-  freeLlmModelId?: string;
-  freeLlmMaxTokens?: number | null;
-  freeLlmApiKey?: string;
-}) => putJSON<{
-  message: string;
-  freeLlmModelId: string;
-  freeLlmMaxTokens: number | null;
-  freeLlmApiKeySet: boolean;
-  freeLlmApiKeyHint: string;
-  freeLlmKeyVerified: boolean;
-}>('/profile/free-llm', body);
-
-export const testFreeLlm = () =>
-  postJSON<{
-    ok: boolean;
-    model: string;
-    sample: string;
-    freeLlmKeyVerified: boolean;
-    freeLlmApiKeySet: boolean;
-    freeLlmApiKeyHint: string;
-  }>('/profile/free-llm-test', {}, { timeoutMs: 330_000 });
 
 export type SlackStatus = {
   slackConnected: boolean;

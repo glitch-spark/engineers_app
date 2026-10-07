@@ -8,6 +8,7 @@ import JobInfoPanel from './JobInfoPanel';
 import Pagination from './Pagination';
 import { useApproveJob } from './useApproveJob';
 import { APPROVABLE_BUCKETS, BUCKET_LABEL, formatDate, locationLabel } from './format';
+import { safeHref } from '../../lib/safeHref';
 
 const PAGE_SIZE = 25;
 
@@ -117,9 +118,9 @@ export default function BucketJobs({
                         .join(' · ')}
                     </span>
                   </button>
-                  {row.url && (
+                  {safeHref(row.url) && (
                     <a
-                      href={row.url}
+                      href={safeHref(row.url)}
                       target="_blank"
                       rel="noreferrer"
                       className="relative z-10 inline-flex items-center gap-1 text-sky-700 hover:underline dark:text-sky-400"

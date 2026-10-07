@@ -3,6 +3,7 @@ import useSWR from 'swr';
 import { Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
+import { openTemplatePreview } from '../lib/templatePreview';
 
 type AccountShape = {
   _id: string;
@@ -179,13 +180,12 @@ function HtmlTemplatePane({
             <button
               type="button"
               onClick={() => {
-                const blob = new Blob([html], { type: 'text/html' });
-                const url = URL.createObjectURL(blob);
-                const w = window.open(url, '_blank');
-                // Revoke after the new tab unloads so memory doesn't leak;
-                // if the popup was blocked, revoke immediately.
-                if (w) w.addEventListener('beforeunload', () => URL.revokeObjectURL(url));
-                else URL.revokeObjectURL(url);
+                // Sanitized and shown in a script-less sandboxed iframe: template HTML is untrusted.
+                try {
+                  openTemplatePreview(html, name || 'template.html');
+                } catch (err) {
+                  notify.error(err, 'Could not open the preview');
+                }
               }}
               className="link text-xs"
               title="Open the uploaded HTML in a new tab"

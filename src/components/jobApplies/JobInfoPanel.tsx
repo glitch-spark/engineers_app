@@ -9,6 +9,7 @@ import { notify } from '../../lib/notify';
 import { APPROVABLE_BUCKETS, BUCKET_LABEL, formatDate } from './format';
 import { useApproveJob } from './useApproveJob';
 import { useRunRefresh } from './useRunRefresh';
+import { safeHref } from '../../lib/safeHref';
 
 const WORK_MODES = [
   { value: 'remote', label: 'Remote' },
@@ -253,10 +254,10 @@ export default function JobInfoPanel({
                 : data?.extractionSource === 'rules'
                   ? 'Read by rules (the AI was unavailable), so check it.'
                   : 'Read by the AI. If something is wrong, correct it: it is saved for everyone who uses this link.'}
-            {data?.url && (
+            {safeHref(data?.url) && (
               <>
                 {' '}
-                <a href={data.url} target="_blank" rel="noreferrer" className="text-sky-700 hover:underline dark:text-sky-400">
+                <a href={safeHref(data?.url)} target="_blank" rel="noreferrer" className="text-sky-700 hover:underline dark:text-sky-400">
                   Open the posting
                 </a>
               </>

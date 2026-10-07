@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import useSWR from 'swr';
 import {
   Loader2, Sparkles, AlertTriangle, TrendingUp, Lightbulb, BarChart3,
@@ -535,7 +536,7 @@ function filterSig(args: { accountId: string; stage: string; from: string; to: s
 }
 
 function MdBlock({ text }: { text: string }) {
-  const html = marked.parse(text || '', { async: false }) as string;
+  const html = DOMPurify.sanitize(marked.parse(text || '', { async: false }) as string);
   return <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 

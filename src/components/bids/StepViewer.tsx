@@ -4,6 +4,7 @@ import { messageOf } from '../../lib/notify';
 import LoadingSpinner from '../LoadingSpinner';
 import Kbd from './Kbd';
 import { fmtTime } from './util';
+import { safeHref } from '../../lib/safeHref';
 
 const shortLabel = (s: BidScreenshot) => (s.isSubmit ? 'Submit' : s.step != null ? `Step ${s.step}` : 'Screenshot');
 
@@ -74,9 +75,9 @@ export default function StepViewer({
           <span className={`font-medium ${shot.isSubmit ? 'text-emerald-700 dark:text-emerald-400' : ''}`}>{stepLabel(shot)}</span>
           <span className="text-muted"> · {index + 1} of {shots.length} · {fmtTime(shot.capturedAt)}</span>
         </p>
-        {shot.url && (
+        {safeHref(shot.url) && (
           <a
-            href={shot.url}
+            href={safeHref(shot.url)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"

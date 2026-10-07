@@ -16,6 +16,7 @@ import { STATUS_DOT } from '../../pages/interviews/RoundTrail';
 import ActionMenu from '../ActionMenu';
 import ConfirmedBadge, { needsConfirmBadge } from './ConfirmedBadge';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
+import { safeHref } from '../../lib/safeHref';
 
 function when(iso: string | null | undefined, end: string | null | undefined, tz: string): string {
   if (!iso) return 'No date';
@@ -160,11 +161,13 @@ export default function InterviewSummary({
           <dd>{iv.appliedPosition || (canEdit ? <QuickAdd label="Add position" onClick={onEditDetails} /> : '—')}</dd>
           <dt className="text-muted">Job post</dt>
           <dd className="min-w-0">
-            {iv.jobUrl ? (
-              <a href={iv.jobUrl} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1 text-sky-700 hover:underline dark:text-sky-400">
-                <span className="truncate">{shortUrl(iv.jobUrl)}</span>
+            {safeHref(iv.jobUrl) ? (
+              <a href={safeHref(iv.jobUrl)} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1 text-sky-700 hover:underline dark:text-sky-400">
+                <span className="truncate">{shortUrl(iv.jobUrl || '')}</span>
                 <ExternalLink size={12} className="shrink-0" aria-hidden />
               </a>
+            ) : iv.jobUrl ? (
+              <span className="block truncate">{iv.jobUrl}</span>
             ) : canEdit ? <QuickAdd label="Add job link" onClick={onEditDetails} /> : '—'}
           </dd>
           {iv.createdAt && (

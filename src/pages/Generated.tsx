@@ -21,6 +21,7 @@ import ModelSelect from '../components/ModelSelect';
 import { useModelChoice } from '../lib/useModelChoice';
 import { formatUsd } from '../lib/modelCost';
 import { useAuth } from '../auth/useAuth';
+import { safeHref } from '../lib/safeHref';
 
 const STEP_LABEL: Record<ResumeJobStep, string> = {
   queued: 'Queued',
@@ -567,8 +568,8 @@ function JobRow({
         </td>
         <td className="px-3 py-2 text-strong max-w-[200px]" title={job.jobUrl || job.companyName}>
           <div className="truncate reveal-on-focus">
-            {job.jobUrl ? (
-              <a href={job.jobUrl} target="_blank" rel="noreferrer" className="link">
+            {safeHref(job.jobUrl) ? (
+              <a href={safeHref(job.jobUrl)} target="_blank" rel="noreferrer" className="link">
                 {job.companyName}
               </a>
             ) : (

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { Link, useParams } from 'react-router-dom';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { ArrowLeft, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -62,7 +63,7 @@ const reviewStyles = `
 `;
 
 function MdBlock({ text }: { text: string }) {
-  const html = marked.parse(text || '', { async: false }) as string;
+  const html = DOMPurify.sanitize(marked.parse(text || '', { async: false }) as string);
   return <div className="review-md" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 

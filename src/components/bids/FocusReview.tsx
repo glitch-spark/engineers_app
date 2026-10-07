@@ -12,6 +12,7 @@ import ReviewActions from './ReviewActions';
 import StepViewer, { defaultStep } from './StepViewer';
 import { dayParts } from '../bidders/weekDates';
 import { byFirstAt, dialogIsOpen, isTypingTarget, reasonLabel } from './util';
+import { safeHref } from '../../lib/safeHref';
 
 type Bid = api.BidReviewItem;
 
@@ -354,7 +355,8 @@ export default function FocusReview({
 
   const openFullSize = () => {
     const shot = shots?.[stepIndex];
-    if (shot?.url) window.open(shot.url, '_blank', 'noopener,noreferrer');
+    const href = safeHref(shot?.url);
+    if (href) window.open(href, '_blank', 'noopener,noreferrer');
     else if (shot) notify.warn("This screenshot didn't upload");
   };
 
