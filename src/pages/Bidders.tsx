@@ -1,165 +1,240 @@
-import { useState } from 'react';
-import useSWR, { mutate as globalMutate } from 'swr';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../api/endpoints';
-import { messageOf, notify } from '../lib/notify';
-import { countryFlag } from '../lib/countries';
 import { usd } from '../lib/money';
-import ActionMenu from '../components/ActionMenu';
-import ConfirmDialog from '../components/ConfirmDialog';
-import LoadingSpinner from '../components/LoadingSpinner';
 import PageHeader from '../components/PageHeader';
 import Switch from '../components/Switch';
+import BidderActions from '../components/bidders/BidderActions';
+import BidderView from '../components/bidders/BidderView';
+import FocusReview, { type FocusScope } from '../components/bids/FocusReview';
 import BidderFormModal from '../components/bidders/BidderFormModal';
-import BidderHistoryPanel from '../components/bidders/BidderHistoryPanel';
+import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDialog';
+import SummaryTiles, { type Tile } from '../components/bidders/SummaryTiles';
+import TeamWeekTable from '../components/bidders/TeamWeekTable';
+import WeekNav from '../components/bidders/WeekNav';
+import { dateInZone } from '../components/bidders/weekDates';
+
+/** URL state: week, bidder, day, tab (history), mode (focus), bid. */
+type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid';
+
+function statusText(b: api.Bidder | undefined, row: api.BidWeekRow) {
+  if (row.status === 'archived') return 'Archived';
+  if (row.status === 'active') return b?.username ? `Active · @${b.username}` : 'Active';
+  // Another owner's bidder (admin view): no invite details to show.
+  if (!b) return 'Invited';
+  if (!b.inviteExpiresAt) return 'Invited · no code yet';
+  const expired = new Date(b.inviteExpiresAt).getTime() < Date.now();
+  return <span className={expired ? 'text-red-600' : undefined}>Invited · expires {formatInviteDate(b.inviteExpiresAt)}</span>;
+}
 
 export default function BiddersPage() {
+  const [params, setParams] = useSearchParams();
+  const week = params.get('week');
+  const bidderId = params.get('bidder');
   const [showArchived, setShowArchived] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<api.Bidder | null>(null);
-  const [pendingArchive, setPendingArchive] = useState<api.Bidder | null>(null);
-  const [archiving, setArchiving] = useState(false);
-  const [historyFor, setHistoryFor] = useState<api.Bidder | null>(null);
+  const [inviteShown, setInviteShown] = useState<{ name: string; invite: api.BidderInvite } | null>(null);
 
-  const { data, mutate, isLoading } = useSWR(['bidders', showArchived] as const, () => api.listBidders(showArchived));
-  const { data: counts, error: countsError } = useSWR('bidder-live-counts', () => api.bidderLiveCounts(), { refreshInterval: 300_000 });
-  const bidders = data?.bidders ?? [];
+  const setParam = useCallback(
+    (patch: Partial<Record<Param, string | null>>) =>
+      setParams((prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(patch)) {
+          if (value) next.set(key, value);
+          else next.delete(key);
+        }
+        return next;
+      }),
+    [setParams],
+  );
 
-  // A new, edited or archived bidder changes the live-count map too.
+  // A bidder view always finds its bidder, archived or not.
+  const includeArchived = showArchived || !!bidderId;
+  const board = useSWR(['bids-week', week, includeArchived] as const, () =>
+    api.bidsWeek({ week: week ?? undefined, includeArchived: includeArchived || undefined }),
+  );
+  // Full bidder records (own bidders) for the status details and the ⋯ menu; an admin's view of other owners'
+  // bidders has none, so those rows get no management menu.
+  const active = useSWR(['bidders', false] as const, () => api.listBidders(false));
+  const archived = useSWR(showArchived ? (['bidders', true] as const) : null, () => api.listBidders(true));
+  const byId = useMemo(() => {
+    const all = [...(active.data?.bidders ?? []), ...(archived.data?.bidders ?? [])];
+    return Object.fromEntries(all.map((b) => [b._id, b])) as Record<string, api.Bidder>;
+  }, [active.data, archived.data]);
+
+  const { mutate: mutateKeys } = useSWRConfig();
   const refresh = () => {
-    mutate();
-    globalMutate('bidder-live-counts');
+    board.mutate();
+    active.mutate();
+    archived.mutate();
+  };
+  // The open day's list and the bidder's week list too (decisions made in the overlay).
+  const refreshAll = () => {
+    refresh();
+    void mutateKeys((key) => Array.isArray(key) && (key[0] === 'bids-day' || key[0] === 'bids-week'));
   };
 
-  const openForm = (b: api.Bidder | null) => {
-    setEditing(b);
-    setFormOpen(true);
-  };
+  const data = board.data;
+  const now = Date.now();
+  const isCurrent = !!data && new Date(data.week.start).getTime() <= now && now < new Date(data.week.end).getTime();
+  const weekKey = data ? dateInZone(data.week.end, data.week.timezone) : null;
 
-  const archive = async () => {
-    const b = pendingArchive;
-    if (!b) return;
-    setArchiving(true);
-    try {
-      await api.archiveBidder(b._id);
-      notify.success(`${b.name} archived`);
-      setPendingArchive(null);
-      refresh();
-    } catch (err) {
-      notify.error(err, 'Failed to archive bidder');
-    } finally {
-      setArchiving(false);
-    }
-  };
+  const openBidder = (id: string, day?: string) => setParam({ bidder: id, day: day ?? null, tab: null, week: weekKey });
+  const review = (id?: string) => setParam({ mode: 'focus', bidder: id ?? null, bid: null, week: weekKey });
 
-  const countCell = (b: api.Bidder, key: 'today' | 'week') => {
-    if (!counts) {
-      if (countsError) return <span title={messageOf(countsError, 'Failed to load live counts')}>⚠️</span>;
-      return <LoadingSpinner size="sm" />;
-    }
-    const c = counts[b._id];
-    if (!c) return <span className="text-muted">—</span>;
-    if (c.error) return <span title={c.error}>⚠️</span>;
-    return <span>{c[key] ?? '—'}</span>;
-  };
+  const row = bidderId ? data?.bidders.find((b) => b.id === bidderId) : undefined;
 
-  const payCell = (b: api.Bidder) => {
-    const week = counts?.[b._id]?.week;
-    return week == null ? '—' : usd(week * b.rate);
+  // Review overlay: a bid of the day panel opens at that bid and walks the panel's list (all bids of the day after a
+  // reload, when that list is gone); the Review buttons walk the pay week's pending bids. The scope is fixed by the
+  // URL, so the overlay never follows a later window.
+  const [navIds, setNavIds] = useState<string[] | null>(null);
+  const focusDay = params.get('day');
+  const focusBid = params.get('bid');
+  const focusWeek = week ?? weekKey;
+  const focus: { scope: FocusScope; startAt?: string; ids?: string[]; set: 'pending' | 'all' } | null =
+    params.get('mode') !== 'focus'
+      ? null
+      : focusBid && focusDay
+        ? { scope: { day: focusDay }, startAt: focusBid, ids: navIds?.includes(focusBid) ? navIds : undefined, set: 'all' }
+        : focusWeek
+          ? { scope: { week: focusWeek }, set: 'pending' }
+          : null;
+  const exitFocus = () => setParam({ mode: null, bid: null });
+  const reviewBid = (bidId: string, ids: string[]) => {
+    setNavIds(ids);
+    setParam({ mode: 'focus', bid: bidId, week: weekKey });
   };
+  // Decisions in the overlay change the counts: reload them however it is left (Esc, its Close, the browser's Back).
+  const wasFocus = useRef(false);
+  const inFocus = !!focus;
+  useEffect(() => {
+    if (wasFocus.current && !inFocus) refreshAll();
+    wasFocus.current = inFocus;
+  });
 
-  const rowActions = (b: api.Bidder) => {
-    const history = { label: 'History', onSelect: () => setHistoryFor(b) };
-    if (b.archivedAt) return [history];
+  const tiles = (): Tile[] => {
+    if (!data) return [];
+    const t = data.totals;
+    const todayIdx = data.week.days.findIndex((d) => d.isToday);
+    const today = isCurrent && todayIdx >= 0 ? t.days[todayIdx] : null;
     return [
-      { label: 'Edit', onSelect: () => openForm(b) },
-      history,
-      { label: 'Archive', danger: true, onSelect: () => setPendingArchive(b) },
+      { label: 'Approved this week', value: t.approved ?? '—', hint: t.pay == null ? undefined : `${usd(t.pay)} pay`, tone: 'success' },
+      {
+        label: 'To review',
+        value: t.toReview ?? '—',
+        hint: t.toReview ? 'pending bids this week' : 'nothing pending',
+        tone: t.toReview ? 'warning' : 'default',
+        action: t.toReview ? { label: 'Review all', onClick: () => review() } : undefined,
+      },
+      { label: 'Rejected', value: t.rejected ?? '—', tone: t.rejected ? 'danger' : 'default' },
+      ...(today
+        ? [{ label: 'Today', value: today.approved ?? '—', hint: today.pending ? `${today.pending} pending` : 'approved so far' } as Tile]
+        : []),
     ];
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {focus && (
+        <FocusReview
+          key={`${'day' in focus.scope ? focus.scope.day : focus.scope.week}|${bidderId ?? ''}|${focus.startAt ?? ''}`}
+          scope={focus.scope}
+          bidderId={bidderId ?? undefined}
+          startAt={focus.startAt}
+          ids={focus.ids}
+          set={focus.set}
+          onExit={exitFocus}
+        />
+      )}
       <PageHeader
         title="Bidders"
-        action={<button type="button" className="btn" onClick={() => openForm(null)}>Add bidder</button>}
+        action={!bidderId && <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>}
       />
 
-      <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />
-
-      <div className="table-wrap">
-        <table className="min-w-full text-sm">
-          <thead className="table-head">
-            <tr>
-              <th className="px-4 py-2.5">Name</th>
-              <th className="px-4 py-2.5">Country</th>
-              <th className="px-4 py-2.5">Profile</th>
-              <th className="px-4 py-2.5">Rate</th>
-              <th className="px-4 py-2.5">Today</th>
-              <th className="px-4 py-2.5">This week</th>
-              <th className="px-4 py-2.5">Est. pay this week</th>
-              <th className="px-4 py-2.5 w-20">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted">
-                  <div role="status" className="flex items-center justify-center">
-                    <div className="spinner spinner-md mr-3" aria-hidden></div>
-                    Loading bidders...
-                  </div>
-                </td>
-              </tr>
-            ) : bidders.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-muted">
-                  {showArchived ? 'No archived bidders.' : 'No bidders yet — add one to start tracking bids.'}
-                </td>
-              </tr>
-            ) : bidders.map((b) => (
-              <tr key={b._id} className={`table-row ${b.archivedAt ? 'text-muted opacity-60' : ''}`}>
-                <td className="px-4 py-2.5">{b.name}</td>
-                <td className="px-4 py-2.5">
-                  {b.country ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span aria-hidden>{countryFlag(b.country)}</span>
-                      <span>{b.country}</span>
-                    </span>
-                  ) : <span className="text-muted">—</span>}
-                </td>
-                <td className="px-4 py-2.5">{b.profileName || <span className="text-muted">—</span>}</td>
-                <td className="px-4 py-2.5">{usd(b.rate)}</td>
-                <td className="px-4 py-2.5">{countCell(b, 'today')}</td>
-                <td className="px-4 py-2.5">{countCell(b, 'week')}</td>
-                <td className="px-4 py-2.5">{payCell(b)}</td>
-                <td className="px-4 py-2.5"><ActionMenu label={`Actions for ${b.name}`} items={rowActions(b)} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <WeekNav week={weekKey} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />
+        {!bidderId && <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />}
       </div>
+
+      {board.error ? (
+        <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
+          Couldn&apos;t load the week.{' '}
+          <button type="button" className="underline" onClick={() => board.mutate()}>Retry</button>
+        </div>
+      ) : !data ? (
+        <div className="space-y-3" aria-busy="true">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-24" />)}
+          </div>
+          <div className="panel space-y-2 p-4">
+            {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-8 w-full" />)}
+          </div>
+        </div>
+      ) : bidderId ? (
+        row && weekKey ? (
+          <BidderView
+            row={row}
+            board={data}
+            weekKey={weekKey}
+            bidder={byId[row.id]}
+            day={params.get('day')}
+            reviewing={!!focus}
+            tab={params.get('tab')}
+            isCurrent={isCurrent}
+            onParam={(patch) => setParam({ week: weekKey, ...patch })}
+            onReview={reviewBid}
+            onChanged={refresh}
+          />
+        ) : (
+          <div className="panel p-4 text-sm text-muted">
+            Bidder not found.{' '}
+            <button type="button" className="underline" onClick={() => setParam({ bidder: null, day: null, tab: null })}>Back to the team</button>
+          </div>
+        )
+      ) : data.bidders.length === 0 ? (
+        <div className="empty-state">
+          <p className="font-medium text-strong">{showArchived ? 'No bidders this week.' : 'No bidders yet'}</p>
+          <p className="mt-1 text-sm text-muted">Add a bidder to start tracking and reviewing their bids.</p>
+          <button type="button" className="btn mt-4" onClick={() => setFormOpen(true)}>Add bidder</button>
+        </div>
+      ) : (
+        <>
+          <SummaryTiles tiles={tiles()} />
+          <TeamWeekTable
+            data={data}
+            onOpenBidder={openBidder}
+            onReview={review}
+            renderStatus={(row) => statusText(byId[row.id], row)}
+            renderActions={(row) =>
+              byId[row.id] ? (
+                <BidderActions
+                  bidder={byId[row.id]}
+                  onChanged={refresh}
+                  onHistory={() => setParam({ bidder: row.id, tab: 'history', day: null, week: weekKey })}
+                />
+              ) : null
+            }
+          />
+        </>
+      )}
 
       <BidderFormModal
         open={formOpen}
-        bidder={editing}
+        bidder={null}
         onClose={() => setFormOpen(false)}
-        onSaved={() => {
+        onSaved={(invite, saved) => {
           setFormOpen(false);
+          if (invite) setInviteShown({ name: saved.name, invite });
           refresh();
         }}
       />
 
-      <BidderHistoryPanel bidder={historyFor} onClose={() => setHistoryFor(null)} />
-
-      <ConfirmDialog
-        open={!!pendingArchive}
-        title="Archive bidder"
-        body={`Archive ${pendingArchive?.name}? They'll stop appearing in reports. History is kept.`}
-        confirmLabel="Archive"
-        tone="danger"
-        busy={archiving}
-        onConfirm={archive}
-        onCancel={() => setPendingArchive(null)}
+      <InviteDialog
+        open={!!inviteShown}
+        bidderName={inviteShown?.name ?? ''}
+        invite={inviteShown?.invite ?? null}
+        onClose={() => setInviteShown(null)}
       />
     </div>
   );

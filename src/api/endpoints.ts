@@ -2105,11 +2105,21 @@ export interface Bidder {
   profileName: string | null;
   rate: number;
   screenshotFolderUrl: string;
+  folder: string | null;
+  status: 'invited' | 'active' | 'archived';
+  username: string | null;
+  inviteExpiresAt: string | null;
+  registeredAt: string | null;
   archivedAt: string | null;
   createdAt: string;
 }
 
-export type BidderInput = Pick<Bidder, 'name' | 'country' | 'profileId' | 'rate' | 'screenshotFolderUrl'>;
+export type BidderInput = Pick<Bidder, 'name' | 'country' | 'profileId' | 'rate'>;
+
+export interface BidderInvite {
+  code: string;
+  expiresAt: string;
+}
 
 export interface BidderLiveCount {
   today: number | null;
@@ -2125,13 +2135,21 @@ export interface BidReport {
   count: number | null;
   rate: number;
   amount: number | null;
+  /** Bid-record days only; null for days still counted by Backblaze folders. */
+  pending?: number | null;
+  rejected?: number | null;
   error: string | null;
 }
 
 export const listBidders = (archived = false) =>
   apiFetch<{ bidders: Bidder[] }>(`/bidders${qs({ archived })}`);
 
-export const createBidder = (body: BidderInput) => postJSON<Bidder>('/bidders', body);
+export const createBidder = (body: BidderInput) =>
+  postJSON<{ bidder: Bidder; invite: BidderInvite }>('/bidders', body);
+
+export const newBidderInvite = (id: string) => postJSON<BidderInvite>(`/bidders/${id}/invite`, {});
+
+export const resetBidderLogin = (id: string) => postJSON<BidderInvite>(`/bidders/${id}/reset-login`, {});
 
 export const updateBidder = (id: string, body: BidderInput) => putJSON<Bidder>(`/bidders/${id}`, body);
 
@@ -2141,3 +2159,165 @@ export const bidderLiveCounts = () => apiFetch<Record<string, BidderLiveCount>>(
 
 export const bidderReports = (id: string, kind: 'daily' | 'weekly', limit = 30) =>
   apiFetch<{ reports: BidReport[] }>(`/bidders/${id}/reports${qs({ kind, limit })}`);
+
+// ---------- bid review ----------
+
+export type BidStatus = 'pending' | 'approved' | 'rejected';
+
+export type RejectReason = 'no_submission' | 'wrong_profile' | 'not_job_page' | 'duplicate' | 'incomplete' | 'other';
+
+/** Reject reasons in display order; `key` is the shortcut digit in the focus viewer. */
+export const REJECT_REASONS: { value: RejectReason; label: string; key: '1' | '2' | '3' | '4' | '5' | '6' }[] = [
+  { value: 'no_submission', label: 'No submission', key: '1' },
+  { value: 'wrong_profile', label: 'Wrong profile/resume', key: '2' },
+  { value: 'not_job_page', label: 'Not a job page', key: '3' },
+  { value: 'duplicate', label: 'Duplicate', key: '4' },
+  { value: 'incomplete', label: 'Incomplete', key: '5' },
+  { value: 'other', label: 'Other', key: '6' },
+];
+
+export interface BidReviewItem {
+  id: string;
+  bidderId: string;
+  bidderName: string;
+  jobUrl: string | null;
+  jobTitle: string | null;
+  firstAt: string;
+  submittedAt: string | null;
+  screenshotCount: number;
+  missingUploads: number;
+  status: BidStatus;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  note: string | null;
+  changedSinceReview: boolean;
+  /** Host of jobUrl without `www.`. */
+  jobDomain: string | null;
+  /** Seconds from the first to the last screenshot. */
+  durationSec: number;
+  /** The bidder's assigned profile; null if none. */
+  profileName: string | null;
+  resumeNames: string[];
+  /** Newest completed tailored resume for this job URL on that profile. */
+  tailoredResumeName: string | null;
+  rejectReason: RejectReason | null;
+  /** Signed link to the Submit screenshot (else the last uploaded step); null if none. */
+  thumbUrl: string | null;
+}
+
+export interface BidDaySummary {
+  name: string;
+  approved: number;
+  pending: number;
+  rejected: number;
+  /** Backblaze job folders in the window with no bid record; null if the folder couldn't be read. */
+  foldersWithoutRecord: number | null;
+}
+
+export interface BidDay {
+  /** Period key of the window's end cutoff (not necessarily today's date); null for a `week` query. */
+  day: string | null;
+  /** Period key of the pay week's cutoff for a `week` query; null for a day. */
+  week?: string | null;
+  start: string;
+  end: string;
+  /** IANA key of the report time zone (BID_REPORT_TIMEZONE), e.g. `America/Chicago`. */
+  timezone: string;
+  bids: BidReviewItem[];
+  /** Per bidder id; counts ignore the status filter. */
+  summary: Record<string, BidDaySummary>;
+}
+
+export interface BidScreenshot {
+  key: string;
+  step: string | number | null;
+  trigger: string | null;
+  /** True for the Submit screenshot (`trigger === 'submit'`). */
+  isSubmit: boolean;
+  capturedAt: string;
+  /** Short-lived signed link; null while the upload is unconfirmed. */
+  url: string | null;
+}
+
+/** `day` and `week` are exclusive; neither means the open daily window. */
+export const listBids = (params: { day?: string; week?: string; bidderId?: string; status?: BidStatus }) =>
+  apiFetch<BidDay>(`/bids${qs(params)}`);
+
+// ---------- pay-week board ----------
+
+/** Counts of one bidder (or the team) in a window; pending/rejected are null on folder-counted days. */
+export interface BidCounts {
+  approved: number | null;
+  pending: number | null;
+  rejected: number | null;
+}
+
+export interface BidWeekDay {
+  /** Period key of the day's end cutoff. */
+  day: string;
+  start: string;
+  end: string;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+export interface BidderWeekDay extends BidCounts {
+  day: string;
+  /** `folders`: Backblaze folder count before BID_RECORDS_START, not reviewed. */
+  source: 'records' | 'folders';
+  /** Folder listing failed; counts are null. */
+  error: string | null;
+}
+
+export interface BidderWeekTotals extends BidCounts {
+  /** approved × rate over the pay-week window (the weekly report's number). */
+  pay: number | null;
+  /** Pending in the pay week; null on folder weeks. */
+  toReview: number | null;
+  source: 'records' | 'folders';
+  error: string | null;
+}
+
+export interface BidWeekRow {
+  id: string;
+  name: string;
+  status: Bidder['status'];
+  country: string | null;
+  profileName: string | null;
+  rate: number;
+  /** One per `week.days`, same order. */
+  days: BidderWeekDay[];
+  week: BidderWeekTotals;
+}
+
+export interface BidWeek {
+  week: {
+    start: string;
+    end: string;
+    /** e.g. "Week ending Sat Oct 10". */
+    label: string;
+    timezone: string;
+    days: BidWeekDay[];
+  };
+  bidders: BidWeekRow[];
+  totals: BidCounts & { pay: number | null; toReview: number | null; days: (BidCounts & { day: string })[] };
+}
+
+/** The pay week holding `week` (YYYY-MM-DD; default the current one). */
+export const bidsWeek = (params: { week?: string; includeArchived?: boolean }) =>
+  apiFetch<BidWeek>(`/bids/week${qs(params)}`);
+
+export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
+
+export const bidScreenshots = (id: string) => apiFetch<BidScreenshot[]>(`/bids/${id}/screenshots`);
+
+/** `reason` only goes with `status: 'rejected'`; `other` needs a non-empty note. */
+export const reviewBid = (id: string, body: { status: BidStatus; note?: string | null; reason?: RejectReason }) =>
+  putJSON<BidReviewItem>(`/bids/${id}/review`, body);
+
+/** `onlyComplete` only goes with `status: 'approved'`: the server then skips bids that are not complete. */
+export const reviewBids = (
+  body:
+    | { ids: string[]; status: BidStatus; reason?: RejectReason; onlyComplete?: false }
+    | { ids: string[]; status: 'approved'; onlyComplete: true },
+) => postJSON<{ updated: number; skipped: number }>('/bids/review', body);

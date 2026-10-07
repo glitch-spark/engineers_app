@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthGuard } from './auth/AuthGuard';
 import { RoleGuard } from './auth/RoleGuard';
@@ -47,6 +47,19 @@ function Standalone({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The old review page: `?day=&bidder=` → that bidder's view with the day open, in the day's pay week. */
+function BidReviewRedirect() {
+  const [params] = useSearchParams();
+  const day = params.get('day');
+  const bidder = params.get('bidder');
+  const next = new URLSearchParams();
+  if (bidder) next.set('bidder', bidder);
+  if (day) next.set('week', day);
+  if (day && bidder) next.set('day', day);
+  const q = next.toString();
+  return <Navigate to={`/bidders${q ? `?${q}` : ''}`} replace />;
+}
+
 function LegacyInterviewRedirect() {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={`/interview/${id}`} replace />;
@@ -90,6 +103,7 @@ export default function App() {
       <Route path="/job-applies" element={<Protected><JobApplies /></Protected>} />
       <Route path="/job-applies/:runId" element={<Protected><JobApplyRun /></Protected>} />
       <Route path="/bidders" element={<Protected><Bidders /></Protected>} />
+      <Route path="/bids/review" element={<BidReviewRedirect />} />
       <Route path="/interview-prep" element={<Protected><InterviewPrep /></Protected>} />
       <Route path="/pipeline" element={<Protected><Pipeline /></Protected>} />
       <Route path="/integrations" element={<Protected><Integrations /></Protected>} />
