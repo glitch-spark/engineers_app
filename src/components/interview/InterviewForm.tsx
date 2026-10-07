@@ -109,8 +109,10 @@ export default function InterviewForm({
           markPreviousPassed: previousOpen && markPrevious,
         });
       } else if (mode === 'editRound' && interview && roundId) {
-        const body = roundPayload(round, tz);
+        const body: api.InterviewStageInput = roundPayload(round, tz);
         if (!round.callerEnabled && entry?.caller?.enabled) body.caller = { enabled: false };
+        // Only an actual change: an unchanged tick must not override the reset a new time causes.
+        if (round.callerEnabled && round.confirmed !== !!entry?.confirmed) body.confirmed = round.confirmed;
         saved = await api.updateInterviewStage(interview._id, roundId, body);
       }
       notify.success(SAVED_MESSAGE[mode]);
@@ -151,6 +153,7 @@ export default function InterviewForm({
             idPrefix={idPrefix}
             tz={tz}
             legend={mode === 'new' ? 'First round' : mode === 'addRound' ? 'Next round' : 'Round'}
+            confirmable={mode === 'editRound' && !!entry?.caller?.enabled}
           />
         )}
         {previousOpen && previous && (

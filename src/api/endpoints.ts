@@ -686,9 +686,12 @@ export interface InterviewStageEntry {
   interviewerName?: string | null;
   endsAt?: string | null;
   caller?: InterviewCaller | null;
+  /** Caller rounds: the caller is lined up. Cleared when the round's time changes. */
+  confirmed?: boolean;
 }
 
-export type InterviewStageInput = Partial<RoundInput>;
+/** `confirmed` only on caller rounds (owner or admin). */
+export type InterviewStageInput = Partial<RoundInput> & { confirmed?: boolean };
 
 export const addInterviewStage = (id: string, body: RoundInput & { markPreviousPassed?: boolean }) =>
   postJSON<Record<string, unknown>>(`/interviews/${id}/stages`, body);
