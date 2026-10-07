@@ -49,7 +49,6 @@ export interface ProfileShape {
   slackTimezone?: string;
   slackDigestHour?: number;
   slackDigestMinute?: number;
-  slackOAuthConfigured?: boolean;
   slackBotConfigured?: boolean;
 }
 
@@ -172,23 +171,21 @@ export const testFreeLlm = () =>
 
 export type SlackStatus = {
   slackConnected: boolean;
+  /** The member ID the user typed (U…); used for @-mentions and DMs. */
+  slackUserId: string | null;
   slackAlertsEnabled: boolean;
   slackTimezone: string;
   slackTimezones?: { value: string; label: string }[];
   slackDigestHour: number;
   slackDigestMinute: number;
-  slackOAuthConfigured: boolean;
   slackBotConfigured: boolean;
 };
 
 export const getSlackStatus = () => apiFetch<SlackStatus>('/integrations/slack/status');
 
-export const startSlackOAuth = () =>
-  postJSON<{ url: string }>('/integrations/slack/oauth-start', {});
-
-export const disconnectSlack = () => del<SlackStatus>('/integrations/slack/disconnect');
-
+/** `slackUserId`: a member ID like U04ABC12345; null or '' clears it. 409 when another user has it. */
 export const updateSlackPrefs = (body: {
+  slackUserId?: string | null;
   slackAlertsEnabled?: boolean;
   slackTimezone?: string;
   slackDigestHour?: number;
