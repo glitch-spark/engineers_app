@@ -489,7 +489,7 @@ export const lookupAccounts = () =>
 // ---------- users lookup (filter dropdowns; available to all authed users) ----------
 
 export const lookupUsers = (params?: { excludeRole?: string }) =>
-  apiFetch<{ users: { _id: string; name: string | null; email: string | null; role?: string }[] }>(
+  apiFetch<{ users: { _id: string; name: string | null; email: string | null; role?: string; isActive?: boolean }[] }>(
     `/users/lookup${qs(params)}`
   );
 

@@ -1,3 +1,12 @@
+import { normalizeInterviewStatus } from '../../lib/stageBadge';
+
+/** A caller round worth a Confirmed / Not confirmed badge: still scheduled and not started yet. */
+export function needsConfirmBadge(status: string | null | undefined, scheduledAt: string | null | undefined, now = new Date()): boolean {
+  if (normalizeInterviewStatus(status) !== 'scheduled' || !scheduledAt) return false;
+  const start = new Date(scheduledAt);
+  return !isNaN(start.getTime()) && start > now;
+}
+
 /** Whether a caller round's caller is lined up: green "Confirmed" or amber "Not confirmed". */
 export default function ConfirmedBadge({ confirmed }: { confirmed?: boolean }) {
   return confirmed ? (

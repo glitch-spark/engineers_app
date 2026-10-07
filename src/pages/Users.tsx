@@ -95,7 +95,12 @@ export default function UsersPage() {
     try {
       const { interviewManagerId, ...fields } = form;
       if (editing) {
-        await api.updateUser(editing._id, { ...fields, interviewManagerId: interviewManagerId || null });
+        // Only a changed manager is sent, so other edits never re-check an existing choice.
+        const managerChanged = interviewManagerId !== (editing.interviewManagerId || '');
+        await api.updateUser(editing._id, {
+          ...fields,
+          ...(managerChanged ? { interviewManagerId: interviewManagerId || null } : {}),
+        });
         notify.success(`User "${form.name || form.email}" updated`);
       } else {
         await api.createUser(fields);
@@ -463,7 +468,7 @@ export default function UsersPage() {
                 options={[
                   { value: '', label: 'None' },
                   ...(everyone?.users ?? [])
-                    .filter((u) => u._id !== editing._id)
+                    .filter((u) => u._id !== editing._id && (u.isActive !== false || u._id === form.interviewManagerId))
                     .map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
                 ]}
               />
