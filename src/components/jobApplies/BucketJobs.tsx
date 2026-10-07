@@ -3,7 +3,6 @@ import useSWR from 'swr';
 import { Check, ExternalLink, Loader2, RotateCcw, Undo2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket } from '../../api/endpoints';
-import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
 import JobInfoPanel from './JobInfoPanel';
 import Pagination from './Pagination';
@@ -42,7 +41,6 @@ export default function BucketJobs({
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
   const [infoRow, setInfoRow] = useState<string | null>(null);
-  const { user } = useAuth();
   const { data, isLoading } = useSWR(['job-apply-bucket', runId, bucket, page], () =>
     api.listJobApplyRows(runId, { screen: bucket, page, limit: PAGE_SIZE }),
   );
@@ -164,7 +162,7 @@ export default function BucketJobs({
           rowId={infoRow}
           runId={runId}
           onClose={() => setInfoRow(null)}
-          canEdit={user?.role === 'admin' || user?.role === 'staff'}
+          canEdit
           canApprove={!readOnly}
           onChanged={onChanged}
         />

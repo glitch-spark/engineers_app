@@ -6,7 +6,7 @@ export interface User {
   id: string;
   name: string | null;
   email: string | null;
-  role: 'admin' | 'staff' | 'accountant';
+  role: 'admin' | 'staff' | 'interview_manager';
   image?: string | null;
   /** ISO timestamps (UTC). Missing from older backends and cached sessions. */
   createdAt?: string | null;

@@ -21,7 +21,6 @@ import SourceLine from '../components/jobApplies/SourceLine';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import JobInfoPanel from '../components/jobApplies/JobInfoPanel';
 import { useRunRefresh } from '../components/jobApplies/useRunRefresh';
-import { useAuth } from '../auth/useAuth';
 import Segmented from '../components/jobApplies/Segmented';
 import {
   ROW_STATUS_LABEL,
@@ -148,7 +147,6 @@ export default function JobApplyRun() {
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [infoRow, setInfoRow] = useState<string | null>(null);
-  const { user } = useAuth();
   // An earlier step opened from the step track (null: the run's own step).
   const [stepView, setStepView] = useState<Step | null>(null);
   const [tailorCoverLetter, setTailorCoverLetter] = useState(false);
@@ -1089,7 +1087,7 @@ export default function JobApplyRun() {
             rowId={infoRow}
             runId={runId}
             onClose={() => setInfoRow(null)}
-            canEdit={user?.role === 'admin' || user?.role === 'staff'}
+            canEdit
           />
         )}
       </div>

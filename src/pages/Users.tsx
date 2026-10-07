@@ -2,7 +2,7 @@ import useSWR from 'swr';
 import { useState, useEffect } from 'react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
-import { Pencil, Trash2, Search, Plus, Users, UserCheck, UserX, Shield, Check } from 'lucide-react';
+import { Pencil, Trash2, Search, Plus, Users, UserCheck, UserX, Shield, Check, CalendarCheck } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify, messageOf } from '../lib/notify';
 import PageHeader from '../components/PageHeader';
@@ -18,10 +18,16 @@ interface User {
   createdAt?: string;
   updatedAt?: string;
   isActive?: boolean;
-  /** Who coordinates this user's caller interviews in Slack. */
-  interviewManagerId?: string | null;
-  interviewManagerName?: string | null;
+  /** Slack member ID (U…), typed in by the user on Profile → Slack. */
+  slackUserId?: string | null;
 }
+
+const ROLE_OPTIONS = [
+  { value: 'staff', label: 'Staff' },
+  { value: 'interview_manager', label: 'Interview manager' },
+  { value: 'admin', label: 'Admin' },
+];
+const roleLabel = (role: string) => ROLE_OPTIONS.find((o) => o.value === role)?.label ?? role;
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,10 +48,7 @@ export default function UsersPage() {
     role: 'staff',
     phone: '',
     birthday: '',
-    interviewManagerId: '',
   });
-  // Everyone, for the interview-manager picker (only while editing someone).
-  const { data: everyone } = useSWR(open && editing ? 'users-lookup-managers' : null, () => api.lookupUsers());
 
   const [isSearching, setIsSearching] = useState(false);
 
@@ -79,10 +82,9 @@ export default function UsersPage() {
         role: editing.role || 'staff',
         phone: editing.phone || '',
         birthday: editing.birthday ? new Date(editing.birthday).toISOString().slice(0, 10) : '',
-        interviewManagerId: editing.interviewManagerId || '',
       });
     } else {
-      setForm({ name: '', email: '', role: 'staff', phone: '', birthday: '', interviewManagerId: '' });
+      setForm({ name: '', email: '', role: 'staff', phone: '', birthday: '' });
     }
   }, [editing]);
 
@@ -93,17 +95,11 @@ export default function UsersPage() {
     setError('');
     setSaving(true);
     try {
-      const { interviewManagerId, ...fields } = form;
       if (editing) {
-        // Only a changed manager is sent, so other edits never re-check an existing choice.
-        const managerChanged = interviewManagerId !== (editing.interviewManagerId || '');
-        await api.updateUser(editing._id, {
-          ...fields,
-          ...(managerChanged ? { interviewManagerId: interviewManagerId || null } : {}),
-        });
+        await api.updateUser(editing._id, form);
         notify.success(`User "${form.name || form.email}" updated`);
       } else {
-        await api.createUser(fields);
+        await api.createUser(form);
         notify.success(`User "${form.name || form.email}" created`);
       }
       await mutate();
@@ -152,7 +148,7 @@ export default function UsersPage() {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
-      case 'accountant': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
+      case 'interview_manager': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
       case 'staff': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800';
       default: return 'bg-zinc-100 dark:bg-zinc-800 text-strong border-zinc-200 dark:border-zinc-700';
     }
@@ -161,7 +157,7 @@ export default function UsersPage() {
   const getRoleIcon = (role: string) => {
     switch (role) {
       case 'admin': return <Shield size={16} aria-hidden />;
-      case 'accountant': return <UserCheck size={16} aria-hidden />;
+      case 'interview_manager': return <CalendarCheck size={16} aria-hidden />;
       case 'staff': return <Users size={16} aria-hidden />;
       default: return <Users size={16} aria-hidden />;
     }
@@ -206,9 +202,7 @@ export default function UsersPage() {
               onChange={setRoleFilter}
               options={[
                 { value: '', label: 'All Roles' },
-                { value: 'admin', label: 'Admin' },
-                { value: 'accountant', label: 'Accountant' },
-                { value: 'staff', label: 'Staff' }
+                ...ROLE_OPTIONS,
               ]}
             />
           </div>
@@ -275,7 +269,7 @@ export default function UsersPage() {
               <th className="px-4 py-3 font-medium text-strong">User</th>
               <th className="px-4 py-3 font-medium text-strong">Role</th>
               <th className="px-4 py-3 font-medium text-strong">Status</th>
-              <th className="px-4 py-3 font-medium text-strong">Interview manager</th>
+              <th className="px-4 py-3 font-medium text-strong">Slack ID</th>
               <th className="px-4 py-3 font-medium text-strong">Created</th>
               <th className="px-4 py-3 font-medium text-strong w-32">Actions</th>
             </tr>
@@ -331,7 +325,7 @@ export default function UsersPage() {
                     <div className="flex items-center">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
                         {getRoleIcon(user.role)}
-                        <span className="ml-1 capitalize">{user.role}</span>
+                        <span className="ml-1">{roleLabel(user.role)}</span>
                       </span>
                     </div>
                   </td>
@@ -351,7 +345,11 @@ export default function UsersPage() {
                   </td>
 
                   <td className="px-4 py-4 text-sm">
-                    {user.interviewManagerName || <span className="text-muted">—</span>}
+                    {user.slackUserId ? (
+                      <span className="font-mono select-all">{user.slackUserId}</span>
+                    ) : (
+                      <span className="text-muted" title="Not set: Slack messages show their name without a ping">—</span>
+                    )}
                   </td>
 
                   <td className="px-4 py-4 text-muted text-sm">
@@ -451,30 +449,14 @@ export default function UsersPage() {
               label="Role"
               value={form.role}
               onChange={(value) => setForm({ ...form, role: value })}
-              options={[
-                { value: 'staff', label: 'Staff' },
-                { value: 'accountant', label: 'Accountant' },
-                { value: 'admin', label: 'Admin' }
-              ]}
+              options={ROLE_OPTIONS}
             />
+            {form.role === 'interview_manager' && (
+              <p className="text-xs text-muted mt-1">
+                Tagged on every caller interview in Slack and can view all interviews.
+              </p>
+            )}
           </div>
-
-          {editing && (
-            <div>
-              <Select
-                label="Interview manager"
-                value={form.interviewManagerId}
-                onChange={(value) => setForm({ ...form, interviewManagerId: value })}
-                options={[
-                  { value: '', label: 'None' },
-                  ...(everyone?.users ?? [])
-                    .filter((u) => u._id !== editing._id && (u.isActive !== false || u._id === form.interviewManagerId))
-                    .map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
-                ]}
-              />
-              <p className="text-xs text-muted mt-1">Tagged in this user's #caller interview threads on Slack.</p>
-            </div>
-          )}
 
           <div>
             <label className="block text-sm font-medium mb-2 text-body" htmlFor="user-phone">Phone Number</label>

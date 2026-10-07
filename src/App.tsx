@@ -12,7 +12,6 @@ import Transactions from './pages/Transactions';
 import Report from './pages/Report';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
-import Accountants from './pages/Accountants';
 import InterviewsPage from './pages/interviews/InterviewsPage';
 import InterviewsAnalyze from './pages/InterviewsAnalyze';
 import InterviewFocus from './pages/InterviewFocus';
@@ -110,7 +109,6 @@ export default function App() {
       <Route path="/preferences" element={<Protected><Preferences /></Protected>} />
       <Route path="/users" element={<Protected><Users /></Protected>} />
       <Route path="/profile" element={<Protected><Profile /></Protected>} />
-      <Route path="/accountants" element={<Protected><Accountants /></Protected>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
