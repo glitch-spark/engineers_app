@@ -71,19 +71,3 @@ export function normalizeSlackTimezone(value?: string | null): string {
   if (ALLOWED.has(cleaned)) return cleaned;
   return 'America/New_York';
 }
-
-export function padTimePart(n: number): string {
-  return String(Math.max(0, Math.min(59, n))).padStart(2, '0');
-}
-
-export function timeInputFromParts(hour: number, minute: number): string {
-  return `${padTimePart(hour)}:${padTimePart(minute)}`;
-}
-
-export function partsFromTimeInput(value: string): { hour: number; minute: number } {
-  const [h, m] = value.split(':').map((x) => Number(x));
-  return {
-    hour: Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 8,
-    minute: Number.isFinite(m) ? Math.min(59, Math.max(0, m)) : 0,
-  };
-}

@@ -4,12 +4,7 @@ import { Loader2, Save, Zap, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { messageOf, notify } from '../lib/notify';
-import {
-  listTimeZones,
-  normalizeSlackTimezone,
-  partsFromTimeInput,
-  timeInputFromParts,
-} from '../lib/slackDigestPrefs';
+import { listTimeZones, normalizeSlackTimezone } from '../lib/slackDigestPrefs';
 import PageHeader from '../components/PageHeader';
 
 interface ProfileData {
@@ -523,8 +518,6 @@ function SlackAlertsCard() {
   const [testing, setTesting] = useState(false);
   const [memberId, setMemberId] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
-  const [digestTime, setDigestTime] = useState('08:00');
-  const [alertsOn, setAlertsOn] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const timeZones = useMemo(() => listTimeZones(), []);
 
@@ -532,8 +525,6 @@ function SlackAlertsCard() {
     if (data && !loaded) {
       setMemberId(data.slackUserId ?? '');
       setTimezone(normalizeSlackTimezone(data.slackTimezone));
-      setDigestTime(timeInputFromParts(data.slackDigestHour ?? 8, data.slackDigestMinute ?? 0));
-      setAlertsOn(!!data.slackAlertsEnabled);
       setLoaded(true);
     }
   }, [data, loaded]);
@@ -555,15 +546,9 @@ function SlackAlertsCard() {
   async function handleSavePrefs() {
     setSaving(true);
     try {
-      const { hour, minute } = partsFromTimeInput(digestTime);
-      await api.updateSlackPrefs({
-        slackAlertsEnabled: alertsOn,
-        slackTimezone: timezone,
-        slackDigestHour: hour,
-        slackDigestMinute: minute,
-      });
+      await api.updateSlackPrefs({ slackTimezone: timezone });
       await mutate();
-      notify.success('Slack digest preferences saved');
+      notify.success('Timezone saved');
     } catch (err) {
       notify.error(err, 'Failed to save Slack preferences');
     } finally {
@@ -595,8 +580,8 @@ function SlackAlertsCard() {
         <div>
           <h2 className="card-header mb-0">Slack</h2>
           <p className="text-muted">
-            Your Slack member ID lets the bot tag you in #caller interview threads and send you a daily
-            digest of your interviews (only you see the digest).
+            Your Slack member ID lets the bot tag you in #caller interview threads and the daily caller
+            interviews list.
           </p>
         </div>
         {connected ? (
@@ -649,17 +634,7 @@ function SlackAlertsCard() {
 
       {connected && (
         <div className="mt-6 space-y-5 border-t border-zinc-200/80 pt-5 dark:border-zinc-800">
-          <label className="flex items-center gap-2.5 text-sm text-zinc-800 dark:text-zinc-200">
-            <input
-              type="checkbox"
-              checked={alertsOn}
-              onChange={(e) => setAlertsOn(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400 dark:border-zinc-600"
-            />
-            Enable daily interview digest
-          </label>
-
-          <div className="grid gap-4 sm:grid-cols-2 sm:max-w-xl">
+          <div className="sm:max-w-xs">
             <div className="form-group mb-0">
               <label className="form-label" htmlFor="slackTimezone">
                 Timezone
@@ -677,26 +652,17 @@ function SlackAlertsCard() {
                 ))}
               </select>
             </div>
-            <div className="form-group mb-0">
-              <label className="form-label" htmlFor="slackDigestTime">
-                Digest time
-              </label>
-              <input
-                id="slackDigestTime"
-                type="time"
-                value={digestTime}
-                onChange={(e) => setDigestTime(e.target.value)}
-                className="input focus-ring"
-              />
-            </div>
           </div>
 
-          <p className="text-xs text-muted">Offsets include daylight time for that city (UTC−12 through UTC+14).</p>
+          <p className="text-xs text-muted">
+            Sets your local day for in-app alerts and daily limits. Offsets include daylight time for that city
+            (UTC−12 through UTC+14).
+          </p>
 
           <div className="flex flex-wrap gap-3">
             <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
-              Save preferences
+              Save timezone
             </button>
             <button type="button" className="btn-accent" disabled={!botReady || testing} onClick={handleTestDm}>
               {testing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Zap className="h-4 w-4" aria-hidden />}

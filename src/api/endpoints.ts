@@ -40,10 +40,7 @@ export interface ProfileShape {
   screeningPromptBody?: string;
   coverLetterPromptBody?: string;
   slackConnected?: boolean;
-  slackAlertsEnabled?: boolean;
   slackTimezone?: string;
-  slackDigestHour?: number;
-  slackDigestMinute?: number;
   slackBotConfigured?: boolean;
 }
 
@@ -133,13 +130,10 @@ export const changePassword = (body: { currentPassword: string; newPassword: str
 
 export type SlackStatus = {
   slackConnected: boolean;
-  /** The member ID the user typed (U…); used for @-mentions and DMs. */
+  /** The member ID the user typed (U…); used for @-mentions and the test DM. */
   slackUserId: string | null;
-  slackAlertsEnabled: boolean;
   slackTimezone: string;
   slackTimezones?: { value: string; label: string }[];
-  slackDigestHour: number;
-  slackDigestMinute: number;
   slackBotConfigured: boolean;
 };
 
@@ -148,10 +142,7 @@ export const getSlackStatus = () => apiFetch<SlackStatus>('/integrations/slack/s
 /** `slackUserId`: a member ID like U04ABC12345; null or '' clears it. 409 when another user has it. */
 export const updateSlackPrefs = (body: {
   slackUserId?: string | null;
-  slackAlertsEnabled?: boolean;
   slackTimezone?: string;
-  slackDigestHour?: number;
-  slackDigestMinute?: number;
 }) =>
   apiFetch<SlackStatus>('/integrations/slack/prefs', {
     method: 'PATCH',
