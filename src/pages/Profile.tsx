@@ -55,6 +55,9 @@ async function readResizedDataURL(file: File, maxDim = 256): Promise<string> {
   }
 }
 
+/** The "Resume LLM (free tier)" card is hidden for now; set true to show it again. */
+const SHOW_FREE_LLM_SETTINGS = false;
+
 /** Account timestamps come from /auth/me; show "—" when the backend hasn't recorded one yet. */
 function formatAccountDate(iso: string | null | undefined, opts: Intl.DateTimeFormatOptions): string {
   if (!iso) return '—';
@@ -368,7 +371,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <FreeLlmSettingsCard />
+      {SHOW_FREE_LLM_SETTINGS && <FreeLlmSettingsCard />}
 
       <SlackAlertsCard />
 
