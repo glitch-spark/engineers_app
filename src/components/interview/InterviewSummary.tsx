@@ -14,6 +14,7 @@ import {
 } from '../../lib/stageBadge';
 import { STATUS_DOT } from '../../pages/interviews/RoundTrail';
 import ActionMenu from '../ActionMenu';
+import ConfirmedBadge, { needsConfirmBadge } from './ConfirmedBadge';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
 
 function when(iso: string | null | undefined, end: string | null | undefined, tz: string): string {
@@ -55,6 +56,7 @@ export default function InterviewSummary({
   tz,
   canEdit,
   onStatus,
+  onConfirm,
   onEditRound,
   onDeleteRound,
   onEditDetails,
@@ -63,6 +65,7 @@ export default function InterviewSummary({
   tz: string;
   canEdit: boolean;
   onStatus: (roundId: string, status: string) => void;
+  onConfirm: (roundId: string, confirmed: boolean) => void;
   onEditRound: (roundId: string) => void;
   onDeleteRound: (roundId: string) => void;
   onEditDetails: () => void;
@@ -128,6 +131,13 @@ export default function InterviewSummary({
               <PhoneCall size={14} className="text-sky-600" aria-hidden />
               <span>Caller: {spotRound.caller.callerName && spotRound.caller.callerName !== 'TBD' ? spotRound.caller.callerName : 'TBD'}</span>
               <span className="text-muted">· {methodLabel(spotRound.caller.method)}</span>
+              {needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && <ConfirmedBadge confirmed={spotRound.confirmed} />}
+              {canEdit && spot.kind === 'next' && needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && (
+                <button type="button" className="btn-outline btn-sm"
+                  onClick={() => onConfirm(spotRound.id, !spotRound.confirmed)}>
+                  {spotRound.confirmed ? 'Unconfirm' : 'Mark confirmed'}
+                </button>
+              )}
               {link && spot.kind === 'next' && (
                 <span className="ml-auto flex gap-1.5">
                   <button type="button" className="btn-outline btn-sm" onClick={() => copy(link)}>
@@ -222,6 +232,7 @@ export default function InterviewSummary({
                   {e.caller?.enabled && (
                     <span className="inline-flex items-center gap-1">
                       <PhoneCall size={12} aria-hidden /> {e.caller.callerName && e.caller.callerName !== 'TBD' ? e.caller.callerName : 'Caller TBD'}
+                      {needsConfirmBadge(e.status, e.scheduledAt, now) && <ConfirmedBadge confirmed={e.confirmed} />}
                     </span>
                   )}
                   {words > 0 && (

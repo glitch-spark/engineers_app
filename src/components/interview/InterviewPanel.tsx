@@ -96,6 +96,17 @@ export default function InterviewPanel({
     }
   };
 
+  const setRoundConfirmed = async (id: string, confirmed: boolean) => {
+    if (!iv) return;
+    try {
+      const saved = await api.updateInterviewStage(iv._id, id, { confirmed });
+      applySaved(saved as unknown as Interview);
+      notify.success(confirmed ? 'Marked confirmed' : 'Confirmation removed');
+    } catch (err) {
+      notify.error(err, 'Failed to update confirmation');
+    }
+  };
+
   const runDelete = async () => {
     if (!iv || !confirm) return;
     setBusy(true);
@@ -171,6 +182,7 @@ export default function InterviewPanel({
               tz={tz}
               canEdit={canEdit}
               onStatus={setRoundStatus}
+              onConfirm={setRoundConfirmed}
               onEditRound={(id) => openForm('editRound', id)}
               onDeleteRound={(id) => setConfirm({ kind: 'round', id })}
               onEditDetails={() => openForm('editDetails')}

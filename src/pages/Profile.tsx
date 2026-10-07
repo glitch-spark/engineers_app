@@ -55,6 +55,9 @@ async function readResizedDataURL(file: File, maxDim = 256): Promise<string> {
   }
 }
 
+/** The "Resume LLM (free tier)" card is hidden for now; set true to show it again. */
+const SHOW_FREE_LLM_SETTINGS = false;
+
 /** Account timestamps come from /auth/me; show "—" when the backend hasn't recorded one yet. */
 function formatAccountDate(iso: string | null | undefined, opts: Intl.DateTimeFormatOptions): string {
   if (!iso) return '—';
@@ -368,7 +371,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <FreeLlmSettingsCard />
+      {SHOW_FREE_LLM_SETTINGS && <FreeLlmSettingsCard />}
 
       <SlackAlertsCard />
 
@@ -774,8 +777,9 @@ function FreeLlmSettingsCard() {
 function SlackAlertsCard() {
   const { data, mutate } = useSWR('profile-slack', () => api.getSlackStatus());
   const [saving, setSaving] = useState(false);
+  const [savingId, setSavingId] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+  const [memberId, setMemberId] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
   const [digestTime, setDigestTime] = useState('08:00');
   const [alertsOn, setAlertsOn] = useState(true);
@@ -783,24 +787,8 @@ function SlackAlertsCard() {
   const timeZones = useMemo(() => listTimeZones(), []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const slack = params.get('slack');
-    if (!slack) return;
-    if (slack === 'connected') {
-      notify.success('Slack connected');
-      mutate();
-    } else if (slack === 'error') {
-      notify.error(params.get('detail') || 'Slack connection failed');
-    }
-    params.delete('slack');
-    params.delete('detail');
-    const next = params.toString();
-    const url = `${window.location.pathname}${next ? `?${next}` : ''}`;
-    window.history.replaceState({}, '', url);
-  }, [mutate]);
-
-  useEffect(() => {
     if (data && !loaded) {
+      setMemberId(data.slackUserId ?? '');
       setTimezone(normalizeSlackTimezone(data.slackTimezone));
       setDigestTime(timeInputFromParts(data.slackDigestHour ?? 8, data.slackDigestMinute ?? 0));
       setAlertsOn(!!data.slackAlertsEnabled);
@@ -808,28 +796,17 @@ function SlackAlertsCard() {
     }
   }, [data, loaded]);
 
-  async function handleConnect() {
-    setConnecting(true);
+  async function saveMemberId(value: string | null) {
+    setSavingId(true);
     try {
-      const { url } = await api.startSlackOAuth();
-      window.location.href = url;
+      const next = await api.updateSlackPrefs({ slackUserId: value });
+      setMemberId(next.slackUserId ?? '');
+      await mutate(next, { revalidate: false });
+      notify.success(next.slackUserId ? 'Slack member ID saved' : 'Slack member ID removed');
     } catch (err) {
-      notify.error(err, 'Could not start Slack connect');
-      setConnecting(false);
-    }
-  }
-
-  async function handleDisconnect() {
-    setSaving(true);
-    try {
-      await api.disconnectSlack();
-      setLoaded(false);
-      await mutate();
-      notify.success('Slack disconnected');
-    } catch (err) {
-      notify.error(err, 'Failed to disconnect Slack');
+      notify.error(err, 'Failed to save your Slack member ID');
     } finally {
-      setSaving(false);
+      setSavingId(false);
     }
   }
 
@@ -864,67 +841,69 @@ function SlackAlertsCard() {
     }
   }
 
-  const connected = !!data?.slackConnected;
-  const oauthReady = !!data?.slackOAuthConfigured;
+  const saved = (data?.slackUserId ?? '').trim();
+  const connected = !!saved;
   const botReady = !!data?.slackBotConfigured;
   const zoneOptions = data?.slackTimezones?.length ? data.slackTimezones : timeZones;
+  const dirty = memberId.trim().toUpperCase() !== saved;
 
   return (
     <div className="card mt-4">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h2 className="card-header mb-0">Slack interview digest</h2>
+          <h2 className="card-header mb-0">Slack</h2>
           <p className="text-muted">
-            You'll get a DM when you add or reschedule an interview, plus a daily digest
-            of that day's schedule. Only you see it.
+            Your Slack member ID lets the bot tag you in #caller interview threads and send you a daily
+            digest of your interviews (only you see the digest).
           </p>
         </div>
         {connected ? (
           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-            Connected
+            Linked
           </span>
         ) : (
           <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-            Not connected
+            Not linked
           </span>
         )}
       </div>
 
-      {!oauthReady && (
-        <p className="mb-4 text-sm text-amber-800 dark:text-amber-200">
-          Slack OAuth is not configured on the server (`SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`).
-        </p>
-      )}
-
-      <div className="flex flex-wrap gap-3">
-        {!connected ? (
-          <button
-            type="button"
-            className="btn"
-            disabled={!oauthReady || connecting}
-            onClick={handleConnect}
-          >
-            {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            Connect Slack
+      <form
+        className="form-group mb-0 sm:max-w-xl"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void saveMemberId(memberId.trim() || null);
+        }}
+      >
+        <label className="form-label" htmlFor="slackMemberId">
+          Slack member ID
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <input
+            id="slackMemberId"
+            value={memberId}
+            onChange={(e) => setMemberId(e.target.value)}
+            placeholder="U04ABC12345"
+            autoComplete="off"
+            spellCheck={false}
+            className="input focus-ring min-w-0 flex-1 font-mono uppercase"
+          />
+          <button type="submit" className="btn" disabled={savingId || !dirty}>
+            {savingId ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+            Save
           </button>
-        ) : (
-          <>
-            <button type="button" className="btn-outline" disabled={saving} onClick={handleDisconnect}>
-              Disconnect
+          {connected && (
+            <button type="button" className="btn-outline" disabled={savingId} onClick={() => void saveMemberId(null)}>
+              Clear
             </button>
-            <button
-              type="button"
-              className="btn-accent"
-              disabled={!botReady || testing}
-              onClick={handleTestDm}
-            >
-              {testing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Zap className="h-4 w-4" aria-hidden />}
-              Send test DM
-            </button>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+        <p className="mt-1.5 text-xs text-muted">
+          In Slack: click your profile picture → <strong>Profile</strong> → <strong>⋮</strong> →{' '}
+          <strong>Copy member ID</strong>.
+        </p>
+      </form>
 
       {connected && (
         <div className="mt-6 space-y-5 border-t border-zinc-200/80 pt-5 dark:border-zinc-800">
@@ -970,15 +949,18 @@ function SlackAlertsCard() {
             </div>
           </div>
 
-          <p className="text-xs text-muted">
-            Offsets include daylight time for that city (UTC−12 through UTC+14). Interviews are
-            date-only, so you get one daily summary — not a 30-minute reminder.
-          </p>
+          <p className="text-xs text-muted">Offsets include daylight time for that city (UTC−12 through UTC+14).</p>
 
-          <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
-            Save preferences
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+              Save preferences
+            </button>
+            <button type="button" className="btn-accent" disabled={!botReady || testing} onClick={handleTestDm}>
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Zap className="h-4 w-4" aria-hidden />}
+              Send test DM
+            </button>
+          </div>
         </div>
       )}
     </div>

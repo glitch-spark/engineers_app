@@ -28,6 +28,8 @@ export type RoundFormState = {
   callerMethod: string;
   callerMethodValue: string;
   callerCoworkerIds: string[];
+  /** Caller lined up (edit an existing caller round only). */
+  confirmed: boolean;
 };
 
 export const DEFAULT_START_TIME = '10:00';
@@ -57,6 +59,7 @@ export function blankRound(
     callerMethod: '',
     callerMethodValue: '',
     callerCoworkerIds: [],
+    confirmed: false,
   };
 }
 
@@ -80,6 +83,7 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     callerMethod: caller?.method || '',
     callerMethodValue: caller?.methodValue || '',
     callerCoworkerIds: caller?.coworkerIds ?? [],
+    confirmed: !!e.confirmed,
   };
 }
 

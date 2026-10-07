@@ -49,7 +49,6 @@ export interface ProfileShape {
   slackTimezone?: string;
   slackDigestHour?: number;
   slackDigestMinute?: number;
-  slackOAuthConfigured?: boolean;
   slackBotConfigured?: boolean;
 }
 
@@ -172,23 +171,21 @@ export const testFreeLlm = () =>
 
 export type SlackStatus = {
   slackConnected: boolean;
+  /** The member ID the user typed (U…); used for @-mentions and DMs. */
+  slackUserId: string | null;
   slackAlertsEnabled: boolean;
   slackTimezone: string;
   slackTimezones?: { value: string; label: string }[];
   slackDigestHour: number;
   slackDigestMinute: number;
-  slackOAuthConfigured: boolean;
   slackBotConfigured: boolean;
 };
 
 export const getSlackStatus = () => apiFetch<SlackStatus>('/integrations/slack/status');
 
-export const startSlackOAuth = () =>
-  postJSON<{ url: string }>('/integrations/slack/oauth-start', {});
-
-export const disconnectSlack = () => del<SlackStatus>('/integrations/slack/disconnect');
-
+/** `slackUserId`: a member ID like U04ABC12345; null or '' clears it. 409 when another user has it. */
 export const updateSlackPrefs = (body: {
+  slackUserId?: string | null;
   slackAlertsEnabled?: boolean;
   slackTimezone?: string;
   slackDigestHour?: number;
@@ -492,7 +489,7 @@ export const lookupAccounts = () =>
 // ---------- users lookup (filter dropdowns; available to all authed users) ----------
 
 export const lookupUsers = (params?: { excludeRole?: string }) =>
-  apiFetch<{ users: { _id: string; name: string | null; email: string | null; role?: string }[] }>(
+  apiFetch<{ users: { _id: string; name: string | null; email: string | null; role?: string; isActive?: boolean }[] }>(
     `/users/lookup${qs(params)}`
   );
 
@@ -689,9 +686,12 @@ export interface InterviewStageEntry {
   interviewerName?: string | null;
   endsAt?: string | null;
   caller?: InterviewCaller | null;
+  /** Caller rounds: the caller is lined up. Cleared when the round's time changes. */
+  confirmed?: boolean;
 }
 
-export type InterviewStageInput = Partial<RoundInput>;
+/** `confirmed` only on caller rounds (owner or admin). */
+export type InterviewStageInput = Partial<RoundInput> & { confirmed?: boolean };
 
 export const addInterviewStage = (id: string, body: RoundInput & { markPreviousPassed?: boolean }) =>
   postJSON<Record<string, unknown>>(`/interviews/${id}/stages`, body);

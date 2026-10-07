@@ -18,6 +18,9 @@ interface User {
   createdAt?: string;
   updatedAt?: string;
   isActive?: boolean;
+  /** Who coordinates this user's caller interviews in Slack. */
+  interviewManagerId?: string | null;
+  interviewManagerName?: string | null;
 }
 
 export default function UsersPage() {
@@ -39,7 +42,10 @@ export default function UsersPage() {
     role: 'staff',
     phone: '',
     birthday: '',
+    interviewManagerId: '',
   });
+  // Everyone, for the interview-manager picker (only while editing someone).
+  const { data: everyone } = useSWR(open && editing ? 'users-lookup-managers' : null, () => api.lookupUsers());
 
   const [isSearching, setIsSearching] = useState(false);
 
@@ -73,9 +79,10 @@ export default function UsersPage() {
         role: editing.role || 'staff',
         phone: editing.phone || '',
         birthday: editing.birthday ? new Date(editing.birthday).toISOString().slice(0, 10) : '',
+        interviewManagerId: editing.interviewManagerId || '',
       });
     } else {
-      setForm({ name: '', email: '', role: 'staff', phone: '', birthday: '' });
+      setForm({ name: '', email: '', role: 'staff', phone: '', birthday: '', interviewManagerId: '' });
     }
   }, [editing]);
 
@@ -86,11 +93,17 @@ export default function UsersPage() {
     setError('');
     setSaving(true);
     try {
+      const { interviewManagerId, ...fields } = form;
       if (editing) {
-        await api.updateUser(editing._id, form);
+        // Only a changed manager is sent, so other edits never re-check an existing choice.
+        const managerChanged = interviewManagerId !== (editing.interviewManagerId || '');
+        await api.updateUser(editing._id, {
+          ...fields,
+          ...(managerChanged ? { interviewManagerId: interviewManagerId || null } : {}),
+        });
         notify.success(`User "${form.name || form.email}" updated`);
       } else {
-        await api.createUser(form);
+        await api.createUser(fields);
         notify.success(`User "${form.name || form.email}" created`);
       }
       await mutate();
@@ -262,6 +275,7 @@ export default function UsersPage() {
               <th className="px-4 py-3 font-medium text-strong">User</th>
               <th className="px-4 py-3 font-medium text-strong">Role</th>
               <th className="px-4 py-3 font-medium text-strong">Status</th>
+              <th className="px-4 py-3 font-medium text-strong">Interview manager</th>
               <th className="px-4 py-3 font-medium text-strong">Created</th>
               <th className="px-4 py-3 font-medium text-strong w-32">Actions</th>
             </tr>
@@ -269,7 +283,7 @@ export default function UsersPage() {
           <tbody className="row-divider">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted">
                   <div role="status" className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading users...
@@ -278,7 +292,7 @@ export default function UsersPage() {
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted">
                   {searchTerm || roleFilter || statusFilter ? (
                     <div>
                       <p>No users found matching your search criteria.</p>
@@ -334,6 +348,10 @@ export default function UsersPage() {
                         Active
                       </span>
                     )}
+                  </td>
+
+                  <td className="px-4 py-4 text-sm">
+                    {user.interviewManagerName || <span className="text-muted">—</span>}
                   </td>
 
                   <td className="px-4 py-4 text-muted text-sm">
@@ -440,6 +458,23 @@ export default function UsersPage() {
               ]}
             />
           </div>
+
+          {editing && (
+            <div>
+              <Select
+                label="Interview manager"
+                value={form.interviewManagerId}
+                onChange={(value) => setForm({ ...form, interviewManagerId: value })}
+                options={[
+                  { value: '', label: 'None' },
+                  ...(everyone?.users ?? [])
+                    .filter((u) => u._id !== editing._id && (u.isActive !== false || u._id === form.interviewManagerId))
+                    .map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
+                ]}
+              />
+              <p className="text-xs text-muted mt-1">Tagged in this user's #caller interview threads on Slack.</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-2 text-body" htmlFor="user-phone">Phone Number</label>

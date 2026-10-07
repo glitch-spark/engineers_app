@@ -77,6 +77,14 @@ export default function InterviewForm({
       time: prefill?.time,
       stage: prefill?.stage ?? (mode === 'addRound' ? nextStage(history) : ''),
     }, tz)));
+  // The saved round's date and time: changing either needs the caller lined up again.
+  const [savedWhen] = useState(() => (entry ? roundFromEntry(entry, tz) : null));
+  const updateRound = (p: Partial<RoundFormState>) => setRound((r) => {
+    const next = { ...r, ...p };
+    const moved = !!savedWhen && (next.date !== savedWhen.date || next.time !== savedWhen.time);
+    if (moved && ('date' in p || 'time' in p)) next.confirmed = false;
+    return next;
+  });
   const [markPrevious, setMarkPrevious] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -109,8 +117,12 @@ export default function InterviewForm({
           markPreviousPassed: previousOpen && markPrevious,
         });
       } else if (mode === 'editRound' && interview && roundId) {
-        const body = roundPayload(round, tz);
+        const body: api.InterviewStageInput = roundPayload(round, tz);
         if (!round.callerEnabled && entry?.caller?.enabled) body.caller = { enabled: false };
+        // Send the tick when it differs from what the server would keep: a new time clears confirmed.
+        const moved = !!savedWhen && (round.date !== savedWhen.date || round.time !== savedWhen.time);
+        const kept = moved ? false : !!entry?.confirmed;
+        if (round.callerEnabled && round.confirmed !== kept) body.confirmed = round.confirmed;
         saved = await api.updateInterviewStage(interview._id, roundId, body);
       }
       notify.success(SAVED_MESSAGE[mode]);
@@ -147,10 +159,11 @@ export default function InterviewForm({
         {showRound && (
           <RoundFields
             round={round}
-            onChange={(p) => setRound((r) => ({ ...r, ...p }))}
+            onChange={updateRound}
             idPrefix={idPrefix}
             tz={tz}
             legend={mode === 'new' ? 'First round' : mode === 'addRound' ? 'Next round' : 'Round'}
+            confirmable={mode === 'editRound' && !!entry?.caller?.enabled}
           />
         )}
         {previousOpen && previous && (

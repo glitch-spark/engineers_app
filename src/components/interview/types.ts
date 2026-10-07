@@ -30,6 +30,8 @@ export type Interview = {
   note?: string;
   stageHistory?: InterviewStageEntry[];
   caller?: InterviewCaller | null;
+  /** The latest round's confirmed flag. */
+  confirmed?: boolean;
   ownerName?: string | null;
   ownerEmail?: string | null;
   createdAt?: string;
