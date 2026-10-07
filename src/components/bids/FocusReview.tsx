@@ -36,6 +36,14 @@ const fetchShots = ([, id]: readonly [string, string]) => api.bidScreenshots(id)
 const titleOf = (b: Bid) => b.jobTitle || b.jobDomain || 'Untitled job';
 const changedText = (b: Bid) => `Changed by ${b.reviewedByName || 'another reviewer'} to ${b.status}`;
 
+/** After a decision in a given list: the next bid in it, else the first one still pending (`from` excluded). */
+function nextInList(ids: string[], bids: Bid[], from: Bid): string | null {
+  const after = ids[ids.indexOf(from.id) + 1];
+  if (after) return after;
+  const pending = new Set(bids.filter((b) => b.status === 'pending').map((b) => b.id));
+  return ids.find((id) => id !== from.id && pending.has(id)) ?? null;
+}
+
 /** The pending bid to show after `from`: the next one in order, else the oldest left (`from` itself excluded). */
 function nextPending(bids: Bid[], from: Bid): string | null {
   const left = bids.filter((b) => b.status === 'pending' && b.id !== from.id).sort(byFirstAt);
@@ -58,19 +66,22 @@ const scopeLabel = (scope: FocusScope) => {
 };
 
 /**
- * Bids of a fixed day or pay week (one bidder or all), oldest first, decided from the keyboard. `set: 'pending'` walks
- * the pending bids; `set: 'all'` walks every bid of the scope, decided ones too, starting at `startAt`.
+ * Full-screen review overlay over the bids of a fixed day or pay week (one bidder or all), decided from the keyboard.
+ * `ids` (e.g. a filtered day table, in its order) is the list to walk, starting at `startAt`; without it
+ * `set: 'pending'` walks the pending bids oldest first and `set: 'all'` every bid of the scope.
  */
 export default function FocusReview({
   scope,
   bidderId,
   startAt,
+  ids,
   set,
   onExit,
 }: {
   scope: FocusScope;
   bidderId?: string;
   startAt?: string;
+  ids?: string[];
   set: 'pending' | 'all';
   onExit: () => void;
 }) {
@@ -96,13 +107,28 @@ export default function FocusReview({
     (!currentId && seed.current ? all.find((b) => b.id === seed.current) : undefined) ??
     pending[0] ??
     null;
-  // J/K move through every bid ('all'), or the pending bids plus the shown one if it no longer is ('pending').
-  const nav = useMemo(
-    () => (set === 'all' ? all : current && current.status !== 'pending' ? [...pending, current].sort(byFirstAt) : pending),
-    [set, all, pending, current],
-  );
+  // ←/→ move through the given list, every bid ('all'), or the pending bids plus the shown one if it no longer is.
+  const nav = useMemo(() => {
+    if (ids) {
+      const byId = new Map(all.map((b) => [b.id, b]));
+      return ids.map((id) => byId.get(id)).filter((b): b is Bid => !!b);
+    }
+    if (set === 'all') return all;
+    return current && current.status !== 'pending' ? [...pending, current].sort(byFirstAt) : pending;
+  }, [ids, set, all, pending, current]);
   const pos = current ? nav.findIndex((b) => b.id === current.id) : -1;
-  const nextId = current ? nextPending(all, current) : null;
+  const after = (bids: Bid[], from: Bid) => (ids ? nextInList(ids, bids, from) : nextPending(bids, from));
+  const nextId = current ? after(all, current) : null;
+
+  // The overlay covers the page: lock its scroll while open.
+  useEffect(() => {
+    const root = document.documentElement;
+    const prev = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = prev;
+    };
+  }, []);
 
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeRef = useRef<Notice | null>(null);
@@ -254,7 +280,7 @@ export default function FocusReview({
           { id: entry.toastId, duration: 6000, style: { fontSize: '0.875rem' } },
         );
         // From the latest data, so a bid decided elsewhere in the meantime is skipped.
-        go(nextPending(latest?.bids ?? [], bid));
+        go(after(latest?.bids ?? [], bid));
       } catch (err) {
         notify.error(err, `Failed to ${next === 'approved' ? 'approve' : 'reject'} bid`);
       }
@@ -337,18 +363,20 @@ export default function FocusReview({
   onKeyRef.current = (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || dialogIsOpen()) return;
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    const arrow = key === 'ArrowLeft' || key === 'ArrowRight';
-    if (e.repeat && !arrow) return;
+    const stepKey = key === 'ArrowUp' || key === 'ArrowDown';
+    if (e.repeat && !stepKey) return;
     const reason = api.REJECT_REASONS.find((r) => r.key === key);
-    if (key === 'u') void undo();
+    if (key === 'Escape') {
+      if (rejectOpen) toggleReject();
+      else onExit();
+    } else if (key === 'u') void undo();
     else if (!current) return;
-    else if (arrow) showStep(key === 'ArrowRight' ? 1 : -1);
-    else if (key === 'j') move(1);
-    else if (key === 'k') move(-1);
+    else if (stepKey) showStep(key === 'ArrowDown' ? 1 : -1);
+    else if (key === 'ArrowRight' || key === 'j') move(1);
+    else if (key === 'ArrowLeft' || key === 'k') move(-1);
     else if (key === 'f') openFullSize();
     else if (key === 'a') void decide(current, 'approved');
     else if (key === 'r') toggleReject();
-    else if (key === 'Escape' && rejectOpen) toggleReject();
     else if (reason && rejectOpen) chooseReason(reason.value);
     else return;
     e.preventDefault();
@@ -359,8 +387,18 @@ export default function FocusReview({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const overlay = (body: React.ReactNode) => (
+    <div
+      role="region"
+      aria-label="Bid review"
+      className="fixed inset-0 z-[70] overflow-y-auto bg-zinc-950/90 p-3 backdrop-blur-sm sm:p-5"
+    >
+      <div className="mx-auto max-w-[1600px]">{body}</div>
+    </div>
+  );
+
   if (!data) {
-    return error ? (
+    return overlay(error ? (
       <div role="alert" className="panel flex flex-col items-center gap-3 px-6 py-12 text-center text-sm">
         <p className="text-red-600">{messageOf(error, 'Failed to load bids')}</p>
         <div className="flex gap-2">
@@ -369,18 +407,18 @@ export default function FocusReview({
         </div>
       </div>
     ) : (
-      <div role="status" className="flex items-center justify-center gap-3 py-10 text-muted">
+      <div role="status" className="panel flex items-center justify-center gap-3 py-10 text-muted">
         <LoadingSpinner size="md" /> Loading bids...
       </div>
-    );
+    ));
   }
 
   const pendingPos = current ? pending.findIndex((b) => b.id === current.id) : -1;
   const bidderName = bidderId ? data.summary[bidderId]?.name : 'All bidders';
   const label = scopeLabel(scope);
   const progress =
-    set === 'all' && pos >= 0
-      ? `Bid ${pos + 1} of ${all.length} · ${pending.length} pending`
+    (ids || set === 'all') && pos >= 0
+      ? `Bid ${pos + 1} of ${nav.length} · ${pending.length} pending`
       : pendingPos >= 0
         ? `Bid ${pendingPos + 1} of ${pending.length} pending`
         : `${pending.length} pending`;
@@ -400,7 +438,7 @@ export default function FocusReview({
   );
 
   if (!current) {
-    return (
+    return overlay(
       <div className="space-y-4">
         {toolbar}
         <div className="panel flex flex-col items-center gap-3 px-6 py-12 text-center">
@@ -409,12 +447,12 @@ export default function FocusReview({
           <p className="text-sm text-muted">{approved} approved · {rejected} rejected</p>
           <button type="button" className="btn" onClick={onExit}>Back</button>
         </div>
-      </div>
+      </div>,
     );
   }
 
-  return (
-    <div ref={rootRef} tabIndex={-1} className="space-y-4 outline-none">
+  return overlay(
+    <div ref={rootRef} tabIndex={-1} className="space-y-3 outline-none">
       {toolbar}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)]">
         <div className="panel min-w-0 p-3 sm:p-4">
@@ -448,10 +486,10 @@ export default function FocusReview({
           />
         </aside>
       </div>
-      <p className="hidden text-xs text-muted sm:block">
-        Keys: <Kbd>A</Kbd> approve · <Kbd>R</Kbd> reject, then <Kbd>1</Kbd>–<Kbd>6</Kbd> reason · <Kbd>J</Kbd>/<Kbd>K</Kbd> next/previous ·{' '}
-        <Kbd>←</Kbd>/<Kbd>→</Kbd> steps · <Kbd>F</Kbd> full size · <Kbd>U</Kbd> undo
+      <p className="hidden text-xs text-zinc-300 sm:block">
+        Keys: <Kbd>A</Kbd> approve · <Kbd>R</Kbd> reject, then <Kbd>1</Kbd>–<Kbd>6</Kbd> reason · <Kbd>←</Kbd>/<Kbd>→</Kbd> previous/next bid ·{' '}
+        <Kbd>↑</Kbd>/<Kbd>↓</Kbd> steps · <Kbd>F</Kbd> full size · <Kbd>U</Kbd> undo · <Kbd>Esc</Kbd> close
       </p>
-    </div>
+    </div>,
   );
 }

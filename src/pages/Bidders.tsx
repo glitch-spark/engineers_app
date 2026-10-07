@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../api/endpoints';
 import { usd } from '../lib/money';
 import PageHeader from '../components/PageHeader';
@@ -63,10 +63,16 @@ export default function BiddersPage() {
     return Object.fromEntries(all.map((b) => [b._id, b])) as Record<string, api.Bidder>;
   }, [active.data, archived.data]);
 
+  const { mutate: mutateKeys } = useSWRConfig();
   const refresh = () => {
     board.mutate();
     active.mutate();
     archived.mutate();
+  };
+  // The open day's list and the bidder's week list too (decisions made in the overlay).
+  const refreshAll = () => {
+    refresh();
+    void mutateKeys((key) => Array.isArray(key) && (key[0] === 'bids-day' || key[0] === 'bids-week'));
   };
 
   const data = board.data;
@@ -79,25 +85,31 @@ export default function BiddersPage() {
 
   const row = bidderId ? data?.bidders.find((b) => b.id === bidderId) : undefined;
 
-  // Focus viewer: a bid row opens its day at that bid (every bid of the day); the Review buttons open the pay week's
-  // pending bids. The scope is fixed by the URL, so the viewer never follows a later window.
+  // Review overlay: a bid of the day panel opens at that bid and walks the panel's list (all bids of the day after a
+  // reload, when that list is gone); the Review buttons walk the pay week's pending bids. The scope is fixed by the
+  // URL, so the overlay never follows a later window.
+  const [navIds, setNavIds] = useState<string[] | null>(null);
   const focusDay = params.get('day');
   const focusBid = params.get('bid');
   const focusWeek = week ?? weekKey;
-  const focus: { scope: FocusScope; startAt?: string; set: 'pending' | 'all' } | null =
+  const focus: { scope: FocusScope; startAt?: string; ids?: string[]; set: 'pending' | 'all' } | null =
     params.get('mode') !== 'focus'
       ? null
       : focusBid && focusDay
-        ? { scope: { day: focusDay }, startAt: focusBid, set: 'all' }
+        ? { scope: { day: focusDay }, startAt: focusBid, ids: navIds?.includes(focusBid) ? navIds : undefined, set: 'all' }
         : focusWeek
           ? { scope: { week: focusWeek }, set: 'pending' }
           : null;
   const exitFocus = () => setParam({ mode: null, bid: null });
-  // Decisions in the viewer change the counts: reload them however the viewer is left (its Back, or the browser's).
+  const reviewBid = (bidId: string, ids: string[]) => {
+    setNavIds(ids);
+    setParam({ mode: 'focus', bid: bidId, week: weekKey });
+  };
+  // Decisions in the overlay change the counts: reload them however it is left (Esc, its Close, the browser's Back).
   const wasFocus = useRef(false);
   const inFocus = !!focus;
   useEffect(() => {
-    if (wasFocus.current && !inFocus) refresh();
+    if (wasFocus.current && !inFocus) refreshAll();
     wasFocus.current = inFocus;
   });
 
@@ -122,24 +134,19 @@ export default function BiddersPage() {
     ];
   };
 
-  if (focus) {
-    return (
-      <div className="space-y-5">
-        <PageHeader title="Bidders" />
+  return (
+    <div className="space-y-5">
+      {focus && (
         <FocusReview
           key={`${'day' in focus.scope ? focus.scope.day : focus.scope.week}|${bidderId ?? ''}|${focus.startAt ?? ''}`}
           scope={focus.scope}
           bidderId={bidderId ?? undefined}
           startAt={focus.startAt}
+          ids={focus.ids}
           set={focus.set}
           onExit={exitFocus}
         />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
+      )}
       <PageHeader
         title="Bidders"
         action={!bidderId && <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>}
@@ -172,10 +179,11 @@ export default function BiddersPage() {
             weekKey={weekKey}
             bidder={byId[row.id]}
             day={params.get('day')}
-            bid={params.get('bid')}
+            reviewing={!!focus}
             tab={params.get('tab')}
             isCurrent={isCurrent}
             onParam={(patch) => setParam({ week: weekKey, ...patch })}
+            onReview={reviewBid}
             onChanged={refresh}
           />
         ) : (

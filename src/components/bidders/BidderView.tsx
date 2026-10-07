@@ -7,13 +7,14 @@ import { countryFlag } from '../../lib/countries';
 import { usd } from '../../lib/money';
 import ConfirmDialog from '../ConfirmDialog';
 import Tabs from '../Tabs';
-import BidPanel from '../bids/BidPanel';
 import RejectDialog from '../bids/RejectDialog';
 import { byFirstAt, reasonLabel } from '../bids/util';
 import BidderActions from './BidderActions';
+import DayPanel from './DayPanel';
 import DayRow from './DayRow';
 import HistoryTab from './HistoryTab';
 import SummaryTiles, { type Tile } from './SummaryTiles';
+import { dayParts } from './weekDates';
 
 /** POST /bids/review accepts 1..500 ids. */
 const BULK_MAX = 500;
@@ -27,8 +28,8 @@ const STATUS_BADGE: Record<api.BidWeekRow['status'], string> = {
 type Patch = Partial<Record<'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid', string | null>>;
 
 /**
- * One bidder's pay week: header, tiles, and tabs This week (one row per day; a day expands to its bids, a bid opens
- * in a side panel) and History (past weekly reports).
+ * One bidder's pay week: header, tiles, and tabs This week (one row per day; a day opens its bids in a side panel, a
+ * bid opens the review overlay) and History (past weekly reports).
  */
 export default function BidderView({
   row,
@@ -36,10 +37,11 @@ export default function BidderView({
   weekKey,
   bidder,
   day,
-  bid,
+  reviewing,
   tab,
   isCurrent,
   onParam,
+  onReview,
   onChanged,
 }: {
   row: api.BidWeekRow;
@@ -49,11 +51,13 @@ export default function BidderView({
   /** The full record when the viewer owns this bidder (for the ⋯ menu). */
   bidder?: api.Bidder;
   day: string | null;
-  /** The bid open in the side panel (a bid of `day`). */
-  bid: string | null;
+  /** The review overlay is open (the day panel steps aside for it). */
+  reviewing: boolean;
   tab: string | null;
   isCurrent: boolean;
   onParam: (patch: Patch) => void;
+  /** Open the review overlay at a bid of the open day, walking `ids`. */
+  onReview: (bidId: string, ids: string[]) => void;
   onChanged: () => void;
 }) {
   const shownDay = board.week.days.find((d) => d.day === day && !d.isFuture)?.day ?? null;
@@ -89,6 +93,22 @@ export default function BidderView({
       notify.error(err, `Failed to ${status === 'approved' ? 'approve' : 'reject'} bid`);
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const bulk = async (ids: string[], status: api.BidStatus, reason?: api.RejectReason) => {
+    setBulkBusy(true);
+    let updated = 0;
+    try {
+      for (let i = 0; i < ids.length; i += BULK_MAX) {
+        updated += (await api.reviewBids({ ids: ids.slice(i, i + BULK_MAX), status, ...(reason ? { reason } : {}) })).updated;
+      }
+      notify.success(`${status === 'approved' ? 'Approved' : 'Rejected'} ${updated} ${updated === 1 ? 'bid' : 'bids'}`);
+    } catch (err) {
+      notify.error(err, updated > 0 ? `Updated ${updated} bids, then failed` : 'Failed to update bids');
+    } finally {
+      setBulkBusy(false);
+      await refresh();
     }
   };
 
@@ -141,6 +161,8 @@ export default function BidderView({
 
   const sorted = useMemo(() => [...(dayBids.data?.bids ?? [])].sort(byFirstAt), [dayBids.data]);
   const activeTab = tab === 'history' ? 'history' : 'week';
+  const panelDay = shownDay ? dayParts(shownDay) : null;
+  const panelCounts = shownDay ? row.days[board.week.days.findIndex((d) => d.day === shownDay)] : null;
 
   return (
     <div className="space-y-5">
@@ -186,27 +208,30 @@ export default function BidderView({
                 day={d}
                 counts={row.days[i]}
                 timezone={board.week.timezone}
-                bids={shownDay === d.day ? (dayBids.data ? sorted : undefined) : undefined}
-                error={shownDay === d.day ? dayBids.error : undefined}
-                expanded={shownDay === d.day}
-                busyId={busyId}
-                onToggle={() => onParam({ day: shownDay === d.day ? null : d.day, bid: null })}
-                onOpenBid={(id) => onParam({ bid: id, day: d.day })}
-                onDecide={decide}
-                onApproveAllComplete={setApproveAll}
+                active={shownDay === d.day}
+                onOpen={() => onParam({ day: d.day })}
               />
             ))}
           </ul>
         )}
       </Tabs>
 
-      <BidPanel
-        bids={sorted}
-        bidId={shownDay ? bid : null}
-        busy={!!busyId}
-        onClose={() => onParam({ bid: null })}
-        onSelect={(id) => onParam({ bid: id })}
-        onDecide={decide}
+      <DayPanel
+        open={!!shownDay && !reviewing && activeTab === 'week'}
+        title={panelDay ? `${panelDay.weekday} ${panelDay.date} · ${row.name}` : ''}
+        subtitle={
+          panelCounts?.source === 'folders'
+            ? 'Folder count, not reviewed — only bids with records are listed'
+            : dayBids.data ? `${sorted.length} ${sorted.length === 1 ? 'bid' : 'bids'}` : undefined
+        }
+        bids={dayBids.data ? sorted : undefined}
+        error={dayBids.error}
+        busy={!!busyId || bulkBusy}
+        onClose={() => onParam({ day: null })}
+        onReview={onReview}
+        onDecide={(b, status) => void decide(b, status)}
+        onBulk={bulk}
+        onApproveAllComplete={setApproveAll}
       />
 
       <RejectDialog

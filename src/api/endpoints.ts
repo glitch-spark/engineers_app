@@ -2201,6 +2201,8 @@ export interface BidReviewItem {
   /** Newest completed tailored resume for this job URL on that profile. */
   tailoredResumeName: string | null;
   rejectReason: RejectReason | null;
+  /** Signed link to the Submit screenshot (else the last uploaded step); null if none. */
+  thumbUrl: string | null;
 }
 
 export interface BidDaySummary {
