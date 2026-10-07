@@ -27,7 +27,6 @@ export type RoundFormState = {
   callerName: string;
   callerMethod: string;
   callerMethodValue: string;
-  callerCoworkerIds: string[];
   /** Caller lined up (edit an existing caller round only). */
   confirmed: boolean;
 };
@@ -58,7 +57,6 @@ export function blankRound(
     callerName: '',
     callerMethod: '',
     callerMethodValue: '',
-    callerCoworkerIds: [],
     confirmed: false,
   };
 }
@@ -82,7 +80,6 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     callerName: caller?.callerName && caller.callerName !== 'TBD' ? caller.callerName : '',
     callerMethod: caller?.method || '',
     callerMethodValue: caller?.methodValue || '',
-    callerCoworkerIds: caller?.coworkerIds ?? [],
     confirmed: !!e.confirmed,
   };
 }
@@ -97,7 +94,6 @@ export function roundPayload(r: RoundFormState, tz: string = browserZone()): Rou
       callerName: r.callerName.trim(),
       method: r.callerMethod || undefined,
       methodValue: r.callerMethodValue.trim(),
-      coworkerIds: r.callerCoworkerIds,
     }
     : undefined;
   return {

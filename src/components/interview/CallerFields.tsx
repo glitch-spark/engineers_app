@@ -1,11 +1,6 @@
-import { useMemo } from 'react';
-import useSWR from 'swr';
 import Select from '../Select';
 import Switch from '../Switch';
-import MultiSelect from '../MultiSelect';
-import * as api from '../../api/endpoints';
 import type { CallerMethod } from '../../api/endpoints';
-import { useAuth } from '../../auth/useAuth';
 import type { RoundFormState } from '../../lib/interviewForm';
 import { CALLER_METHOD_OPTIONS } from './types';
 
@@ -28,20 +23,6 @@ export default function CallerFields({
   disabled?: boolean;
   idPrefix: string;
 }) {
-  const { user } = useAuth();
-  const { data: usersData } = useSWR(round.callerEnabled ? ['users-lookup'] : null, () => api.lookupUsers());
-  const coworkerOptions = useMemo(
-    () =>
-      (usersData?.users ?? [])
-        .filter((u) => u._id !== user?.id)
-        .map((u) => ({
-          value: u._id,
-          label: u.name || u.email || 'Unnamed user',
-          hint: u.name && u.email ? u.email : undefined,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [usersData, user?.id],
-  );
   const method = (round.callerMethod || '') as CallerMethod | '';
   const id = (k: string) => `${idPrefix}-caller-${k}`;
 
@@ -50,7 +31,7 @@ export default function CallerFields({
       <Switch
         id={id('toggle')}
         label="Request a caller"
-        description="A coworker joins at this round's start time. Posts to the #caller channel on Slack."
+        description="A caller joins at this round's start time. Posts to the #caller channel on Slack."
         checked={round.callerEnabled}
         disabled={disabled}
         onChange={(on) => onChange({ callerEnabled: on })}
@@ -93,21 +74,6 @@ export default function CallerFields({
               placeholder={METHOD_VALUE_PLACEHOLDER[method]}
               onChange={(e) => onChange({ callerMethodValue: e.target.value })}
             />
-          </div>
-          <div>
-            <label htmlFor={id('coworkers')} className="block text-sm font-medium mb-1">Coworkers</label>
-            <MultiSelect
-              id={id('coworkers')}
-              value={round.callerCoworkerIds}
-              onChange={(ids) => onChange({ callerCoworkerIds: ids })}
-              options={coworkerOptions}
-              placeholder="Search teammates…"
-              emptyText={usersData ? 'No teammates match' : 'Loading teammates…'}
-              disabled={disabled}
-            />
-            <p className="mt-1 text-xs text-muted">
-              Tagged with you in the #caller thread 30 minutes before the start, and listed in their daily Slack digest.
-            </p>
           </div>
         </div>
       )}

@@ -619,7 +619,7 @@ export const clearInterviewChatHistory = (interviewId: string) =>
 
 export type CallerMethod = 'video' | 'phone_hushed' | 'phone_slynumber';
 
-/** Caller request on a round: a coworker joins at the round's start time. */
+/** Caller request on a round: a caller joins at the round's start time. */
 export interface InterviewCaller {
   enabled: boolean;
   callerName?: string;
@@ -627,8 +627,6 @@ export interface InterviewCaller {
   startsAt?: string | null;
   method?: CallerMethod | null;
   methodValue?: string;
-  coworkerIds?: string[];
-  coworkers?: { _id: string; name?: string | null; email?: string | null }[];
   slackChannelTs?: string | null;
 }
 
@@ -637,7 +635,6 @@ export interface CallerInput {
   callerName?: string;
   method?: string;
   methodValue?: string;
-  coworkerIds?: string[];
 }
 
 /** One round as sent to the API (ISO UTC datetimes). */
