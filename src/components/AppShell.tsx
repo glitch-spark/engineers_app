@@ -56,8 +56,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const useWideLayout =
     pathname === '/interviews'
     || pathname === '/interviews/calendar'
-    || pathname === '/interviews/analyze'
-    || pathname === '/pipeline';
+    || pathname === '/interviews/analyze';
   return (
     <div className="shell-content flex min-h-screen flex-col transition-all duration-300">
       <a href="#main" className="skip-link">Skip to main content</a>

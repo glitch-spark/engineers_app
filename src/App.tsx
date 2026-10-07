@@ -22,8 +22,6 @@ import Generated from './pages/Generated';
 import JobApplies from './pages/JobApplies';
 import Bidders from './pages/Bidders';
 import JobApplyRun from './pages/JobApplyRun';
-import Pipeline from './pages/Pipeline';
-import Integrations from './pages/Integrations';
 import AccountEdit from './pages/AccountEdit';
 import Preferences from './pages/Preferences';
 
@@ -104,8 +102,6 @@ export default function App() {
       <Route path="/bidders" element={<Protected><Bidders /></Protected>} />
       <Route path="/bids/review" element={<BidReviewRedirect />} />
       <Route path="/interview-prep" element={<Protected><InterviewPrep /></Protected>} />
-      <Route path="/pipeline" element={<Protected><Pipeline /></Protected>} />
-      <Route path="/integrations" element={<Protected><Integrations /></Protected>} />
       <Route path="/preferences" element={<Protected><Preferences /></Protected>} />
       <Route path="/users" element={<Protected><Users /></Protected>} />
       <Route path="/profile" element={<Protected><Profile /></Protected>} />
