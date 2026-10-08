@@ -14,6 +14,7 @@ import RowDetail from '../components/jobApplies/RowDetail';
 import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
+import { APPLIED_UI } from '../components/jobApplies/appliedUi';
 import RunSummary from '../components/jobApplies/RunSummary';
 import StepTrack, { type Step } from '../components/jobApplies/StepTrack';
 import ScreeningReport from '../components/jobApplies/ScreeningReport';
@@ -49,9 +50,13 @@ const SHORTCUTS: [string, string][] = [
   ['o', 'Open the job posting in a new tab'],
   ['t', 'Tailor a resume for every profile on this job that doesn’t have one'],
   ['d', 'Download the first ready tailored PDF, otherwise the top uploaded PDF'],
-  ['1 – 9', 'Toggle “applied” for suggestion 1–9'],
-  ['a', 'Mark the job applied for every profile with a resume ready (tailored, else the matching upload), and go to the next job'],
-  ['x', 'Select / unselect the job (for copying links, tailoring or marking several at once)'],
+  ...(APPLIED_UI
+    ? ([
+        ['1 – 9', 'Toggle “applied” for suggestion 1–9'],
+        ['a', 'Mark the job applied for every profile with a resume ready (tailored, else the matching upload), and go to the next job'],
+      ] as [string, string][])
+    : []),
+  ['x', APPLIED_UI ? 'Select / unselect the job (for copying links, tailoring or marking several at once)' : 'Select / unselect the job (for copying links or tailoring several at once)'],
   ['c', 'Copy the links of the selected jobs (or of this job when none are selected)'],
   ['Enter', 'Show / hide the score breakdown'],
   ['?', 'Show this list'],
@@ -134,7 +139,7 @@ type RowsPage = Awaited<ReturnType<typeof api.listJobApplyRows>>;
 export default function JobApplyRun() {
   const { runId = '' } = useParams();
   const [view, setView] = useState<JobApplyView>('suggested');
-  const [appliedFilter, setAppliedFilter] = useState<JobApplyAppliedFilter>('no');
+  const [appliedFilter, setAppliedFilter] = useState<JobApplyAppliedFilter>(APPLIED_UI ? 'no' : 'any');
   const [accountId, setAccountId] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(readPageSize);
@@ -144,6 +149,7 @@ export default function JobApplyRun() {
   // Tailored resumes picked for download (resume job ids); kept across buckets and pages.
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [downloadingPicked, setDownloadingPicked] = useState(false);
+  const [pickingProfile, setPickingProfile] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [thresholdDraft, setThresholdDraft] = useState<number | null>(null);
   const [busy, setBusy] = useState<'cancel' | 'retry' | 'bulk' | null>(null);
@@ -397,6 +403,29 @@ export default function JobApplyRun() {
     [rows],
   );
 
+  /** Pick every ready tailored resume of one profile in the whole run (all pages and buckets). */
+  const pickProfile = useCallback(
+    async (acc: string) => {
+      if (!acc) return;
+      setPickingProfile(true);
+      try {
+        const { jobIds } = await api.listReadyTailored(runId, acc);
+        const name = profileNames[acc] ?? 'this profile';
+        if (!jobIds.length) {
+          notify.info(`No tailored resumes ready for ${name} yet`);
+          return;
+        }
+        setPicked((prev) => new Set([...prev, ...jobIds]));
+        notify.success(`Selected ${jobIds.length} resume${jobIds.length === 1 ? '' : 's'} for ${name}`);
+      } catch (err) {
+        notify.error(err, 'Could not select that profile’s resumes');
+      } finally {
+        setPickingProfile(false);
+      }
+    },
+    [runId, profileNames],
+  );
+
   /** Same download as the Resume page: <Profile>/<Company>/Resume.pdf into a picked folder, else one zip. */
   const downloadPicked = useCallback(async () => {
     const ids = [...picked];
@@ -555,11 +584,11 @@ export default function JobApplyRun() {
       else if (key === 'x') toggleSelected(row._id);
       else if (key === 'c') void copyLinks(selectedRows.length ? selectedRows : [row]);
       else if (e.key === 'Enter') setExpanded((cur) => (cur === row._id ? null : row._id));
-      else if (key === 'a') {
+      else if (APPLIED_UI && key === 'a') {
         // Every profile with a resume ready; ones already applied are left (no second application / bid).
         void markRow(row);
         move(1);
-      } else if (/^[1-9]$/.test(e.key)) {
+      } else if (APPLIED_UI && /^[1-9]$/.test(e.key)) {
         const s = row.suggestions[Number(e.key) - 1];
         if (!s) return;
         void toggleApplied(row, s, !row.appliedResumes.some((m) => m.resumeId === s.resumeId));
@@ -784,10 +813,10 @@ export default function JobApplyRun() {
           : stepView === 2
             ? active
               ? 'Scoring is running with these picks. You can change them once it’s done.'
-              : 'Change who applies in each location group, then score again. Your tailored resumes, sheet rows and applied marks stay.'
+              : 'Change who applies in each location group, then score again. Your tailored resumes and sheet rows stay.'
             : active
               ? 'Scoring your resumes against each job. Next: export to your sheet, tailor the rest, apply.'
-              : 'Export to your sheet, tailor the jobs that need it, then apply and mark them applied.'
+              : 'Export to your sheet and tailor the jobs that need it, then download the resumes you want.'
       }
     />
   );
@@ -855,15 +884,17 @@ export default function JobApplyRun() {
               { value: 'failed', label: 'Failed', count: run.counts.failed },
             ]}
           />
-          <Segmented
-            label="Status"
-            value={appliedFilter}
-            onChange={(v) => {
-              setAppliedFilter(v);
-              resetPaging();
-            }}
-            options={APPLIED_FILTERS}
-          />
+          {APPLIED_UI && (
+            <Segmented
+              label="Status"
+              value={appliedFilter}
+              onChange={(v) => {
+                setAppliedFilter(v);
+                resetPaging();
+              }}
+              options={APPLIED_FILTERS}
+            />
+          )}
         </div>
         <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
           <div className="w-56">
@@ -902,7 +933,7 @@ export default function JobApplyRun() {
           tailorModel={RESUME_MODEL.label}
           onTailor={() => openTailor(null)}
           onExport={() => setShowExport(true)}
-          onMark={() => setConfirmAll(true)}
+          onMark={APPLIED_UI ? () => setConfirmAll(true) : undefined}
         />
       )}
 
@@ -921,10 +952,12 @@ export default function JobApplyRun() {
                   <Sparkles className="h-4 w-4" aria-hidden />
                   Tailor
                 </button>
-                <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
-                  {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
-                  Mark applied
-                </button>
+                {APPLIED_UI && (
+                  <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
+                    {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
+                    Mark applied
+                  </button>
+                )}
                 <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
                   <X className="h-4 w-4" aria-hidden />
                   Clear
@@ -939,11 +972,27 @@ export default function JobApplyRun() {
             <Pagination info={pagination} onPage={goToPage} label="Pages (top)" />
           </div>
 
-          {(picked.size > 0 || readyOnPage.length > 0) && (
+          {(picked.size > 0 || readyOnPage.length > 0 || (run.profiles ?? []).length > 0) && (
             <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Resumes selected for download">
               <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
                 {picked.size > 0 ? `${picked.size} resume${picked.size === 1 ? '' : 's'} selected` : 'Resumes'}
               </span>
+              {(run.profiles ?? []).length > 0 && (
+                <select
+                  className="select focus-ring w-auto py-1 text-sm"
+                  aria-label="Select every ready tailored resume of a profile"
+                  value=""
+                  disabled={pickingProfile}
+                  onChange={(e) => void pickProfile(e.target.value)}
+                >
+                  <option value="">{pickingProfile ? 'Selecting…' : 'Select profile…'}</option>
+                  {(run.profiles ?? []).map((p) => (
+                    <option key={p.accountId} value={p.accountId}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               {picked.size > 0 && (
                 <button type="button" className="btn btn-sm" onClick={() => void downloadPicked()} disabled={downloadingPicked}>
                   {downloadingPicked ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
@@ -1015,7 +1064,7 @@ export default function JobApplyRun() {
                             else rowRefs.current.delete(row._id);
                           }}
                           onClick={() => setFocusedId(row._id)}
-                          className={`table-row align-top ${row.applied ? 'opacity-60' : ''} ${
+                          className={`table-row align-top ${APPLIED_UI && row.applied ? 'opacity-60' : ''} ${
                             isFocused ? 'bg-sky-50/70 shadow-[inset_3px_0_0_0] shadow-sky-600 dark:bg-sky-950/30 dark:shadow-sky-400' : ''
                           }`}
                           aria-current={isFocused ? 'true' : undefined}
@@ -1115,7 +1164,6 @@ export default function JobApplyRun() {
                               threshold={run.threshold}
                               profileNames={profileNames}
                               hasFile={(id) => !!resumesById.get(id)?.hasFile}
-                              onToggle={(file, applied, label) => void toggleFile(row, file, applied, label)}
                               onDownload={(s) => void download(s)}
                               tailorModel={RESUME_MODEL.label}
                               onTailor={(acc) => void tailor(row, acc)}
@@ -1236,7 +1284,7 @@ export default function JobApplyRun() {
                   )}
                 </>
               ) : (
-                'Nothing to tailor: these jobs already have tailored resumes or were already applied to for these profiles, aren’t open to them, or today’s limit is reached.'
+                'Nothing to tailor: these jobs already have tailored resumes for these profiles, aren’t open to them, or today’s limit is reached.'
               )}
             </p>
           </div>

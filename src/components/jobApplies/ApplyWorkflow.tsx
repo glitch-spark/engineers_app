@@ -79,7 +79,8 @@ export default function ApplyWorkflow({
   tailorModel?: string;
   onTailor: () => void;
   onExport: () => void;
-  onMark: () => void;
+  /** Mark ready applications applied; without it the Apply step is hidden. */
+  onMark?: () => void;
 }) {
   const left = counts.byProfile.filter((p) => p.toGo > 0);
   const markReady = profileFilter
@@ -102,7 +103,7 @@ export default function ApplyWorkflow({
         ) : (
           <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400">
             <CheckCircle2 className="h-4 w-4" aria-hidden />
-            {counts.applied ? `All ${plural(counts.applied, 'application')} applied` : 'Nothing to apply to'}
+            {counts.applied && onMark ? `All ${plural(counts.applied, 'application')} applied` : 'Nothing to apply to'}
           </p>
         )}
         {left.length > 1 && (
@@ -116,7 +117,7 @@ export default function ApplyWorkflow({
         )}
       </div>
 
-      <ol className="grid gap-2 sm:grid-cols-3">
+      <ol className={`grid gap-2 ${onMark ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <Step
           n={1}
           icon={FileSpreadsheet}
@@ -155,16 +156,18 @@ export default function ApplyWorkflow({
             </>
           }
         />
-        <Step
-          n={3}
-          icon={CheckCheck}
-          title="Apply"
-          todo={markReady > 0}
-          disabled={busy || markReady === 0}
-          busy={busy}
-          onClick={onMark}
-          detail={`${markReady} ready now${profileFilter ? ` · ${profileFilter.name}` : ''} · ${counts.applied} applied · click to mark the ready ones applied`}
-        />
+        {onMark && (
+          <Step
+            n={3}
+            icon={CheckCheck}
+            title="Apply"
+            todo={markReady > 0}
+            disabled={busy || markReady === 0}
+            busy={busy}
+            onClick={onMark}
+            detail={`${markReady} ready now${profileFilter ? ` · ${profileFilter.name}` : ''} · ${counts.applied} applied · click to mark the ready ones applied`}
+          />
+        )}
       </ol>
     </section>
   );

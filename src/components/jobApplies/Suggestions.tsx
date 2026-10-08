@@ -1,6 +1,6 @@
-import { Check, Download, ExternalLink, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
+import { Download, ExternalLink, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyRow, JobApplySuggestion, JobApplyTailored } from '../../api/endpoints';
-import { bandClass, formatDate } from './format';
+import { bandClass } from './format';
 import { safeHref } from '../../lib/safeHref';
 
 /** The file applied with: an uploaded resume or one of the job's tailored resumes. */
@@ -21,27 +21,34 @@ export function firstReadyTailored(row: JobApplyRow): JobApplyTailored | undefin
     .sort((a, b) => order.indexOf(a.accountId) - order.indexOf(b.accountId))[0];
 }
 
-function AppliedToggle({
-  checked,
-  onChange,
+/** A finished tailored resume. With `onPick`, clicking it selects it for the bulk download (highlighted). */
+function TailoredChip({
+  picked,
+  onPick,
   label,
   children,
 }: {
-  checked: boolean;
-  onChange: (on: boolean) => void;
+  picked: boolean;
+  onPick?: (on: boolean) => void;
   label: string;
   children: React.ReactNode;
 }) {
+  if (!onPick) return <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5">{children}</span>;
   return (
-    <label
-      className={`flex min-w-0 cursor-pointer items-center gap-1.5 rounded-lg px-1 py-0.5 ${
-        checked ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+    <button
+      type="button"
+      aria-pressed={picked}
+      onClick={() => onPick(!picked)}
+      title={picked ? 'Selected for download · click to unselect' : 'Click to select for download'}
+      aria-label={`${picked ? 'Unselect' : 'Select'} ${label} for download`}
+      className={`flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-0.5 ring-1 transition-colors focus-ring ${
+        picked
+          ? 'bg-sky-50 ring-sky-400 dark:bg-sky-950/40 dark:ring-sky-600'
+          : 'ring-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800'
       }`}
     >
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} aria-label={label} />
       {children}
-      {checked && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Applied" />}
-    </label>
+    </button>
   );
 }
 
@@ -84,7 +91,6 @@ export default function Suggestions({
   profileNames,
   hasFile,
   tailorModel,
-  onToggle,
   onDownload,
   onTailor,
   onTailorAll,
@@ -98,25 +104,20 @@ export default function Suggestions({
   hasFile: (resumeId: string) => boolean;
   /** Name of the model the Tailor buttons use, shown on hover. */
   tailorModel?: string;
-  onToggle: (file: AppliedFile, applied: boolean, label: string) => void;
   onDownload: (s: JobApplySuggestion) => void;
   onTailor: (accountId: string) => void;
   onTailorAll: () => void;
   onDownloadTailored: (t: JobApplyTailored) => void;
-  /** Download selection (by tailored job id), separate from the Applied marks. */
+  /** Download selection by tailored job id: clicking a finished tailored resume picks it. */
   isPicked?: (tailoredJobId: string) => boolean;
   onPick?: (tailoredJobId: string, on: boolean) => void;
 }) {
-  const marked = (f: AppliedFile) =>
-    row.appliedResumes.some((m) => (f.tailoredJobId ? m.tailoredJobId === f.tailoredJobId : m.resumeId === f.resumeId));
   const withModel = tailorModel ? `Tailor with ${tailorModel}` : undefined;
   const profiles = orderedProfiles(row);
   const untailored = profiles.filter((acc) => {
     const t = row.tailored.find((x) => x.accountId === acc);
     return !t || t.status === 'failed';
   });
-  const previous = row.previouslyApplied[0];
-  const appliedCount = row.applications.filter((a) => a.state === 'applied').length;
 
   if (profiles.length === 0) {
     return <p className="hint">No profile can take this job (see Flags).</p>;
@@ -134,22 +135,6 @@ export default function Suggestions({
           <ExternalLink className="h-3 w-3" aria-hidden /> Open posting
         </a>
       )}
-      {previous && (
-        <p
-          className="badge-info"
-          title={row.previouslyApplied.map((p) => `${formatDate(p.appliedAt)} · ${p.profileName} · ${p.filename}`).join('\n')}
-        >
-          Already applied {formatDate(previous.appliedAt)} · {previous.profileName}
-          {row.previouslyApplied.length > 1 ? ` +${row.previouslyApplied.length - 1}` : ''}
-        </p>
-      )}
-
-      {row.applications.length > 1 && appliedCount > 0 && (
-        <p className={appliedCount === row.applications.length ? 'text-xs font-medium text-emerald-700 dark:text-emerald-400' : 'text-xs text-zinc-500'}>
-          {appliedCount} of {row.applications.length} profiles applied
-        </p>
-      )}
-
       <ul className="divide-y divide-dashed divide-zinc-200 dark:divide-zinc-700">
         {profiles.map((acc) => {
           const name = profileNames[acc] ?? 'Profile';
@@ -169,15 +154,11 @@ export default function Suggestions({
                 )}
               </span>
 
-              {/* Uploaded resume: a resume line keeps room for its checkbox, score and download; a note can wrap */}
+              {/* Uploaded resume: a resume line keeps room for its score and download; a note can wrap */}
               <div className={`flex items-center gap-1 ${s ? 'min-w-[7.5rem]' : ''}`}>
                 {s ? (
                   <>
-                    <AppliedToggle
-                      checked={marked({ accountId: acc, resumeId: s.resumeId })}
-                      onChange={(on) => onToggle({ accountId: acc, resumeId: s.resumeId }, on, `${name} · ${s.filename}`)}
-                      label={`Applied with ${name} · ${s.filename}`}
-                    >
+                    <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5">
                       {n > 0 && n <= 9 && (
                         <kbd className="hidden w-3 text-center text-[10px] text-zinc-400 sm:inline" aria-hidden>
                           {n}
@@ -187,7 +168,7 @@ export default function Suggestions({
                         {s.total}
                       </span>
                       <span className="truncate text-sm text-zinc-600 dark:text-zinc-400">{s.filename}</span>
-                    </AppliedToggle>
+                    </span>
                     <button
                       type="button"
                       className="btn-icon"
@@ -222,25 +203,15 @@ export default function Suggestions({
                   </span>
                 ) : t.status === 'completed' ? (
                   <>
-                    {onPick && (
-                      <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5 rounded border-zinc-300 accent-sky-600 dark:border-zinc-600"
-                        checked={isPicked?.(t.jobId) ?? false}
-                        onChange={(e) => onPick(t.jobId, e.target.checked)}
-                        title="Select for download"
-                        aria-label={`Select ${name}'s tailored resume for download`}
-                      />
-                    )}
-                    <AppliedToggle
-                      checked={marked({ accountId: acc, tailoredJobId: t.jobId })}
-                      onChange={(on) => onToggle({ accountId: acc, tailoredJobId: t.jobId }, on, `Tailored · ${name}`)}
-                      label={`Applied with the tailored resume (${name})`}
+                    <TailoredChip
+                      picked={isPicked?.(t.jobId) ?? false}
+                      onPick={onPick ? (on) => onPick(t.jobId, on) : undefined}
+                      label={`${name}'s tailored resume`}
                     >
                       <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
                       <span className="text-sm font-medium">Tailored</span>
                       <TailoredScore t={t} />
-                    </AppliedToggle>
+                    </TailoredChip>
                     <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${name})`}>
                       <Download className="h-3.5 w-3.5" aria-hidden />
                     </button>
@@ -254,11 +225,9 @@ export default function Suggestions({
                     >
                       <MessageSquareText className="h-3.5 w-3.5" aria-hidden />
                     </a>
-                    {!marked({ accountId: acc, tailoredJobId: t.jobId }) && (
-                      <button type="button" className="btn-icon" onClick={() => onTailor(acc)} title={tailorModel ? `Generate again with ${tailorModel}` : 'Generate again'} aria-label={`Re-tailor for ${name}`}>
-                        <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                      </button>
-                    )}
+                    <button type="button" className="btn-icon" onClick={() => onTailor(acc)} title={tailorModel ? `Generate again with ${tailorModel}` : 'Generate again'} aria-label={`Re-tailor for ${name}`}>
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                    </button>
                   </>
                 ) : (
                   <button

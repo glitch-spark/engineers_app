@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
 import type { JobApplyRun, JobApplyView } from '../../api/endpoints';
 import ProgressBar from './ProgressBar';
+import { APPLIED_UI } from './appliedUi';
 import { RUN_STATUS_BADGE, RUN_STATUS_LABEL, isActive } from './format';
 
 const DAY_MS = 86_400_000;
@@ -51,8 +52,12 @@ export default function RunSummary({
           ) : (
             <Stat label="To apply" value={run.toApply ?? 0} tone="primary" />
           )}
-          <Stat label="Applied today" value={run.appliedSince ?? 0} tone="good" />
-          <Stat label="This run" value={run.appliedInRun ?? 0} />
+          {APPLIED_UI && (
+            <>
+              <Stat label="Applied today" value={run.appliedSince ?? 0} tone="good" />
+              <Stat label="This run" value={run.appliedInRun ?? 0} />
+            </>
+          )}
           <Stat
             label="Suggested"
             value={run.suggested}
@@ -112,7 +117,7 @@ export default function RunSummary({
         <p className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
           Results are deleted {new Date(Date.now() + (expiresInMs ?? 0)).toLocaleString(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' })}.
-          Your applied marks are kept; re-running the sheet is quick.
+          {APPLIED_UI ? 'Your applied marks are kept; re-running' : 'Re-running'} the sheet is quick.
         </p>
       )}
       {run.error && <p className="text-sm text-red-700 dark:text-red-400">Run stopped: {run.error}</p>}

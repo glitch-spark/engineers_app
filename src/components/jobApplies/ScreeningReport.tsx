@@ -384,9 +384,9 @@ export default function ScreeningReport({
                   );
                 })}
                 {rescore && (
-                  <li>Replaces this run’s scores and suggestions. Your tailored resumes, sheet rows and applied marks stay.</li>
+                  <li>Replaces this run’s scores and suggestions. Your tailored resumes and sheet rows stay.</li>
                 )}
-                <li>Next: step ③ lists the suggested jobs with their best resume; export to your sheet, tailor, mark applied.</li>
+                <li>Next: step ③ lists the suggested jobs with their best resume; export to your sheet, tailor, download.</li>
                 {[...plan.skipped.entries()].map(([m, n]) => (
                   <li key={m} className="text-amber-800 dark:text-amber-300">
                     {n} {marketLabel(m)} job{n === 1 ? '' : 's'} {n === 1 ? 'has' : 'have'} no profile and will be skipped.

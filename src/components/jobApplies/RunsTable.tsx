@@ -4,6 +4,7 @@ import { ArrowRight, ExternalLink, Trash2 } from 'lucide-react';
 import type { JobApplyRun } from '../../api/endpoints';
 import Pagination from './Pagination';
 import Segmented from './Segmented';
+import { APPLIED_UI } from './appliedUi';
 import { expiresHint, formatDateTime, isActive, runGroup, runStep } from './format';
 import { safeHref } from '../../lib/safeHref';
 
@@ -31,10 +32,14 @@ export function runRow(run: JobApplyRun): { status: string; links: string; actio
   if (active) return { status: `③ Scoring ${c.scored} / ${c.total}`, links, action: null };
   if (run.status !== 'done') return { status: `③ ${run.status}`, links, action: null };
   if (s && s.toApply > 0) {
-    const parts = [`${s.toApply} to apply`, `${s.applied} applied`, s.tailoring ? `${s.tailoring} tailoring` : ''];
+    const parts = [`${s.toApply} to apply`, APPLIED_UI ? `${s.applied} applied` : '', s.tailoring ? `${s.tailoring} tailoring` : ''];
     return { status: `③ Tailor & apply · ${parts.filter(Boolean).join(' · ')}`, links, action: 'Continue applying' };
   }
-  return { status: s && s.applied ? `Finished · ${s.applied} applied` : 'Finished · nothing suggested', links, action: null };
+  return {
+    status: APPLIED_UI && s && s.applied ? `Finished · ${s.applied} applied` : s ? 'Finished' : 'Finished · nothing suggested',
+    links,
+    action: null,
+  };
 }
 
 /**

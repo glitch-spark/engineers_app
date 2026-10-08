@@ -10,7 +10,7 @@ export const STEPS: { n: Step; title: string; about: string }[] = [
     title: 'Pick profiles',
     about: 'Jobs are grouped by candidate location (US · UK/EU · Latam). Choose who applies where.',
   },
-  { n: 3, title: 'Tailor & apply', about: 'Best resume per job, tailor the rest, export to your sheet, mark applied.' },
+  { n: 3, title: 'Tailor & apply', about: 'Best resume per job, tailor the rest, export to your sheet, download the resumes.' },
 ];
 
 const NUM = ['①', '②', '③'];
