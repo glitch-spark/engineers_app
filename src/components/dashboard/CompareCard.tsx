@@ -18,15 +18,10 @@ const count = new Intl.NumberFormat('en-US');
 
 type Row = api.DashboardCompareMetric['rows'][number];
 
-const DASH = '—';
-
 const METRICS: { key: keyof api.DashboardCompare['metrics']; title: string; format: (row: Row) => string }[] = [
-  { key: 'bids', title: 'Bids', format: (r) => count.format(r.value ?? 0) },
-  { key: 'interviews', title: 'Interviews', format: (r) => count.format(r.value ?? 0) },
-  { key: 'earnings', title: 'Earnings', format: (r) => currency.format(r.value ?? 0) },
-  { key: 'goalBids', title: 'Bids goal', format: (r) => (r.value == null ? DASH : `${r.value}%`) },
-  { key: 'goalInterviews', title: 'Interviews goal', format: (r) => (r.value == null ? DASH : `${r.value}%`) },
-  { key: 'logged', title: 'Days logged', format: (r) => (r.value == null ? DASH : `${r.logged} / ${r.workingDays}`) },
+  { key: 'bids', title: 'Bids', format: (r) => count.format(r.value) },
+  { key: 'interviews', title: 'Interviews', format: (r) => count.format(r.value) },
+  { key: 'earnings', title: 'Earnings', format: (r) => currency.format(r.value) },
 ];
 
 /** "You vs team": bids, interviews and earnings ranked across the team, with the viewed user highlighted. */

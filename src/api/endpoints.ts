@@ -806,12 +806,8 @@ export interface DashboardCompareMetric {
     userId: string;
     name: string;
     image?: string | null;
-    /** null = no data (e.g. no goal set); ranks last. */
-    value: number | null;
+    value: number;
     rank: number;
-    /** Plan-logging board only. */
-    logged?: number;
-    workingDays?: number;
   }[];
   /** The viewed user's place; nulls when an admin views nobody. */
   subject: { rank: number | null; value: number | null; outOf: number };
@@ -826,11 +822,6 @@ export interface DashboardCompare {
     bids: DashboardCompareMetric;
     interviews: DashboardCompareMetric;
     earnings: DashboardCompareMetric;
-    /** Goal attainment, whole percent. */
-    goalBids: DashboardCompareMetric;
-    goalInterviews: DashboardCompareMetric;
-    /** Days logged ÷ working days (0–1). */
-    logged: DashboardCompareMetric;
   };
 }
 
