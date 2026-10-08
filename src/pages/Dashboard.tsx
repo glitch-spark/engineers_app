@@ -4,6 +4,7 @@ import PageHeader from '../components/PageHeader';
 import ThisWeekCard from '../components/dashboard/ThisWeekCard';
 import ActivityChartCard from '../components/dashboard/ActivityChartCard';
 import NetIncomeCard from '../components/dashboard/NetIncomeCard';
+import CompareCard from '../components/dashboard/CompareCard';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 
@@ -51,6 +52,7 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-6">
           <ThisWeekCard userId={userId} />
+          <CompareCard userId={userId} />
           <ActivityChartCard userId={userId} />
           <NetIncomeCard userId={userId} />
         </div>

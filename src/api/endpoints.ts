@@ -798,6 +798,26 @@ export const getDashboardActivity = (params: { from: string; to: string; userId?
 export const getDashboardNetMonthly = (params: { userId?: string; today?: string }) =>
   apiFetch<DashboardNetMonthly>(`/dashboard/net-monthly${qs(params)}`);
 
+export type DashboardCompareRange = 'week' | 'month' | '30d';
+
+export interface DashboardCompareMetric {
+  /** Everyone ranked, highest first; ties share a rank. */
+  rows: { userId: string; name: string; image?: string | null; value: number; rank: number }[];
+  /** The viewed user's place; nulls when an admin views nobody. */
+  subject: { rank: number | null; value: number | null; outOf: number };
+}
+
+export interface DashboardCompare {
+  range: DashboardCompareRange;
+  from: string;
+  to: string;
+  subjectId: string;
+  metrics: { bids: DashboardCompareMetric; interviews: DashboardCompareMetric; earnings: DashboardCompareMetric };
+}
+
+export const getDashboardCompare = (params: { range: DashboardCompareRange; userId?: string; today?: string }) =>
+  apiFetch<DashboardCompare>(`/dashboard/compare${qs(params)}`);
+
 export interface LeaderboardResponse {
   metric: LeaderboardMetric;
   range: number;
