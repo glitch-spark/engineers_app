@@ -5,6 +5,7 @@ import ThisWeekCard from '../components/dashboard/ThisWeekCard';
 import ActivityChartCard from '../components/dashboard/ActivityChartCard';
 import NetIncomeCard from '../components/dashboard/NetIncomeCard';
 import CompareCard from '../components/dashboard/CompareCard';
+import TeamOverview from '../components/dashboard/TeamOverview';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 
@@ -35,7 +36,7 @@ export default function DashboardPage() {
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
           >
-            <option value="">Pick a user</option>
+            <option value="">All users</option>
             {users.map((u) => (
               <option key={u._id} value={u._id}>
                 {u.name || u.email}
@@ -46,9 +47,7 @@ export default function DashboardPage() {
       )}
 
       {isAdmin && !selectedUserId ? (
-        <div className="panel p-4">
-          <p className="text-sm text-muted">Pick a user to see their dashboard.</p>
-        </div>
+        <TeamOverview onPick={setSelectedUserId} />
       ) : (
         <div className="space-y-6">
           <ThisWeekCard userId={userId} />
