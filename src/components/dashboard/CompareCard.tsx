@@ -16,13 +16,18 @@ const RANGES: { value: api.DashboardCompareRange; label: string }[] = [
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const count = new Intl.NumberFormat('en-US');
 
-const METRICS: { key: keyof api.DashboardCompare['metrics']; title: string; format: (n: number) => string }[] = [
-  { key: 'bids', title: 'Bids', format: (n) => count.format(n) },
-  { key: 'interviews', title: 'Interviews', format: (n) => count.format(n) },
-  { key: 'earnings', title: 'Earnings', format: (n) => currency.format(n) },
-];
-
 type Row = api.DashboardCompareMetric['rows'][number];
+
+const DASH = '—';
+
+const METRICS: { key: keyof api.DashboardCompare['metrics']; title: string; format: (row: Row) => string }[] = [
+  { key: 'bids', title: 'Bids', format: (r) => count.format(r.value ?? 0) },
+  { key: 'interviews', title: 'Interviews', format: (r) => count.format(r.value ?? 0) },
+  { key: 'earnings', title: 'Earnings', format: (r) => currency.format(r.value ?? 0) },
+  { key: 'goalBids', title: 'Bids goal', format: (r) => (r.value == null ? DASH : `${r.value}%`) },
+  { key: 'goalInterviews', title: 'Interviews goal', format: (r) => (r.value == null ? DASH : `${r.value}%`) },
+  { key: 'logged', title: 'Days logged', format: (r) => (r.value == null ? DASH : `${r.logged} / ${r.workingDays}`) },
+];
 
 /** "You vs team": bids, interviews and earnings ranked across the team, with the viewed user highlighted. */
 export default function CompareCard({ userId }: { userId?: string }) {
@@ -83,7 +88,7 @@ function MetricBoard({
   metric: api.DashboardCompareMetric;
   subjectId: string;
   isSelf: boolean;
-  format: (n: number) => string;
+  format: (row: Row) => string;
 }) {
   const top = metric.rows.slice(0, TOP);
   const mine = metric.rows.find((r) => r.userId === subjectId);
@@ -130,7 +135,7 @@ function BoardRow({
   row: Row;
   highlight: boolean;
   isSelf: boolean;
-  format: (n: number) => string;
+  format: (row: Row) => string;
 }) {
   return (
     <li
@@ -143,7 +148,7 @@ function BoardRow({
       <span className="min-w-0 flex-1 truncate">
         <NameWithAvatar name={highlight && isSelf ? 'You' : row.name} imageUrl={row.image} size="sm" />
       </span>
-      <span className="tabular-nums">{format(row.value)}</span>
+      <span className="tabular-nums">{format(row)}</span>
     </li>
   );
 }
