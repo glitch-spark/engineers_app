@@ -149,7 +149,6 @@ export default function JobApplyRun() {
   // Tailored resumes picked for download (resume job ids); kept across buckets and pages.
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [downloadingPicked, setDownloadingPicked] = useState(false);
-  const [pickingProfile, setPickingProfile] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [thresholdDraft, setThresholdDraft] = useState<number | null>(null);
   const [busy, setBusy] = useState<'cancel' | 'retry' | 'bulk' | null>(null);
@@ -397,34 +396,6 @@ export default function JobApplyRun() {
       return next;
     });
   }, []);
-
-  const readyOnPage = useMemo(
-    () => rows.flatMap((r) => r.tailored.filter((t) => t.status === 'completed').map((t) => t.jobId)),
-    [rows],
-  );
-
-  /** Pick every ready tailored resume of one profile in the whole run (all pages and buckets). */
-  const pickProfile = useCallback(
-    async (acc: string) => {
-      if (!acc) return;
-      setPickingProfile(true);
-      try {
-        const { jobIds } = await api.listReadyTailored(runId, acc);
-        const name = profileNames[acc] ?? 'this profile';
-        if (!jobIds.length) {
-          notify.info(`No tailored resumes ready for ${name} yet`);
-          return;
-        }
-        setPicked((prev) => new Set([...prev, ...jobIds]));
-        notify.success(`Selected ${jobIds.length} resume${jobIds.length === 1 ? '' : 's'} for ${name}`);
-      } catch (err) {
-        notify.error(err, 'Could not select that profile’s resumes');
-      } finally {
-        setPickingProfile(false);
-      }
-    },
-    [runId, profileNames],
-  );
 
   /** Same download as the Resume page: <Profile>/<Company>/Resume.pdf into a picked folder, else one zip. */
   const downloadResumes = useCallback(async (ids: string[]) => {
@@ -949,9 +920,14 @@ export default function JobApplyRun() {
       <div className="flex flex-col-reverse gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1 space-y-5">
           <div className="flex min-h-[2rem] flex-wrap items-center justify-between gap-3">
-            {selected.size > 0 ? (
-              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Selected jobs">
-                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{selected.size} selected</span>
+            {selected.size > 0 || picked.size > 0 ? (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Selected jobs and resumes">
+                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                  {[
+                    selected.size > 0 ? `${selected.size} selected` : '',
+                    picked.size > 0 ? `${picked.size} resume${picked.size === 1 ? '' : 's'} picked` : '',
+                  ].filter(Boolean).join(' · ')}
+                </span>
                 <button type="button" className="btn-outline btn-sm" onClick={() => void copyLinks(selectedRows)}>
                   <Copy className="h-4 w-4" aria-hidden />
                   Copy links
@@ -981,7 +957,14 @@ export default function JobApplyRun() {
                     Mark applied
                   </button>
                 )}
-                <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => {
+                    setSelected(new Set());
+                    setPicked(new Set());
+                  }}
+                >
                   <X className="h-4 w-4" aria-hidden />
                   Clear
                 </button>
@@ -994,51 +977,6 @@ export default function JobApplyRun() {
             )}
             <Pagination info={pagination} onPage={goToPage} label="Pages (top)" />
           </div>
-
-          {(picked.size > 0 || readyOnPage.length > 0 || (run.profiles ?? []).length > 0) && (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Resumes selected for download">
-              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                {picked.size > 0 ? `${picked.size} resume${picked.size === 1 ? '' : 's'} selected` : 'Resumes'}
-              </span>
-              {(run.profiles ?? []).length > 0 && (
-                <select
-                  className="select focus-ring w-auto py-1 text-sm"
-                  aria-label="Select every ready tailored resume of a profile"
-                  value=""
-                  disabled={pickingProfile}
-                  onChange={(e) => void pickProfile(e.target.value)}
-                >
-                  <option value="">{pickingProfile ? 'Selecting…' : 'Select profile…'}</option>
-                  {(run.profiles ?? []).map((p) => (
-                    <option key={p.accountId} value={p.accountId}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {picked.size > 0 && (
-                <button type="button" className="btn btn-sm" onClick={() => void downloadResumes([...picked])} disabled={downloadingPicked}>
-                  {downloadingPicked ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
-                  Download selected ({picked.size})
-                </button>
-              )}
-              {readyOnPage.some((id) => !picked.has(id)) && (
-                <button
-                  type="button"
-                  className="btn-outline btn-sm"
-                  onClick={() => setPicked((prev) => new Set([...prev, ...readyOnPage]))}
-                >
-                  Select all on this page
-                </button>
-              )}
-              {picked.size > 0 && (
-                <button type="button" className="btn-outline btn-sm" onClick={() => setPicked(new Set())}>
-                  <X className="h-4 w-4" aria-hidden />
-                  Clear
-                </button>
-              )}
-            </div>
-          )}
 
           <div className="table-wrap">
             {rowsLoading && rows.length === 0 ? (

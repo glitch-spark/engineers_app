@@ -1747,10 +1747,6 @@ export const listJobApplyRuns = () => apiFetch<{ runs: JobApplyRun[] }>('/job-ap
 export const getJobApplyRun = (id: string, appliedSince?: string) =>
   apiFetch<JobApplyRun>(`/job-applies/runs/${id}${qs({ appliedSince })}`);
 
-/** One profile's completed tailored resumes across the whole run (resume job ids), for bulk download. */
-export const listReadyTailored = (runId: string, accountId: string) =>
-  apiFetch<{ jobIds: string[] }>(`/job-applies/runs/${runId}/tailored${qs({ accountId })}`);
-
 export const listJobApplyRows = (
   id: string,
   params: {
