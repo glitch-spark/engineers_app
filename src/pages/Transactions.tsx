@@ -2,7 +2,7 @@ import useSWR from 'swr';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Modal from '../components/Modal';
-import { Pencil, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pencil, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
@@ -33,8 +33,33 @@ type Tx = {
   payMethod?: PayMethod | null;
   cardLast4?: string | null;
   cardLabel?: string | null;
+  /** Wallet address for coin payments. */
+  coinAddress?: string | null;
   billingCycle?: BillingCycle | null;
 };
+
+/** A shortened wallet address (full on hover) with a copy button. */
+function CoinAddress({ address }: { address: string }) {
+  const short = address.length > 14 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(address);
+      notify.success('Wallet address copied');
+    } catch (err) {
+      notify.error(err, 'Could not copy the address');
+    }
+  };
+  return (
+    <span className="ml-1 inline-flex items-center gap-1 whitespace-nowrap">
+      <span className="font-mono text-xs text-muted" title={address}>
+        · {short}
+      </span>
+      <button type="button" className="btn-icon" onClick={() => void copy()} title="Copy wallet address" aria-label={`Copy wallet address ${address}`}>
+        <Copy className="h-3.5 w-3.5" aria-hidden />
+      </button>
+    </span>
+  );
+}
 
 function txPayerId(t: Tx): string {
   if (t.payerId && typeof t.payerId === 'object') return t.payerId._id;
@@ -117,6 +142,7 @@ export default function TransactionsPage() {
     payMethod: '' | PayMethod;
     cardLast4: string;
     cardLabel: string;
+    coinAddress: string;
     billingCycle: BillingCycle;
     payerId: string;
   }>({
@@ -127,6 +153,7 @@ export default function TransactionsPage() {
     payMethod: '',
     cardLast4: '',
     cardLabel: '',
+    coinAddress: '',
     billingCycle: 'monthly',
     payerId: '',
   });
@@ -144,6 +171,7 @@ export default function TransactionsPage() {
         payMethod: (editing.payMethod as '' | PayMethod) || '',
         cardLast4: editing.cardLast4 || '',
         cardLabel: editing.cardLabel || '',
+        coinAddress: editing.coinAddress || '',
         billingCycle: editing.billingCycle || 'monthly',
         payerId: txPayerId(editing),
       });
@@ -160,6 +188,7 @@ export default function TransactionsPage() {
       payMethod: '',
       cardLast4: '',
       cardLabel: '',
+      coinAddress: '',
       billingCycle: 'monthly',
       payerId: user?.id || '',
     });
@@ -179,6 +208,7 @@ export default function TransactionsPage() {
       payMethod: 'card',
       cardLast4: (searchParams.get('last4') || '').replace(/\D/g, '').slice(0, 4),
       cardLabel: searchParams.get('label') || '',
+      coinAddress: '',
       billingCycle: searchParams.get('cycle') === 'one_time' ? 'one_time' : 'monthly',
       payerId: user?.id || '',
     });
@@ -235,6 +265,8 @@ export default function TransactionsPage() {
         payMethod: form.payMethod,
         cardLast4: form.payMethod === 'card' ? form.cardLast4 : null,
         cardLabel: form.payMethod === 'card' ? form.cardLabel || null : null,
+        // '' clears a stored address; card payments drop it on the server.
+        coinAddress: form.payMethod === 'coin' ? form.coinAddress.trim() : '',
         billingCycle: form.billingCycle,
         payerId: form.payerId,
         ...(editing ? { userId: editing.userId?._id } : {}),
@@ -490,7 +522,10 @@ export default function TransactionsPage() {
                       {formatMoney(amt)}
                     </td>
                     <td className="px-4 py-2.5">{t.description || '—'}</td>
-                    <td className="px-4 py-2.5">{formatPayMethod(t)}</td>
+                    <td className="px-4 py-2.5">
+                      {formatPayMethod(t)}
+                      {t.payMethod === 'coin' && t.coinAddress && <CoinAddress address={t.coinAddress} />}
+                    </td>
                     <td className="px-4 py-2.5 capitalize">{t.status}</td>
                     <td className="px-4 py-2.5"><NameWithAvatar name={t.ownerName || t.userId?.name} imageUrl={t.ownerImage || t.userId?.image} /></td>
                     <td className="px-4 py-2.5"><NameWithAvatar name={t.payerName || (typeof t.payerId === 'object' ? t.payerId?.name : undefined) || t.ownerName} imageUrl={t.payerImage || (typeof t.payerId === 'object' ? t.payerId?.image : undefined) || t.ownerImage} /></td>
@@ -678,7 +713,13 @@ export default function TransactionsPage() {
               value={form.payMethod}
               onChange={(e) => {
                 const v = e.target.value as '' | PayMethod;
-                setForm({ ...form, payMethod: v, cardLast4: v === 'card' ? form.cardLast4 : '', cardLabel: v === 'card' ? form.cardLabel : '' });
+                setForm({
+                  ...form,
+                  payMethod: v,
+                  cardLast4: v === 'card' ? form.cardLast4 : '',
+                  cardLabel: v === 'card' ? form.cardLabel : '',
+                  coinAddress: v === 'coin' ? form.coinAddress : '',
+                });
               }}
             >
               <option value="">Select method</option>
@@ -764,6 +805,22 @@ export default function TransactionsPage() {
                 />
               </div>
             </>
+          )}
+          {form.payMethod === 'coin' && (
+            <div>
+              <label htmlFor={`${formId}-coin-address`} className="form-label mb-1 block">Wallet address</label>
+              <input
+                id={`${formId}-coin-address`}
+                className="input font-mono"
+                placeholder="0x… or bc1…"
+                maxLength={200}
+                autoComplete="off"
+                spellCheck={false}
+                value={form.coinAddress}
+                onChange={(e) => setForm({ ...form, coinAddress: e.target.value })}
+              />
+              <p className="text-xs text-muted mt-1">Optional. The wallet this was paid from or to.</p>
+            </div>
           )}
           <div className="flex gap-2 justify-end pt-1">
             <button
