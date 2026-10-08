@@ -427,8 +427,7 @@ export default function JobApplyRun() {
   );
 
   /** Same download as the Resume page: <Profile>/<Company>/Resume.pdf into a picked folder, else one zip. */
-  const downloadPicked = useCallback(async () => {
-    const ids = [...picked];
+  const downloadResumes = useCallback(async (ids: string[]) => {
     if (!ids.length) return;
     setDownloadingPicked(true);
     try {
@@ -439,7 +438,7 @@ export default function JobApplyRun() {
     } finally {
       setDownloadingPicked(false);
     }
-  }, [picked]);
+  }, []);
 
   const download = useCallback(
     async (s: { accountId: string; resumeId: string }) => {
@@ -621,6 +620,15 @@ export default function JobApplyRun() {
   }, [confirmTailorAll, tailorProfiles, tailorRowIds, runId]);
 
   const selectedRows = rows.filter((r) => selected.has(r._id));
+  // Ready tailored resumes on the checked jobs (only the filtered profile's, when filtering), plus clicked ones.
+  const selectedResumeIds = [
+    ...new Set([
+      ...selectedRows.flatMap((r) =>
+        r.tailored.filter((t) => t.status === 'completed' && (!accountId || t.accountId === accountId)).map((t) => t.jobId),
+      ),
+      ...picked,
+    ]),
+  ];
 
   /** Copy these jobs' posting links, one per line (each link once). */
   const copyLinks = useCallback(async (jobs: JobApplyRow[]) => {
@@ -952,6 +960,21 @@ export default function JobApplyRun() {
                   <Sparkles className="h-4 w-4" aria-hidden />
                   Tailor
                 </button>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => void downloadResumes(selectedResumeIds)}
+                  disabled={downloadingPicked || selectedResumeIds.length === 0}
+                  title={
+                    selectedResumeIds.length
+                      ? `Download ${selectedResumeIds.length} tailored resume${selectedResumeIds.length === 1 ? '' : 's'}`
+                        + (accountId ? ` (${profileNames[accountId] ?? 'this profile'} only)` : '')
+                      : 'No tailored resume is ready on the selected jobs'
+                  }
+                >
+                  {downloadingPicked ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
+                  Download{selectedResumeIds.length ? ` (${selectedResumeIds.length})` : ''}
+                </button>
                 {APPLIED_UI && (
                   <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
                     {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" aria-hidden />}
@@ -994,7 +1017,7 @@ export default function JobApplyRun() {
                 </select>
               )}
               {picked.size > 0 && (
-                <button type="button" className="btn btn-sm" onClick={() => void downloadPicked()} disabled={downloadingPicked}>
+                <button type="button" className="btn btn-sm" onClick={() => void downloadResumes([...picked])} disabled={downloadingPicked}>
                   {downloadingPicked ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
                   Download selected ({picked.size})
                 </button>
