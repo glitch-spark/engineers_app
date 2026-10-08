@@ -48,6 +48,7 @@ export default function UsersPage() {
     role: 'staff',
     phone: '',
     birthday: '',
+    slackUserId: '',
   });
 
   const [isSearching, setIsSearching] = useState(false);
@@ -82,9 +83,10 @@ export default function UsersPage() {
         role: editing.role || 'staff',
         phone: editing.phone || '',
         birthday: editing.birthday ? new Date(editing.birthday).toISOString().slice(0, 10) : '',
+        slackUserId: editing.slackUserId || '',
       });
     } else {
-      setForm({ name: '', email: '', role: 'staff', phone: '', birthday: '' });
+      setForm({ name: '', email: '', role: 'staff', phone: '', birthday: '', slackUserId: '' });
     }
   }, [editing]);
 
@@ -96,10 +98,11 @@ export default function UsersPage() {
     setSaving(true);
     try {
       if (editing) {
-        await api.updateUser(editing._id, form);
+        await api.updateUser(editing._id, { ...form, slackUserId: form.slackUserId.trim() || null });
         notify.success(`User "${form.name || form.email}" updated`);
       } else {
-        await api.createUser(form);
+        const { slackUserId: _slackUserId, ...fields } = form; // set on edit, once the user exists
+        await api.createUser(fields);
         notify.success(`User "${form.name || form.email}" created`);
       }
       await mutate();
@@ -457,6 +460,25 @@ export default function UsersPage() {
               </p>
             )}
           </div>
+
+          {editing && (
+            <div>
+              <label className="block text-sm font-medium mb-2 text-body" htmlFor="user-slack-id">Slack member ID</label>
+              <input
+                id="user-slack-id"
+                className="input w-full font-mono uppercase"
+                placeholder="U04ABC12345"
+                autoComplete="off"
+                spellCheck={false}
+                value={form.slackUserId}
+                onChange={(e) => setForm({ ...form, slackUserId: e.target.value })}
+                aria-describedby="user-slack-id-note"
+              />
+              <p id="user-slack-id-note" className="text-xs text-muted mt-1">
+                In Slack: their profile → <strong>⋮</strong> → <strong>Copy member ID</strong>. Leave blank to clear.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-2 text-body" htmlFor="user-phone">Phone Number</label>
