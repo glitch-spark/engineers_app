@@ -89,6 +89,8 @@ export default function Suggestions({
   onTailor,
   onTailorAll,
   onDownloadTailored,
+  isPicked,
+  onPick,
 }: {
   row: JobApplyRow;
   threshold: number;
@@ -101,6 +103,9 @@ export default function Suggestions({
   onTailor: (accountId: string) => void;
   onTailorAll: () => void;
   onDownloadTailored: (t: JobApplyTailored) => void;
+  /** Download selection (by tailored job id), separate from the Applied marks. */
+  isPicked?: (tailoredJobId: string) => boolean;
+  onPick?: (tailoredJobId: string, on: boolean) => void;
 }) {
   const marked = (f: AppliedFile) =>
     row.appliedResumes.some((m) => (f.tailoredJobId ? m.tailoredJobId === f.tailoredJobId : m.resumeId === f.resumeId));
@@ -217,6 +222,16 @@ export default function Suggestions({
                   </span>
                 ) : t.status === 'completed' ? (
                   <>
+                    {onPick && (
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 rounded border-zinc-300 accent-sky-600 dark:border-zinc-600"
+                        checked={isPicked?.(t.jobId) ?? false}
+                        onChange={(e) => onPick(t.jobId, e.target.checked)}
+                        title="Select for download"
+                        aria-label={`Select ${name}'s tailored resume for download`}
+                      />
+                    )}
                     <AppliedToggle
                       checked={marked({ accountId: acc, tailoredJobId: t.jobId })}
                       onChange={(on) => onToggle({ accountId: acc, tailoredJobId: t.jobId }, on, `Tailored · ${name}`)}

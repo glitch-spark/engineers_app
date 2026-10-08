@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCheck, ChevronDown, ChevronRight, Copy, ExternalLink, FileText, Keyboard, Loader2, Sparkles, Square, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, Copy, Download, ExternalLink, FileText, Keyboard, Loader2, Sparkles, Square, X } from 'lucide-react';
 import * as api from '../api/endpoints';
 import type { JobApplyAppliedFilter, JobApplyMarkRef, JobApplyRow, JobApplySuggestion, JobApplyView } from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -141,6 +141,9 @@ export default function JobApplyRun() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Tailored resumes picked for download (resume job ids); kept across buckets and pages.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [downloadingPicked, setDownloadingPicked] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [thresholdDraft, setThresholdDraft] = useState<number | null>(null);
   const [busy, setBusy] = useState<'cancel' | 'retry' | 'bulk' | null>(null);
@@ -379,6 +382,35 @@ export default function JobApplyRun() {
       notify.error(err, 'Could not download the tailored resume');
     }
   }, [profileNames]);
+
+  const pick = useCallback((jobId: string, on: boolean) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(jobId);
+      else next.delete(jobId);
+      return next;
+    });
+  }, []);
+
+  const readyOnPage = useMemo(
+    () => rows.flatMap((r) => r.tailored.filter((t) => t.status === 'completed').map((t) => t.jobId)),
+    [rows],
+  );
+
+  /** Same download as the Resume page: <Profile>/<Company>/Resume.pdf into a picked folder, else one zip. */
+  const downloadPicked = useCallback(async () => {
+    const ids = [...picked];
+    if (!ids.length) return;
+    setDownloadingPicked(true);
+    try {
+      await api.bulkDownloadResumeJobs(ids);
+      notify.success(`Downloaded ${ids.length} resume${ids.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      notify.error(err, 'Could not download the selected resumes');
+    } finally {
+      setDownloadingPicked(false);
+    }
+  }, [picked]);
 
   const download = useCallback(
     async (s: { accountId: string; resumeId: string }) => {
@@ -907,6 +939,35 @@ export default function JobApplyRun() {
             <Pagination info={pagination} onPage={goToPage} label="Pages (top)" />
           </div>
 
+          {(picked.size > 0 || readyOnPage.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Resumes selected for download">
+              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                {picked.size > 0 ? `${picked.size} resume${picked.size === 1 ? '' : 's'} selected` : 'Resumes'}
+              </span>
+              {picked.size > 0 && (
+                <button type="button" className="btn btn-sm" onClick={() => void downloadPicked()} disabled={downloadingPicked}>
+                  {downloadingPicked ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
+                  Download selected ({picked.size})
+                </button>
+              )}
+              {readyOnPage.some((id) => !picked.has(id)) && (
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => setPicked((prev) => new Set([...prev, ...readyOnPage]))}
+                >
+                  Select all on this page
+                </button>
+              )}
+              {picked.size > 0 && (
+                <button type="button" className="btn-outline btn-sm" onClick={() => setPicked(new Set())}>
+                  <X className="h-4 w-4" aria-hidden />
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="table-wrap">
             {rowsLoading && rows.length === 0 ? (
               <p role="status" className="flex items-center gap-2 p-6 text-sm text-muted">
@@ -1060,6 +1121,8 @@ export default function JobApplyRun() {
                               onTailor={(acc) => void tailor(row, acc)}
                               onTailorAll={() => void tailorRow(row)}
                               onDownloadTailored={(t) => void downloadTailored(row, t)}
+                              isPicked={(id) => picked.has(id)}
+                              onPick={pick}
                             />
                           </td>
                         </tr>
