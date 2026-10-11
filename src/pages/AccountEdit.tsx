@@ -6,6 +6,7 @@ import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
 import ResumeStylingEditor from '../components/ResumeStylingEditor';
 import ResumesSection from '../components/ResumesSection';
+import PromptEvalBlock from '../components/promptEval/PromptEvalBlock';
 import CountrySelect from '../components/CountrySelect';
 import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
@@ -243,6 +244,7 @@ export default function AccountEditPage() {
       </Section>
 
       <PromptsBlock accountId={id!} />
+      <PromptEvalBlock accountId={id!} />
     </div>
   );
 }
