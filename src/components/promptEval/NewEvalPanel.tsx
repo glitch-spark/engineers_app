@@ -198,7 +198,7 @@ export default function NewEvalPanel({
       }
     >
       <div className="grid gap-5 lg:grid-cols-2">
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           {accountId ? (
             <div>
               <span className="block text-xs font-medium mb-1 text-muted">Profile</span>
@@ -251,7 +251,7 @@ export default function NewEvalPanel({
           </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           <JdPicker value={jdIds} onChange={setJdIds} />
           <div>
             <label htmlFor="prompt-eval-label" className="block text-xs font-medium mb-1 text-muted">

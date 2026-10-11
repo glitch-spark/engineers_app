@@ -16,24 +16,27 @@ export interface RadarSeries {
 export const METRIC_LABEL: Record<RadarMetric, string> = { match: 'Match', believability: 'Believability' };
 
 /**
- * One axis per role, 0-100, one polygon per run. Roles no run scored are left out so each polygon stays closed.
- * Identity never relies on color alone: a single run needs no legend (the card names it); two or more get one.
+ * All eight role axes, 0-100, one polygon per run. A role a run did not cover has no point on that axis (not a
+ * zero), so a one-role run shows one marked axis on the full wheel. Identity never relies on color alone: a
+ * single run needs no legend (the card names it); two or more get one.
  */
 export default function RoleRadar({ series, metric, height = 320 }: { series: RadarSeries[]; metric: RadarMetric; height?: number }) {
   const chart = useChartTheme();
   const { theme } = useTheme();
   const mode = theme === 'dark' ? 'dark' : 'light';
 
-  const data = useMemo(() => {
-    const roles = EVAL_ROLES.filter((role) => series.some((s) => s.scores[role]?.[metric] != null));
-    return roles.map((role) => {
-      const point: Record<string, string | number | null> = { role: ROLE_LABEL[role] };
-      for (const s of series) point[s.id] = s.scores[role]?.[metric] ?? null;
-      return point;
-    });
-  }, [series, metric]);
+  const data = useMemo(
+    () =>
+      EVAL_ROLES.map((role) => {
+        const point: Record<string, string | number | null> = { role: ROLE_LABEL[role] };
+        for (const s of series) point[s.id] = s.scores[role]?.[metric] ?? null;
+        return point;
+      }),
+    [series, metric],
+  );
+  const anyScored = series.some((s) => EVAL_ROLES.some((role) => s.scores[role]?.[metric] != null));
 
-  if (series.length === 0 || data.length === 0) {
+  if (series.length === 0 || !anyScored) {
     return (
       <p className="flex items-center justify-center text-sm text-muted" style={{ height }}>
         No scored roles yet.
@@ -63,7 +66,8 @@ export default function RoleRadar({ series, metric, height = 320 }: { series: Ra
                 strokeWidth={2}
                 fill={color}
                 fillOpacity={series.length > 1 ? 0.12 : 0.25}
-                dot={{ r: 3, fill: color, strokeWidth: 0 }}
+                dot={{ r: 4, fill: color, strokeWidth: 0 }}
+                connectNulls={false}
                 isAnimationActive={false}
               />
             );

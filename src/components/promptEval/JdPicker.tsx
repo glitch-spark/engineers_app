@@ -59,7 +59,8 @@ export default function JdPicker({
   }
 
   return (
-    <fieldset>
+    // min-w-0 overrides the fieldset default (min-inline-size: min-content) so long titles truncate instead of overflowing.
+    <fieldset className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-2">
         <legend className="block text-xs font-medium text-muted">Job descriptions</legend>
         <span className={`text-xs tabular-nums ${atCap ? 'text-amber-700 dark:text-amber-400' : 'text-faint'}`}>
