@@ -56,7 +56,7 @@ export const PROMPT_SOURCE_LABEL: Record<PromptEvalPromptSource, string> = {
 };
 
 /** Server-side cap, mirrored so the picker can stop at it. */
-export const MAX_JDS_PER_RUN = 25;
+export const MAX_JDS_PER_RUN = 50;
 
 export const isRunActive = (status: PromptEvalRunStatus) => status === 'running';
 

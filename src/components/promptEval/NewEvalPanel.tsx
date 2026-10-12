@@ -11,6 +11,7 @@ import ResumePromptField from '../ResumePromptField';
 import Select from '../Select';
 import SidePanel from '../SidePanel';
 import JdPicker from './JdPicker';
+import ScopePicker, { roundRobinIds, type ScopeKey } from './ScopePicker';
 
 export interface EvalPrefill {
   accountId?: string;
@@ -61,6 +62,9 @@ export default function NewEvalPanel({
   const [origin, setOrigin] = useState<PromptOrigin>('none');
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   const [jdIds, setJdIds] = useState<string[]>(prefill?.jdIds ?? []);
+  const [scope, setScope] = useState<ScopeKey>(prefill?.jdIds?.length ? 'custom' : '5');
+  // Same key as JdPicker, so SWR serves both from one request.
+  const { data: library } = useSWR(open ? ['prompt-eval-jds', 'active'] : null, () => api.listEvalJds());
   const [label, setLabel] = useState(prefill?.label ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -72,8 +76,16 @@ export default function NewEvalPanel({
     if (!open) return;
     setProfileId(accountId ?? prefill?.accountId ?? '');
     setJdIds(prefill?.jdIds ?? []);
+    setScope(prefill?.jdIds?.length ? 'custom' : '5');
     setLabel(prefill?.label ?? '');
   }, [open, accountId, prefill]);
+
+  // A preset scope picks its postings from the library (round-robin across roles) whenever either changes.
+  useEffect(() => {
+    if (!library || scope === 'custom') return;
+    const count = scope === 'all' ? library.jds.length : Number(scope);
+    setJdIds(roundRobinIds(library.jds, library.roles, Math.min(count, library.jds.length)));
+  }, [library, scope]);
 
   // Prefill the prompt from the profile (then the global prompt) whenever the profile changes.
   useEffect(() => {
@@ -252,7 +264,14 @@ export default function NewEvalPanel({
         </div>
 
         <div className="min-w-0 space-y-5">
-          <JdPicker value={jdIds} onChange={setJdIds} />
+          <ScopePicker value={scope} onChange={setScope} librarySize={library?.jds.length ?? 0} perJdCost={perJd} />
+          <JdPicker
+            value={jdIds}
+            onChange={(ids) => {
+              setScope('custom');
+              setJdIds(ids);
+            }}
+          />
           <div>
             <label htmlFor="prompt-eval-label" className="block text-xs font-medium mb-1 text-muted">
               Label (optional)
