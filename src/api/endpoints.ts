@@ -2279,6 +2279,9 @@ export interface BidWeekRow {
   country: string | null;
   profileName: string | null;
   rate: number;
+  /** The user who owns the bidder; ownerName is null when that user no longer exists. */
+  ownerId: string;
+  ownerName: string | null;
   /** One per `week.days`, same order. */
   days: BidderWeekDay[];
   week: BidderWeekTotals;
@@ -2297,8 +2300,8 @@ export interface BidWeek {
   totals: BidCounts & { pay: number | null; toReview: number | null; days: (BidCounts & { day: string })[] };
 }
 
-/** The pay week holding `week` (YYYY-MM-DD; default the current one). */
-export const bidsWeek = (params: { week?: string; includeArchived?: boolean }) =>
+/** The pay week holding `week` (YYYY-MM-DD; default the current one). `ownerId` narrows to one user's bidders. */
+export const bidsWeek = (params: { week?: string; includeArchived?: boolean; ownerId?: string }) =>
   apiFetch<BidWeek>(`/bids/week${qs(params)}`);
 
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);

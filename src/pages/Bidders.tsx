@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../api/endpoints';
+import { useAuth } from '../auth/useAuth';
 import { usd } from '../lib/money';
 import PageHeader from '../components/PageHeader';
+import Select from '../components/Select';
 import Switch from '../components/Switch';
 import BidderActions from '../components/bidders/BidderActions';
 import BidderView from '../components/bidders/BidderView';
@@ -15,8 +17,8 @@ import TeamWeekTable from '../components/bidders/TeamWeekTable';
 import WeekNav from '../components/bidders/WeekNav';
 import { dateInZone } from '../components/bidders/weekDates';
 
-/** URL state: week, bidder, day, tab (history), mode (focus), bid. */
-type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid';
+/** URL state: week, bidder, day, tab (history), mode (focus), bid, owner (admin filter). */
+type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner';
 
 function statusText(b: api.Bidder | undefined, row: api.BidWeekRow) {
   if (row.status === 'archived') return 'Archived';
@@ -32,6 +34,9 @@ export default function BiddersPage() {
   const [params, setParams] = useSearchParams();
   const week = params.get('week');
   const bidderId = params.get('bidder');
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const ownerId = isAdmin ? params.get('owner') ?? '' : '';
   const [showArchived, setShowArchived] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [inviteShown, setInviteShown] = useState<{ name: string; invite: api.BidderInvite } | null>(null);
@@ -51,8 +56,21 @@ export default function BiddersPage() {
 
   // A bidder view always finds its bidder, archived or not.
   const includeArchived = showArchived || !!bidderId;
-  const board = useSWR(['bids-week', week, includeArchived] as const, () =>
-    api.bidsWeek({ week: week ?? undefined, includeArchived: includeArchived || undefined }),
+  // The owner filter narrows the team table only, so a bidder link opens whatever the filter.
+  const boardOwner = bidderId ? '' : ownerId;
+  const board = useSWR(['bids-week', week, includeArchived, boardOwner] as const, () =>
+    api.bidsWeek({ week: week ?? undefined, includeArchived: includeArchived || undefined, ownerId: boardOwner || undefined }),
+  );
+  const users = useSWR(isAdmin ? (['users-lookup'] as const) : null, () => api.lookupUsers());
+  const ownerOptions = useMemo(
+    () => [
+      { value: '', label: 'All users' },
+      ...(users.data?.users ?? []).map((u) => ({
+        value: u._id,
+        label: `${u.name || u.email || u._id}${u._id === user?.id ? ' (you)' : ''}`,
+      })),
+    ],
+    [users.data, user?.id],
   );
   // Full bidder records (own bidders) for the status details and the ⋯ menu; an admin's view of other owners'
   // bidders has none, so those rows get no management menu.
@@ -154,7 +172,22 @@ export default function BiddersPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <WeekNav week={weekKey} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />
-        {!bidderId && <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />}
+        {!bidderId && (
+          <div className="flex flex-wrap items-center gap-3">
+            {isAdmin && (
+              <div className="w-48">
+                <Select
+                  value={ownerId}
+                  onChange={(v) => setParam({ owner: v || null })}
+                  options={ownerOptions}
+                  ariaLabel="Filter bidders by owner"
+                  className="w-full text-sm"
+                />
+              </div>
+            )}
+            <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />
+          </div>
+        )}
       </div>
 
       {board.error ? (
@@ -192,6 +225,11 @@ export default function BiddersPage() {
             <button type="button" className="underline" onClick={() => setParam({ bidder: null, day: null, tab: null })}>Back to the team</button>
           </div>
         )
+      ) : data.bidders.length === 0 && ownerId ? (
+        <div className="empty-state">
+          <p className="font-medium text-strong">{showArchived ? 'This user has no bidders.' : 'This user has no active bidders.'}</p>
+          <button type="button" className="btn mt-4" onClick={() => setParam({ owner: null })}>Show all users</button>
+        </div>
       ) : data.bidders.length === 0 ? (
         <div className="empty-state">
           <p className="font-medium text-strong">{showArchived ? 'No bidders this week.' : 'No bidders yet'}</p>
@@ -203,6 +241,7 @@ export default function BiddersPage() {
           <SummaryTiles tiles={tiles()} />
           <TeamWeekTable
             data={data}
+            showOwner={isAdmin}
             onOpenBidder={openBidder}
             onReview={review}
             renderStatus={(row) => statusText(byId[row.id], row)}

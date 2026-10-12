@@ -31,12 +31,15 @@ export function DayCount({ c, future }: { c: api.BidCounts & { source?: string; 
  */
 export default function TeamWeekTable({
   data,
+  showOwner = false,
   onOpenBidder,
   onReview,
   renderStatus,
   renderActions,
 }: {
   data: api.BidWeek;
+  /** Adds an Owner column (the admin view lists every user's bidders). */
+  showOwner?: boolean;
   onOpenBidder: (id: string, day?: string) => void;
   onReview: (bidderId?: string) => void;
   renderStatus: (row: api.BidWeekRow) => ReactNode;
@@ -53,6 +56,7 @@ export default function TeamWeekTable({
         <thead className="table-head">
           <tr>
             <th scope="col" className="px-4 py-2.5">Name</th>
+            {showOwner && <th scope="col" className="px-3 py-2.5">Owner</th>}
             <th scope="col" className="px-3 py-2.5">Status</th>
             <th scope="col" className="px-3 py-2.5">Profile</th>
             <th scope="col" className="px-3 py-2.5">Rate</th>
@@ -93,6 +97,9 @@ export default function TeamWeekTable({
                   {row.name}
                 </button>
               </th>
+              {showOwner && (
+                <td className="px-3 py-2.5 whitespace-nowrap">{row.ownerName || <span className="text-muted">—</span>}</td>
+              )}
               <td className="px-3 py-2.5 whitespace-nowrap text-xs">{renderStatus(row)}</td>
               <td className="px-3 py-2.5">{row.profileName || <span className="text-muted">—</span>}</td>
               <td className="px-3 py-2.5 whitespace-nowrap">{usd(row.rate)}</td>
@@ -139,7 +146,7 @@ export default function TeamWeekTable({
         </tbody>
         <tfoot>
           <tr className="border-t border-zinc-200 bg-zinc-50/70 font-medium dark:border-zinc-800 dark:bg-zinc-900/40">
-            <th scope="row" className="px-4 py-2.5 text-left" colSpan={4}>Total</th>
+            <th scope="row" className="px-4 py-2.5 text-left" colSpan={showOwner ? 5 : 4}>Total</th>
             {totals.days.map((c, i) => (
               <td key={c.day} className="px-1 py-2.5 text-center">
                 <DayCount c={c} future={week.days[i].isFuture} />
