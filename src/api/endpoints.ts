@@ -1450,8 +1450,8 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
 
 // ---------- resume prompt evaluator ----------
 
-export type EvalRole = 'fullstack' | 'frontend' | 'backend' | 'ai' | 'ml' | 'llm' | 'data' | 'test';
-export const EVAL_ROLES: EvalRole[] = ['fullstack', 'frontend', 'backend', 'ai', 'ml', 'llm', 'data', 'test'];
+export type EvalRole = 'fullstack' | 'frontend' | 'backend' | 'ai' | 'ml' | 'llm' | 'data' | 'test' | 'senior_swe' | 'staff_swe';
+export const EVAL_ROLES: EvalRole[] = ['fullstack', 'frontend', 'backend', 'ai', 'ml', 'llm', 'data', 'test', 'senior_swe', 'staff_swe'];
 
 /** A sample posting in the shared library; seeds carry a `seedKey`. */
 export interface EvalJobDescription {

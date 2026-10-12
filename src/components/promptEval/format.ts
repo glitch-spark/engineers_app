@@ -16,6 +16,8 @@ export const ROLE_LABEL: Record<EvalRole, string> = {
   llm: 'LLM',
   data: 'Data',
   test: 'Test',
+  senior_swe: 'Senior SWE',
+  staff_swe: 'Staff SWE',
 };
 
 export const RUN_STATUS_LABEL: Record<PromptEvalRunStatus, string> = {
@@ -54,7 +56,7 @@ export const PROMPT_SOURCE_LABEL: Record<PromptEvalPromptSource, string> = {
 };
 
 /** Server-side cap, mirrored so the picker can stop at it. */
-export const MAX_JDS_PER_RUN = 12;
+export const MAX_JDS_PER_RUN = 25;
 
 export const isRunActive = (status: PromptEvalRunStatus) => status === 'running';
 
