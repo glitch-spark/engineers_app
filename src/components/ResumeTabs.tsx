@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
-import { FileDown, ListChecks, Settings } from 'lucide-react';
+import { FileDown, FlaskConical, ListChecks, Settings } from 'lucide-react';
 
 const TABS = [
   { to: '/resume', label: 'Generate', icon: FileDown, exact: true },
   { to: '/resume/generated', label: 'Generated Resumes', icon: ListChecks, exact: false },
+  { to: '/resume/eval', label: 'Prompt Eval', icon: FlaskConical, exact: false },
   { to: '/preferences', label: 'Prompts', icon: Settings, exact: true },
 ];
 

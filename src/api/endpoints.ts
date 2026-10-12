@@ -1121,7 +1121,7 @@ export interface ScreeningPair {
 }
 
 export type LlmProvider = 'free' | 'openai' | 'anthropic';
-export type ModelTask = 'resume' | 'cover_letter' | 'screening';
+export type ModelTask = 'resume' | 'cover_letter' | 'screening' | 'judge';
 export type ModelTier = 'budget' | 'balanced' | 'premium';
 
 export interface ModelProviderInfo {
@@ -1447,6 +1447,139 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
   const filename = _filenameFromCD(res.headers.get('Content-Disposition'), 'resumes.zip');
   _saveBlob(blob, filename);
 }
+
+// ---------- resume prompt evaluator ----------
+
+export type EvalRole = 'fullstack' | 'frontend' | 'backend' | 'ai' | 'ml' | 'llm' | 'data' | 'test' | 'senior_swe' | 'staff_swe';
+export const EVAL_ROLES: EvalRole[] = ['fullstack', 'frontend', 'backend', 'ai', 'ml', 'llm', 'data', 'test', 'senior_swe', 'staff_swe'];
+
+/** A sample posting in the shared library; seeds carry a `seedKey`. */
+export interface EvalJobDescription {
+  _id: string;
+  role: EvalRole;
+  title: string;
+  company: string;
+  text: string;
+  seedKey?: string | null;
+  createdBy?: string | null;
+  archived: boolean;
+  archivedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JudgeVerdict {
+  /** 0-100 fit for the posting; location and work authorization are ignored by the judge. */
+  matchScore: number;
+  /** 0-100: reads like a real engineer's own resume. */
+  believabilityScore: number;
+  matchNotes: string[];
+  believabilityNotes: string[];
+  missingRequirements: string[];
+  redFlags: string[];
+  strengths: string[];
+  summary: string;
+}
+
+export type PromptEvalRowStatus = 'pending' | 'generating' | 'judging' | 'done' | 'failed';
+export type PromptEvalRunStatus = 'running' | 'done' | 'failed';
+export type PromptEvalPromptSource = 'custom' | 'profile' | 'global' | 'none';
+
+export interface PromptEvalRow {
+  jdId: string;
+  role: EvalRole;
+  jdTitle: string;
+  jdCompany: string;
+  status: PromptEvalRowStatus;
+  error?: string | null;
+  genModelId?: string | null;
+  genProvider?: LlmProvider | null;
+  genModel?: string | null;
+  genFallbackUsed: boolean;
+  /** The resume came from a cache (Redis or Mongo): identical prompt + JD + model, no model call. */
+  genCached: boolean;
+  genInputTokens?: number | null;
+  genOutputTokens?: number | null;
+  genCostUsd?: number | null;
+  judgeModelId?: string | null;
+  judgeProvider?: LlmProvider | null;
+  judgeModel?: string | null;
+  judgeFallbackUsed: boolean;
+  judgeCached: boolean;
+  judgeInputTokens?: number | null;
+  judgeOutputTokens?: number | null;
+  judgeCostUsd?: number | null;
+  /** Only on GET /runs/{id}; the list leaves these out. */
+  resumeText?: string | null;
+  resumeHtml?: string | null;
+  verdict?: JudgeVerdict | null;
+  durationMs?: number | null;
+}
+
+export interface PromptEvalRoleScore {
+  match: number | null;
+  believability: number | null;
+  n: number;
+}
+
+export interface PromptEvalRun {
+  _id: string;
+  userId: string;
+  accountId: string;
+  accountName: string;
+  label?: string | null;
+  /** The custom prompt text the run actually used (snapshot). */
+  promptBody: string;
+  promptSource: PromptEvalPromptSource;
+  resumeModelId?: string | null;
+  judgeModelId?: string | null;
+  status: PromptEvalRunStatus;
+  error?: string | null;
+  startedAt: string;
+  finishedAt?: string | null;
+  durationMs?: number | null;
+  rows: PromptEvalRow[];
+  counts: { total: number; done: number; failed: number };
+  avgMatch?: number | null;
+  avgBelievability?: number | null;
+  roleScores: Partial<Record<EvalRole, PromptEvalRoleScore>>;
+  totalCostUsd: number;
+  cachedRows: number;
+  cachedJudgeRows: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const listEvalJds = (params?: { role?: EvalRole; includeArchived?: boolean }) =>
+  apiFetch<{ roles: EvalRole[]; jds: EvalJobDescription[] }>(`/resume/eval/jds${qs(params)}`);
+
+export const createEvalJd = (body: { role: EvalRole; title: string; company: string; text: string }) =>
+  postJSON<EvalJobDescription>('/resume/eval/jds', body);
+
+export const updateEvalJd = (id: string, body: Partial<{ role: EvalRole; title: string; company: string; text: string }>) =>
+  putJSON<EvalJobDescription>(`/resume/eval/jds/${id}`, body);
+
+export const archiveEvalJd = (id: string) => postJSON<EvalJobDescription>(`/resume/eval/jds/${id}/archive`, {});
+
+export const unarchiveEvalJd = (id: string) => postJSON<EvalJobDescription>(`/resume/eval/jds/${id}/unarchive`, {});
+
+/** Starts a run (202). `promptBody` undefined = the saved profile/global prompt; a string (even '') is used as is. */
+export const createPromptEvalRun = (body: {
+  accountId: string;
+  promptBody?: string;
+  resumeModel?: string;
+  judgeModel?: string;
+  roles?: EvalRole[];
+  jdIds?: string[];
+  label?: string;
+}) => postJSON<{ runId: string; status: PromptEvalRunStatus; jdCount: number }>('/resume/eval/runs', body);
+
+export const listPromptEvalRuns = (params?: { accountId?: string; page?: number; limit?: number }) =>
+  apiFetch<{ runs: PromptEvalRun[]; pagination: Pagination }>(`/resume/eval/runs${qs(params)}`);
+
+export const getPromptEvalRun = (id: string) => apiFetch<PromptEvalRun>(`/resume/eval/runs/${id}`);
+
+export const deletePromptEvalRun = (id: string) => del<{ ok: boolean }>(`/resume/eval/runs/${id}`);
 
 // ---------- job applies ----------
 
