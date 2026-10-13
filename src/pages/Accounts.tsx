@@ -57,8 +57,9 @@ export default function AccountsPage() {
     })
   );
 
-  const { data: usersData } = useSWR(isAdmin ? ['users-list'] : null, () => api.listUsers());
-  const users = (usersData?.users as Array<{ _id: string; name?: string; email?: string }>) || [];
+  // The lookup lists every user; /users is paginated (10 by default), which cut the filter short.
+  const { data: usersData } = useSWR(isAdmin ? ['users-lookup'] : null, () => api.lookupUsers());
+  const users = usersData?.users ?? [];
 
   const remove = async () => {
     const acc = pendingDelete;
@@ -86,11 +87,11 @@ export default function AccountsPage() {
     }
   };
 
-  // Only the creator can change a profile (the API returns 404 for anyone else).
+  // The creator or an admin can archive or delete a profile (the API returns 404 for anyone else).
   const rowActions = (a: Acc) => {
     const edit = { label: 'Edit', onSelect: () => navigate(`/accounts/${a._id}`) };
     const ownerId = typeof a.createdBy === 'object' ? a.createdBy?._id : a.createdBy;
-    if (!user?.id || ownerId !== user.id) return [edit];
+    if (!isAdmin && (!user?.id || ownerId !== user.id)) return [edit];
     return [
       edit,
       a.archived
