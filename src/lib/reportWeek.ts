@@ -2,7 +2,7 @@
  *  Weeks start on Monday; Monday–Saturday are working days and Sunday
  *  belongs to the week that just ended.
  */
-import type { Counts } from '../api/endpoints';
+import type { Bids, Counts } from '../api/endpoints';
 import { mondayOfWeek, toDateInputValue } from './dateRangePresets';
 
 export type CompareState = 'met' | 'short' | 'over' | 'none';
@@ -87,7 +87,42 @@ export function compare(done: number, goal: number): { state: CompareState; diff
 }
 
 export function emptyCounts(): Counts {
-  return { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0 };
+  return { bidsSelf: 0, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0 };
+}
+
+export const SELF_REGIONS = [
+  { field: 'bidsSelfUs', label: 'US' },
+  { field: 'bidsSelfEu', label: 'EU' },
+  { field: 'bidsSelfLatam', label: 'LATAM' },
+] as const;
+
+export type SelfRegionField = (typeof SELF_REGIONS)[number]['field'];
+
+export function selfRegionsTotal(c: Bids): number {
+  return SELF_REGIONS.reduce((sum, r) => sum + (c[r.field] ?? 0), 0);
+}
+
+/** Self bids saved before the US / EU / LATAM split: the part of the total
+ *  no region covers (a whole pre-split day, or such days within a week). */
+export function preSplitSelf(c: Bids): number {
+  return Math.max(0, c.bidsSelf - selfRegionsTotal(c));
+}
+
+/** `c` with one region set; the self total becomes the regions' sum. */
+export function withSelfRegion<T extends Bids>(c: T, field: SelfRegionField, n: number): T {
+  const next = { ...c, [field]: n };
+  return { ...next, bidsSelf: selfRegionsTotal(next) };
+}
+
+/** Just the bid fields, for a save. */
+export function bidsOf(c: Bids): Bids {
+  return {
+    bidsSelf: c.bidsSelf,
+    bidsSelfUs: c.bidsSelfUs ?? 0,
+    bidsSelfEu: c.bidsSelfEu ?? 0,
+    bidsSelfLatam: c.bidsSelfLatam ?? 0,
+    bidsBidder: c.bidsBidder,
+  };
 }
 
 /** Working days (Mon–Sat) strictly between two dates. */

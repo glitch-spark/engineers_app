@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { ChecklistItem, Counts } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
-import { dateParam, dayLabel, isToday, parseDateParam } from '../../lib/reportWeek';
+import { bidsOf, dateParam, dayLabel, isToday, parseDateParam } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import ChecklistEditor, { cleanItems } from './ChecklistEditor';
 import GoalDoneFields from './GoalDoneFields';
@@ -76,7 +76,7 @@ export default function DayPanel({
     try {
       await api.putDayPlan(date, {
         goalItems: cleanItems(form.goalItems),
-        done: { bidsSelf: form.done.bidsSelf, bidsBidder: form.done.bidsBidder },
+        done: bidsOf(form.done),
         notes: form.notes,
       });
       await mutate();

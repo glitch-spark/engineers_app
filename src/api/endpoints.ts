@@ -293,16 +293,19 @@ export const runAlertAction = (id: string, action: string) =>
 
 // ---------- weekly / daily plans (Goal vs Done) ----------
 
-export interface Counts {
-  bidsSelf: number;
-  bidsBidder: number;
-  interviewsSelf: number;
-  interviewsCaller: number;
-}
-
+/** `bidsSelf` is the self total: the US / EU / LATAM sum, or a total saved
+ *  before self bids were split by region. */
 export interface Bids {
   bidsSelf: number;
+  bidsSelfUs: number;
+  bidsSelfEu: number;
+  bidsSelfLatam: number;
   bidsBidder: number;
+}
+
+export interface Counts extends Bids {
+  interviewsSelf: number;
+  interviewsCaller: number;
 }
 
 export interface ChecklistItem {

@@ -1,5 +1,6 @@
 import { CheckCircle2, Circle, Target } from 'lucide-react';
 import type { WeekPlan } from '../../api/endpoints';
+import { preSplitSelf, selfRegionsTotal, SELF_REGIONS } from '../../lib/reportWeek';
 import ProgressMetric from './ProgressMetric';
 
 /** The week's goal and how far along it is. */
@@ -14,6 +15,7 @@ export default function WeekGoalCard({
 }) {
   const { goal, done } = week;
   const ticked = week.goalItems.filter((i) => i.done).length;
+  const bySelfRegion = selfRegionsTotal(goal) + selfRegionsTotal(done) > 0;
   const hasGoal =
     goal.bidsSelf + goal.bidsBidder + goal.interviewsSelf + goal.interviewsCaller > 0 || week.goalItems.length > 0;
 
@@ -47,12 +49,21 @@ export default function WeekGoalCard({
       ) : (
         <>
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <ProgressMetric label="Bids · self" done={done.bidsSelf} goal={goal.bidsSelf} />
+            {bySelfRegion ? (
+              SELF_REGIONS.map((r) => (
+                <ProgressMetric key={r.field} label={`Bids · self (${r.label})`} done={done[r.field] ?? 0} goal={goal[r.field] ?? 0} />
+              ))
+            ) : (
+              <ProgressMetric label="Bids · self" done={done.bidsSelf} goal={goal.bidsSelf} />
+            )}
             <ProgressMetric label="Bids · bidder" done={done.bidsBidder} goal={goal.bidsBidder} />
             <ProgressMetric label="Interviews · self" done={done.interviewsSelf} goal={goal.interviewsSelf} />
             <ProgressMetric label="Interviews · caller" done={done.interviewsCaller} goal={goal.interviewsCaller} />
           </div>
-          <p className="mt-2 text-[11px] text-muted">Interviews are counted from the Interviews page.</p>
+          <p className="mt-2 text-[11px] text-muted">
+            Interviews are counted from the Interviews page.
+            {bySelfRegion && preSplitSelf(done) > 0 && ` Plus ${preSplitSelf(done)} self bids saved before the region split.`}
+          </p>
 
           {week.goalItems.length > 0 && (
             <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">

@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { ChecklistItem, Counts } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
-import { parseDateParam, weekLabel } from '../../lib/reportWeek';
+import { bidsOf, parseDateParam, weekLabel } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import ChecklistEditor, { cleanItems } from './ChecklistEditor';
 import GoalDoneFields from './GoalDoneFields';
@@ -93,7 +93,7 @@ export default function WeekPanel({
       await api.putWeekPlan(weekStart, {
         goal: form.goal,
         goalItems: cleanItems(form.goalItems),
-        dailyGoal: { bidsSelf: form.dailyGoal.bidsSelf, bidsBidder: form.dailyGoal.bidsBidder },
+        dailyGoal: bidsOf(form.dailyGoal),
         dailyGoalItems: cleanItems(form.dailyGoalItems).map((i) => ({ text: i.text, done: false })),
         recapNotes: form.recapNotes,
       });

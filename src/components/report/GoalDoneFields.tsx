@@ -1,4 +1,5 @@
 import type { Counts, InterviewStages } from '../../api/endpoints';
+import { preSplitSelf, SELF_REGIONS, withSelfRegion, type SelfRegionField } from '../../lib/reportWeek';
 import { stageBadgeClass } from '../../lib/stageBadge';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -62,7 +63,8 @@ function StageChips({ stages }: { stages?: Record<string, number> }) {
 
 /** Goal | Done for bids and interviews.
  *
- *  Bids: goal and done are typed. Interviews: the goal is typed on the week
+ *  Bids: goal and done are typed; self bids per region (US, EU, LATAM), which
+ *  add up to the self total. Interviews: the goal is typed on the week
  *  only; done always comes from the Interviews page (read-only, with stages).
  */
 export default function GoalDoneFields({
@@ -86,24 +88,43 @@ export default function GoalDoneFields({
 }) {
   const row = showDone ? ROW_WITH_DONE : ROW_GOAL_ONLY;
 
+  const set = (c: Counts, field: keyof Counts, n: number): Counts =>
+    SELF_REGIONS.some((r) => r.field === field) ? withSelfRegion(c, field as SelfRegionField, n) : { ...c, [field]: n };
+
   const goalCell = (field: keyof Counts, label: string) =>
     readOnly || !onGoal ? (
-      <ValueBox value={goal[field]} muted />
+      <ValueBox value={goal[field] ?? 0} muted />
     ) : (
-      <NumberInput value={goal[field]} label={`${label} goal`} onChange={(n) => onGoal({ ...goal, [field]: n })} />
+      <NumberInput value={goal[field] ?? 0} label={`${label} goal`} onChange={(n) => onGoal(set(goal, field, n))} />
     );
 
-  const bidRow = (field: 'bidsSelf' | 'bidsBidder', label: string) => (
+  const bidRow = (field: SelfRegionField | 'bidsBidder', label: string) => (
     <div key={field} className={`${row} py-1`}>
       <span className="pt-2 text-sm text-body">{label}</span>
       {goalCell(field, `Bids ${label.toLowerCase()}`)}
       {showDone && (
         readOnly || !onDone ? (
-          <ValueBox value={done[field]} />
+          <ValueBox value={done[field] ?? 0} />
         ) : (
-          <NumberInput value={done[field]} label={`Bids ${label.toLowerCase()} done`} onChange={(n) => onDone({ ...done, [field]: n })} />
+          <NumberInput value={done[field] ?? 0} label={`Bids ${label.toLowerCase()} done`} onChange={(n) => onDone(set(done, field, n))} />
         )
       )}
+    </div>
+  );
+
+  // Self bids saved before the region split: shown as-is until a region is typed.
+  const preSplitGoal = preSplitSelf(goal);
+  const preSplitDone = showDone ? preSplitSelf(done) : 0;
+  const preSplitRow = (preSplitGoal > 0 || preSplitDone > 0) && (
+    <div className={`${row} py-1`}>
+      <div className="min-w-0 pt-2 text-sm text-body">
+        Self (no region)
+        <div className="text-[11px] text-muted">
+          Saved before the region split{!readOnly && (onGoal || onDone) ? ' · typing a region replaces it' : ''}
+        </div>
+      </div>
+      <ValueBox value={preSplitGoal} muted />
+      {showDone && <ValueBox value={preSplitDone} />}
     </div>
   );
 
@@ -127,7 +148,8 @@ export default function GoalDoneFields({
       </div>
       <section className="py-1">
         <h3 className="form-label mb-0.5">Bids</h3>
-        {bidRow('bidsSelf', 'Self')}
+        {SELF_REGIONS.map((r) => bidRow(r.field, `Self (${r.label})`))}
+        {preSplitRow}
         {bidRow('bidsBidder', 'Bidder')}
       </section>
       {(showDone || showInterviewGoal) && (
