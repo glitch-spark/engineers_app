@@ -575,21 +575,6 @@ function JobRow({
             ) : (
               job.companyName
             )}
-            {job.source === 'job_applies' &&
-              (job.jobApplyRunId ? (
-                <Link
-                  to={`/job-applies/${job.jobApplyRunId}`}
-                  className="badge-neutral ml-2 align-middle text-[10px] hover:underline"
-                  title="Open the Job Applies run this resume was tailored in"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  From run: {job.jobApplyRunName} ↗
-                </Link>
-              ) : (
-                <span className="badge-neutral ml-2 align-middle text-[10px]" title="Tailored from a Job Applies run">
-                  From a Job Applies run
-                </span>
-              ))}
           </div>
           {job.matchSnippet && (
             <div className="text-[11px] text-muted italic mt-0.5 line-clamp-2 reveal-on-focus" title={job.matchSnippet}>
@@ -1019,7 +1004,24 @@ function ScreeningPanel({
         <header className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs text-muted">Screening Q&amp;A</div>
-            <h2 id={titleId} className="font-semibold text-strong truncate">{job.companyName}</h2>
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 id={titleId} className="font-semibold text-strong truncate">{job.companyName}</h2>
+              {job.source === 'job_applies' &&
+                (job.jobApplyRunId ? (
+                  <Link
+                    to={`/job-applies/${job.jobApplyRunId}`}
+                    className="badge-neutral shrink-0 max-w-[220px] gap-1 text-[10px] hover:underline"
+                    title={`Open the Job Applies run this resume was tailored in: ${job.jobApplyRunName}`}
+                  >
+                    <span className="truncate">From run: {job.jobApplyRunName}</span>
+                    <span aria-hidden>↗</span>
+                  </Link>
+                ) : (
+                  <span className="badge-neutral shrink-0 text-[10px]" title="Tailored from a Job Applies run">
+                    From a Job Applies run
+                  </span>
+                ))}
+            </div>
             <div className="text-xs text-muted truncate">{job.profileName}</div>
             {job.screeningLlmProvider && (
               <div className="mt-1">
