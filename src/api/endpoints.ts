@@ -856,6 +856,68 @@ export interface DashboardTeam {
 export const getDashboardTeam = (params: { range: DashboardCompareRange; today?: string }) =>
   apiFetch<DashboardTeam>(`/dashboard/team${qs(params)}`);
 
+export type AiUsageBucket = 'hour' | 'day';
+
+export interface AiUsageTotals {
+  costUsd: number;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Part of costUsd rebuilt from older records with an estimated per-step split. */
+  estimatedCostUsd: number;
+  /** Calls on models without a catalog price (counted at $0). */
+  unpricedCalls: number;
+}
+
+export interface AiUsageReport {
+  from: string;
+  to: string;
+  tz: string;
+  bucket: AiUsageBucket;
+  totals: AiUsageTotals;
+  /** One point per bucket, labelled in `tz` ("2026-10-14T13:00" or "2026-10-14"); cost split three ways. */
+  series: {
+    bucket: string;
+    costUsd: number;
+    calls: number;
+    byFeature: Record<string, number>;
+    byModel: Record<string, number>;
+    byUser: Record<string, number>;
+  }[];
+  /** user x feature x model, most expensive first. userId null = unattributed. */
+  rows: {
+    userId: string | null;
+    userName: string;
+    feature: string;
+    model: string;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    estimated: boolean;
+  }[];
+  /** Everything present in the period, ignoring the filters. User id "unattributed" = no user. */
+  options: { users: { id: string; name: string }[]; features: string[]; models: string[] };
+}
+
+export interface AiUsageParams {
+  from: string;
+  to: string;
+  tz: string;
+  userId?: string[];
+  feature?: string[];
+  model?: string[];
+}
+
+/** Admins only. List filters repeat the key (?feature=a&feature=b), which `qs` doesn't do. */
+export const getAiUsage = (params: AiUsageParams) => {
+  const search = new URLSearchParams({ from: params.from, to: params.to, tz: params.tz });
+  for (const key of ['userId', 'feature', 'model'] as const) {
+    for (const value of params[key] ?? []) search.append(key, value);
+  }
+  return apiFetch<AiUsageReport>(`/ai-usage?${search.toString()}`);
+};
+
 export interface LeaderboardResponse {
   metric: LeaderboardMetric;
   range: number;
