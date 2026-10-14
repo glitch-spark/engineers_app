@@ -234,7 +234,8 @@ export default function AiUsageCard() {
 
       {customError ? (
         <p className="text-sm text-muted">{customError}</p>
-      ) : error && !data ? (
+      ) : error ? (
+        // Any error, even with older data kept by SWR: that data belongs to the previous selection.
         <div>
           <p className="mb-3 text-sm text-muted">Couldn&rsquo;t load AI usage.</p>
           <button type="button" className="btn-outline" onClick={() => mutate()}>
