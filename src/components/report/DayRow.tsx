@@ -1,7 +1,54 @@
 import { ChevronRight } from 'lucide-react';
-import type { DayPlan } from '../../api/endpoints';
-import { dayLabel, dayState, parseDateParam } from '../../lib/reportWeek';
+import type { Counts, DayPlan } from '../../api/endpoints';
+import { compare, dayLabel, dayState, parseDateParam, preSplitSelf, SELF_REGIONS } from '../../lib/reportWeek';
 import GoalDone from './GoalDone';
+
+type BidPart = { label: string; done: number; goal: number };
+
+/** LATAM, EU, US, then Bidder, the order the daily follow-up reads them. */
+const SPLIT_REGIONS = [...SELF_REGIONS].reverse();
+
+/** The day's bids by region and bidder; self bids saved before the region
+ *  split show as "Self". Parts with neither goal nor done are left out. */
+function bidParts(goal: Counts, done: Counts): BidPart[] {
+  const parts: BidPart[] = [
+    ...SPLIT_REGIONS.map((r) => ({ label: r.label, done: done[r.field] ?? 0, goal: goal[r.field] ?? 0 })),
+    { label: 'Self', done: preSplitSelf(done), goal: preSplitSelf(goal) },
+    { label: 'Bidder', done: done.bidsBidder, goal: goal.bidsBidder },
+  ];
+  return parts.filter((p) => p.done > 0 || p.goal > 0);
+}
+
+/** "(LATAM 20/50, EU 30/50, …)", or just the goals "(LATAM 50, …)" before follow-up. */
+function BidSplit({ parts, showDone }: { parts: BidPart[]; showDone: boolean }) {
+  if (parts.length === 0) return null;
+  return (
+    <span className="ml-1 text-muted">
+      (
+      {parts.map((p, i) => (
+        <span key={p.label} className="whitespace-nowrap tabular-nums">
+          {i > 0 && ', '}
+          {p.label}{' '}
+          {showDone ? (
+            <>
+              <span
+                className={`font-medium ${
+                  compare(p.done, p.goal).state === 'short' ? 'text-amber-700 dark:text-amber-400' : 'text-strong'
+                }`}
+              >
+                {p.done}
+              </span>
+              /{p.goal}
+            </>
+          ) : (
+            p.goal
+          )}
+        </span>
+      ))}
+      )
+    </span>
+  );
+}
 
 /** One day of the week board: its goal (from the weekly plan), then what was done once followed up. */
 export default function DayRow({
@@ -23,6 +70,7 @@ export default function DayRow({
   const hasGoal = bidsGoal > 0 || day.goalItems.length > 0;
   const state = dayState({ date: day.date, today, hasGoal, logged: day.loggedAt !== null });
   const interviews = done.interviewsSelf + done.interviewsCaller;
+  const parts = bidParts(goal, done);
 
   const interviewsText = (
     <span className="whitespace-nowrap text-muted">
@@ -33,6 +81,7 @@ export default function DayRow({
   const goalText = (
     <span className="text-muted">
       Goal: Bids {bidsGoal}
+      <BidSplit parts={parts.filter((p) => p.goal > 0)} showDone={false} />
       {day.goalItems.length > 0 && ` · ${day.goalItems.length} goal${day.goalItems.length === 1 ? '' : 's'}`}
     </span>
   );
@@ -41,7 +90,10 @@ export default function DayRow({
   if (state === 'done') {
     body = (
       <>
-        <GoalDone label="Bids" done={done.bidsSelf + done.bidsBidder} goal={bidsGoal} />
+        <span>
+          <GoalDone label="Bids" done={done.bidsSelf + done.bidsBidder} goal={bidsGoal} />
+          <BidSplit parts={parts} showDone />
+        </span>
         {interviewsText}
         {day.goalItems.length > 0 && <span className="text-muted">Goals {ticked}/{day.goalItems.length}</span>}
       </>
