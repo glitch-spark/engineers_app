@@ -1,6 +1,7 @@
 import { Download, FileCode2, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyProfile, JobApplyRow, JobApplyTailored } from '../../api/endpoints';
 import { bandClass } from './format';
+import { PromptCell } from './PromptCell';
 
 /** The file applied with: an uploaded resume or one of the job's tailored resumes. */
 export type AppliedFile = { accountId: string; resumeId?: string; tailoredJobId?: string };
@@ -97,8 +98,8 @@ function TailoredScore({ t }: { t: JobApplyTailored }) {
 const CELL = 'px-3 py-2 align-middle';
 
 /**
- * One profile's cells on a job's row: Profile, Sample resumes (.pdf), HTML template and Tailored. A job open to
- * several profiles has one table row per profile; the job's own cells span them.
+ * One profile's cells on a job's row: Profile, Sample resumes (.pdf), HTML template, Prompt and Tailored. A job open
+ * to several profiles has one table row per profile; the job's own cells span them.
  */
 export function ProfileCells({
   row,
@@ -113,6 +114,7 @@ export function ProfileCells({
   onDownloadTailored,
   isPicked,
   onPick,
+  onPromptChange,
 }: {
   row: JobApplyRow;
   acc: string;
@@ -129,6 +131,8 @@ export function ProfileCells({
   /** Download selection by tailored job id: clicking a finished tailored resume picks it. */
   isPicked?: (tailoredJobId: string) => boolean;
   onPick?: (tailoredJobId: string, on: boolean) => void;
+  /** Save the prompt this profile tailors the job with. */
+  onPromptChange: (promptId: string) => Promise<void>;
 }) {
   const withModel = tailorModel ? `Tailor with ${tailorModel}` : undefined;
   const best = row.suggestions.find((x) => x.accountId === acc);
@@ -220,11 +224,21 @@ export function ProfileCells({
       </td>
 
       <td className={CELL}>
+        <PromptCell
+          options={profile?.prompts ?? []}
+          defaultId={profile?.defaultPromptId}
+          suggestedId={row.prompt?.[acc]?.suggestedId ?? null}
+          chosenId={row.prompt?.[acc]?.chosenId ?? null}
+          onChange={onPromptChange}
+        />
+      </td>
+
+      <td className={CELL}>
         <div className="flex items-center gap-1">
           {!t ? (
             <button
               type="button"
-              className="btn-outline btn-sm whitespace-nowrap py-0.5"
+              className="btn-outline btn-sm whitespace-nowrap py-0.5 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => onTailor(acc)}
               disabled={noTemplate}
               title={noTemplate ? 'Add an HTML template to this profile first' : withModel}
@@ -245,7 +259,9 @@ export function ProfileCells({
                 label={`${profileName}'s tailored resume`}
               >
                 <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
-                <span className="text-sm font-medium">Tailored</span>
+                <span className="text-sm font-medium" title={t.promptName ? `Tailored with ${t.promptName}` : undefined}>
+                  Tailored
+                </span>
                 <TailoredScore t={t} />
               </TailoredChip>
               <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${profileName})`}>

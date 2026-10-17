@@ -13,6 +13,7 @@ import ModelSelect from '../components/ModelSelect';
 import RowDetail from '../components/jobApplies/RowDetail';
 import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
 import { type AppliedFile, ProfileCells, firstReadyTailored, orderedProfiles, profilesToTailor } from '../components/jobApplies/Suggestions';
+import { JobRoleMarks } from '../components/jobApplies/JobRoleMarks';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import { APPLIED_UI } from '../components/jobApplies/appliedUi';
 import RunSummary from '../components/jobApplies/RunSummary';
@@ -379,6 +380,23 @@ export default function JobApplyRun() {
       }
     },
     [mutateRows, mutateRun],
+  );
+
+  /** Save the resume prompt a profile tailors this job with; the row comes back with the new choice. */
+  const changePrompt = useCallback(
+    async (row: JobApplyRow, accountId: string, promptId: string) => {
+      try {
+        const updated = await api.setJobApplyRowPrompt(row._id, { accountId, promptId });
+        await mutateRows(
+          (prev: RowsPage | undefined) =>
+            prev && { ...prev, rows: prev.rows.map((r) => (r._id === row._id ? { ...r, prompt: updated.prompt } : r)) },
+          { revalidate: false },
+        );
+      } catch (err) {
+        notify.error(err, 'Could not change the prompt');
+      }
+    },
+    [mutateRows],
   );
 
   /** Tailor for every profile this job is open to that has no tailored resume yet (or only a failed one). */
@@ -1035,6 +1053,7 @@ export default function JobApplyRun() {
                     <th className="px-3 py-2 font-medium">Profile</th>
                     <th className="px-3 py-2 font-medium">Sample resumes (.pdf)</th>
                     <th className="px-3 py-2 font-medium">HTML template</th>
+                    <th className="px-3 py-2 font-medium">Prompt</th>
                     <th className="px-3 py-2 font-medium">Tailored</th>
                   </tr>
                 </thead>
@@ -1144,6 +1163,7 @@ export default function JobApplyRun() {
                                       </button>
                                       {row.humanEdited && <span className="badge-info ml-1 align-middle">Edited</span>}
                                     </p>
+                                    <JobRoleMarks jobRole={row.jobRole} />
                                     {toTailor.length > 1 && (
                                       <button
                                         type="button"
@@ -1177,9 +1197,10 @@ export default function JobApplyRun() {
                               onDownloadTailored={downloadTailored}
                               isPicked={(id) => picked.has(id)}
                               onPick={pick}
+                              onPromptChange={(promptId) => changePrompt(row, acc, promptId)}
                             />
                           ) : (
-                            <td colSpan={4} className={`${jobCell} hint`}>
+                            <td colSpan={5} className={`${jobCell} hint`}>
                               No profile can take this job (see Flags).
                             </td>
                           )}
@@ -1187,7 +1208,7 @@ export default function JobApplyRun() {
                       ))}
                       {isOpen && (
                         <tr>
-                          <td colSpan={11} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
+                          <td colSpan={12} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
                             <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
                           </td>
                         </tr>
@@ -1314,6 +1335,7 @@ export default function JobApplyRun() {
               <p className="text-sm">
                 {RESUME_MODEL.label} <span className="text-zinc-500">· always used for tailoring in Job Applies</span>
               </p>
+              <p className="hint mt-1">Each job uses the prompt selected in its Prompt column.</p>
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={tailorCoverLetter} onChange={(e) => setTailorCoverLetter(e.target.checked)} />
