@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { JobApplyPromptOption } from '../../api/endpoints';
-import { PROMPT_ROLE_LABEL } from '../prompts/promptRoles';
+import { rolesLabel, unitRoles } from '../prompts/promptRoles';
 
 /**
  * The resume prompt a profile tailors this job with: the user's choice, else the prompt suggested from the job, else the
@@ -29,11 +29,12 @@ export function PromptCell({
     return <span className="block max-w-[11rem] truncate text-zinc-700 dark:text-zinc-300">{options[0].name}</span>;
   }
 
-  // "DevOps · DevOps" says nothing twice: the role is shown only when the name doesn't already say it.
-  const label = (o: JobApplyPromptOption) =>
-    o.role && o.name.trim().toLowerCase() !== PROMPT_ROLE_LABEL[o.role].toLowerCase()
-      ? `${o.name} · ${PROMPT_ROLE_LABEL[o.role]}`
-      : o.name;
+  // "DevOps · DevOps" says nothing twice: the roles are shown only when the name doesn't already say them.
+  const label = (o: JobApplyPromptOption) => {
+    const roles = unitRoles(o);
+    const said = rolesLabel(roles);
+    return roles.length && o.name.trim().toLowerCase() !== said.toLowerCase() ? `${o.name} · ${said}` : o.name;
+  };
   const tag = value === suggestedId && suggestedId !== defaultId ? 'Suggested' : value === defaultId ? 'Default' : '';
 
   return (

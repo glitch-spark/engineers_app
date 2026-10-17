@@ -30,7 +30,7 @@ type AccShape = {
 function promptsOf(acc: AccShape): { prompts: api.ResumePrompt[]; defaultId: string } {
   const prompts = acc.resumePrompts?.length
     ? acc.resumePrompts
-    : [{ id: 'default', name: legacyPromptName(acc.resumePromptBody ?? ''), role: null, body: acc.resumePromptBody ?? '' }];
+    : [{ id: 'default', name: legacyPromptName(acc.resumePromptBody ?? ''), roles: [], role: null, body: acc.resumePromptBody ?? '' }];
   const defaultId = prompts.some((p) => p.id === acc.defaultPromptId) ? (acc.defaultPromptId as string) : prompts[0].id;
   return { prompts, defaultId };
 }

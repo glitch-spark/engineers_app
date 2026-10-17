@@ -30,6 +30,17 @@ export function legacyPromptName(body: string): string {
   return name.replace(/[\s\-—:·]+$/, '') || 'Default';
 }
 
+/** A unit's roles; one saved before units had several roles carries a single `role`. */
+export function unitRoles(p: { roles?: PromptRole[] | null; role?: PromptRole | null }): PromptRole[] {
+  if (p.roles?.length) return p.roles;
+  return p.role ? [p.role] : [];
+}
+
+/** "Full stack + DevOps", or "All roles (general)" with none. */
+export function rolesLabel(roles: PromptRole[]): string {
+  return roles.length ? roles.map((r) => PROMPT_ROLE_LABEL[r]).join(' + ') : NO_ROLE_LABEL;
+}
+
 /** A temporary id for a prompt not saved yet; the server gives it a real one. */
 export function newPromptId(): string {
   return `new-${Math.random().toString(36).slice(2, 10)}`;

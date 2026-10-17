@@ -50,7 +50,7 @@ export default function ResumePromptsEditor({
   const update = (patch: Partial<ResumePrompt>) =>
     onChange(prompts.map((p) => (p.id === current.id ? { ...p, ...patch } : p)), defaultId);
   const add = () => {
-    const p: ResumePrompt = { id: newPromptId(), name: 'New prompt', role: null, body: '' };
+    const p: ResumePrompt = { id: newPromptId(), name: 'New prompt', roles: [], role: null, body: '' };
     onChange([...prompts, p], defaultId);
     setSelectedId(p.id);
     setLastIndex(prompts.length);
