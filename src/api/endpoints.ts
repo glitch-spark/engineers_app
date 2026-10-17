@@ -1688,6 +1688,9 @@ export interface JobApplyProfile {
   name: string;
   country?: string | null;
   region?: string | null;
+  /** The HTML template tailored resumes are written into; without one the profile can't be tailored. */
+  hasTemplate?: boolean;
+  templateName?: string | null;
 }
 
 export interface JobApplyRunSummary {
