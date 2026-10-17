@@ -43,8 +43,8 @@ export default function TemplatePane({
 
   return (
     <div className="flex h-full flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="form-label mb-0">HTML template</span>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">HTML template</h3>
         {html && (
           <span className="flex items-center gap-3 text-xs">
             <label className="link cursor-pointer [&:has(:focus-visible)]:ring-2 [&:has(:focus-visible)]:ring-sky-600">

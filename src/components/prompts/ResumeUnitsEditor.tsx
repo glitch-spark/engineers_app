@@ -69,8 +69,9 @@ export default function ResumeUnitsEditor({
   const setRoles = (next: PromptRole[]) => update({ roles: next, role: null });
 
   return (
-    <div className="space-y-3">
-      <div role="tablist" aria-label="Resume units" className="flex flex-wrap items-center gap-1.5">
+    <div className="space-y-4">
+      {/* Tab bar: the units, on a line that separates them from the selected unit below */}
+      <div role="tablist" aria-label="Resume units" className="flex flex-wrap items-end gap-1 border-b border-zinc-200 dark:border-zinc-700">
         {prompts.map((p) => {
           const active = p.id === current.id;
           return (
@@ -80,11 +81,11 @@ export default function ResumeUnitsEditor({
               role="tab"
               aria-selected={active}
               onClick={() => select(p.id)}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                 active
-                  ? 'border-sky-500 bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
-                  : 'border-zinc-200 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-              } ${errors[p.id] ? 'border-red-400 dark:border-red-500' : ''}`}
+                  ? 'border-sky-600 text-sky-800 dark:border-sky-400 dark:text-sky-200'
+                  : 'border-transparent text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+              } ${errors[p.id] ? 'text-red-700 dark:text-red-400' : ''}`}
             >
               <span className="max-w-[14rem] truncate">{p.name.trim() || 'Untitled'}</span>
               {p.id === defaultId && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" aria-label="default" />}
@@ -97,13 +98,14 @@ export default function ResumeUnitsEditor({
           );
         })}
         {prompts.length < MAX_PROMPTS && (
-          <button type="button" onClick={add} className="btn-outline btn-sm">
+          <button type="button" onClick={add} className="btn-outline btn-sm mb-1.5 ml-2">
             <Plus className="h-3.5 w-3.5" aria-hidden /> Add unit
           </button>
         )}
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
+      {/* The selected unit: its name, roles and default / delete, then its template, prompt and Eval cards */}
+      <div className="flex flex-wrap items-end gap-3 border-b border-zinc-200 pb-4 dark:border-zinc-700">
         <div className="min-w-[14rem] flex-1 sm:max-w-xs">
           <label htmlFor={`${ids}-name`} className="form-label">
             Name
@@ -180,15 +182,16 @@ export default function ResumeUnitsEditor({
       )}
 
       <div className="grid gap-4 lg:grid-cols-[4fr_3fr_3fr]">
-        <section aria-label="HTML template" className="min-w-0">
+        <section aria-label="HTML template" className="flex min-w-0 flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40">
           <TemplatePane
             html={current.templateHtml ?? ''}
             name={current.templateName ?? ''}
             onChange={(templateHtml, templateName) => update({ templateHtml, templateName })}
           />
         </section>
-        <section aria-label="Prompt" className="min-w-0">
+        <section aria-label="Prompt" className="flex min-w-0 flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40">
           <ResumePromptField
+            inCard
             value={current.body}
             onChange={(body) => update({ body })}
             label="Prompt"
@@ -200,8 +203,8 @@ export default function ResumeUnitsEditor({
             defaultSource="global"
           />
         </section>
-        <aside aria-label="Eval" className="flex min-w-0 flex-col rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Eval</h3>
+        <aside aria-label="Eval" className="flex min-w-0 flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Eval</h3>
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
             <Radar className="h-8 w-8 text-zinc-300 dark:text-zinc-600" aria-hidden />
             <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">No eval yet</p>

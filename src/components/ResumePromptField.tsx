@@ -21,6 +21,7 @@ export default function ResumePromptField({
   label,
   hint,
   kind = 'resume',
+  inCard = false,
   defaultSource = 'none',
 }: {
   value: string;
@@ -28,6 +29,8 @@ export default function ResumePromptField({
   label: string;
   hint: string;
   kind?: 'resume' | 'screening' | 'coverLetter';
+  /** Inside a card: a bold header like the card's siblings, and the text box fills the card's height. */
+  inCard?: boolean;
   defaultSource?: 'none' | 'global';
 }) {
   const [loadingDefault, setLoadingDefault] = useState(false);
@@ -57,9 +60,14 @@ export default function ResumePromptField({
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <label htmlFor={id} className="block text-xs font-medium text-muted">{label}</label>
+    <div className={inCard ? 'flex h-full flex-col' : undefined}>
+      <div className={`flex items-center justify-between ${inCard ? 'mb-3' : 'mb-1'}`}>
+        <label
+          htmlFor={id}
+          className={inCard ? 'block text-sm font-semibold text-zinc-900 dark:text-zinc-50' : 'block text-xs font-medium text-muted'}
+        >
+          {label}
+        </label>
         <div className="flex items-center gap-2">
           <span id={`${id}-count`} className="text-[11px] text-faint">
             {value.length}/{MAX}<span className="sr-only"> characters used</span>
@@ -80,7 +88,7 @@ export default function ResumePromptField({
       <textarea
         id={id}
         aria-describedby={`${id}-hint ${id}-count`}
-        className="input w-full text-sm"
+        className={`input w-full text-sm ${inCard ? 'min-h-[18rem] flex-1 resize-none' : ''}`}
         rows={12}
         value={value}
         maxLength={MAX}
