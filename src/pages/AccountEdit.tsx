@@ -421,18 +421,10 @@ function PromptsBlock({ accountId }: { accountId: string }) {
                 }}
                 dirtyIds={dirtyIds}
                 errors={errors}
+                onSave={() => void save()}
+                saving={saving}
+                changed={unitsChanged}
               />
-              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-                <span className="text-xs text-muted" aria-live="polite">
-                  {unitsChanged
-                    ? `Unsaved changes${dirtyIds.size ? ` in ${dirtyIds.size} unit${dirtyIds.size === 1 ? '' : 's'}` : ''}`
-                    : 'All changes saved'}
-                </span>
-                <button type="button" onClick={save} disabled={saving || !unitsChanged} className="btn disabled:opacity-50">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
-                  Save resume units
-                </button>
-              </div>
             </Section>
 
             <Section

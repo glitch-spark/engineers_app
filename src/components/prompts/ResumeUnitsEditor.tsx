@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Play, Plus, Radar, Star, Trash2, X } from 'lucide-react';
+import { Loader2, Play, Plus, Radar, Save, Star, Trash2, X } from 'lucide-react';
 import type { PromptRole, ResumePrompt } from '../../api/endpoints';
 import ResumePromptField from '../ResumePromptField';
 import TemplatePane from './TemplatePane';
@@ -15,6 +15,9 @@ export default function ResumeUnitsEditor({
   onChange,
   dirtyIds,
   errors,
+  onSave,
+  saving,
+  changed,
 }: {
   prompts: ResumePrompt[];
   defaultId: string;
@@ -23,6 +26,11 @@ export default function ResumeUnitsEditor({
   dirtyIds: Set<string>;
   /** What's wrong with each unit's name (id → message). */
   errors: Record<string, string>;
+  /** Save every unit (and the profile's other prompts). */
+  onSave: () => void;
+  saving: boolean;
+  /** Something to save: a unit edited, added or deleted, or another default. */
+  changed: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(prompts[0]?.id ?? '');
   const [lastIndex, setLastIndex] = useState(0);
@@ -174,6 +182,15 @@ export default function ResumeUnitsEditor({
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete
         </button>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted" aria-live="polite">
+            {changed ? `Unsaved${dirtyIds.size ? ` · ${dirtyIds.size} unit${dirtyIds.size === 1 ? '' : 's'}` : ''}` : 'Saved'}
+          </span>
+          <button type="button" onClick={onSave} disabled={saving || !changed} className="btn btn-sm disabled:opacity-50">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Save className="h-3.5 w-3.5" aria-hidden />}
+            Save
+          </button>
+        </div>
       </div>
       {error && (
         <p id="prompt-name-error" className="text-xs text-red-700 dark:text-red-400">
