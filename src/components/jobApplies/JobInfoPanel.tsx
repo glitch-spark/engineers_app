@@ -164,11 +164,12 @@ export default function JobInfoPanel({
   const ro = !canEdit;
 
   // Approval: a job that was read can be approved from any bucket in APPROVABLE_BUCKETS; one that wasn't has no
-  // description to go on yet, so it is pasted below first (saving reads the job again).
+  // description to go on yet, so it is pasted below first (saving reads the job again). A job in Invalid role was
+  // read: it is moved back from the job list.
   const screen = data?.screen ?? null;
   const approved = !!data?.forceInclude && screen === 'valid';
   const approvable = !!screen && APPROVABLE_BUCKETS.includes(screen);
-  const unread = !!screen && screen !== 'valid' && !approvable;
+  const unread = !!screen && screen !== 'valid' && screen !== 'invalid_role' && !approvable;
   const approving = busyId === rowId;
 
   return (

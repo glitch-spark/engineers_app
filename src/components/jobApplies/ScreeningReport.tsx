@@ -130,7 +130,8 @@ export default function ScreeningReport({
     .filter((p) => jobsFor(p.id) > 0)
     .map((p) => options.get(p.id))
     .filter((p): p is ProfileOption => !!p);
-  const nonZero = BUCKET_ORDER.filter((b) => report.buckets[b] > 0);
+  // Invalid role always shows, even empty, so everyone sees where moved jobs go.
+  const nonZero = BUCKET_ORDER.filter((b) => report.buckets[b] > 0 || b === 'invalid_role');
   const blocker =
     report.worth === 0
       ? 'No jobs worth applying to'
@@ -284,7 +285,7 @@ export default function ScreeningReport({
               }`}
             >
               <span className={`h-2 w-2 rounded-full ${BUCKET_COLOR[b]}`} aria-hidden />
-              {BUCKET_LABEL[b]} {report.buckets[b]}
+              {BUCKET_LABEL[b]} {report.buckets[b] ?? 0}
             </button>
           ))}
           {!readOnly && !rescore && (

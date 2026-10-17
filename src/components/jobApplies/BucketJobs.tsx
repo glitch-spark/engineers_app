@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import useSWR from 'swr';
-import { Check, ExternalLink, Loader2, RotateCcw, Undo2 } from 'lucide-react';
+import { Ban, Check, ExternalLink, Loader2, RotateCcw, Undo2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket } from '../../api/endpoints';
 import { notify } from '../../lib/notify';
 import JobInfoPanel from './JobInfoPanel';
 import Pagination from './Pagination';
 import { useApproveJob } from './useApproveJob';
+import { useInvalidJob } from './useInvalidJob';
 import { APPROVABLE_BUCKETS, BUCKET_LABEL, formatDate, locationLabel } from './format';
 import { safeHref } from '../../lib/safeHref';
 
@@ -15,6 +16,7 @@ const PAGE_SIZE = 25;
 function reason(row: api.JobApplyRow): string {
   if (row.status === 'fetch_failed' || row.status === 'llm_failed') return row.statusReason ?? '';
   if (row.screen === 'not_job') return 'Not a single job posting (error page, job list or careers page)';
+  if (row.screen === 'invalid_role') return 'Moved here from Worth applying: not a role to apply for';
   const failing = (row.gates ?? []).filter((g) => g.result === 'fail').map((g) => g.reason || g.name);
   const unknown = (row.gates ?? []).filter((g) => g.result === 'unknown').map((g) => g.reason || g.name);
   if (row.forceInclude) return failing.length ? `Approved despite: ${failing.join(' · ')}` : 'Approved';
@@ -49,7 +51,12 @@ export default function BucketJobs({
   const { setApproved, busyId: approvingId } = useApproveJob(runId, onChanged);
   // A person can approve the jobs in these buckets into Worth applying, and undo an approval there.
   const canApprove = !readOnly && APPROVABLE_BUCKETS.includes(bucket);
-  const anyBusy = busy !== null || approvingId !== null;
+  // Worth applying jobs can be moved to Invalid role, and moved back from there, at any step (also once the run is
+  // scored and this list is otherwise read-only): several people check the same links.
+  const { setInvalid, busyId: invalidatingId } = useInvalidJob(runId, onChanged);
+  const canMoveToInvalid = bucket === 'valid';
+  const canMoveBack = bucket === 'invalid_role';
+  const anyBusy = busy !== null || approvingId !== null || invalidatingId !== null;
 
   const retry = async () => {
     setBusy('retry');
@@ -111,6 +118,7 @@ export default function BucketJobs({
                       {row.company && <span className="font-normal text-zinc-500"> · {row.company}</span>}
                       {row.humanEdited && <span className="badge-info ml-2 align-middle">Edited</span>}
                       {row.forceInclude && bucket === 'valid' && <span className="badge-success ml-2 align-middle">Approved</span>}
+                      {bucket === 'invalid_role' && <span className="badge-danger ml-2 align-middle">Invalid</span>}
                     </span>
                     <span className="hint block">
                       {[reason(row), row.groupKey ? locationLabel(row.groupKey) : '', row.postedDate ? `posted ${formatDate(row.postedDate)}` : '']
@@ -145,6 +153,24 @@ export default function BucketJobs({
                         <Check className="h-3.5 w-3.5" aria-hidden />
                       )}
                       {undoable ? 'Undo approval' : 'Approve'}
+                    </button>
+                  )}
+                  {(canMoveToInvalid || canMoveBack) && (
+                    <button
+                      type="button"
+                      className="btn-outline btn-sm relative z-10"
+                      title={canMoveBack ? 'Move it back to Worth applying' : 'Not a role to apply for: move it to Invalid role'}
+                      onClick={() => void setInvalid(row._id, canMoveToInvalid)}
+                      disabled={anyBusy}
+                    >
+                      {invalidatingId === row._id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      ) : canMoveBack ? (
+                        <Undo2 className="h-3.5 w-3.5" aria-hidden />
+                      ) : (
+                        <Ban className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {canMoveBack ? 'Undo' : 'Move to Invalid'}
                     </button>
                   )}
                 </li>

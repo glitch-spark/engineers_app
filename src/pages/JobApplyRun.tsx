@@ -12,7 +12,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import ModelSelect from '../components/ModelSelect';
 import RowDetail from '../components/jobApplies/RowDetail';
 import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
-import Suggestions, { type AppliedFile, firstReadyTailored, orderedProfiles } from '../components/jobApplies/Suggestions';
+import { type AppliedFile, ProfileCells, firstReadyTailored, orderedProfiles, profilesToTailor } from '../components/jobApplies/Suggestions';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
 import { APPLIED_UI } from '../components/jobApplies/appliedUi';
 import RunSummary from '../components/jobApplies/RunSummary';
@@ -155,6 +155,8 @@ export default function JobApplyRun() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  // Asked before exporting while some applications have no resume to send yet (they'd be left out of the sheet).
+  const [confirmExport, setConfirmExport] = useState(false);
   const [infoRow, setInfoRow] = useState<string | null>(null);
   // An earlier step opened from the step track (null: the run's own step).
   const [stepView, setStepView] = useState<Step | null>(null);
@@ -172,7 +174,7 @@ export default function JobApplyRun() {
     revalidateOnFocus: false,
   });
   const [since] = useState(localMidnightIso);
-  const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
+  const rowRefs = useRef(new Map<string, HTMLTableSectionElement>());
 
   const tailoringPending = (r?: api.JobApplyRun) => !!r?.tailoring && r.tailoring.queued + r.tailoring.inProgress > 0;
   const { data: run, mutate: mutateRun } = useSWR(
@@ -213,6 +215,7 @@ export default function JobApplyRun() {
     () => Object.fromEntries((run?.profiles ?? []).map((p) => [p.accountId, p.name])),
     [run?.profiles],
   );
+  const profilesById = useMemo(() => new Map((run?.profiles ?? []).map((p) => [p.accountId, p])), [run?.profiles]);
   const resumesById = useMemo(() => new Map((run?.resumes ?? []).map((r) => [r.resumeId, r])), [run?.resumes]);
   const healthByResume = useMemo(
     () => Object.fromEntries((run?.resumes ?? []).map((r) => [r.resumeId, r.health])),
@@ -221,18 +224,30 @@ export default function JobApplyRun() {
 
   // Debounced threshold change: PATCH the run, then the rows key (which includes the threshold) refetches.
   const threshold = thresholdDraft ?? run?.threshold ?? 75;
+  const [savingThreshold, setSavingThreshold] = useState(false);
+  // From the slider moving until the run's counts for the new minimum are in: the workflow shows a spinner meanwhile.
+  const recounting = thresholdDraft !== null || savingThreshold;
   const debounce = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (thresholdDraft === null || !run || thresholdDraft === run.threshold) return;
     window.clearTimeout(debounce.current);
     debounce.current = window.setTimeout(async () => {
+      setSavingThreshold(true);
       try {
         const updated = await api.updateJobApplyRun(runId, { threshold: thresholdDraft });
-        await mutateRun({ ...updated, appliedInRun: run.appliedInRun, appliedSince: run.appliedSince }, { revalidate: false });
+        // The reply has no application counts: keep the current ones on screen, then fetch the run again for the
+        // new minimum's (the Export / Tailor steps and the counts under the slider).
+        await mutateRun(
+          { ...run, ...updated, appliedInRun: run.appliedInRun, appliedSince: run.appliedSince, applications: run.applications },
+          { revalidate: false },
+        );
         setThresholdDraft(null);
         setPage(1);
+        await mutateRun();
       } catch (err) {
         notify.error(err, 'Could not update the minimum score');
+      } finally {
+        setSavingThreshold(false);
       }
     }, 400);
     return () => window.clearTimeout(debounce.current);
@@ -377,16 +392,30 @@ export default function JobApplyRun() {
     [tailor],
   );
 
-  const downloadTailored = useCallback(async (row: JobApplyRow, t: api.JobApplyTailored) => {
-    if (t.status !== 'completed') return;
-    const company = (row.company || row.title || 'job').replace(/[^\w .()-]+/g, '_');
-    const who = (profileNames[t.accountId] ?? 'Profile').replace(/[^\w .()-]+/g, '_');
-    try {
-      await api.downloadTailoredResume(t.jobId, `Resume (${company}) - ${who}.pdf`);
-    } catch (err) {
-      notify.error(err, 'Could not download the tailored resume');
-    }
-  }, [profileNames]);
+  /** Same download as the Resume page: <Profile>/<Company>/Resume.pdf into a picked folder, else one zip. */
+  const saveResumes = useCallback(
+    async (body: api.JobApplyDownloadRequest) => {
+      setDownloadingPicked(true);
+      try {
+        const { downloaded, skipped } = await api.downloadJobApplyResumes(runId, body);
+        const left = skipped ? ` · ${skipped} skipped: need tailoring` : '';
+        if (downloaded) notify.success(`Downloaded ${downloaded} resume${downloaded === 1 ? '' : 's'}${left}`);
+        else notify.info(`No resume to download${left}`);
+      } catch (err) {
+        notify.error(err, 'Could not download the resumes');
+      } finally {
+        setDownloadingPicked(false);
+      }
+    },
+    [runId],
+  );
+
+  const downloadTailored = useCallback(
+    (t: api.JobApplyTailored) => {
+      if (t.status === 'completed') void saveResumes({ files: [{ kind: 'tailored', tailoredJobId: t.jobId }] });
+    },
+    [saveResumes],
+  );
 
   const pick = useCallback((jobId: string, on: boolean) => {
     setPicked((prev) => {
@@ -397,39 +426,16 @@ export default function JobApplyRun() {
     });
   }, []);
 
-  /** Same download as the Resume page: <Profile>/<Company>/Resume.pdf into a picked folder, else one zip. */
-  const downloadResumes = useCallback(async (ids: string[]) => {
-    if (!ids.length) return;
-    setDownloadingPicked(true);
-    try {
-      await api.bulkDownloadResumeJobs(ids);
-      notify.success(`Downloaded ${ids.length} resume${ids.length === 1 ? '' : 's'}`);
-    } catch (err) {
-      notify.error(err, 'Could not download the selected resumes');
-    } finally {
-      setDownloadingPicked(false);
-    }
-  }, []);
-
+  /** One template resume of this job, saved like the Resume page (<Profile>/<Company>/Resume.pdf). */
   const download = useCallback(
-    async (s: { accountId: string; resumeId: string }) => {
+    (row: JobApplyRow, s: { accountId: string; resumeId: string }) => {
       if (!resumesById.get(s.resumeId)?.hasFile) {
         notify.info('The original file isn’t stored for this resume');
         return;
       }
-      const tab = window.open('', '_blank'); // opened now, while this is still a user action, so it isn't blocked
-      try {
-        const { url } = await api.getAccountResumeFileUrl(s.accountId, s.resumeId);
-        const href = safeHref(url);
-        if (!href) throw new Error('The file link is not a web address');
-        if (tab) tab.location.href = href;
-        else window.location.href = href;
-      } catch (err) {
-        tab?.close();
-        notify.error(err, 'Could not download the resume');
-      }
+      void saveResumes({ files: [{ kind: 'uploaded', rowId: row._id, accountId: s.accountId, resumeId: s.resumeId }] });
     },
-    [resumesById],
+    [resumesById, saveResumes],
   );
 
   const toggleSelected = (id: string) =>
@@ -548,8 +554,8 @@ export default function JobApplyRun() {
       else if (key === 't') void tailorRow(row);
       else if (key === 'd') {
         const ready = firstReadyTailored(row);
-        if (ready) void downloadTailored(row, ready);
-        else if (row.suggestions[0]) void download(row.suggestions[0]);
+        if (ready) downloadTailored(ready);
+        else if (row.suggestions[0]) download(row, row.suggestions[0]);
       }
       else if (key === 'x') toggleSelected(row._id);
       else if (key === 'c') void copyLinks(selectedRows.length ? selectedRows : [row]);
@@ -591,15 +597,23 @@ export default function JobApplyRun() {
   }, [confirmTailorAll, tailorProfiles, tailorRowIds, runId]);
 
   const selectedRows = rows.filter((r) => selected.has(r._id));
-  // Ready tailored resumes on the checked jobs (only the filtered profile's, when filtering), plus clicked ones.
-  const selectedResumeIds = [
-    ...new Set([
-      ...selectedRows.flatMap((r) =>
-        r.tailored.filter((t) => t.status === 'completed' && (!accountId || t.accountId === accountId)).map((t) => t.jobId),
-      ),
-      ...picked,
-    ]),
-  ];
+  // What Download saves for the checked jobs, one per job × profile (only the filtered profile's, when filtering): its
+  // tailored resume when ready, else its highest template resume at or above the minimum score; plus tailored ones
+  // clicked. Profiles below the minimum with nothing tailored are skipped.
+  const downloadCount = (() => {
+    const tailoredIds = new Set(picked);
+    let uploaded = 0;
+    for (const r of selectedRows) {
+      for (const acc of r.openProfiles) {
+        if (accountId && acc !== accountId) continue;
+        const t = r.tailored.find((x) => x.accountId === acc && x.status === 'completed');
+        const scores = r.resumeScores ?? r.suggestions;
+        if (t) tailoredIds.add(t.jobId);
+        else if (scores.some((s) => s.accountId === acc && s.total >= (run?.threshold ?? 75))) uploaded += 1;
+      }
+    }
+    return tailoredIds.size + uploaded;
+  })();
 
   /** Copy these jobs' posting links, one per line (each link once). */
   const copyLinks = useCallback(async (jobs: JobApplyRow[]) => {
@@ -749,18 +763,6 @@ export default function JobApplyRun() {
     ...(run.profiles ?? []).map((p) => ({ value: p.accountId, label: p.name })),
   ];
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selected.has(r._id));
-  // The profiles picked for a job's location group(s), for its Location cell.
-  const pickedFor = (row: JobApplyRow) =>
-    [
-      ...new Set([
-        ...(row.markets?.length ? row.markets : ['none']).flatMap((m) => run.assignments[m] ?? []),
-        ...(run.assignments['*'] ?? []),
-      ]),
-    ]
-      .map((id) => profileNames[id])
-      .filter(Boolean)
-      .join(', ');
-
   const header = (
     <PageHeader
       title={run.fileName}
@@ -900,6 +902,19 @@ export default function JobApplyRun() {
               onChange={(e) => setThresholdDraft(Number(e.target.value))}
               className="w-full accent-sky-600"
             />
+            {recounting ? (
+              <p className="hint flex items-center gap-1.5" aria-live="polite">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Updating counts…
+              </p>
+            ) : run.applications?.tailorNeeded != null && (
+              <p className="hint tabular-nums" aria-live="polite">
+                <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                  {run.applications.noTailorNeeded ?? 0} no need to tailor
+                </span>
+                {' · '}
+                <span className="font-medium text-violet-700 dark:text-violet-300">{run.applications.tailorNeeded} need tailoring</span>
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -909,9 +924,14 @@ export default function JobApplyRun() {
           counts={run.applications}
           profileFilter={accountId ? { accountId, name: profileNames[accountId] ?? 'this profile' } : undefined}
           busy={busy !== null}
+          updating={recounting}
           tailorModel={RESUME_MODEL.label}
           onTailor={() => openTailor(null)}
-          onExport={() => setShowExport(true)}
+          onExport={() =>
+            run.applications && run.applications.needsResume + run.applications.tailoring > 0
+              ? setConfirmExport(true)
+              : setShowExport(true)
+          }
           onMark={APPLIED_UI ? () => setConfirmAll(true) : undefined}
         />
       )}
@@ -939,17 +959,20 @@ export default function JobApplyRun() {
                 <button
                   type="button"
                   className="btn-outline btn-sm"
-                  onClick={() => void downloadResumes(selectedResumeIds)}
-                  disabled={downloadingPicked || selectedResumeIds.length === 0}
+                  onClick={() =>
+                    void saveResumes({ rowIds: [...selected], accountId: accountId || undefined, tailoredJobIds: [...picked] })
+                  }
+                  disabled={downloadingPicked || downloadCount === 0}
                   title={
-                    selectedResumeIds.length
-                      ? `Download ${selectedResumeIds.length} tailored resume${selectedResumeIds.length === 1 ? '' : 's'}`
+                    downloadCount
+                      ? `Download ${downloadCount} resume${downloadCount === 1 ? '' : 's'} as <Profile>/<Company>/Resume.pdf: each`
+                        + ' tailored one when ready, else the highest template resume at or above the minimum score'
                         + (accountId ? ` (${profileNames[accountId] ?? 'this profile'} only)` : '')
-                      : 'No tailored resume is ready on the selected jobs'
+                      : 'No resume to send on the selected jobs yet: tailor the ones below the minimum score'
                   }
                 >
                   {downloadingPicked ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
-                  Download{selectedResumeIds.length ? ` (${selectedResumeIds.length})` : ''}
+                  Download{downloadCount ? ` (${downloadCount})` : ''}
                 </button>
                 {APPLIED_UI && (
                   <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
@@ -992,7 +1015,7 @@ export default function JobApplyRun() {
                     : 'No jobs match this view.'}
               </p>
             ) : (
-              <table className="min-w-full text-sm">
+              <table className="w-full text-sm">
                 <thead className="table-head whitespace-nowrap">
                   <tr>
                     <th className="w-8 px-3 py-2 font-medium">
@@ -1004,148 +1027,174 @@ export default function JobApplyRun() {
                       />
                     </th>
                     <th className="w-10 px-3 py-2 font-medium">#</th>
-                    <th className="px-3 py-2 font-medium">Job</th>
-                    <th className="px-3 py-2 font-medium">Posted</th>
-                    <th className="px-3 py-2 font-medium">Work mode</th>
                     <th className="px-3 py-2 font-medium">Location</th>
+                    <th className="px-3 py-2 font-medium">Work mode</th>
+                    <th className="px-3 py-2 font-medium">Posted</th>
+                    <th className="px-3 py-2 font-medium">Job</th>
                     <th className="px-3 py-2 font-medium">Flags</th>
-                    <th className="px-3 py-2 font-medium">Apply with</th>
+                    <th className="px-3 py-2 font-medium">Profile</th>
+                    <th className="px-3 py-2 font-medium">Sample resumes (.pdf)</th>
+                    <th className="px-3 py-2 font-medium">HTML template</th>
+                    <th className="px-3 py-2 font-medium">Tailored</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const isOpen = expanded === row._id;
-                    const isFocused = focusedId === row._id;
-                    const age = ageDays(row.postedDate);
-                    return (
-                      <Fragment key={row._id}>
-                        <tr
-                          ref={(el) => {
-                            if (el) rowRefs.current.set(row._id, el);
-                            else rowRefs.current.delete(row._id);
-                          }}
-                          onClick={() => setFocusedId(row._id)}
-                          className={`table-row align-top ${APPLIED_UI && row.applied ? 'opacity-60' : ''} ${
-                            isFocused ? 'bg-sky-50/70 shadow-[inset_3px_0_0_0] shadow-sky-600 dark:bg-sky-950/30 dark:shadow-sky-400' : ''
-                          }`}
-                          aria-current={isFocused ? 'true' : undefined}
-                        >
-                          <td className="px-3 py-2">
-                            <input
-                              type="checkbox"
-                              checked={selected.has(row._id)}
-                              onChange={() => toggleSelected(row._id)}
-                              aria-label={`Select ${row.title || 'job'}`}
-                            />
-                          </td>
-                          <td className="px-3 py-2 tabular-nums text-zinc-500">{row.rowIndex}</td>
-                          <td className="max-w-xs px-3 py-2">
-                            <div className="flex items-start gap-1.5">
-                              <button
-                                type="button"
-                                className="btn-icon -ml-1.5"
-                                aria-expanded={isOpen}
-                                aria-label={isOpen ? 'Hide score breakdown' : 'Show score breakdown'}
-                                onClick={() => setExpanded(isOpen ? null : row._id)}
-                                disabled={!row.topScore && row.status !== 'scored' && row.status !== 'excluded'}
+                {rows.map((row) => {
+                  const isOpen = expanded === row._id;
+                  const isFocused = focusedId === row._id;
+                  const age = ageDays(row.postedDate);
+                  // One table row per profile the job is open to; the job's own cells span them.
+                  const profiles = orderedProfiles(row);
+                  const span = Math.max(1, profiles.length);
+                  const toTailor = profilesToTailor(row, run.threshold);
+                  const jobCell = 'px-3 py-2 align-middle';
+                  return (
+                    <tbody
+                      key={row._id}
+                      ref={(el) => {
+                        if (el) rowRefs.current.set(row._id, el);
+                        else rowRefs.current.delete(row._id);
+                      }}
+                      onClick={() => setFocusedId(row._id)}
+                      // not `table-row`: on a <tbody> Tailwind's display utility of that name breaks the table
+                      className={`hover:bg-zinc-50 dark:hover:bg-zinc-900/60 ${APPLIED_UI && row.applied ? 'opacity-60' : ''} ${
+                        isFocused ? 'bg-sky-50/70 dark:bg-sky-950/30' : ''
+                      }`}
+                      aria-current={isFocused ? 'true' : undefined}
+                    >
+                      {(profiles.length ? profiles : [null]).map((acc, i) => (
+                        <tr key={acc ?? 'none'} className={i > 0 ? 'border-dashed' : ''}>
+                          {i === 0 && (
+                            <>
+                              <td
+                                rowSpan={span}
+                                className={`${jobCell} ${isFocused ? 'shadow-[inset_3px_0_0_0] shadow-sky-600 dark:shadow-sky-400' : ''}`}
                               >
-                                {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
-                              </button>
-                              <div className="min-w-0">
-                                {/* wrap rather than truncate: a one-line title holds the column at full width and pushes
-                                    Apply with past the table's edge on narrower screens */}
-                                <p className="line-clamp-2 font-medium text-zinc-800 dark:text-zinc-100" title={row.title || undefined}>
-                                  {row.title || 'Untitled role'}
-                                </p>
-                                <p className="line-clamp-1 text-xs text-zinc-500">
-                                  {row.company}
-                                  {safeHref(row.url) && (
-                                    <a
-                                      href={safeHref(row.url)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="ml-1 inline-flex items-center gap-0.5 text-sky-700 hover:underline dark:text-sky-400"
-                                    >
-                                      {row.company ? 'open' : hostOf(row.url ?? '')}
-                                      <ExternalLink className="h-3 w-3" aria-hidden />
-                                      <span className="sr-only">(opens in a new tab)</span>
-                                    </a>
-                                  )}
+                                <input
+                                  type="checkbox"
+                                  checked={selected.has(row._id)}
+                                  onChange={() => toggleSelected(row._id)}
+                                  aria-label={`Select ${row.title || 'job'}`}
+                                />
+                              </td>
+                              <td rowSpan={span} className={`${jobCell} tabular-nums text-zinc-500`}>
+                                {row.rowIndex}
+                              </td>
+                              <td rowSpan={span} className={`${jobCell} max-w-[10rem]`}>
+                                {row.groupKey ? (
+                                  locationLabel(row.groupKey)
+                                ) : row.allowedLocations.length ? (
+                                  row.allowedLocations.map((l) => l.value).join(', ')
+                                ) : (
+                                  <span className="hint">Not stated</span>
+                                )}
+                                {row.status === 'unassigned' && <p className="hint">No profile picked</p>}
+                              </td>
+                              <td rowSpan={span} className={jobCell}>
+                                {capitalize(row.workMode) || <span className="hint">—</span>}
+                              </td>
+                              <td rowSpan={span} className={`${jobCell} whitespace-nowrap`}>
+                                {row.postedDate ? (
+                                  <>
+                                    {formatDate(row.postedDate)}
+                                    {age !== null && <span className="hint block">{age === 0 ? 'today' : `${age}d ago`}</span>}
+                                  </>
+                                ) : (
+                                  <span className="hint">Unknown</span>
+                                )}
+                              </td>
+                              <td rowSpan={span} className={`${jobCell} max-w-xs`}>
+                                <div className="flex items-center gap-1.5">
                                   <button
                                     type="button"
-                                    className="btn-icon ml-1 inline-flex align-middle"
-                                    onClick={() => setInfoRow(row._id)}
-                                    aria-label="Job info and description"
-                                    title="Job info and description"
+                                    className="btn-icon -ml-1.5"
+                                    aria-expanded={isOpen}
+                                    aria-label={isOpen ? 'Hide score breakdown' : 'Show score breakdown'}
+                                    onClick={() => setExpanded(isOpen ? null : row._id)}
+                                    disabled={!row.topScore && row.status !== 'scored' && row.status !== 'excluded'}
                                   >
-                                    <FileText className="h-3.5 w-3.5" aria-hidden />
+                                    {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
                                   </button>
-                                  {row.humanEdited && <span className="badge-info ml-1 align-middle">Edited</span>}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2">
-                            {row.postedDate ? (
-                              <>
-                                {formatDate(row.postedDate)}
-                                {age !== null && <span className="hint block">{age === 0 ? 'today' : `${age}d ago`}</span>}
-                              </>
-                            ) : (
-                              <span className="hint">Unknown</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">{capitalize(row.workMode) || <span className="hint">—</span>}</td>
-                          <td className="max-w-[10rem] px-3 py-2">
-                            {row.groupKey ? (
-                              locationLabel(row.groupKey)
-                            ) : row.allowedLocations.length ? (
-                              row.allowedLocations.map((l) => l.value).join(', ')
-                            ) : (
-                              <span className="hint">Not stated</span>
-                            )}
-                            {row.status === 'unassigned' ? (
-                              <p className="hint">No profile picked</p>
-                            ) : (
-                              row.groupKey &&
-                              run.screenedAt &&
-                              !run.autoStart && (
-                                <p className="hint line-clamp-2" title={pickedFor(row)}>
-                                  {pickedFor(row)}
-                                </p>
-                              )
-                            )}
-                          </td>
-                          <td className="max-w-[14rem] px-3 py-2">
-                            <Flags row={row} profileNames={profileNames} />
-                          </td>
-                          <td className="px-3 py-2">
-                            <Suggestions
+                                  <div className="min-w-0">
+                                    {/* wrap rather than truncate: a one-line title holds the column at full width */}
+                                    <p className="line-clamp-2 font-medium text-zinc-800 dark:text-zinc-100" title={row.title || undefined}>
+                                      {row.title || 'Untitled role'}
+                                    </p>
+                                    <p className="line-clamp-1 text-xs text-zinc-500">
+                                      {row.company}
+                                      {safeHref(row.url) && (
+                                        <a
+                                          href={safeHref(row.url)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="ml-1 inline-flex items-center gap-0.5 text-sky-700 hover:underline dark:text-sky-400"
+                                        >
+                                          {row.company ? 'open' : hostOf(row.url ?? '')}
+                                          <ExternalLink className="h-3 w-3" aria-hidden />
+                                          <span className="sr-only">(opens in a new tab)</span>
+                                        </a>
+                                      )}
+                                      <button
+                                        type="button"
+                                        className="btn-icon ml-1 inline-flex align-middle"
+                                        onClick={() => setInfoRow(row._id)}
+                                        aria-label="Job info and description"
+                                        title="Job info and description"
+                                      >
+                                        <FileText className="h-3.5 w-3.5" aria-hidden />
+                                      </button>
+                                      {row.humanEdited && <span className="badge-info ml-1 align-middle">Edited</span>}
+                                    </p>
+                                    {toTailor.length > 1 && (
+                                      <button
+                                        type="button"
+                                        className="text-xs font-medium text-violet-700 hover:underline dark:text-violet-300"
+                                        onClick={() => void tailorRow(row)}
+                                        title={`Tailor with ${RESUME_MODEL.label}`}
+                                      >
+                                        <Sparkles className="mr-1 inline h-3 w-3" aria-hidden />
+                                        Tailor all {toTailor.length} profiles
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td rowSpan={span} className={`${jobCell} max-w-[14rem]`}>
+                                <Flags row={row} profileNames={profileNames} />
+                              </td>
+                            </>
+                          )}
+                          {acc ? (
+                            <ProfileCells
                               row={row}
+                              acc={acc}
                               threshold={run.threshold}
-                              profileNames={profileNames}
+                              profile={profilesById.get(acc)}
+                              profileName={profileNames[acc] ?? 'Profile'}
                               hasFile={(id) => !!resumesById.get(id)?.hasFile}
-                              onDownload={(s) => void download(s)}
+                              onDownload={(s) => download(row, s)}
                               tailorModel={RESUME_MODEL.label}
-                              onTailor={(acc) => void tailor(row, acc)}
-                              onTailorAll={() => void tailorRow(row)}
-                              onDownloadTailored={(t) => void downloadTailored(row, t)}
+                              onTailor={(a) => void tailor(row, a)}
+                              onDownloadTailored={downloadTailored}
                               isPicked={(id) => picked.has(id)}
                               onPick={pick}
                             />
+                          ) : (
+                            <td colSpan={4} className={`${jobCell} hint`}>
+                              No profile can take this job (see Flags).
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={11} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
+                            <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
                           </td>
                         </tr>
-                        {isOpen && (
-                          <tr>
-                            <td colSpan={8} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
-                              <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
+                      )}
+                    </tbody>
+                  );
+                })}
               </table>
             )}
           </div>
@@ -1193,8 +1242,51 @@ export default function JobApplyRun() {
       />
 
       <ConfirmDialog
+        open={confirmExport}
+        title="Some applications have no resume yet"
+        body={(() => {
+          const c = run.applications;
+          const should = c?.needsResume ?? 0;
+          const tailoring = c?.tailoring ?? 0;
+          return (
+            <div className="space-y-2">
+              <p>
+                {should > 0 && (
+                  <>
+                    <span className="font-semibold">{applicationsText(should)}</span> {should === 1 ? 'needs' : 'need'} a tailored resume (no
+                    template resume at or above {run.threshold})
+                  </>
+                )}
+                {should > 0 && tailoring > 0 && ', and '}
+                {tailoring > 0 && (
+                  <>
+                    <span className="font-semibold">{tailoring}</span> {tailoring === 1 ? 'is' : 'are'} still tailoring
+                  </>
+                )}
+                {'. They won’t be in the sheet now: export again once they’re tailored.'}
+              </p>
+              <p className="hint">
+                {c?.ready ?? 0} ready to export now: {c?.readyTemplate ?? 0} with a template resume, {c?.readyTailored ?? 0} tailored.
+              </p>
+            </div>
+          );
+        })()}
+        confirmLabel="Export the rest"
+        tone="default"
+        onConfirm={() => {
+          setConfirmExport(false);
+          setShowExport(true);
+        }}
+        onCancel={() => setConfirmExport(false)}
+      />
+
+      <ConfirmDialog
         open={confirmTailorAll}
-        title={tailorRowIds ? `Tailor resumes for ${tailorRowIds.length} selected job${tailorRowIds.length === 1 ? '' : 's'}` : 'Tailor resumes'}
+        title={
+          tailorRowIds
+            ? `Tailor resumes for ${tailorRowIds.length} selected job${tailorRowIds.length === 1 ? '' : 's'}`
+            : `Tailor resumes${run.applications?.needsResume ? ` (${run.applications.needsResume})` : ''}`
+        }
         body={
           <div className="space-y-4">
             <fieldset className="space-y-1.5">

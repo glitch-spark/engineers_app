@@ -1667,6 +1667,7 @@ export type JobApplyScreenBucket =
   | 'read_failed'
   | 'not_job'
   | 'clearance'
+  | 'invalid_role'
   | 'onsite'
   | 'too_old'
   | 'other_location';
@@ -1687,6 +1688,9 @@ export interface JobApplyProfile {
   name: string;
   country?: string | null;
   region?: string | null;
+  /** The HTML template tailored resumes are written into; without one the profile can't be tailored. */
+  hasTemplate?: boolean;
+  templateName?: string | null;
 }
 
 export interface JobApplyRunSummary {
@@ -1762,9 +1766,17 @@ export interface JobApplyApplicationCounts {
   toExport?: number;
   /** Applications with a resume to send already in a sheet: they can still be exported to another sheet. */
   exportedReady?: number;
+  /** Applications to go whose uploaded resume scores at or above the minimum score: no tailoring needed. */
+  noTailorNeeded?: number;
+  /** Applications to go with no uploaded resume, or only ones below the minimum score: they need a tailored one. */
+  tailorNeeded?: number;
   applied: number;
-  /** Has a resume to apply with: the tailored one when done, else the matching uploaded one. */
+  /** Has a resume to apply with: the tailored one when done, else an uploaded one at or above the minimum score. */
   ready: number;
+  /** Ready applications sending a template resume at or above the minimum score. */
+  readyTemplate?: number;
+  /** Ready applications sending a tailored resume. */
+  readyTailored?: number;
   tailoring: number;
   needsResume: number;
   byProfile: { accountId: string; name: string; toGo: number; ready: number }[];
@@ -1832,6 +1844,15 @@ export interface JobApplySuggestion {
   knockouts: string[];
 }
 
+/** One uploaded resume's score on a job (every resume, not just each profile's best). */
+export interface JobApplyResumeScore {
+  accountId: string;
+  resumeId: string;
+  filename: string;
+  total: number;
+  band: ScoreBand;
+}
+
 export interface JobApplyRow {
   _id: string;
   rowIndex: number;
@@ -1846,6 +1867,8 @@ export interface JobApplyRow {
   /** Candidate markets the job is open to: 'US', 'UKEU', 'LATAM'. */
   markets?: string[];
   forceInclude?: boolean;
+  /** A person moved it out of Worth applying: it is in Invalid role (even if approved) and is not scored. */
+  markedInvalid?: boolean;
   jdSource?: 'sheet' | 'ats_api' | 'html' | 'browser' | 'manual' | null;
   /** false: read from the page's text only (no job-site API or posting data), so it needs a check. */
   jdStructured?: boolean | null;
@@ -1860,6 +1883,8 @@ export interface JobApplyRow {
   profileGates: { accountId: string; gates: JobApplyGate[] }[];
   topScore: number | null;
   suggestions: JobApplySuggestion[];
+  /** Every uploaded resume's score, best first within each profile. */
+  resumeScores?: JobApplyResumeScore[];
   /** Resumes marked applied for this job in this run. */
   appliedResumes: JobApplyAppliedMark[];
   /** Every application for this job is applied (or, with none, something was marked). */
@@ -2023,6 +2048,13 @@ export const startJobApplyRun = (
 export const setJobApplyRowInclude = (rowId: string, include: boolean) =>
   apiFetch<JobApplyRow>(`/job-applies/rows/${rowId}/include`, { method: 'PUT', body: JSON.stringify({ include }) });
 
+/**
+ * Move a Worth applying job to Invalid role (`invalid: true`), or back. Only before scoring starts, and only from
+ * Worth applying; the server answers 409 / 400 otherwise. Shared per job link, like an approval.
+ */
+export const setJobApplyRowInvalid = (rowId: string, invalid: boolean) =>
+  apiFetch<JobApplyRow>(`/job-applies/rows/${rowId}/invalid`, { method: 'PUT', body: JSON.stringify({ invalid }) });
+
 export const cancelJobApplyRun = (id: string) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/cancel`, {});
 
 export const retryJobApplyRun = (id: string) => postJSON<{ reset: number }>(`/job-applies/runs/${id}/retry-failed`, {});
@@ -2093,6 +2125,99 @@ export async function downloadTailoredResume(jobId: string, filename: string): P
   _saveBlob(await res.blob(), filename);
 }
 
+/** A resume to download from Tailor & apply, and where it goes (`<Profile>/<Company>` + `Resume.pdf`). */
+export type JobApplyDownloadFile =
+  | { kind: 'tailored'; tailoredJobId: string; folder: string; filename: string }
+  | { kind: 'uploaded'; rowId: string; accountId: string; resumeId: string; folder: string; filename: string };
+
+export interface JobApplyDownloadRequest {
+  /** Selected jobs: each profile's tailored resume when ready, else its highest template resume at or above the minimum. */
+  rowIds?: string[];
+  /** Only this profile's resumes on those jobs. */
+  accountId?: string;
+  /** Tailored resumes picked by hand. */
+  tailoredJobIds?: string[];
+  /** Exactly these files (a single download). */
+  files?: ({ kind: 'tailored'; tailoredJobId: string } | { kind: 'uploaded'; rowId: string; accountId: string; resumeId: string })[];
+}
+
+/**
+ * Download resumes from Tailor & apply the way the Resume page does: `<Profile>/<Company>/Resume.pdf` into a folder
+ * the user picks (Chrome / Edge), else one zip with the same folders. Returns how many resumes were saved and how many
+ * applications were skipped because they have no resume to send yet (below the minimum score, not tailored).
+ */
+export async function downloadJobApplyResumes(
+  runId: string,
+  body: JobApplyDownloadRequest,
+): Promise<{ downloaded: number; skipped: number }> {
+  const plan = await postJSON<{ files: JobApplyDownloadFile[]; skipped: number }>(`/job-applies/runs/${runId}/download-files`, body);
+  if (!plan.files.length) return { downloaded: 0, skipped: plan.skipped };
+  const token = getToken();
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const fsa = await import('../lib/downloadDir');
+  if (fsa.isFsaSupported()) {
+    const dir = await fsa.getDownloadDir();
+    if (!dir && fsa.lastPickError() === 'blocked') {
+      throw new Error("Chrome blocked that folder (system files protected). Pick a normal folder — e.g. Documents/Resumes — and try again.");
+    }
+    if (!dir && fsa.lastPickError() === 'dead') {
+      throw new Error("That folder no longer exists on disk. Pick a different folder and try again.");
+    }
+    if (dir) {
+      // Same as the Resume page: a few at a time, and one re-prompt if the folder handle goes stale mid-way.
+      let currentDir: typeof dir | null = dir;
+      let recovery: Promise<typeof dir | null> | null = null;
+      const recoverDir = () =>
+        (recovery ??= (async () => {
+          fsa.resetDownloadDir();
+          currentDir = await fsa.getDownloadDir();
+          return currentDir;
+        })());
+      let downloaded = 0;
+      const queue = [...plan.files];
+      const workers = Array.from({ length: Math.min(5, queue.length) }, async () => {
+        for (let f = queue.shift(); f; f = queue.shift()) {
+          const url =
+            f.kind === 'tailored'
+              ? `${BASE_URL}/resume/jobs/${f.tailoredJobId}/download?format=pdf`
+              : `${BASE_URL}/job-applies/rows/${f.rowId}/resume-file?${new URLSearchParams({ accountId: f.accountId, resumeId: f.resumeId })}`;
+          const res = await fetch(url, { headers });
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const folder = _sanitizeFolderPath(f.folder);
+          try {
+            if (!currentDir) break;
+            await fsa.writeToFolder(currentDir, folder, f.filename, blob);
+          } catch (err) {
+            if (!fsa.isStaleHandleError(err)) throw err;
+            const fresh = await recoverDir();
+            if (!fresh) break;
+            await fsa.writeToFolder(fresh, folder, f.filename, blob);
+          }
+          downloaded += 1;
+        }
+      });
+      await Promise.all(workers);
+      return { downloaded, skipped: plan.skipped };
+    }
+  }
+
+  // Fallback: one zip with the same folders.
+  const res = await fetch(`${BASE_URL}/job-applies/runs/${runId}/download-zip`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try { const data = await res.json(); message = data.error || data.detail || message; } catch { /* ignore */ }
+    throw new Error(message);
+  }
+  _saveBlob(await res.blob(), _filenameFromCD(res.headers.get('Content-Disposition'), 'resumes.zip'));
+  return { downloaded: plan.files.length, skipped: plan.skipped };
+}
+
 export interface JobSheetPreview {
   title: string;
   /** Unique jobs (links after cleaning and de-duplication). */
@@ -2119,9 +2244,15 @@ export const previewJobSheet = (source: JobApplySource) => {
 export interface JobApplyExportResult {
   /** Rows that would be / were added: applications with a resume to send. */
   ready: number;
+  /** Of those rows: sending a template resume at or above the minimum score / a tailored resume. */
+  readyTemplate?: number;
+  readyTailored?: number;
   added: number;
   /** Applications waiting for their tailored resume: a later export adds them. */
   waiting: number;
+  /** Of those: nothing tailored yet (no template at or above the minimum score) / being tailored now. */
+  needsTailoring?: number;
+  tailoring?: number;
   alreadyExported: number;
   /** Matching uploaded resumes whose original PDF isn't stored (no link possible). */
   noFile: number;

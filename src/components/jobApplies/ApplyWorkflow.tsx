@@ -10,6 +10,7 @@ function Step({
   todo,
   disabled,
   busy,
+  updating,
   onClick,
 }: {
   n: number;
@@ -20,6 +21,8 @@ function Step({
   todo: boolean;
   disabled?: boolean;
   busy?: boolean;
+  /** Its counts are being worked out again (the minimum score changed): it stays, with a spinner, until they're in. */
+  updating?: boolean;
   onClick: () => void;
 }) {
   const tone = disabled
@@ -31,9 +34,12 @@ function Step({
     <li>
       <button
         type="button"
-        onClick={onClick}
+        onClick={updating ? undefined : onClick}
         disabled={disabled}
-        className={`flex h-full w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${tone}`}
+        aria-busy={updating || undefined}
+        className={`flex h-full w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${tone} ${
+          updating ? 'cursor-wait' : ''
+        }`}
       >
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums ${
@@ -45,10 +51,12 @@ function Step({
         </span>
         <span className="min-w-0">
           <span className="flex items-center gap-1.5 text-sm font-medium text-zinc-900 dark:text-zinc-50">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Icon className="h-4 w-4" aria-hidden />}
+            {busy || updating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Icon className="h-4 w-4" aria-hidden />}
             {title}
           </span>
-          <span className="block text-xs text-zinc-600 dark:text-zinc-400">{detail}</span>
+          <span className="block text-xs text-zinc-600 dark:text-zinc-400">
+            {updating ? 'Updating for the new minimum score…' : detail}
+          </span>
         </span>
       </button>
     </li>
@@ -66,6 +74,7 @@ export default function ApplyWorkflow({
   counts,
   profileFilter,
   busy,
+  updating,
   tailorModel,
   onTailor,
   onExport,
@@ -75,6 +84,8 @@ export default function ApplyWorkflow({
   /** With a profile filter, Mark as applied only covers that profile's applications. */
   profileFilter?: { accountId: string; name: string };
   busy: boolean;
+  /** The counts are being worked out again (the minimum score changed): the steps show a spinner until they're in. */
+  updating?: boolean;
   /** Name of the model tailoring uses (picked in the tailor dialog); unknown until the model list loads. */
   tailorModel?: string;
   onTailor: () => void;
@@ -123,30 +134,42 @@ export default function ApplyWorkflow({
           icon={FileSpreadsheet}
           title="Export to sheet"
           todo={toExport > 0}
-          disabled={busy || (toExport === 0 && exportedReady === 0)}
+          disabled={busy || (!updating && toExport === 0 && exportedReady === 0)}
+          updating={updating}
           onClick={onExport}
           detail={
-            toExport > 0
-              ? `${toExport} ready to export` + (waiting > 0 ? ` · ${waiting} wait for tailoring` : '')
-              : waiting > 0
-                ? `${waiting} wait for tailoring, then export` + (exportedReady > 0 ? ' · or export to another sheet' : '')
-                : exportedReady > 0
-                  ? `All ${exportedReady} ready in your sheet · export to another sheet`
-                  : counts.toGo > 0
-                    ? `All ${counts.toGo} in the sheet`
-                    : 'Nothing to export'
+            <>
+              {toExport > 0
+                ? `${toExport} ready to export` + (waiting > 0 ? ` · ${waiting} wait for tailoring` : '')
+                : waiting > 0
+                  ? `${waiting} wait for tailoring, then export` + (exportedReady > 0 ? ' · or export to another sheet' : '')
+                  : exportedReady > 0
+                    ? `All ${exportedReady} ready in your sheet · export to another sheet`
+                    : counts.toGo > 0
+                      ? `All ${counts.toGo} in the sheet`
+                      : 'Nothing to export'}
+              {counts.readyTemplate != null && counts.toGo > 0 && (
+                <span className="block tabular-nums">
+                  {counts.readyTemplate} template resume · {counts.readyTailored ?? 0} tailored · {counts.needsResume} should tailor
+                  {counts.tailoring > 0 && ` · ${counts.tailoring} tailoring`}
+                </span>
+              )}
+            </>
           }
         />
         <Step
           n={2}
           icon={Sparkles}
-          title={counts.needsResume > 0 ? `Tailor ${counts.needsResume}` : 'Tailor resumes'}
+          title={counts.needsResume > 0 && !updating ? `Tailor resumes (${counts.needsResume})` : 'Tailor resumes'}
+          updating={updating}
           todo={counts.needsResume > 0}
           disabled={busy}
           onClick={onTailor}
           detail={
             <>
-              {counts.needsResume > 0 ? `${plural(counts.needsResume, 'application')} without a resume` : 'Every application has a resume'}
+              {counts.needsResume > 0
+                ? `${plural(counts.needsResume, 'application')} ${counts.needsResume === 1 ? 'needs' : 'need'} a tailored resume (none uploaded, or below the minimum score)`
+                : 'Every application has a resume'}
               {tailorModel && ` · ${tailorModel}`}
               {counts.tailoring > 0 && (
                 <span className="ml-1 inline-flex items-center gap-1">

@@ -1,7 +1,6 @@
-import { Download, ExternalLink, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
-import type { JobApplyRow, JobApplySuggestion, JobApplyTailored } from '../../api/endpoints';
+import { Download, FileCode2, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
+import type { JobApplyProfile, JobApplyRow, JobApplyTailored } from '../../api/endpoints';
 import { bandClass } from './format';
-import { safeHref } from '../../lib/safeHref';
 
 /** The file applied with: an uploaded resume or one of the job's tailored resumes. */
 export type AppliedFile = { accountId: string; resumeId?: string; tailoredJobId?: string };
@@ -19,6 +18,20 @@ export function firstReadyTailored(row: JobApplyRow): JobApplyTailored | undefin
   return row.tailored
     .filter((t) => t.status === 'completed')
     .sort((a, b) => order.indexOf(a.accountId) - order.indexOf(b.accountId))[0];
+}
+
+/** A profile's best sample resume is below the minimum score (or it has none): it needs a tailored resume. */
+export function needsTailoring(row: JobApplyRow, acc: string, threshold: number): boolean {
+  const best = row.suggestions.find((s) => s.accountId === acc);
+  return !best || best.total < threshold;
+}
+
+/** Profiles that need tailoring and have no tailored resume yet (or a failed one): what "Tailor all" tailors. */
+export function profilesToTailor(row: JobApplyRow, threshold: number): string[] {
+  return orderedProfiles(row).filter((acc) => {
+    const t = row.tailored.find((x) => x.accountId === acc);
+    return (!t || t.status === 'failed') && needsTailoring(row, acc, threshold);
+  });
 }
 
 /** A finished tailored resume. With `onPick`, clicking it selects it for the bulk download (highlighted). */
@@ -81,182 +94,201 @@ function TailoredScore({ t }: { t: JobApplyTailored }) {
   );
 }
 
+const CELL = 'px-3 py-2 align-middle';
+
 /**
- * "Apply with" for one job: one line per profile the job is open to. Each line has that profile's best uploaded
- * resume (when it scores at or above the threshold) and its own tailored resume (Tailor → Generating → Tailored).
+ * One profile's cells on a job's row: Profile, Sample resumes (.pdf), HTML template and Tailored. A job open to
+ * several profiles has one table row per profile; the job's own cells span them.
  */
-export default function Suggestions({
+export function ProfileCells({
   row,
+  acc,
   threshold,
-  profileNames,
+  profile,
+  profileName,
   hasFile,
   tailorModel,
   onDownload,
   onTailor,
-  onTailorAll,
   onDownloadTailored,
   isPicked,
   onPick,
 }: {
   row: JobApplyRow;
+  acc: string;
   threshold: number;
-  profileNames: Record<string, string>;
+  /** The run's profile: its HTML template (unknown until the run loads). */
+  profile?: JobApplyProfile;
+  profileName: string;
   hasFile: (resumeId: string) => boolean;
   /** Name of the model the Tailor buttons use, shown on hover. */
   tailorModel?: string;
-  onDownload: (s: JobApplySuggestion) => void;
+  onDownload: (s: { accountId: string; resumeId: string }) => void;
   onTailor: (accountId: string) => void;
-  onTailorAll: () => void;
   onDownloadTailored: (t: JobApplyTailored) => void;
   /** Download selection by tailored job id: clicking a finished tailored resume picks it. */
   isPicked?: (tailoredJobId: string) => boolean;
   onPick?: (tailoredJobId: string, on: boolean) => void;
 }) {
   const withModel = tailorModel ? `Tailor with ${tailorModel}` : undefined;
-  const profiles = orderedProfiles(row);
-  const untailored = profiles.filter((acc) => {
-    const t = row.tailored.find((x) => x.accountId === acc);
-    return !t || t.status === 'failed';
-  });
-
-  if (profiles.length === 0) {
-    return <p className="hint">No profile can take this job (see Flags).</p>;
-  }
+  const best = row.suggestions.find((x) => x.accountId === acc);
+  const n = best ? row.suggestions.indexOf(best) + 1 : 0;
+  const t = row.tailored.find((x) => x.accountId === acc);
+  // Every sample resume of this profile, best first (a profile can have several).
+  const own = row.resumeScores?.filter((r) => r.accountId === acc) ?? [];
+  const resumes = own.length ? own : best ? [best] : [];
+  const noTemplate = profile?.hasTemplate === false;
+  const toTailor = needsTailoring(row, acc, threshold) && (!t || t.status === 'failed');
 
   return (
-    <div className="min-w-[20rem] space-y-1">
-      {safeHref(row.url) && (
-        <a
-          href={safeHref(row.url)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"
-        >
-          <ExternalLink className="h-3 w-3" aria-hidden /> Open posting
-        </a>
-      )}
-      <ul className="divide-y divide-dashed divide-zinc-200 dark:divide-zinc-700">
-        {profiles.map((acc) => {
-          const name = profileNames[acc] ?? 'Profile';
-          const s = row.suggestions.find((x) => x.accountId === acc);
-          const n = s ? row.suggestions.indexOf(s) + 1 : 0;
-          const t = row.tailored.find((x) => x.accountId === acc);
-          return (
-            <li key={acc} className="grid grid-cols-[7rem_1fr_auto] items-center gap-x-2 py-1">
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100" title={name}>
-                  {name}
-                </span>
-                {row.exportedProfiles.includes(acc) && (
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400" title="In the exported Google Sheet">
-                    Exported
-                  </span>
-                )}
-              </span>
+    <>
+      <td className={CELL}>
+        <span className="block max-w-[10rem] truncate font-medium text-zinc-800 dark:text-zinc-100" title={profileName}>
+          {profileName}
+        </span>
+        {toTailor && (
+          <span className="block text-[11px] text-violet-700 dark:text-violet-300">
+            {best ? `below ${threshold} · tailor` : 'tailor'}
+          </span>
+        )}
+        {row.exportedProfiles.includes(acc) && (
+          <span className="block text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400" title="In the exported Google Sheet">
+            Exported
+          </span>
+        )}
+      </td>
 
-              {/* Uploaded resume: a resume line keeps room for its score and download; a note can wrap */}
-              <div className={`flex items-center gap-1 ${s ? 'min-w-[7.5rem]' : ''}`}>
-                {s ? (
-                  <>
-                    <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5">
-                      {n > 0 && n <= 9 && (
-                        <kbd className="hidden w-3 text-center text-[10px] text-zinc-400 sm:inline" aria-hidden>
-                          {n}
-                        </kbd>
-                      )}
-                      <span className={bandClass(s.band)} title={s.knockouts.join('\n') || undefined}>
-                        {s.total}
-                      </span>
-                      <span className="truncate text-sm text-zinc-600 dark:text-zinc-400">{s.filename}</span>
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-icon"
-                      onClick={() => onDownload(s)}
-                      disabled={!hasFile(s.resumeId)}
-                      title={hasFile(s.resumeId) ? 'Download resume PDF' : 'Original file not stored'}
-                      aria-label={`Download ${s.filename}`}
-                    >
-                      <Download className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                  </>
-                ) : (
-                  <span className="text-xs text-zinc-400">
-                    {row.tailorOnly.includes(acc) ? 'No uploaded resume' : `No resume ≥ ${threshold}`}
+      <td className={CELL}>
+        {resumes.length ? (
+          <ul className="space-y-0.5">
+            {resumes.map((r) => {
+              const below = r.total < threshold;
+              const isBest = r.resumeId === best?.resumeId;
+              const knockouts = isBest ? best?.knockouts ?? [] : [];
+              return (
+                <li key={r.resumeId} className="flex items-center gap-1.5">
+                  <kbd className="hidden w-3 text-center text-[10px] text-zinc-400 sm:inline" aria-hidden>
+                    {isBest && n > 0 && n <= 9 ? n : ''}
+                  </kbd>
+                  <span
+                    className={`inline-flex w-9 justify-center ${below ? 'badge-neutral tabular-nums opacity-70' : bandClass(r.band)}`}
+                    title={
+                      [below ? `Below the minimum score (${threshold}): tailor a resume` : '', ...knockouts].filter(Boolean).join('\n') ||
+                      undefined
+                    }
+                  >
+                    {r.total}
                   </span>
-                )}
-              </div>
-
-              {/* Tailored resume for this profile; once done, its actions get their own line under the uploaded one */}
-              <div
-                className={`flex items-center gap-1 ${t?.status === 'completed' ? 'col-span-2 col-start-2 justify-start' : 'justify-end'}`}
-              >
-                {!t ? (
-                  <button type="button" className="btn-outline btn-sm whitespace-nowrap py-0.5" onClick={() => onTailor(acc)} title={withModel}>
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                    Tailor
-                  </button>
-                ) : t.status === 'queued' || t.status === 'in_progress' ? (
-                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-zinc-600 dark:text-zinc-400">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                    {t.status === 'queued' ? 'Queued' : 'Generating…'}
+                  <span
+                    className={`min-w-0 max-w-[14rem] flex-1 truncate ${below ? 'text-zinc-400 dark:text-zinc-500' : 'text-zinc-700 dark:text-zinc-300'}`}
+                    title={r.filename}
+                  >
+                    {r.filename}
                   </span>
-                ) : t.status === 'completed' ? (
-                  <>
-                    <TailoredChip
-                      picked={isPicked?.(t.jobId) ?? false}
-                      onPick={onPick ? (on) => onPick(t.jobId, on) : undefined}
-                      label={`${name}'s tailored resume`}
-                    >
-                      <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
-                      <span className="text-sm font-medium">Tailored</span>
-                      <TailoredScore t={t} />
-                    </TailoredChip>
-                    <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${name})`}>
-                      <Download className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                    <a
-                      href={`/resume/generated?job=${t.jobId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-icon"
-                      title="Screening Q&A, job description and cover letter (Generated Resumes)"
-                      aria-label={`Screening Q&A for ${name}'s tailored resume (opens in a new tab)`}
-                    >
-                      <MessageSquareText className="h-3.5 w-3.5" aria-hidden />
-                    </a>
-                    <button type="button" className="btn-icon" onClick={() => onTailor(acc)} title={tailorModel ? `Generate again with ${tailorModel}` : 'Generate again'} aria-label={`Re-tailor for ${name}`}>
-                      <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                  </>
-                ) : (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-red-700 hover:underline dark:text-red-400"
-                    onClick={() => onTailor(acc)}
-                    title={t.error ?? 'Generation failed'}
+                    className="btn-icon"
+                    onClick={() => onDownload(r)}
+                    disabled={!hasFile(r.resumeId)}
+                    title={hasFile(r.resumeId) ? 'Download resume PDF' : 'Original file not stored'}
+                    aria-label={`Download ${r.filename}`}
                   >
-                    <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                    Failed · Retry
+                    <Download className="h-3.5 w-3.5" aria-hidden />
                   </button>
-                )}
-              </div>
-              {t?.status === 'failed' && (
-                <p className="col-span-3 line-clamp-3 break-words pb-1 text-xs text-red-700 dark:text-red-400" title={t.error ?? undefined}>
-                  {t.error || 'Generation failed (no details recorded).'}
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <span className="text-xs text-zinc-400">{row.tailorOnly.includes(acc) ? 'No sample resumes' : 'Not scored for this job'}</span>
+        )}
+      </td>
 
-      {untailored.length > 1 && (
-        <button type="button" className="text-xs font-medium text-violet-700 hover:underline dark:text-violet-300" onClick={onTailorAll} title={withModel}>
-          <Sparkles className="mr-1 inline h-3 w-3" aria-hidden />
-          Tailor all {untailored.length} profiles
-        </button>
-      )}
-    </div>
+      <td className={CELL}>
+        {!profile ? (
+          <span className="text-xs text-zinc-400">—</span>
+        ) : profile.hasTemplate ? (
+          <span className="flex max-w-[12rem] items-center gap-1.5 text-zinc-700 dark:text-zinc-300" title={profile.templateName ?? undefined}>
+            <FileCode2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
+            <span className="truncate">{profile.templateName}</span>
+          </span>
+        ) : (
+          <span className="text-xs font-medium text-amber-700 dark:text-amber-400" title="Add an HTML template to this profile to tailor resumes">
+            No HTML template
+          </span>
+        )}
+      </td>
+
+      <td className={CELL}>
+        <div className="flex items-center gap-1">
+          {!t ? (
+            <button
+              type="button"
+              className="btn-outline btn-sm whitespace-nowrap py-0.5"
+              onClick={() => onTailor(acc)}
+              disabled={noTemplate}
+              title={noTemplate ? 'Add an HTML template to this profile first' : withModel}
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              Tailor
+            </button>
+          ) : t.status === 'queued' || t.status === 'in_progress' ? (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-zinc-600 dark:text-zinc-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              {t.status === 'queued' ? 'Queued' : 'Generating…'}
+            </span>
+          ) : t.status === 'completed' ? (
+            <>
+              <TailoredChip
+                picked={isPicked?.(t.jobId) ?? false}
+                onPick={onPick ? (on) => onPick(t.jobId, on) : undefined}
+                label={`${profileName}'s tailored resume`}
+              >
+                <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
+                <span className="text-sm font-medium">Tailored</span>
+                <TailoredScore t={t} />
+              </TailoredChip>
+              <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${profileName})`}>
+                <Download className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <a
+                href={`/resume/generated?job=${t.jobId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-icon"
+                title="Screening Q&A, job description and cover letter (Generated Resumes)"
+                aria-label={`Screening Q&A for ${profileName}'s tailored resume (opens in a new tab)`}
+              >
+                <MessageSquareText className="h-3.5 w-3.5" aria-hidden />
+              </a>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => onTailor(acc)}
+                title={tailorModel ? `Generate again with ${tailorModel}` : 'Generate again'}
+                aria-label={`Re-tailor for ${profileName}`}
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-red-700 hover:underline dark:text-red-400"
+              onClick={() => onTailor(acc)}
+              title={t.error ?? 'Generation failed'}
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+              Failed · Retry
+            </button>
+          )}
+        </div>
+        {t?.status === 'failed' && (
+          <p className="mt-0.5 line-clamp-2 max-w-[16rem] break-words text-xs text-red-700 dark:text-red-400" title={t.error ?? undefined}>
+            {t.error || 'Generation failed (no details recorded).'}
+          </p>
+        )}
+      </td>
+    </>
   );
 }
