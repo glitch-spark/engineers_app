@@ -22,6 +22,7 @@ export default function RoundFields({
   tz,
   legend = 'Round',
   confirmable = false,
+  callerEditable = true,
 }: {
   round: RoundFormState;
   onChange: (patch: Partial<RoundFormState>) => void;
@@ -32,6 +33,8 @@ export default function RoundFields({
   legend?: string;
   /** Show the Confirmed switch (editing an existing round that has a caller). */
   confirmable?: boolean;
+  /** Whether this user may pick the caller (see CallerFields). */
+  callerEditable?: boolean;
 }) {
   const id = (k: string) => `${idPrefix}-round-${k}`;
   const req = <span className="text-red-700 dark:text-red-400" aria-hidden> *</span>;
@@ -87,7 +90,7 @@ export default function RoundFields({
           placeholder="Name of the interviewer or recruiter"
           onChange={(e) => onChange({ interviewerName: e.target.value })} />
       </div>
-      <CallerFields round={round} onChange={onChange} disabled={disabled} idPrefix={idPrefix} />
+      <CallerFields round={round} onChange={onChange} disabled={disabled} idPrefix={idPrefix} callerEditable={callerEditable} />
       {confirmable && round.callerEnabled && (
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-0.5" checked={round.confirmed} disabled={disabled}

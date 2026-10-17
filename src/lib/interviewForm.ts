@@ -1,7 +1,7 @@
 /** Pure state helpers for the Application + Round interview form. */
 import type { CallerInput, InterviewStageEntry, RoundInput } from '../api/endpoints';
 import { INTERVIEW_STAGE_ORDER, normalizeInterviewStatus, type InterviewStatusValue } from './stageBadge';
-import { browserZone, fromZoned, zonedDateKey, zonedTime } from './interviewTimezone';
+import { browserZone, fromZoned, parseServerTime, zonedDateKey, zonedTime } from './interviewTimezone';
 
 export type InterviewFormMode = 'new' | 'editDetails' | 'addRound' | 'editRound';
 
@@ -24,7 +24,12 @@ export type RoundFormState = {
   note: string;
   transcript: string;
   callerEnabled: boolean;
+  /** The saved caller's name (shown when it is not on the caller list). */
   callerName: string;
+  /** Picked from the caller list: '' = not assigned yet, OFF_LIST_CALLER = a name not on the list. */
+  callerId: string;
+  /** callerId as saved: the caller is sent only when the pick changes, so a round keeps the caller it has. */
+  callerIdSaved: string;
   callerMethod: string;
   callerMethodValue: string;
   /** Caller lined up (edit an existing caller round only). */
@@ -32,6 +37,8 @@ export type RoundFormState = {
 };
 
 export const DEFAULT_START_TIME = '10:00';
+/** A round's caller typed before the caller list existed (e.g. "David"). */
+export const OFF_LIST_CALLER = '__off_list';
 export const DEFAULT_DURATION_MIN = 60;
 export const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
 
@@ -41,7 +48,7 @@ export function blankApplication(): ApplicationFormState {
 
 /** `tz` is the IANA zone the form's date and time are read in (default: browser). */
 export function blankRound(
-  opts: { date?: string; time?: string; stage?: string } = {},
+  opts: { date?: string; time?: string; stage?: string; callerEnabled?: boolean } = {},
   tz: string = browserZone(),
 ): RoundFormState {
   return {
@@ -53,8 +60,10 @@ export function blankRound(
     interviewerName: '',
     note: '',
     transcript: '',
-    callerEnabled: false,
+    callerEnabled: !!opts.callerEnabled,
     callerName: '',
+    callerId: '',
+    callerIdSaved: '',
     callerMethod: '',
     callerMethodValue: '',
     confirmed: false,
@@ -62,11 +71,13 @@ export function blankRound(
 }
 
 export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone()): RoundFormState {
-  const start = e.scheduledAt ? new Date(e.scheduledAt) : null;
-  const end = e.endsAt ? new Date(e.endsAt) : null;
+  const start = e.scheduledAt ? parseServerTime(e.scheduledAt) : null;
+  const end = e.endsAt ? parseServerTime(e.endsAt) : null;
   const valid = start && !isNaN(start.getTime());
   const minutes = valid && end && !isNaN(end.getTime()) ? Math.round((end.getTime() - start.getTime()) / 60000) : 0;
   const caller = e.caller;
+  const typedName = caller?.callerName && caller.callerName !== 'TBD' ? caller.callerName : '';
+  const callerId = caller?.callerId || (typedName ? OFF_LIST_CALLER : '');
   return {
     stage: e.stage || '',
     date: valid ? zonedDateKey(start, tz) : '',
@@ -77,7 +88,9 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     note: e.note || '',
     transcript: e.transcript || '',
     callerEnabled: !!caller?.enabled,
-    callerName: caller?.callerName && caller.callerName !== 'TBD' ? caller.callerName : '',
+    callerName: typedName,
+    callerId,
+    callerIdSaved: callerId,
     callerMethod: caller?.method || '',
     callerMethodValue: caller?.methodValue || '',
     confirmed: !!e.confirmed,
@@ -91,9 +104,10 @@ export function roundPayload(r: RoundFormState, tz: string = browserZone()): Rou
   const caller: CallerInput | undefined = r.callerEnabled
     ? {
       enabled: true,
-      callerName: r.callerName.trim(),
       method: r.callerMethod || undefined,
       methodValue: r.callerMethodValue.trim(),
+      // Only a changed pick is sent; left out, the round keeps its caller (or starts with none).
+      ...(r.callerId !== r.callerIdSaved && r.callerId !== OFF_LIST_CALLER ? { callerId: r.callerId } : {}),
     }
     : undefined;
   return {

@@ -2,8 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PhoneCall, Plus } from 'lucide-react';
 import type { InterviewRoundRow } from '../../api/endpoints';
 import { layoutDayEvents, sameDay } from '../../lib/calendarLayout';
-import { stageLabel } from '../../lib/stageBadge';
-import { localDateKey, roundClass, timeText, type RoundEvent } from './calendarShared';
+import { eventClass, eventDetail, localDateKey, timeText, type RoundEvent } from './calendarShared';
 import { toWall } from '../../lib/interviewTimezone';
 
 const SLOT_PX = 24; // one 30-minute row
@@ -80,8 +79,8 @@ export default function CalendarWeek({
               <div key={`ad-${localDateKey(d)}`} className="space-y-0.5 border-b border-l border-zinc-200 p-0.5 dark:border-zinc-800">
                 {events.filter((e) => e.allDay && sameDay(e.start, d)).map((e) => (
                   <button key={e.id} type="button" onClick={() => onOpen(e.row)}
-                    className={`block w-full truncate rounded border px-1 py-0.5 text-left text-[11px] ${roundClass(e.row)}`}>
-                    {e.row.companyName || 'Interview'} · {stageLabel(e.row.stage)}
+                    className={`block w-full truncate rounded border px-1 py-0.5 text-left text-[11px] ${eventClass(e)}`}>
+                    {e.row.companyName || 'Interview'} · {eventDetail(e)}
                   </button>
                 ))}
               </div>
@@ -129,8 +128,8 @@ export default function CalendarWeek({
                     key={e.id}
                     type="button"
                     onClick={() => onOpen(e.row)}
-                    aria-label={`${timeText(e.start)} ${e.row.companyName || 'Interview'} · ${stageLabel(e.row.stage)}`}
-                    className={`absolute z-20 overflow-hidden rounded-md border px-1 py-0.5 text-left text-[11px] leading-tight shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600 ${roundClass(e.row)}`}
+                    aria-label={`${timeText(e.start)} ${e.row.companyName || 'Interview'} · ${eventDetail(e)}`}
+                    className={`absolute z-20 overflow-hidden rounded-md border px-1 py-0.5 text-left text-[11px] leading-tight shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600 ${eventClass(e)}`}
                     style={{
                       top,
                       height: Math.max(mins / 30 * SLOT_PX - 2, 18),
@@ -142,7 +141,7 @@ export default function CalendarWeek({
                       {e.row.hasCaller && <PhoneCall size={10} aria-hidden />}
                       <span className="truncate">{e.row.companyName || 'Interview'}</span>
                     </span>
-                    <span className="block truncate opacity-80">{timeText(e.start)} · {stageLabel(e.row.stage)}</span>
+                    <span className="block truncate opacity-80">{timeText(e.start)} · {eventDetail(e)}</span>
                   </button>
                 );
               })}

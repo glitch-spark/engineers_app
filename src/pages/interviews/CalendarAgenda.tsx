@@ -1,8 +1,7 @@
 import { Plus } from 'lucide-react';
 import type { InterviewRoundRow } from '../../api/endpoints';
 import { sameDay } from '../../lib/calendarLayout';
-import { stageLabel } from '../../lib/stageBadge';
-import { localDateKey, roundClass, timeText, type RoundEvent } from './calendarShared';
+import { eventClass, eventDetail, localDateKey, timeText, type RoundEvent } from './calendarShared';
 
 /** Phone layout for the week: rounds listed day by day. */
 export default function CalendarAgenda({
@@ -37,9 +36,9 @@ export default function CalendarAgenda({
                 {dayEvents.map((e) => (
                   <li key={e.id}>
                     <button type="button" onClick={() => onOpen(e.row)}
-                      className={`flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-sm ${roundClass(e.row)}`}>
+                      className={`flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-sm ${eventClass(e)}`}>
                       <span className="w-16 shrink-0 tabular-nums">{e.allDay ? 'All day' : timeText(e.start)}</span>
-                      <span className="truncate">{e.row.companyName || 'Interview'} · {stageLabel(e.row.stage)}</span>
+                      <span className="truncate">{e.row.companyName || 'Interview'} · {eventDetail(e)}</span>
                     </button>
                   </li>
                 ))}

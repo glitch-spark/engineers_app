@@ -520,6 +520,10 @@ export interface InterviewRoundRow {
   ownerId: string;
   ownerName: string | null;
   hasCaller: boolean;
+  /** Caller rounds only: the assigned caller (null = not assigned yet, or a name typed before the caller list). */
+  callerId?: string | null;
+  /** Caller rounds only; "TBD" when no caller is assigned yet. */
+  callerName?: string | null;
 }
 
 export const listInterviewRounds = (params: {
@@ -529,6 +533,10 @@ export const listInterviewRounds = (params: {
   accountId?: string;
   stage?: string;
   status?: string;
+  /** 'true': caller rounds only (the Callers calendar). */
+  callerOnly?: string;
+  /** One caller's rounds; 'unassigned' = no caller yet. */
+  callerId?: string;
 }) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>> }>(
   `/interviews/rounds${qs(params)}`,
 );
@@ -579,6 +587,8 @@ export type CallerMethod = 'video' | 'phone_hushed' | 'phone_slynumber';
 export interface InterviewCaller {
   enabled: boolean;
   callerName?: string;
+  /** From the caller list; null = not assigned yet, or a name typed before the list existed. */
+  callerId?: string | null;
   /** Round start (UTC ISO). */
   startsAt?: string | null;
   method?: CallerMethod | null;
@@ -589,6 +599,8 @@ export interface InterviewCaller {
 export interface CallerInput {
   enabled: boolean;
   callerName?: string;
+  /** From the caller list ('' = not assigned). Left out = the round keeps its caller. */
+  callerId?: string;
   method?: string;
   methodValue?: string;
 }
@@ -657,6 +669,26 @@ export const updateInterviewStage = (id: string, stageId: string, body: Intervie
 
 export const deleteInterviewStage = (id: string, stageId: string) =>
   del<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}`);
+
+/** Admin / interview manager: assign a caller round's caller ('' = not assigned yet), on anyone's interview. */
+export const assignRoundCaller = (id: string, stageId: string, callerId: string) =>
+  putJSON<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}/caller`, { callerId });
+
+// ---------- callers ----------
+
+export type CallerColor = 'sky' | 'violet' | 'emerald' | 'amber' | 'rose' | 'teal' | 'indigo' | 'orange';
+
+export interface Caller {
+  _id: string;
+  name: string;
+  color: CallerColor;
+}
+
+/** Everyone reads the list; `canManage` = Admin or interview manager (add, edit, delete). */
+export const listCallers = () => apiFetch<{ callers: Caller[]; canManage: boolean }>('/callers');
+export const createCaller = (body: { name: string; color?: CallerColor }) => postJSON<Caller>('/callers', body);
+export const updateCaller = (id: string, body: { name?: string; color?: CallerColor }) => putJSON<Caller>(`/callers/${id}`, body);
+export const deleteCaller = (id: string) => del<void>(`/callers/${id}`);
 
 // ---------- leaderboard ----------
 

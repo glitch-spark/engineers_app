@@ -8,16 +8,26 @@ import { archivedLabel, filterProfiles } from '../../lib/profileArchive';
 import { DATE_RANGE_PRESET_OPTIONS, type DateRangePreset } from '../../lib/dateRangePresets';
 import { INTERVIEW_STAGE_ORDER, INTERVIEW_STATUSES, stageLabel } from '../../lib/stageBadge';
 import type { InterviewFilters as Filters } from '../../lib/interviewFilters';
+import { useCallers } from '../../lib/useCallers';
 
-/** One filter bar for List and Calendar; the Date range also picks the calendar's period. */
+/** One filter bar for List and Calendar; the Date range also picks the calendar's period.
+ * `callers`: the Callers calendar shows every user's caller rounds, so a Caller filter replaces User and Profile. */
 export default function InterviewFilters({
   filters,
   update,
+  callers: callersView = false,
 }: {
   filters: Filters;
   update: (patch: Partial<Filters>) => void;
+  callers?: boolean;
 }) {
   const { user } = useAuth();
+  const { callers } = useCallers();
+  const callerOptions = [
+    { value: '', label: 'All callers' },
+    { value: 'unassigned', label: 'No caller yet' },
+    ...callers.map((c) => ({ value: c._id, label: c.name })),
+  ];
   const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
   const { data: accountsData } = useSWR(['accounts-lookup'], () => api.lookupAccounts());
 
@@ -48,14 +58,23 @@ export default function InterviewFilters({
 
   return (
     <div className="panel flex flex-wrap items-end gap-3 px-4 py-3">
-      <div className="w-44">
-        <label htmlFor="ivf-user" className="mb-1 block text-xs text-muted">User</label>
-        <Select id="ivf-user" value={filters.user} onChange={(v) => update({ user: v, profile: '' })} options={userOptions} />
-      </div>
-      <div className="w-48">
-        <label htmlFor="ivf-profile" className="mb-1 block text-xs text-muted">Profile</label>
-        <Select id="ivf-profile" value={filters.profile} onChange={(v) => update({ profile: v })} options={profileOptions} />
-      </div>
+      {callersView ? (
+        <div className="w-48">
+          <label htmlFor="ivf-caller" className="mb-1 block text-xs text-muted">Caller</label>
+          <Select id="ivf-caller" value={filters.caller} onChange={(v) => update({ caller: v })} options={callerOptions} />
+        </div>
+      ) : (
+        <>
+          <div className="w-44">
+            <label htmlFor="ivf-user" className="mb-1 block text-xs text-muted">User</label>
+            <Select id="ivf-user" value={filters.user} onChange={(v) => update({ user: v, profile: '' })} options={userOptions} />
+          </div>
+          <div className="w-48">
+            <label htmlFor="ivf-profile" className="mb-1 block text-xs text-muted">Profile</label>
+            <Select id="ivf-profile" value={filters.profile} onChange={(v) => update({ profile: v })} options={profileOptions} />
+          </div>
+        </>
+      )}
       <div className="w-40">
         <label htmlFor="ivf-stage" className="mb-1 block text-xs text-muted">Stage</label>
         <Select id="ivf-stage" value={filters.stage} onChange={(v) => update({ stage: v })} options={stageOptions} />

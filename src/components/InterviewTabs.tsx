@@ -1,8 +1,9 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ListChecks, BarChart3 } from 'lucide-react';
+import { ListChecks, BarChart3, PhoneCall } from 'lucide-react';
 
 const TABS = [
   { to: '/interviews', label: 'Interviews', icon: ListChecks, match: (p: string) => p === '/interviews' || p === '/interviews/calendar' },
+  { to: '/interviews/callers', label: 'Callers', icon: PhoneCall, match: (p: string) => p.startsWith('/interviews/callers') },
   { to: '/interviews/analyze', label: 'Analyze', icon: BarChart3, match: (p: string) => p.startsWith('/interviews/analyze') },
 ];
 

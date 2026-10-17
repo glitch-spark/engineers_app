@@ -19,8 +19,10 @@ import RoundFields from './RoundFields';
 import type { Interview } from './types';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone } from '../../lib/interviewTimezone';
+import { useAuth } from '../../auth/useAuth';
 
-export type RoundPrefill = { date?: string; time?: string; stage?: string };
+/** `caller`: start with "Request a caller" on (new interview from the Callers calendar). */
+export type RoundPrefill = { date?: string; time?: string; stage?: string; caller?: boolean };
 
 function applicationFromInterview(iv: Interview): ApplicationFormState {
   return {
@@ -63,6 +65,9 @@ export default function InterviewForm({
 }) {
   const idPrefix = useId();
   const { tz } = useInterviewTimezone();
+  const { user } = useAuth();
+  // The creator may pick a caller for a new round; afterwards Admin / interview managers assign it.
+  const callerEditable = mode !== 'editRound' || user?.role === 'admin' || user?.role === 'interview_manager';
   const history = interview?.stageHistory ?? [];
   const entry = mode === 'editRound' ? history.find((e) => e.id === roundId) : undefined;
   const previous = history[history.length - 1];
@@ -76,6 +81,7 @@ export default function InterviewForm({
       date: prefill?.date,
       time: prefill?.time,
       stage: prefill?.stage ?? (mode === 'addRound' ? nextStage(history) : ''),
+      callerEnabled: prefill?.caller,
     }, tz)));
   // The saved round's date and time: changing either needs the caller lined up again.
   const [savedWhen] = useState(() => (entry ? roundFromEntry(entry, tz) : null));
@@ -164,6 +170,7 @@ export default function InterviewForm({
             tz={tz}
             legend={mode === 'new' ? 'First round' : mode === 'addRound' ? 'Next round' : 'Round'}
             confirmable={mode === 'editRound' && !!entry?.caller?.enabled}
+            callerEditable={callerEditable}
           />
         )}
         {previousOpen && previous && (

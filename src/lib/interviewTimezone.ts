@@ -54,6 +54,12 @@ export function zonedTime(date: Date, tz: string): string {
   return `${pad(p.h)}:${pad(p.mi)}`;
 }
 
+/** A server timestamp → Date. The API stores UTC but has sent some times without an offset
+ * ("2026-10-17T14:00:00"), which `new Date` would read as browser-local time; read those as UTC. */
+export function parseServerTime(iso: string): Date {
+  return new Date(/T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(iso) ? `${iso}Z` : iso);
+}
+
 /** Offset of `tz` from UTC at instant `t`, in ms (wall clock minus UTC). */
 function offsetAt(t: number, tz: string): number {
   const p = zonedParts(new Date(t), tz);
