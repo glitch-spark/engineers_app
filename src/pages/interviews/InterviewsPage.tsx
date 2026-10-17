@@ -87,11 +87,12 @@ export default function InterviewsPage({ view }: { view: View }) {
         <InterviewTabs />
         <div className="flex flex-wrap items-center gap-3">
           <ZoneSelect />
-          <nav className="segmented" aria-label="Interview view">
-            {viewLink('list', 'List')}
-            {viewLink('calendar', 'Calendar')}
-            {viewLink('callers', 'Callers')}
-          </nav>
+          {view !== 'callers' && (
+            <nav className="segmented" aria-label="Interview view">
+              {viewLink('list', 'List')}
+              {viewLink('calendar', 'Calendar')}
+            </nav>
+          )}
         </div>
       </div>
 
