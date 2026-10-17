@@ -1,6 +1,7 @@
-import { Download, FileCode2, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
+import { Download, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyProfile, JobApplyRow, JobApplyTailored } from '../../api/endpoints';
 import { bandClass } from './format';
+import { PromptCell, effectiveUnitId } from './PromptCell';
 
 /** The file applied with: an uploaded resume or one of the job's tailored resumes. */
 export type AppliedFile = { accountId: string; resumeId?: string; tailoredJobId?: string };
@@ -97,8 +98,8 @@ function TailoredScore({ t }: { t: JobApplyTailored }) {
 const CELL = 'px-3 py-2 align-middle';
 
 /**
- * One profile's cells on a job's row: Profile, Sample resumes (.pdf), HTML template and Tailored. A job open to
- * several profiles has one table row per profile; the job's own cells span them.
+ * One profile's cells on a job's row: Profile, Sample resumes (.pdf), HTML template, Prompt and Tailored. A job open
+ * to several profiles has one table row per profile; the job's own cells span them.
  */
 export function ProfileCells({
   row,
@@ -113,6 +114,7 @@ export function ProfileCells({
   onDownloadTailored,
   isPicked,
   onPick,
+  onPromptChange,
 }: {
   row: JobApplyRow;
   acc: string;
@@ -129,6 +131,8 @@ export function ProfileCells({
   /** Download selection by tailored job id: clicking a finished tailored resume picks it. */
   isPicked?: (tailoredJobId: string) => boolean;
   onPick?: (tailoredJobId: string, on: boolean) => void;
+  /** Save the prompt this profile tailors the job with. */
+  onPromptChange: (promptId: string) => Promise<void>;
 }) {
   const withModel = tailorModel ? `Tailor with ${tailorModel}` : undefined;
   const best = row.suggestions.find((x) => x.accountId === acc);
@@ -137,7 +141,15 @@ export function ProfileCells({
   // Every sample resume of this profile, best first (a profile can have several).
   const own = row.resumeScores?.filter((r) => r.accountId === acc) ?? [];
   const resumes = own.length ? own : best ? [best] : [];
-  const noTemplate = profile?.hasTemplate === false;
+  // The selected resume unit decides whether this profile can be tailored for the job (its template is shown in the
+  // Prompt cell).
+  const units = profile?.prompts ?? [];
+  const promptState = row.prompt?.[acc];
+  const unit = units.find(
+    (u) => u.id === effectiveUnitId(units, profile?.defaultPromptId, promptState?.suggestedId, promptState?.chosenId),
+  );
+  const unitHasTemplate = unit?.hasTemplate ?? profile?.hasTemplate;
+  const noTemplate = unitHasTemplate === false;
   const toTailor = needsTailoring(row, acc, threshold) && (!t || t.status === 'failed');
 
   return (
@@ -205,18 +217,13 @@ export function ProfileCells({
       </td>
 
       <td className={CELL}>
-        {!profile ? (
-          <span className="text-xs text-zinc-400">—</span>
-        ) : profile.hasTemplate ? (
-          <span className="flex max-w-[12rem] items-center gap-1.5 text-zinc-700 dark:text-zinc-300" title={profile.templateName ?? undefined}>
-            <FileCode2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
-            <span className="truncate">{profile.templateName}</span>
-          </span>
-        ) : (
-          <span className="text-xs font-medium text-amber-700 dark:text-amber-400" title="Add an HTML template to this profile to tailor resumes">
-            No HTML template
-          </span>
-        )}
+        <PromptCell
+          options={profile?.prompts ?? []}
+          defaultId={profile?.defaultPromptId}
+          suggestedId={row.prompt?.[acc]?.suggestedId ?? null}
+          chosenId={row.prompt?.[acc]?.chosenId ?? null}
+          onChange={onPromptChange}
+        />
       </td>
 
       <td className={CELL}>
@@ -224,10 +231,10 @@ export function ProfileCells({
           {!t ? (
             <button
               type="button"
-              className="btn-outline btn-sm whitespace-nowrap py-0.5"
+              className="btn-outline btn-sm whitespace-nowrap py-0.5 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => onTailor(acc)}
               disabled={noTemplate}
-              title={noTemplate ? 'Add an HTML template to this profile first' : withModel}
+              title={noTemplate ? 'This resume unit has no HTML template: add one on the profile page' : withModel}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               Tailor
@@ -238,16 +245,20 @@ export function ProfileCells({
               {t.status === 'queued' ? 'Queued' : 'Generating…'}
             </span>
           ) : t.status === 'completed' ? (
-            <>
+            <div className="flex flex-col items-start gap-0.5">
               <TailoredChip
                 picked={isPicked?.(t.jobId) ?? false}
                 onPick={onPick ? (on) => onPick(t.jobId, on) : undefined}
                 label={`${profileName}'s tailored resume`}
               >
                 <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
-                <span className="text-sm font-medium">Tailored</span>
+                <span className="text-sm font-medium" title={t.promptName ? `Tailored with ${t.promptName}` : undefined}>
+                  Tailored
+                </span>
                 <TailoredScore t={t} />
               </TailoredChip>
+              {/* The tailored resume's actions, under it */}
+              <div className="flex items-center gap-0.5 pl-1">
               <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${profileName})`}>
                 <Download className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -270,7 +281,8 @@ export function ProfileCells({
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden />
               </button>
-            </>
+              </div>
+            </div>
           ) : (
             <button
               type="button"

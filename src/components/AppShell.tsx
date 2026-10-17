@@ -53,11 +53,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }, [isSidebarCollapsed]);
 
   if (isAuth) return <>{children}</>;
-  const useWideLayout =
-    pathname === '/interviews'
-    || pathname === '/interviews/calendar'
-    || pathname === '/interviews/analyze'
-    || pathname.startsWith('/job-applies/'); // a run's wide Tailor & apply table
   return (
     <div className="shell-content flex min-h-screen flex-col transition-all duration-300">
       <a href="#main" className="skip-link">Skip to main content</a>
@@ -73,11 +68,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           id="main"
           ref={mainRef}
           tabIndex={-1}
-          className={
-            useWideLayout
-              ? 'w-[94%] max-w-[1920px] mx-auto px-4 sm:px-6 pt-6 pb-12 focus:outline-none'
-              : 'max-w-7xl mx-auto p-4 sm:p-6 pb-12 focus:outline-none'
-          }
+          // Every page uses the wide layout the Interviews pages introduced.
+          className="w-[94%] max-w-[1920px] mx-auto px-4 sm:px-6 pt-6 pb-12 focus:outline-none"
         >
           <div className="animate-fade-in-up">
             {children}

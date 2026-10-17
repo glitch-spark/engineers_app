@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
-import ResumeStylingEditor from '../components/ResumeStylingEditor';
 import ResumesSection from '../components/ResumesSection';
 import PromptEvalBlock from '../components/promptEval/PromptEvalBlock';
+import ResumeUnitsEditor from '../components/prompts/ResumeUnitsEditor';
+import { legacyPromptName, promptErrors, unitRoles } from '../components/prompts/promptRoles';
 import CountrySelect from '../components/CountrySelect';
 import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
@@ -18,9 +19,35 @@ type AccShape = {
   country?: string | null;
   region?: string | null;
   resumePromptBody?: string;
+  styleTemplate?: string | null;
+  styleTemplateName?: string | null;
+  pageFormat?: string;
+  resumePrompts?: api.ResumePrompt[];
+  defaultPromptId?: string | null;
   screeningPrompt?: string;
   coverLetterPrompt?: string;
 };
+
+/** A profile's resume units and default. One saved before units existed reads as a single unit: its previous HTML
+ *  template and prompt (named from the prompt's heading). The server sends units already in this shape. */
+function promptsOf(acc: AccShape): { prompts: api.ResumePrompt[]; defaultId: string } {
+  const prompts: api.ResumePrompt[] = acc.resumePrompts?.length
+    ? acc.resumePrompts.map((p) => ({ ...p, roles: unitRoles(p) }))
+    : [{
+        id: 'default',
+        name: legacyPromptName(acc.resumePromptBody ?? ''),
+        roles: [],
+        body: acc.resumePromptBody ?? '',
+        templateHtml: acc.styleTemplate ?? '',
+        templateName: acc.styleTemplateName ?? '',
+        pageFormat: acc.pageFormat,
+      }];
+  const defaultId = prompts.some((p) => p.id === acc.defaultPromptId) ? (acc.defaultPromptId as string) : prompts[0].id;
+  return { prompts, defaultId };
+}
+
+const promptKey = (p: api.ResumePrompt) =>
+  JSON.stringify([p.name, unitRoles(p), p.body, p.templateHtml ?? '', p.templateName ?? '']);
 
 export default function AccountEditPage() {
   const { id } = useParams<{ id?: string }>();
@@ -239,10 +266,6 @@ export default function AccountEditPage() {
         <ResumesSection accountId={id!} />
       </Section>
 
-      <Section title="HTML template" desc="Upload your resume as an .html file. The resume LLM rewrites text in place per generation; structure and styles preserved.">
-        <ResumeStylingEditor accountId={id!} showHeader={false} />
-      </Section>
-
       <PromptsBlock accountId={id!} />
       <PromptEvalBlock accountId={id!} />
     </div>
@@ -262,7 +285,11 @@ function readPromptsOpen(): boolean {
 function PromptsBlock({ accountId }: { accountId: string }) {
   // Collapsed by default; remembered per browser. Collapsing only hides the fields, so unsaved edits stay.
   const [open, setOpen] = useState(readPromptsOpen);
-  const [resumePrompt, setResumePrompt] = useState('');
+  const [prompts, setPrompts] = useState<api.ResumePrompt[]>([]);
+  const [defaultId, setDefaultId] = useState('');
+  // What was last loaded / saved, to mark unsaved prompts (•).
+  const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
+  const [savedDefault, setSavedDefault] = useState('');
   const [screeningPrompt, setScreeningPrompt] = useState('');
   const [coverLetterPrompt, setCoverLetterPrompt] = useState('');
   const [loading, setLoading] = useState(true);
@@ -274,7 +301,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
       try {
         const acc = (await api.getAccount(accountId)) as AccShape;
         if (cancelled) return;
-        setResumePrompt(acc.resumePromptBody || '');
+        loadPrompts(acc);
         setScreeningPrompt(acc.screeningPrompt || '');
         setCoverLetterPrompt(acc.coverLetterPrompt || '');
       } catch (err) {
@@ -286,14 +313,45 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     return () => { cancelled = true; };
   }, [accountId]);
 
+  function loadPrompts(acc: AccShape) {
+    const view = promptsOf(acc);
+    setPrompts(view.prompts);
+    setDefaultId(view.defaultId);
+    setSavedKeys(Object.fromEntries(view.prompts.map((p) => [p.id, promptKey(p)])));
+    setSavedDefault(view.defaultId);
+  }
+
+  const errors = useMemo(() => promptErrors(prompts), [prompts]);
+  const dirtyIds = useMemo(
+    () => new Set(prompts.filter((p) => savedKeys[p.id] !== promptKey(p)).map((p) => p.id)),
+    [prompts, savedKeys],
+  );
+  // Anything to save in the units: an edited or new unit, a deleted one, or another default.
+  const unitsChanged =
+    dirtyIds.size > 0 || defaultId !== savedDefault || Object.keys(savedKeys).some((id) => !prompts.some((p) => p.id === id));
+
   async function save() {
+    if (Object.keys(errors).length) {
+      notify.info('Fix the prompt names first');
+      return;
+    }
     setSaving(true);
     try {
-      await api.updateAccount(accountId, {
-        resumePromptBody: resumePrompt,
+      const saved = (await api.updateAccount(accountId, {
+        resumePrompts: prompts.map((p) => ({
+          id: p.id,
+          name: p.name.trim(),
+          roles: unitRoles(p),
+          body: p.body,
+          templateHtml: p.templateHtml ?? '',
+          templateName: p.templateName ?? '',
+          ...(p.pageFormat ? { pageFormat: p.pageFormat } : {}),
+        })),
+        defaultPromptId: defaultId,
         screeningPrompt: screeningPrompt,
         coverLetterPrompt: coverLetterPrompt,
-      });
+      })) as AccShape;
+      if (saved?.resumePrompts?.length) loadPrompts(saved);
       notify.success('Prompts saved');
     } catch (err) {
       notify.error(err, 'Failed to save prompts');
@@ -312,16 +370,16 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     }
   }
 
-  const customized = [
-    resumePrompt.trim() && 'Resume',
-    screeningPrompt.trim() && 'Screening Q&A',
-    coverLetterPrompt.trim() && 'Cover letter',
-  ].filter(Boolean);
+  const customized = [screeningPrompt.trim() && 'Screening Q&A', coverLetterPrompt.trim() && 'Cover letter'].filter(Boolean);
+  const defaultName = prompts.find((p) => p.id === defaultId)?.name || 'Default';
   const summary = loading
     ? 'Loading…'
-    : customized.length
-      ? `Customized: ${customized.join(', ')}`
-      : 'Using defaults (inherit global → built-in)';
+    : [
+        `${prompts.length} resume unit${prompts.length === 1 ? "" : "s"} · default: ${defaultName}`,
+        customized.length ? `customized: ${customized.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
 
   return (
     <>
@@ -351,15 +409,21 @@ function PromptsBlock({ accountId }: { accountId: string }) {
         ) : (
           <>
             <Section
-              title="Resume generating prompt"
-              desc="Drives which fields the resume LLM rewrites (and how). Overrides your global prompt for this profile only. Empty = inherit global → built-in default."
+              title="Resume units"
+              desc="One HTML template + its prompt per unit, marked with the job roles it's for. Job Applies suggests the unit whose roles fit each job; the resume LLM rewrites the template's text in place."
             >
-              <ResumePromptField
-                value={resumePrompt}
-                onChange={setResumePrompt}
-                label="Profile resume content prompt"
-                hint="Empty = inherit global → built-in default."
-                defaultSource="global"
+              <ResumeUnitsEditor
+                prompts={prompts}
+                defaultId={defaultId}
+                onChange={(next, nextDefault) => {
+                  setPrompts(next);
+                  setDefaultId(nextDefault);
+                }}
+                dirtyIds={dirtyIds}
+                errors={errors}
+                onSave={() => void save()}
+                saving={saving}
+                changed={unitsChanged}
               />
             </Section>
 
@@ -398,7 +462,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
                 className="btn disabled:opacity-50"
               >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
-                Save prompts
+                Save all prompts
               </button>
             </div>
           </>

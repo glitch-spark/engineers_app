@@ -1691,6 +1691,38 @@ export interface JobApplyProfile {
   /** The HTML template tailored resumes are written into; without one the profile can't be tailored. */
   hasTemplate?: boolean;
   templateName?: string | null;
+  /** The profile's resume prompts (no text) and its default, for the Prompt column. */
+  prompts?: JobApplyPromptOption[];
+  defaultPromptId?: string | null;
+}
+
+/** A job role a resume prompt is written for. */
+export type PromptRole = 'fullstack' | 'frontend' | 'backend' | 'devops' | 'data' | 'ml' | 'mobile' | 'qa';
+
+/** A profile's resume unit: an HTML template, the prompt written for it, and the job roles it is meant for. */
+export interface ResumePrompt {
+  id: string;
+  name: string;
+  /** Job roles this unit is for; none = all roles (general). */
+  roles: PromptRole[];
+  /** Before units had several roles: read as `[role]`. */
+  role?: PromptRole | null;
+  body: string;
+  /** The unit's HTML template; empty / null = none. */
+  templateHtml?: string | null;
+  templateName?: string | null;
+  pageFormat?: string;
+  updatedAt?: string;
+}
+
+/** A profile's resume unit as Job Applies lists it (no prompt text or template HTML). */
+export interface JobApplyPromptOption {
+  id: string;
+  name: string;
+  roles: PromptRole[];
+  role?: PromptRole | null;
+  hasTemplate?: boolean;
+  templateName?: string | null;
 }
 
 export interface JobApplyRunSummary {
@@ -1810,6 +1842,9 @@ export interface JobApplyTailored {
   match?: JobApplyTailoredMatch | null;
   /** This profile's best uploaded resume on this job (even below the threshold), to compare with. */
   uploadedScore?: number | null;
+  /** The resume unit (prompt) and HTML template it was tailored with. */
+  promptName?: string | null;
+  templateName?: string | null;
 }
 
 export interface JobApplyTailoredMatch {
@@ -1901,6 +1936,10 @@ export interface JobApplyRow {
   exportedProfiles: string[];
   /** Profiles without uploaded resumes this job is open to (apply with a tailored resume). */
   tailorOnly: string[];
+  /** The job's roles (strongest first, up to 3), read from its title and skills; `reason` explains them. */
+  jobRole?: { roles: PromptRole[]; reason: string };
+  /** Per profile: the suggested prompt for this job and the user's choice (null = none / no longer exists). */
+  prompt?: Record<string, { suggestedId: string | null; chosenId: string | null }>;
 }
 
 export interface JobApplyComponent {
@@ -2054,6 +2093,10 @@ export const setJobApplyRowInclude = (rowId: string, include: boolean) =>
  */
 export const setJobApplyRowInvalid = (rowId: string, invalid: boolean) =>
   apiFetch<JobApplyRow>(`/job-applies/rows/${rowId}/invalid`, { method: 'PUT', body: JSON.stringify({ invalid }) });
+
+/** Choose the resume prompt a profile tailors this job with; choosing the suggested one clears the choice. */
+export const setJobApplyRowPrompt = (rowId: string, body: { accountId: string; promptId: string }) =>
+  apiFetch<JobApplyRow>(`/job-applies/rows/${rowId}/prompt`, { method: 'PUT', body: JSON.stringify(body) });
 
 export const cancelJobApplyRun = (id: string) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/cancel`, {});
 
