@@ -3,8 +3,19 @@ import { Loader2 } from 'lucide-react';
 import type { JobApplyPromptOption } from '../../api/endpoints';
 import { rolesLabel, unitRoles } from '../prompts/promptRoles';
 
+/** The unit a profile tailors this job with: the user's choice, else the suggestion, else the default (if they exist). */
+export function effectiveUnitId(
+  options: JobApplyPromptOption[],
+  defaultId: string | null | undefined,
+  suggestedId: string | null | undefined,
+  chosenId: string | null | undefined,
+): string | undefined {
+  const has = (id: string | null | undefined): id is string => !!id && options.some((o) => o.id === id);
+  return has(chosenId) ? chosenId : has(suggestedId) ? suggestedId : has(defaultId) ? defaultId : options[0]?.id;
+}
+
 /**
- * The resume prompt a profile tailors this job with: the user's choice, else the prompt suggested from the job, else the
+ * The resume unit a profile tailors this job with: the user's choice, else the prompt suggested from the job, else the
  * profile's default. Changing it saves at once.
  */
 export function PromptCell({
@@ -21,8 +32,7 @@ export function PromptCell({
   onChange: (promptId: string) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
-  const has = (id: string | null | undefined): id is string => !!id && options.some((o) => o.id === id);
-  const value = has(chosenId) ? chosenId : has(suggestedId) ? suggestedId : has(defaultId) ? defaultId : options[0]?.id;
+  const value = effectiveUnitId(options, defaultId, suggestedId, chosenId);
 
   if (!value) return <span className="text-xs text-zinc-400">—</span>;
   if (options.length === 1) {

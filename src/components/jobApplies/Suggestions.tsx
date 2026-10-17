@@ -1,7 +1,7 @@
 import { Download, FileCode2, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyProfile, JobApplyRow, JobApplyTailored } from '../../api/endpoints';
 import { bandClass } from './format';
-import { PromptCell } from './PromptCell';
+import { PromptCell, effectiveUnitId } from './PromptCell';
 
 /** The file applied with: an uploaded resume or one of the job's tailored resumes. */
 export type AppliedFile = { accountId: string; resumeId?: string; tailoredJobId?: string };
@@ -141,7 +141,15 @@ export function ProfileCells({
   // Every sample resume of this profile, best first (a profile can have several).
   const own = row.resumeScores?.filter((r) => r.accountId === acc) ?? [];
   const resumes = own.length ? own : best ? [best] : [];
-  const noTemplate = profile?.hasTemplate === false;
+  // The selected resume unit decides the HTML template (and whether this profile can be tailored for the job).
+  const units = profile?.prompts ?? [];
+  const promptState = row.prompt?.[acc];
+  const unit = units.find(
+    (u) => u.id === effectiveUnitId(units, profile?.defaultPromptId, promptState?.suggestedId, promptState?.chosenId),
+  );
+  const unitHasTemplate = unit?.hasTemplate ?? profile?.hasTemplate;
+  const templateName = unit?.hasTemplate != null ? unit.templateName : profile?.templateName;
+  const noTemplate = unitHasTemplate === false;
   const toTailor = needsTailoring(row, acc, threshold) && (!t || t.status === 'failed');
 
   return (
@@ -211,13 +219,16 @@ export function ProfileCells({
       <td className={CELL}>
         {!profile ? (
           <span className="text-xs text-zinc-400">—</span>
-        ) : profile.hasTemplate ? (
-          <span className="flex max-w-[12rem] items-center gap-1.5 text-zinc-700 dark:text-zinc-300" title={profile.templateName ?? undefined}>
+        ) : unitHasTemplate ? (
+          <span className="flex max-w-[12rem] items-center gap-1.5 text-zinc-700 dark:text-zinc-300" title={templateName ?? undefined}>
             <FileCode2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
-            <span className="truncate">{profile.templateName}</span>
+            <span className="truncate">{templateName || 'HTML template'}</span>
           </span>
         ) : (
-          <span className="text-xs font-medium text-amber-700 dark:text-amber-400" title="Add an HTML template to this profile to tailor resumes">
+          <span
+            className="text-xs font-medium text-amber-700 dark:text-amber-400"
+            title="Add an HTML template to this resume unit on the profile page to tailor with it"
+          >
             No HTML template
           </span>
         )}
@@ -241,7 +252,7 @@ export function ProfileCells({
               className="btn-outline btn-sm whitespace-nowrap py-0.5 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => onTailor(acc)}
               disabled={noTemplate}
-              title={noTemplate ? 'Add an HTML template to this profile first' : withModel}
+              title={noTemplate ? 'This resume unit has no HTML template: add one on the profile page' : withModel}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               Tailor
