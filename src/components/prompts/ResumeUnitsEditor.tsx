@@ -7,7 +7,7 @@ import { MAX_PROMPTS, MAX_PROMPT_NAME, NO_ROLE_LABEL, PROMPT_ROLES, PROMPT_ROLE_
 
 /**
  * A profile's resume units: a tab per unit (★ default, • unsaved); the selected unit's name, role marks, default and
- * delete controls; then its HTML template (40%), its prompt (30%) and the Eval panel (30%; the eval comes later).
+ * delete controls; then its HTML template (40%), its prompt (40%) and the Eval panel (20%; the eval comes later).
  */
 export default function ResumeUnitsEditor({
   prompts,
@@ -181,7 +181,7 @@ export default function ResumeUnitsEditor({
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[4fr_3fr_3fr]">
+      <div className="grid gap-4 lg:grid-cols-[4fr_4fr_2fr]">
         <section aria-label="HTML template" className="flex min-w-0 flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40">
           <TemplatePane
             html={current.templateHtml ?? ''}

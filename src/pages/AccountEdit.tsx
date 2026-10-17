@@ -289,6 +289,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
   const [defaultId, setDefaultId] = useState('');
   // What was last loaded / saved, to mark unsaved prompts (•).
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
+  const [savedDefault, setSavedDefault] = useState('');
   const [screeningPrompt, setScreeningPrompt] = useState('');
   const [coverLetterPrompt, setCoverLetterPrompt] = useState('');
   const [loading, setLoading] = useState(true);
@@ -317,6 +318,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     setPrompts(view.prompts);
     setDefaultId(view.defaultId);
     setSavedKeys(Object.fromEntries(view.prompts.map((p) => [p.id, promptKey(p)])));
+    setSavedDefault(view.defaultId);
   }
 
   const errors = useMemo(() => promptErrors(prompts), [prompts]);
@@ -324,6 +326,9 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     () => new Set(prompts.filter((p) => savedKeys[p.id] !== promptKey(p)).map((p) => p.id)),
     [prompts, savedKeys],
   );
+  // Anything to save in the units: an edited or new unit, a deleted one, or another default.
+  const unitsChanged =
+    dirtyIds.size > 0 || defaultId !== savedDefault || Object.keys(savedKeys).some((id) => !prompts.some((p) => p.id === id));
 
   async function save() {
     if (Object.keys(errors).length) {
@@ -417,6 +422,17 @@ function PromptsBlock({ accountId }: { accountId: string }) {
                 dirtyIds={dirtyIds}
                 errors={errors}
               />
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                <span className="text-xs text-muted" aria-live="polite">
+                  {unitsChanged
+                    ? `Unsaved changes${dirtyIds.size ? ` in ${dirtyIds.size} unit${dirtyIds.size === 1 ? '' : 's'}` : ''}`
+                    : 'All changes saved'}
+                </span>
+                <button type="button" onClick={save} disabled={saving || !unitsChanged} className="btn disabled:opacity-50">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+                  Save resume units
+                </button>
+              </div>
             </Section>
 
             <Section
@@ -454,7 +470,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
                 className="btn disabled:opacity-50"
               >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
-                Save resume units
+                Save all prompts
               </button>
             </div>
           </>
