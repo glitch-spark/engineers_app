@@ -4,11 +4,10 @@ import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
-import ResumeStylingEditor from '../components/ResumeStylingEditor';
 import ResumesSection from '../components/ResumesSection';
 import PromptEvalBlock from '../components/promptEval/PromptEvalBlock';
-import ResumePromptsEditor from '../components/prompts/ResumePromptsEditor';
-import { legacyPromptName, promptErrors } from '../components/prompts/promptRoles';
+import ResumeUnitsEditor from '../components/prompts/ResumeUnitsEditor';
+import { legacyPromptName, promptErrors, unitRoles } from '../components/prompts/promptRoles';
 import CountrySelect from '../components/CountrySelect';
 import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
@@ -20,22 +19,35 @@ type AccShape = {
   country?: string | null;
   region?: string | null;
   resumePromptBody?: string;
+  styleTemplate?: string | null;
+  styleTemplateName?: string | null;
+  pageFormat?: string;
   resumePrompts?: api.ResumePrompt[];
   defaultPromptId?: string | null;
   screeningPrompt?: string;
   coverLetterPrompt?: string;
 };
 
-/** A profile's resume prompts and default; one saved before several prompts existed reads as "Default". */
+/** A profile's resume units and default. One saved before units existed reads as a single unit: its previous HTML
+ *  template and prompt (named from the prompt's heading). The server sends units already in this shape. */
 function promptsOf(acc: AccShape): { prompts: api.ResumePrompt[]; defaultId: string } {
-  const prompts = acc.resumePrompts?.length
-    ? acc.resumePrompts
-    : [{ id: 'default', name: legacyPromptName(acc.resumePromptBody ?? ''), roles: [], role: null, body: acc.resumePromptBody ?? '' }];
+  const prompts: api.ResumePrompt[] = acc.resumePrompts?.length
+    ? acc.resumePrompts.map((p) => ({ ...p, roles: unitRoles(p) }))
+    : [{
+        id: 'default',
+        name: legacyPromptName(acc.resumePromptBody ?? ''),
+        roles: [],
+        body: acc.resumePromptBody ?? '',
+        templateHtml: acc.styleTemplate ?? '',
+        templateName: acc.styleTemplateName ?? '',
+        pageFormat: acc.pageFormat,
+      }];
   const defaultId = prompts.some((p) => p.id === acc.defaultPromptId) ? (acc.defaultPromptId as string) : prompts[0].id;
   return { prompts, defaultId };
 }
 
-const promptKey = (p: api.ResumePrompt) => JSON.stringify([p.name, p.role, p.body]);
+const promptKey = (p: api.ResumePrompt) =>
+  JSON.stringify([p.name, unitRoles(p), p.body, p.templateHtml ?? '', p.templateName ?? '']);
 
 export default function AccountEditPage() {
   const { id } = useParams<{ id?: string }>();
@@ -254,10 +266,6 @@ export default function AccountEditPage() {
         <ResumesSection accountId={id!} />
       </Section>
 
-      <Section title="HTML template" desc="Upload your resume as an .html file. The resume LLM rewrites text in place per generation; structure and styles preserved.">
-        <ResumeStylingEditor accountId={id!} showHeader={false} />
-      </Section>
-
       <PromptsBlock accountId={id!} />
       <PromptEvalBlock accountId={id!} />
     </div>
@@ -325,7 +333,15 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     setSaving(true);
     try {
       const saved = (await api.updateAccount(accountId, {
-        resumePrompts: prompts.map(({ id, name, role, body }) => ({ id, name: name.trim(), role, body })),
+        resumePrompts: prompts.map((p) => ({
+          id: p.id,
+          name: p.name.trim(),
+          roles: unitRoles(p),
+          body: p.body,
+          templateHtml: p.templateHtml ?? '',
+          templateName: p.templateName ?? '',
+          ...(p.pageFormat ? { pageFormat: p.pageFormat } : {}),
+        })),
         defaultPromptId: defaultId,
         screeningPrompt: screeningPrompt,
         coverLetterPrompt: coverLetterPrompt,
@@ -354,7 +370,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
   const summary = loading
     ? 'Loading…'
     : [
-        `${prompts.length} resume prompt${prompts.length === 1 ? '' : 's'} · default: ${defaultName}`,
+        `${prompts.length} resume unit${prompts.length === 1 ? "" : "s"} · default: ${defaultName}`,
         customized.length ? `customized: ${customized.join(', ')}` : '',
       ]
         .filter(Boolean)
@@ -388,10 +404,10 @@ function PromptsBlock({ accountId }: { accountId: string }) {
         ) : (
           <>
             <Section
-              title="Resume generating prompt"
-              desc="Drives which fields the resume LLM rewrites (and how). One prompt per role; Job Applies suggests the right one for each job. Empty = inherit global."
+              title="Resume units"
+              desc="One HTML template + its prompt per unit, marked with the job roles it's for. Job Applies suggests the unit whose roles fit each job; the resume LLM rewrites the template's text in place."
             >
-              <ResumePromptsEditor
+              <ResumeUnitsEditor
                 prompts={prompts}
                 defaultId={defaultId}
                 onChange={(next, nextDefault) => {
@@ -438,7 +454,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
                 className="btn disabled:opacity-50"
               >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
-                Save prompts
+                Save resume units
               </button>
             </div>
           </>
