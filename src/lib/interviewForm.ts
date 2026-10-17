@@ -1,7 +1,7 @@
 /** Pure state helpers for the Application + Round interview form. */
 import type { CallerInput, InterviewStageEntry, RoundInput } from '../api/endpoints';
 import { INTERVIEW_STAGE_ORDER, normalizeInterviewStatus, type InterviewStatusValue } from './stageBadge';
-import { browserZone, fromZoned, zonedDateKey, zonedTime } from './interviewTimezone';
+import { browserZone, fromZoned, parseServerTime, zonedDateKey, zonedTime } from './interviewTimezone';
 
 export type InterviewFormMode = 'new' | 'editDetails' | 'addRound' | 'editRound';
 
@@ -62,8 +62,8 @@ export function blankRound(
 }
 
 export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone()): RoundFormState {
-  const start = e.scheduledAt ? new Date(e.scheduledAt) : null;
-  const end = e.endsAt ? new Date(e.endsAt) : null;
+  const start = e.scheduledAt ? parseServerTime(e.scheduledAt) : null;
+  const end = e.endsAt ? parseServerTime(e.endsAt) : null;
   const valid = start && !isNaN(start.getTime());
   const minutes = valid && end && !isNaN(end.getTime()) ? Math.round((end.getTime() - start.getTime()) / 60000) : 0;
   const caller = e.caller;
