@@ -1,5 +1,5 @@
 import { Download, ExternalLink, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
-import type { JobApplyRow, JobApplySuggestion, JobApplyTailored } from '../../api/endpoints';
+import type { JobApplyRow, JobApplyTailored } from '../../api/endpoints';
 import { bandClass } from './format';
 import { safeHref } from '../../lib/safeHref';
 
@@ -83,7 +83,8 @@ function TailoredScore({ t }: { t: JobApplyTailored }) {
 
 /**
  * "Apply with" for one job: one line per profile the job is open to. Each line has that profile's best uploaded
- * resume (when it scores at or above the threshold) and its own tailored resume (Tailor → Generating → Tailored).
+ * resume with its score (below the minimum score it is greyed: that profile needs a tailored resume) and its own
+ * tailored resume (Tailor → Generating → Tailored).
  */
 export default function Suggestions({
   row,
@@ -104,7 +105,7 @@ export default function Suggestions({
   hasFile: (resumeId: string) => boolean;
   /** Name of the model the Tailor buttons use, shown on hover. */
   tailorModel?: string;
-  onDownload: (s: JobApplySuggestion) => void;
+  onDownload: (s: { accountId: string; resumeId: string }) => void;
   onTailor: (accountId: string) => void;
   onTailorAll: () => void;
   onDownloadTailored: (t: JobApplyTailored) => void;
@@ -114,9 +115,12 @@ export default function Suggestions({
 }) {
   const withModel = tailorModel ? `Tailor with ${tailorModel}` : undefined;
   const profiles = orderedProfiles(row);
+  // Profiles whose uploaded resume is below the minimum score (or who have none) and have no tailored one yet: what
+  // "Tailor all" tailors, like the run's Tailor resumes.
   const untailored = profiles.filter((acc) => {
     const t = row.tailored.find((x) => x.accountId === acc);
-    return !t || t.status === 'failed';
+    const s = row.suggestions.find((x) => x.accountId === acc);
+    return (!t || t.status === 'failed') && (!s || s.total < threshold);
   });
 
   if (profiles.length === 0) {
@@ -141,6 +145,9 @@ export default function Suggestions({
           const s = row.suggestions.find((x) => x.accountId === acc);
           const n = s ? row.suggestions.indexOf(s) + 1 : 0;
           const t = row.tailored.find((x) => x.accountId === acc);
+          // Every uploaded resume of this profile, best first (a profile can have several template resumes).
+          const own = row.resumeScores?.filter((r) => r.accountId === acc) ?? [];
+          const resumes = own.length ? own : s ? [s] : [];
           return (
             <li key={acc} className="grid grid-cols-[7rem_1fr_auto] items-center gap-x-2 py-1">
               <span className="flex min-w-0 flex-col">
@@ -154,35 +161,50 @@ export default function Suggestions({
                 )}
               </span>
 
-              {/* Uploaded resume: a resume line keeps room for its score and download; a note can wrap */}
-              <div className={`flex items-center gap-1 ${s ? 'min-w-[7.5rem]' : ''}`}>
-                {s ? (
-                  <>
-                    <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5">
-                      {n > 0 && n <= 9 && (
-                        <kbd className="hidden w-3 text-center text-[10px] text-zinc-400 sm:inline" aria-hidden>
-                          {n}
-                        </kbd>
-                      )}
-                      <span className={bandClass(s.band)} title={s.knockouts.join('\n') || undefined}>
-                        {s.total}
-                      </span>
-                      <span className="truncate text-sm text-zinc-600 dark:text-zinc-400">{s.filename}</span>
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-icon"
-                      onClick={() => onDownload(s)}
-                      disabled={!hasFile(s.resumeId)}
-                      title={hasFile(s.resumeId) ? 'Download resume PDF' : 'Original file not stored'}
-                      aria-label={`Download ${s.filename}`}
-                    >
-                      <Download className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                  </>
+              {/* Uploaded resumes, one line each: a resume line keeps room for its score and download; a note can wrap */}
+              <div className={`flex min-w-0 flex-col ${resumes.length ? 'min-w-[7.5rem]' : ''}`}>
+                {resumes.length ? (
+                  resumes.map((r) => {
+                    const below = r.total < threshold;
+                    const best = r.resumeId === s?.resumeId;
+                    const knockouts = best ? s?.knockouts ?? [] : [];
+                    return (
+                      <div key={r.resumeId} className="flex items-center gap-1">
+                        <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5">
+                          <kbd className="hidden w-3 text-center text-[10px] text-zinc-400 sm:inline" aria-hidden>
+                            {best && n > 0 && n <= 9 ? n : ''}
+                          </kbd>
+                          <span
+                            className={below ? 'badge-neutral tabular-nums opacity-70' : bandClass(r.band)}
+                            title={
+                              [below ? `Below the minimum score (${threshold}): tailor a resume` : '', ...knockouts]
+                                .filter(Boolean)
+                                .join('\n') || undefined
+                            }
+                          >
+                            {r.total}
+                          </span>
+                          <span className={`truncate text-sm ${below ? 'text-zinc-400 dark:text-zinc-500' : 'text-zinc-600 dark:text-zinc-400'}`}>
+                            {r.filename}
+                          </span>
+                          {below && <span className="whitespace-nowrap text-[11px] text-violet-700 dark:text-violet-300">below {threshold}</span>}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          onClick={() => onDownload(r)}
+                          disabled={!hasFile(r.resumeId)}
+                          title={hasFile(r.resumeId) ? 'Download resume PDF' : 'Original file not stored'}
+                          aria-label={`Download ${r.filename}`}
+                        >
+                          <Download className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                      </div>
+                    );
+                  })
                 ) : (
                   <span className="text-xs text-zinc-400">
-                    {row.tailorOnly.includes(acc) ? 'No uploaded resume' : `No resume ≥ ${threshold}`}
+                    {row.tailorOnly.includes(acc) ? 'No uploaded resume' : 'Not scored for this job'}
                   </span>
                 )}
               </div>

@@ -155,6 +155,8 @@ export default function JobApplyRun() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  // Asked before exporting while some applications have no resume to send yet (they'd be left out of the sheet).
+  const [confirmExport, setConfirmExport] = useState(false);
   const [infoRow, setInfoRow] = useState<string | null>(null);
   // An earlier step opened from the step track (null: the run's own step).
   const [stepView, setStepView] = useState<Step | null>(null);
@@ -377,16 +379,30 @@ export default function JobApplyRun() {
     [tailor],
   );
 
-  const downloadTailored = useCallback(async (row: JobApplyRow, t: api.JobApplyTailored) => {
-    if (t.status !== 'completed') return;
-    const company = (row.company || row.title || 'job').replace(/[^\w .()-]+/g, '_');
-    const who = (profileNames[t.accountId] ?? 'Profile').replace(/[^\w .()-]+/g, '_');
-    try {
-      await api.downloadTailoredResume(t.jobId, `Resume (${company}) - ${who}.pdf`);
-    } catch (err) {
-      notify.error(err, 'Could not download the tailored resume');
-    }
-  }, [profileNames]);
+  /** Same download as the Resume page: <Profile>/<Company>/Resume.pdf into a picked folder, else one zip. */
+  const saveResumes = useCallback(
+    async (body: api.JobApplyDownloadRequest) => {
+      setDownloadingPicked(true);
+      try {
+        const { downloaded, skipped } = await api.downloadJobApplyResumes(runId, body);
+        const left = skipped ? ` · ${skipped} skipped: need tailoring` : '';
+        if (downloaded) notify.success(`Downloaded ${downloaded} resume${downloaded === 1 ? '' : 's'}${left}`);
+        else notify.info(`No resume to download${left}`);
+      } catch (err) {
+        notify.error(err, 'Could not download the resumes');
+      } finally {
+        setDownloadingPicked(false);
+      }
+    },
+    [runId],
+  );
+
+  const downloadTailored = useCallback(
+    (t: api.JobApplyTailored) => {
+      if (t.status === 'completed') void saveResumes({ files: [{ kind: 'tailored', tailoredJobId: t.jobId }] });
+    },
+    [saveResumes],
+  );
 
   const pick = useCallback((jobId: string, on: boolean) => {
     setPicked((prev) => {
@@ -397,39 +413,16 @@ export default function JobApplyRun() {
     });
   }, []);
 
-  /** Same download as the Resume page: <Profile>/<Company>/Resume.pdf into a picked folder, else one zip. */
-  const downloadResumes = useCallback(async (ids: string[]) => {
-    if (!ids.length) return;
-    setDownloadingPicked(true);
-    try {
-      await api.bulkDownloadResumeJobs(ids);
-      notify.success(`Downloaded ${ids.length} resume${ids.length === 1 ? '' : 's'}`);
-    } catch (err) {
-      notify.error(err, 'Could not download the selected resumes');
-    } finally {
-      setDownloadingPicked(false);
-    }
-  }, []);
-
+  /** One template resume of this job, saved like the Resume page (<Profile>/<Company>/Resume.pdf). */
   const download = useCallback(
-    async (s: { accountId: string; resumeId: string }) => {
+    (row: JobApplyRow, s: { accountId: string; resumeId: string }) => {
       if (!resumesById.get(s.resumeId)?.hasFile) {
         notify.info('The original file isn’t stored for this resume');
         return;
       }
-      const tab = window.open('', '_blank'); // opened now, while this is still a user action, so it isn't blocked
-      try {
-        const { url } = await api.getAccountResumeFileUrl(s.accountId, s.resumeId);
-        const href = safeHref(url);
-        if (!href) throw new Error('The file link is not a web address');
-        if (tab) tab.location.href = href;
-        else window.location.href = href;
-      } catch (err) {
-        tab?.close();
-        notify.error(err, 'Could not download the resume');
-      }
+      void saveResumes({ files: [{ kind: 'uploaded', rowId: row._id, accountId: s.accountId, resumeId: s.resumeId }] });
     },
-    [resumesById],
+    [resumesById, saveResumes],
   );
 
   const toggleSelected = (id: string) =>
@@ -548,8 +541,8 @@ export default function JobApplyRun() {
       else if (key === 't') void tailorRow(row);
       else if (key === 'd') {
         const ready = firstReadyTailored(row);
-        if (ready) void downloadTailored(row, ready);
-        else if (row.suggestions[0]) void download(row.suggestions[0]);
+        if (ready) downloadTailored(ready);
+        else if (row.suggestions[0]) download(row, row.suggestions[0]);
       }
       else if (key === 'x') toggleSelected(row._id);
       else if (key === 'c') void copyLinks(selectedRows.length ? selectedRows : [row]);
@@ -591,15 +584,23 @@ export default function JobApplyRun() {
   }, [confirmTailorAll, tailorProfiles, tailorRowIds, runId]);
 
   const selectedRows = rows.filter((r) => selected.has(r._id));
-  // Ready tailored resumes on the checked jobs (only the filtered profile's, when filtering), plus clicked ones.
-  const selectedResumeIds = [
-    ...new Set([
-      ...selectedRows.flatMap((r) =>
-        r.tailored.filter((t) => t.status === 'completed' && (!accountId || t.accountId === accountId)).map((t) => t.jobId),
-      ),
-      ...picked,
-    ]),
-  ];
+  // What Download saves for the checked jobs, one per job × profile (only the filtered profile's, when filtering): its
+  // tailored resume when ready, else its highest template resume at or above the minimum score; plus tailored ones
+  // clicked. Profiles below the minimum with nothing tailored are skipped.
+  const downloadCount = (() => {
+    const tailoredIds = new Set(picked);
+    let uploaded = 0;
+    for (const r of selectedRows) {
+      for (const acc of r.openProfiles) {
+        if (accountId && acc !== accountId) continue;
+        const t = r.tailored.find((x) => x.accountId === acc && x.status === 'completed');
+        const scores = r.resumeScores ?? r.suggestions;
+        if (t) tailoredIds.add(t.jobId);
+        else if (scores.some((s) => s.accountId === acc && s.total >= (run?.threshold ?? 75))) uploaded += 1;
+      }
+    }
+    return tailoredIds.size + uploaded;
+  })();
 
   /** Copy these jobs' posting links, one per line (each link once). */
   const copyLinks = useCallback(async (jobs: JobApplyRow[]) => {
@@ -900,6 +901,15 @@ export default function JobApplyRun() {
               onChange={(e) => setThresholdDraft(Number(e.target.value))}
               className="w-full accent-sky-600"
             />
+            {run.applications?.tailorNeeded != null && (
+              <p className="hint tabular-nums" aria-live="polite">
+                <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                  {run.applications.noTailorNeeded ?? 0} no need to tailor
+                </span>
+                {' · '}
+                <span className="font-medium text-violet-700 dark:text-violet-300">{run.applications.tailorNeeded} need tailoring</span>
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -911,7 +921,11 @@ export default function JobApplyRun() {
           busy={busy !== null}
           tailorModel={RESUME_MODEL.label}
           onTailor={() => openTailor(null)}
-          onExport={() => setShowExport(true)}
+          onExport={() =>
+            run.applications && run.applications.needsResume + run.applications.tailoring > 0
+              ? setConfirmExport(true)
+              : setShowExport(true)
+          }
           onMark={APPLIED_UI ? () => setConfirmAll(true) : undefined}
         />
       )}
@@ -939,17 +953,20 @@ export default function JobApplyRun() {
                 <button
                   type="button"
                   className="btn-outline btn-sm"
-                  onClick={() => void downloadResumes(selectedResumeIds)}
-                  disabled={downloadingPicked || selectedResumeIds.length === 0}
+                  onClick={() =>
+                    void saveResumes({ rowIds: [...selected], accountId: accountId || undefined, tailoredJobIds: [...picked] })
+                  }
+                  disabled={downloadingPicked || downloadCount === 0}
                   title={
-                    selectedResumeIds.length
-                      ? `Download ${selectedResumeIds.length} tailored resume${selectedResumeIds.length === 1 ? '' : 's'}`
+                    downloadCount
+                      ? `Download ${downloadCount} resume${downloadCount === 1 ? '' : 's'} as <Profile>/<Company>/Resume.pdf: each`
+                        + ' tailored one when ready, else the highest template resume at or above the minimum score'
                         + (accountId ? ` (${profileNames[accountId] ?? 'this profile'} only)` : '')
-                      : 'No tailored resume is ready on the selected jobs'
+                      : 'No resume to send on the selected jobs yet: tailor the ones below the minimum score'
                   }
                 >
                   {downloadingPicked ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
-                  Download{selectedResumeIds.length ? ` (${selectedResumeIds.length})` : ''}
+                  Download{downloadCount ? ` (${downloadCount})` : ''}
                 </button>
                 {APPLIED_UI && (
                   <button type="button" className="btn btn-sm" onClick={() => void bulkMark('selected')} disabled={busy !== null}>
@@ -1125,11 +1142,11 @@ export default function JobApplyRun() {
                               threshold={run.threshold}
                               profileNames={profileNames}
                               hasFile={(id) => !!resumesById.get(id)?.hasFile}
-                              onDownload={(s) => void download(s)}
+                              onDownload={(s) => download(row, s)}
                               tailorModel={RESUME_MODEL.label}
                               onTailor={(acc) => void tailor(row, acc)}
                               onTailorAll={() => void tailorRow(row)}
-                              onDownloadTailored={(t) => void downloadTailored(row, t)}
+                              onDownloadTailored={downloadTailored}
                               isPicked={(id) => picked.has(id)}
                               onPick={pick}
                             />
@@ -1193,8 +1210,51 @@ export default function JobApplyRun() {
       />
 
       <ConfirmDialog
+        open={confirmExport}
+        title="Some applications have no resume yet"
+        body={(() => {
+          const c = run.applications;
+          const should = c?.needsResume ?? 0;
+          const tailoring = c?.tailoring ?? 0;
+          return (
+            <div className="space-y-2">
+              <p>
+                {should > 0 && (
+                  <>
+                    <span className="font-semibold">{applicationsText(should)}</span> {should === 1 ? 'needs' : 'need'} a tailored resume (no
+                    template resume at or above {run.threshold})
+                  </>
+                )}
+                {should > 0 && tailoring > 0 && ', and '}
+                {tailoring > 0 && (
+                  <>
+                    <span className="font-semibold">{tailoring}</span> {tailoring === 1 ? 'is' : 'are'} still tailoring
+                  </>
+                )}
+                {'. They won’t be in the sheet now: export again once they’re tailored.'}
+              </p>
+              <p className="hint">
+                {c?.ready ?? 0} ready to export now: {c?.readyTemplate ?? 0} with a template resume, {c?.readyTailored ?? 0} tailored.
+              </p>
+            </div>
+          );
+        })()}
+        confirmLabel="Export the rest"
+        tone="default"
+        onConfirm={() => {
+          setConfirmExport(false);
+          setShowExport(true);
+        }}
+        onCancel={() => setConfirmExport(false)}
+      />
+
+      <ConfirmDialog
         open={confirmTailorAll}
-        title={tailorRowIds ? `Tailor resumes for ${tailorRowIds.length} selected job${tailorRowIds.length === 1 ? '' : 's'}` : 'Tailor resumes'}
+        title={
+          tailorRowIds
+            ? `Tailor resumes for ${tailorRowIds.length} selected job${tailorRowIds.length === 1 ? '' : 's'}`
+            : `Tailor resumes${run.applications?.needsResume ? ` (${run.applications.needsResume})` : ''}`
+        }
         body={
           <div className="space-y-4">
             <fieldset className="space-y-1.5">

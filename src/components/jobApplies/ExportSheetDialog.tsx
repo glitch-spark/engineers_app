@@ -238,9 +238,20 @@ export default function ExportSheetDialog({
                     </span>
                   </p>
                   <ul className="hint list-disc space-y-0.5 pl-9">
-                    {ok.apply.waiting > 0 && (
-                      <li>{ok.apply.waiting} wait for tailoring: export again when their resumes are ready</li>
+                    {ok.apply.readyTemplate != null && ok.apply.ready > 0 && (
+                      <li>
+                        {ok.apply.readyTemplate} with a template resume · {ok.apply.readyTailored ?? 0} tailored
+                      </li>
                     )}
+                    {ok.apply.waiting > 0 &&
+                      (ok.apply.needsTailoring != null ? (
+                        <li>
+                          Not added yet: {ok.apply.needsTailoring} should tailor
+                          {ok.apply.tailoring ? ` · ${ok.apply.tailoring} tailoring` : ''}. Export again when their resumes are ready
+                        </li>
+                      ) : (
+                        <li>{ok.apply.waiting} wait for tailoring: export again when their resumes are ready</li>
+                      ))}
                     {ok.apply.alreadyExported > 0 && <li>{ok.apply.alreadyExported} already in this sheet (skipped)</li>}
                     {ok.apply.noFile > 0 && <li>{ok.apply.noFile} uploaded resumes have no stored PDF to link to</li>}
                   </ul>

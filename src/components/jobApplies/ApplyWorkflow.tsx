@@ -126,27 +126,37 @@ export default function ApplyWorkflow({
           disabled={busy || (toExport === 0 && exportedReady === 0)}
           onClick={onExport}
           detail={
-            toExport > 0
-              ? `${toExport} ready to export` + (waiting > 0 ? ` · ${waiting} wait for tailoring` : '')
-              : waiting > 0
-                ? `${waiting} wait for tailoring, then export` + (exportedReady > 0 ? ' · or export to another sheet' : '')
-                : exportedReady > 0
-                  ? `All ${exportedReady} ready in your sheet · export to another sheet`
-                  : counts.toGo > 0
-                    ? `All ${counts.toGo} in the sheet`
-                    : 'Nothing to export'
+            <>
+              {toExport > 0
+                ? `${toExport} ready to export` + (waiting > 0 ? ` · ${waiting} wait for tailoring` : '')
+                : waiting > 0
+                  ? `${waiting} wait for tailoring, then export` + (exportedReady > 0 ? ' · or export to another sheet' : '')
+                  : exportedReady > 0
+                    ? `All ${exportedReady} ready in your sheet · export to another sheet`
+                    : counts.toGo > 0
+                      ? `All ${counts.toGo} in the sheet`
+                      : 'Nothing to export'}
+              {counts.readyTemplate != null && counts.toGo > 0 && (
+                <span className="block tabular-nums">
+                  {counts.readyTemplate} template resume · {counts.readyTailored ?? 0} tailored · {counts.needsResume} should tailor
+                  {counts.tailoring > 0 && ` · ${counts.tailoring} tailoring`}
+                </span>
+              )}
+            </>
           }
         />
         <Step
           n={2}
           icon={Sparkles}
-          title={counts.needsResume > 0 ? `Tailor ${counts.needsResume}` : 'Tailor resumes'}
+          title={counts.needsResume > 0 ? `Tailor resumes (${counts.needsResume})` : 'Tailor resumes'}
           todo={counts.needsResume > 0}
           disabled={busy}
           onClick={onTailor}
           detail={
             <>
-              {counts.needsResume > 0 ? `${plural(counts.needsResume, 'application')} without a resume` : 'Every application has a resume'}
+              {counts.needsResume > 0
+                ? `${plural(counts.needsResume, 'application')} need a tailored resume (none uploaded, or below the minimum score)`
+                : 'Every application has a resume'}
               {tailorModel && ` · ${tailorModel}`}
               {counts.tailoring > 0 && (
                 <span className="ml-1 inline-flex items-center gap-1">
