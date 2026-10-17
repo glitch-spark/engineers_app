@@ -1,8 +1,7 @@
 import { Plus } from 'lucide-react';
 import type { InterviewRoundRow } from '../../api/endpoints';
 import { sameDay } from '../../lib/calendarLayout';
-import { stageLabel } from '../../lib/stageBadge';
-import { localDateKey, roundClass, timeText, type RoundEvent } from './calendarShared';
+import { eventClass, eventDetail, localDateKey, timeText, type RoundEvent } from './calendarShared';
 import { toWall } from '../../lib/interviewTimezone';
 
 const MAX_PER_DAY = 3;
@@ -58,8 +57,8 @@ export default function CalendarMonth({
               <div className="mt-0.5 space-y-0.5">
                 {dayEvents.slice(0, MAX_PER_DAY).map((e) => (
                   <button key={e.id} type="button" onClick={() => onOpen(e.row)}
-                    className={`block w-full truncate rounded border px-1 py-0.5 text-left text-[11px] ${roundClass(e.row)}`}>
-                    {e.allDay ? '' : `${timeText(e.start)} `}{e.row.companyName || 'Interview'} · {stageLabel(e.row.stage)}
+                    className={`block w-full truncate rounded border px-1 py-0.5 text-left text-[11px] ${eventClass(e)}`}>
+                    {e.allDay ? '' : `${timeText(e.start)} `}{e.row.companyName || 'Interview'} · {eventDetail(e)}
                   </button>
                 ))}
                 {extra > 0 && (

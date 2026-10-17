@@ -1,9 +1,10 @@
 import type { InterviewRoundRow } from '../../api/endpoints';
 import { isLegacyAllDay, type CalEvent } from '../../lib/calendarLayout';
-import { normalizeInterviewStatus, stageBadgeClass } from '../../lib/stageBadge';
+import { normalizeInterviewStatus, stageBadgeClass, stageLabel } from '../../lib/stageBadge';
 import { toWall } from '../../lib/interviewTimezone';
 
-export type RoundEvent = CalEvent & { row: InterviewRoundRow };
+/** `cls` / `detail` override the stage colour and the stage text (the Callers calendar shows the caller). */
+export type RoundEvent = CalEvent & { row: InterviewRoundRow; cls?: string; detail?: string };
 
 /** Events on `tz`'s wall clock (see toWall), so layout can use local Date getters. */
 export function toEvents(rows: InterviewRoundRow[], tz: string): RoundEvent[] {
@@ -22,6 +23,14 @@ export function roundClass(row: InterviewRoundRow): string {
     status === 'canceled' ? 'opacity-60 line-through' : '',
     status === 'rejected' ? 'border-l-4 border-l-red-500' : '',
   ].join(' ');
+}
+
+export function eventClass(e: RoundEvent): string {
+  return e.cls ?? roundClass(e.row);
+}
+
+export function eventDetail(e: RoundEvent): string {
+  return e.detail ?? stageLabel(e.row.stage);
 }
 
 export function timeText(d: Date): string {

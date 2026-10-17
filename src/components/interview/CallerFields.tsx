@@ -2,6 +2,7 @@ import Select from '../Select';
 import Switch from '../Switch';
 import type { CallerMethod } from '../../api/endpoints';
 import type { RoundFormState } from '../../lib/interviewForm';
+import { useCallers } from '../../lib/useCallers';
 import { CALLER_METHOD_OPTIONS } from './types';
 
 const METHOD_VALUE_PLACEHOLDER: Record<CallerMethod | '', string> = {
@@ -17,14 +18,28 @@ export default function CallerFields({
   onChange,
   disabled,
   idPrefix,
+  callerEditable = true,
 }: {
   round: RoundFormState;
   onChange: (patch: Partial<RoundFormState>) => void;
   disabled?: boolean;
   idPrefix: string;
+  /** False: the caller is shown but only Admin / an interview manager changes it (an existing round). */
+  callerEditable?: boolean;
 }) {
   const method = (round.callerMethod || '') as CallerMethod | '';
   const id = (k: string) => `${idPrefix}-caller-${k}`;
+  const { callers, byId } = useCallers();
+  const saved = round.callerIdSaved;
+  // The saved caller stays pickable when it isn't on the list (typed before it, or removed since).
+  const offList = saved && !byId.has(saved)
+    ? [{ value: saved, label: `${round.callerName || 'Caller'} (not on the list)` }]
+    : [];
+  const callerOptions = [
+    { value: '', label: 'Not assigned yet' },
+    ...callers.map((c) => ({ value: c._id, label: c.name })),
+    ...offList,
+  ];
 
   return (
     <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
@@ -40,15 +55,20 @@ export default function CallerFields({
         <div className="mt-3 space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor={id('name')} className="block text-sm font-medium mb-1">Caller</label>
-              <input
+              <label htmlFor={id('name')} className="block text-sm font-medium mb-1">
+                Caller
+              </label>
+              <Select
                 id={id('name')}
-                className="input"
-                value={round.callerName}
-                disabled={disabled}
-                placeholder="TBD"
-                onChange={(e) => onChange({ callerName: e.target.value })}
+                value={round.callerId}
+                onChange={(v) => onChange({ callerId: v })}
+                options={callerOptions}
+                disabled={disabled || !callerEditable}
+                ariaDescribedBy={id('name-hint')}
               />
+              <p id={id('name-hint')} className="mt-1 text-xs text-muted">
+                {callerEditable ? 'Optional. An admin or interview manager can assign or change it later.' : 'An admin or interview manager assigns the caller.'}
+              </p>
             </div>
             <div>
               <label htmlFor={id('method')} className="block text-sm font-medium mb-1">Method</label>

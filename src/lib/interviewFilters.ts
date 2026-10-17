@@ -18,6 +18,8 @@ export type InterviewFilters = {
   profile: string;
   stage: string;
   status: string;
+  /** Callers calendar: a caller id, 'unassigned', or '' for every caller. */
+  caller: string;
   range: DateRangePreset;
   from: string;
   to: string;
@@ -38,6 +40,7 @@ function defaults(d: FilterDefaults): InterviewFilters {
     profile: '',
     stage: '',
     status: '',
+    caller: '',
     range: 'this_week',
     from: '',
     to: '',
@@ -58,6 +61,7 @@ export function parseInterviewFilters(params: URLSearchParams, d: FilterDefaults
     profile: get('profile'),
     stage: get('stage'),
     status: get('status'),
+    caller: get('caller'),
     range: PRESETS.includes(range) ? range : base.range,
     from: DATE_RE.test(get('from')) ? get('from') : '',
     to: DATE_RE.test(get('to')) ? get('to') : '',
@@ -178,17 +182,26 @@ export type RoundsQuery = {
   accountId?: string;
   stage?: string;
   status?: string;
+  callerOnly?: string;
+  callerId?: string;
 };
 
-/** `range` is YYYY-MM-DD in `tz` with an exclusive `to`; sent as that zone's midnights. */
+/** `range` is YYYY-MM-DD in `tz` with an exclusive `to`; sent as that zone's midnights.
+ * `callers`: the Callers calendar — every user's caller rounds, narrowed by the Caller filter. */
 export function roundsQuery(
   f: InterviewFilters,
   range: { from: string; to: string },
   tz: string = browserZone(),
+  { callers = false }: { callers?: boolean } = {},
 ): RoundsQuery {
   const q: RoundsQuery = { from: dayStart(range.from, tz), to: dayStart(range.to, tz) };
-  if (f.user && f.user !== 'all') q.creatorId = f.user;
-  if (f.profile) q.accountId = f.profile;
+  if (callers) {
+    q.callerOnly = 'true';
+    if (f.caller) q.callerId = f.caller;
+  } else {
+    if (f.user && f.user !== 'all') q.creatorId = f.user;
+    if (f.profile) q.accountId = f.profile;
+  }
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
   return q;

@@ -14,17 +14,23 @@ import InterviewsCalendar from './InterviewsCalendar';
 import InterviewsList from './InterviewsList';
 import { useInterviewFilters } from './useInterviewFilters';
 import ZoneSelect from '../../components/interview/ZoneSelect';
+import CallerRoundDialog from '../../components/interview/CallerRoundDialog';
+import CallersManager from '../../components/interview/CallersManager';
 
 type PanelState = { interview: Interview | null; mode: PanelMode; roundId?: string; prefill?: RoundPrefill };
 
-/** Interviews tab: List (default) or Calendar, shared filters, one side panel. */
-export default function InterviewsPage({ view }: { view: 'list' | 'calendar' }) {
+type View = 'list' | 'calendar' | 'callers';
+
+/** Interviews tab: List (default), Calendar or Callers (every user's caller rounds), shared filters, one side panel. */
+export default function InterviewsPage({ view }: { view: View }) {
   const [filters, update, sharedQs] = useInterviewFilters();
   const [params, setParams] = useSearchParams();
   const { mutate } = useSWRConfig();
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Interview | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [callerRound, setCallerRound] = useState<{ interview: Interview; roundId: string } | null>(null);
+  const [managingCallers, setManagingCallers] = useState(false);
 
   const refresh = () => mutate(
     (key) => Array.isArray(key) && (key[0] === 'interviews-list' || key[0] === 'interview-rounds'),
@@ -61,9 +67,9 @@ export default function InterviewsPage({ view }: { view: 'list' | 'calendar' }) 
   };
 
   const rounds = deleteTarget?.stageHistory?.length || 1;
-  const viewLink = (target: 'list' | 'calendar', label: string) => (
+  const viewLink = (target: View, label: string) => (
     <Link
-      to={`/interviews${target === 'calendar' ? '/calendar' : ''}${sharedQs}`}
+      to={`/interviews${target === 'list' ? '' : `/${target}`}${sharedQs}`}
       aria-current={view === target ? 'page' : undefined}
       className={`segmented-btn ${view === target ? 'segmented-btn-active-neutral' : ''}`}
     >
@@ -84,13 +90,24 @@ export default function InterviewsPage({ view }: { view: 'list' | 'calendar' }) 
           <nav className="segmented" aria-label="Interview view">
             {viewLink('list', 'List')}
             {viewLink('calendar', 'Calendar')}
+            {viewLink('callers', 'Callers')}
           </nav>
         </div>
       </div>
 
-      <InterviewFilters filters={filters} update={update} />
+      <InterviewFilters filters={filters} update={update} callers={view === 'callers'} />
 
-      {view === 'list' ? (
+      {view === 'callers' ? (
+        <InterviewsCalendar
+          key="callers"
+          callers
+          filters={filters}
+          update={update}
+          onOpenRound={(iv, roundId) => setCallerRound({ interview: iv, roundId })}
+          onNew={(prefill) => setPanel({ interview: null, mode: 'new', prefill: { ...prefill, caller: true } })}
+          onManageCallers={() => setManagingCallers(true)}
+        />
+      ) : view === 'list' ? (
         <InterviewsList
           filters={filters}
           update={update}
@@ -120,6 +137,17 @@ export default function InterviewsPage({ view }: { view: 'list' | 'calendar' }) 
           />
         </>
       )}
+
+      {callerRound && (
+        <CallerRoundDialog
+          interview={callerRound.interview}
+          roundId={callerRound.roundId}
+          onClose={() => setCallerRound(null)}
+          onAssigned={(saved) => { setCallerRound({ interview: saved, roundId: callerRound.roundId }); refresh(); }}
+          onOpenInterview={() => { setPanel({ interview: callerRound.interview, mode: 'view' }); setCallerRound(null); }}
+        />
+      )}
+      {managingCallers && <CallersManager onClose={() => setManagingCallers(false)} onChanged={() => { refresh(); }} />}
 
       <ConfirmDialog
         open={!!deleteTarget}
