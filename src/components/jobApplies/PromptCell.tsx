@@ -29,7 +29,11 @@ export function PromptCell({
     return <span className="block max-w-[11rem] truncate text-zinc-700 dark:text-zinc-300">{options[0].name}</span>;
   }
 
-  const label = (o: JobApplyPromptOption) => (o.role ? `${o.name} · ${PROMPT_ROLE_LABEL[o.role]}` : o.name);
+  // "DevOps · DevOps" says nothing twice: the role is shown only when the name doesn't already say it.
+  const label = (o: JobApplyPromptOption) =>
+    o.role && o.name.trim().toLowerCase() !== PROMPT_ROLE_LABEL[o.role].toLowerCase()
+      ? `${o.name} · ${PROMPT_ROLE_LABEL[o.role]}`
+      : o.name;
   const tag = value === suggestedId && suggestedId !== defaultId ? 'Suggested' : value === defaultId ? 'Default' : '';
 
   return (
