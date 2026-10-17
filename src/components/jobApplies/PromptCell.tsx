@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { FileCode2, Loader2 } from 'lucide-react';
 import type { JobApplyPromptOption } from '../../api/endpoints';
-import { rolesLabel, unitRoles } from '../prompts/promptRoles';
+import { PROMPT_ROLE_LABEL, rolesLabel, unitRoles } from '../prompts/promptRoles';
 
 /** The unit a profile tailors this job with: the user's choice, else the suggestion, else the default (if they exist). */
 export function effectiveUnitId(
@@ -36,7 +36,12 @@ export function PromptCell({
 
   if (!value) return <span className="text-xs text-zinc-400">—</span>;
   if (options.length === 1) {
-    return <span className="block max-w-[11rem] truncate text-zinc-700 dark:text-zinc-300">{options[0].name}</span>;
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="block max-w-[16rem] truncate text-zinc-700 dark:text-zinc-300">{options[0].name}</span>
+        <UnitDetails unit={options[0]} />
+      </div>
+    );
   }
 
   // "DevOps · DevOps" says nothing twice: the roles are shown only when the name doesn't already say them.
@@ -46,12 +51,13 @@ export function PromptCell({
     return roles.length && o.name.trim().toLowerCase() !== said.toLowerCase() ? `${o.name} · ${said}` : o.name;
   };
   const tag = value === suggestedId && suggestedId !== defaultId ? 'Suggested' : value === defaultId ? 'Default' : '';
+  const unit = options.find((o) => o.id === value);
 
   return (
     <div className="flex flex-col gap-0.5">
       <div className="flex items-center gap-1.5">
         <select
-          className="input w-auto max-w-[11rem] py-1 text-xs"
+          className="input w-full max-w-[16rem] py-1 text-xs"
           value={value}
           disabled={saving}
           aria-label="Resume prompt"
@@ -80,6 +86,42 @@ export function PromptCell({
           {tag}
         </span>
       )}
+      {unit && <UnitDetails unit={unit} />}
     </div>
   );
 }
+
+/** The selected unit's HTML template and its role marks (styled like the job's), under the Prompt select. */
+function UnitDetails({ unit }: { unit: JobApplyPromptOption }) {
+  const roles = unitRoles(unit);
+  return (
+    <>
+      {unit.hasTemplate === false ? (
+        <span
+          className="text-[11px] font-medium text-amber-700 dark:text-amber-400"
+          title="Add an HTML template to this resume unit on the profile page to tailor with it"
+        >
+          No HTML template
+        </span>
+      ) : (
+        <span className="flex max-w-[16rem] items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400" title={unit.templateName ?? undefined}>
+          <FileCode2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
+          <span className="truncate">{unit.templateName || 'HTML template'}</span>
+        </span>
+      )}
+      {roles.length > 0 && (
+        <ul className="flex flex-wrap gap-1" aria-label="Unit roles">
+          {roles.map((r) => (
+            <li
+              key={r}
+              className="rounded-md bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800 dark:bg-violet-950/60 dark:text-violet-200"
+            >
+              {PROMPT_ROLE_LABEL[r]}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+

@@ -1046,14 +1046,12 @@ export default function JobApplyRun() {
                     </th>
                     <th className="w-10 px-3 py-2 font-medium">#</th>
                     <th className="px-3 py-2 font-medium">Location</th>
-                    <th className="px-3 py-2 font-medium">Work mode</th>
                     <th className="px-3 py-2 font-medium">Posted</th>
                     <th className="px-3 py-2 font-medium">Job</th>
                     <th className="px-3 py-2 font-medium">Flags</th>
                     <th className="px-3 py-2 font-medium">Profile</th>
                     <th className="px-3 py-2 font-medium">Sample resumes (.pdf)</th>
-                    <th className="px-3 py-2 font-medium">HTML template</th>
-                    <th className="px-3 py-2 font-medium">Prompt</th>
+                    <th className="min-w-[16rem] px-3 py-2 font-medium">Prompt</th>
                     <th className="px-3 py-2 font-medium">Tailored</th>
                   </tr>
                 </thead>
@@ -1106,10 +1104,8 @@ export default function JobApplyRun() {
                                 ) : (
                                   <span className="hint">Not stated</span>
                                 )}
+                                <p className="hint">{capitalize(row.workMode) || 'Work mode not stated'}</p>
                                 {row.status === 'unassigned' && <p className="hint">No profile picked</p>}
-                              </td>
-                              <td rowSpan={span} className={jobCell}>
-                                {capitalize(row.workMode) || <span className="hint">—</span>}
                               </td>
                               <td rowSpan={span} className={`${jobCell} whitespace-nowrap`}>
                                 {row.postedDate ? (
@@ -1121,7 +1117,7 @@ export default function JobApplyRun() {
                                   <span className="hint">Unknown</span>
                                 )}
                               </td>
-                              <td rowSpan={span} className={`${jobCell} max-w-xs`}>
+                              <td rowSpan={span} className={`${jobCell} min-w-[18rem] max-w-md`}>
                                 <div className="flex items-center gap-1.5">
                                   <button
                                     type="button"
@@ -1200,7 +1196,7 @@ export default function JobApplyRun() {
                               onPromptChange={(promptId) => changePrompt(row, acc, promptId)}
                             />
                           ) : (
-                            <td colSpan={5} className={`${jobCell} hint`}>
+                            <td colSpan={4} className={`${jobCell} hint`}>
                               No profile can take this job (see Flags).
                             </td>
                           )}
@@ -1208,7 +1204,7 @@ export default function JobApplyRun() {
                       ))}
                       {isOpen && (
                         <tr>
-                          <td colSpan={12} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
+                          <td colSpan={10} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-900/40">
                             <RowDetail rowId={row._id} profileNames={profileNames} healthByResume={healthByResume} />
                           </td>
                         </tr>

@@ -1,4 +1,4 @@
-import { Download, FileCode2, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
+import { Download, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyProfile, JobApplyRow, JobApplyTailored } from '../../api/endpoints';
 import { bandClass } from './format';
 import { PromptCell, effectiveUnitId } from './PromptCell';
@@ -141,14 +141,14 @@ export function ProfileCells({
   // Every sample resume of this profile, best first (a profile can have several).
   const own = row.resumeScores?.filter((r) => r.accountId === acc) ?? [];
   const resumes = own.length ? own : best ? [best] : [];
-  // The selected resume unit decides the HTML template (and whether this profile can be tailored for the job).
+  // The selected resume unit decides whether this profile can be tailored for the job (its template is shown in the
+  // Prompt cell).
   const units = profile?.prompts ?? [];
   const promptState = row.prompt?.[acc];
   const unit = units.find(
     (u) => u.id === effectiveUnitId(units, profile?.defaultPromptId, promptState?.suggestedId, promptState?.chosenId),
   );
   const unitHasTemplate = unit?.hasTemplate ?? profile?.hasTemplate;
-  const templateName = unit?.hasTemplate != null ? unit.templateName : profile?.templateName;
   const noTemplate = unitHasTemplate === false;
   const toTailor = needsTailoring(row, acc, threshold) && (!t || t.status === 'failed');
 
@@ -217,24 +217,6 @@ export function ProfileCells({
       </td>
 
       <td className={CELL}>
-        {!profile ? (
-          <span className="text-xs text-zinc-400">—</span>
-        ) : unitHasTemplate ? (
-          <span className="flex max-w-[12rem] items-center gap-1.5 text-zinc-700 dark:text-zinc-300" title={templateName ?? undefined}>
-            <FileCode2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
-            <span className="truncate">{templateName || 'HTML template'}</span>
-          </span>
-        ) : (
-          <span
-            className="text-xs font-medium text-amber-700 dark:text-amber-400"
-            title="Add an HTML template to this resume unit on the profile page to tailor with it"
-          >
-            No HTML template
-          </span>
-        )}
-      </td>
-
-      <td className={CELL}>
         <PromptCell
           options={profile?.prompts ?? []}
           defaultId={profile?.defaultPromptId}
@@ -263,7 +245,7 @@ export function ProfileCells({
               {t.status === 'queued' ? 'Queued' : 'Generating…'}
             </span>
           ) : t.status === 'completed' ? (
-            <>
+            <div className="flex flex-col items-start gap-0.5">
               <TailoredChip
                 picked={isPicked?.(t.jobId) ?? false}
                 onPick={onPick ? (on) => onPick(t.jobId, on) : undefined}
@@ -275,6 +257,8 @@ export function ProfileCells({
                 </span>
                 <TailoredScore t={t} />
               </TailoredChip>
+              {/* The tailored resume's actions, under it */}
+              <div className="flex items-center gap-0.5 pl-1">
               <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${profileName})`}>
                 <Download className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -297,7 +281,8 @@ export function ProfileCells({
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden />
               </button>
-            </>
+              </div>
+            </div>
           ) : (
             <button
               type="button"
