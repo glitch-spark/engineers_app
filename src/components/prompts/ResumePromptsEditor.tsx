@@ -160,7 +160,11 @@ export default function ResumePromptsEditor({
           value={current.body}
           onChange={(body) => update({ body })}
           label="Prompt"
-          hint="Empty = inherit global."
+          hint={
+            isDefault
+              ? 'Empty = inherit global.'
+              : 'Empty = use this profile’s default prompt (or global if that’s empty too).'
+          }
           defaultSource="global"
         />
         <aside aria-label="Eval" className="flex flex-col rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
