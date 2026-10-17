@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
@@ -7,6 +7,8 @@ import ResumePromptField from '../components/ResumePromptField';
 import ResumeStylingEditor from '../components/ResumeStylingEditor';
 import ResumesSection from '../components/ResumesSection';
 import PromptEvalBlock from '../components/promptEval/PromptEvalBlock';
+import ResumePromptsEditor from '../components/prompts/ResumePromptsEditor';
+import { promptErrors } from '../components/prompts/promptRoles';
 import CountrySelect from '../components/CountrySelect';
 import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
@@ -18,9 +20,22 @@ type AccShape = {
   country?: string | null;
   region?: string | null;
   resumePromptBody?: string;
+  resumePrompts?: api.ResumePrompt[];
+  defaultPromptId?: string | null;
   screeningPrompt?: string;
   coverLetterPrompt?: string;
 };
+
+/** A profile's resume prompts and default; one saved before several prompts existed reads as "Default". */
+function promptsOf(acc: AccShape): { prompts: api.ResumePrompt[]; defaultId: string } {
+  const prompts = acc.resumePrompts?.length
+    ? acc.resumePrompts
+    : [{ id: 'default', name: 'Default', role: null, body: acc.resumePromptBody ?? '' }];
+  const defaultId = prompts.some((p) => p.id === acc.defaultPromptId) ? (acc.defaultPromptId as string) : prompts[0].id;
+  return { prompts, defaultId };
+}
+
+const promptKey = (p: api.ResumePrompt) => JSON.stringify([p.name, p.role, p.body]);
 
 export default function AccountEditPage() {
   const { id } = useParams<{ id?: string }>();
@@ -262,7 +277,10 @@ function readPromptsOpen(): boolean {
 function PromptsBlock({ accountId }: { accountId: string }) {
   // Collapsed by default; remembered per browser. Collapsing only hides the fields, so unsaved edits stay.
   const [open, setOpen] = useState(readPromptsOpen);
-  const [resumePrompt, setResumePrompt] = useState('');
+  const [prompts, setPrompts] = useState<api.ResumePrompt[]>([]);
+  const [defaultId, setDefaultId] = useState('');
+  // What was last loaded / saved, to mark unsaved prompts (•).
+  const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
   const [screeningPrompt, setScreeningPrompt] = useState('');
   const [coverLetterPrompt, setCoverLetterPrompt] = useState('');
   const [loading, setLoading] = useState(true);
@@ -274,7 +292,7 @@ function PromptsBlock({ accountId }: { accountId: string }) {
       try {
         const acc = (await api.getAccount(accountId)) as AccShape;
         if (cancelled) return;
-        setResumePrompt(acc.resumePromptBody || '');
+        loadPrompts(acc);
         setScreeningPrompt(acc.screeningPrompt || '');
         setCoverLetterPrompt(acc.coverLetterPrompt || '');
       } catch (err) {
@@ -286,14 +304,33 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     return () => { cancelled = true; };
   }, [accountId]);
 
+  function loadPrompts(acc: AccShape) {
+    const view = promptsOf(acc);
+    setPrompts(view.prompts);
+    setDefaultId(view.defaultId);
+    setSavedKeys(Object.fromEntries(view.prompts.map((p) => [p.id, promptKey(p)])));
+  }
+
+  const errors = useMemo(() => promptErrors(prompts), [prompts]);
+  const dirtyIds = useMemo(
+    () => new Set(prompts.filter((p) => savedKeys[p.id] !== promptKey(p)).map((p) => p.id)),
+    [prompts, savedKeys],
+  );
+
   async function save() {
+    if (Object.keys(errors).length) {
+      notify.info('Fix the prompt names first');
+      return;
+    }
     setSaving(true);
     try {
-      await api.updateAccount(accountId, {
-        resumePromptBody: resumePrompt,
+      const saved = (await api.updateAccount(accountId, {
+        resumePrompts: prompts.map(({ id, name, role, body }) => ({ id, name: name.trim(), role, body })),
+        defaultPromptId: defaultId,
         screeningPrompt: screeningPrompt,
         coverLetterPrompt: coverLetterPrompt,
-      });
+      })) as AccShape;
+      if (saved?.resumePrompts?.length) loadPrompts(saved);
       notify.success('Prompts saved');
     } catch (err) {
       notify.error(err, 'Failed to save prompts');
@@ -312,16 +349,16 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     }
   }
 
-  const customized = [
-    resumePrompt.trim() && 'Resume',
-    screeningPrompt.trim() && 'Screening Q&A',
-    coverLetterPrompt.trim() && 'Cover letter',
-  ].filter(Boolean);
+  const customized = [screeningPrompt.trim() && 'Screening Q&A', coverLetterPrompt.trim() && 'Cover letter'].filter(Boolean);
+  const defaultName = prompts.find((p) => p.id === defaultId)?.name || 'Default';
   const summary = loading
     ? 'Loading…'
-    : customized.length
-      ? `Customized: ${customized.join(', ')}`
-      : 'Using defaults (inherit global → built-in)';
+    : [
+        `${prompts.length} resume prompt${prompts.length === 1 ? '' : 's'} · default: ${defaultName}`,
+        customized.length ? `customized: ${customized.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
 
   return (
     <>
@@ -352,14 +389,17 @@ function PromptsBlock({ accountId }: { accountId: string }) {
           <>
             <Section
               title="Resume generating prompt"
-              desc="Drives which fields the resume LLM rewrites (and how). Overrides your global prompt for this profile only. Empty = inherit global → built-in default."
+              desc="Drives which fields the resume LLM rewrites (and how). One prompt per role; Job Applies suggests the right one for each job. Empty = inherit global."
             >
-              <ResumePromptField
-                value={resumePrompt}
-                onChange={setResumePrompt}
-                label="Profile resume content prompt"
-                hint="Empty = inherit global → built-in default."
-                defaultSource="global"
+              <ResumePromptsEditor
+                prompts={prompts}
+                defaultId={defaultId}
+                onChange={(next, nextDefault) => {
+                  setPrompts(next);
+                  setDefaultId(nextDefault);
+                }}
+                dirtyIds={dirtyIds}
+                errors={errors}
               />
             </Section>
 
