@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Play, Plus, Radar, Star, Trash2 } from 'lucide-react';
 import type { PromptRole, ResumePrompt } from '../../api/endpoints';
 import ResumePromptField from '../ResumePromptField';
-import { MAX_PROMPTS, MAX_PROMPT_NAME, PROMPT_ROLES, PROMPT_ROLE_LABEL, newPromptId } from './promptRoles';
+import { MAX_PROMPTS, MAX_PROMPT_NAME, NO_ROLE_LABEL, PROMPT_ROLES, PROMPT_ROLE_LABEL, newPromptId } from './promptRoles';
 
 /**
  * A profile's resume prompts, one per role: a tab per prompt (★ default, • unsaved), the selected prompt's name, role,
@@ -126,7 +126,7 @@ export default function ResumePromptsEditor({
             value={current.role ?? ''}
             onChange={(e) => update({ role: (e.target.value || null) as PromptRole | null })}
           >
-            <option value="">No role</option>
+            <option value="">{NO_ROLE_LABEL}</option>
             {PROMPT_ROLES.map((r) => (
               <option key={r} value={r}>
                 {PROMPT_ROLE_LABEL[r]}

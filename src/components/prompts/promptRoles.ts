@@ -14,8 +14,21 @@ export const PROMPT_ROLE_LABEL: Record<PromptRole, string> = {
   qa: 'QA / Test',
 };
 
+/** What a prompt without a role is shown as: it's written for any job. */
+export const NO_ROLE_LABEL = 'All roles (general)';
+
 export const MAX_PROMPTS = 10;
 export const MAX_PROMPT_NAME = 60;
+
+/** A name for an older profile's single prompt: its first line when that's a markdown heading (without a trailing
+ *  "(…)"), else "Default". Matches the server's naming. */
+export function legacyPromptName(body: string): string {
+  const first = body.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? '';
+  if (!first.startsWith('#')) return 'Default';
+  let name = first.replace(/^#+/, '').trim().replace(/\s*\([^)]*\)\s*$/, '').split('**').join('').trim();
+  if (name.length > MAX_PROMPT_NAME) name = name.slice(0, MAX_PROMPT_NAME).replace(/\s+\S*$/, '');
+  return name.replace(/[\s\-—:·]+$/, '') || 'Default';
+}
 
 /** A temporary id for a prompt not saved yet; the server gives it a real one. */
 export function newPromptId(): string {
