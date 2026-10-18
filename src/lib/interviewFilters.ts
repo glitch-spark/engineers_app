@@ -7,6 +7,7 @@ import {
   type DateRangePreset,
 } from './dateRangePresets';
 import { browserZone, toWall, zonedDayBounds } from './interviewTimezone';
+import type { listCallerRounds } from '../api/endpoints';
 
 export type ListSort = 'latest' | 'company' | 'stage' | 'status';
 export type SortDir = 'asc' | 'desc';
@@ -172,6 +173,18 @@ export function listQuery(
   if (f.profile) q.accountId = f.profile;
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
+  return q;
+}
+
+/** Callers list: the Date range like the Interviews list, the Caller filter, newest first by default. */
+export function callerRoundsQuery(f: InterviewFilters, limit: number, now = new Date(), tz: string = browserZone()) {
+  const { from, to } = listDateRange(f, toWall(now, tz));
+  const q: Parameters<typeof listCallerRounds>[0] = { page: f.page, limit, dir: f.dir };
+  if (from) q.from = dayStart(from, tz);
+  if (to) q.to = dayEnd(to, tz);
+  if (f.stage) q.stage = f.stage;
+  if (f.status) q.status = f.status;
+  if (f.caller) q.callerId = f.caller;
   return q;
 }
 

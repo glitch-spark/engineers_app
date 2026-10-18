@@ -541,6 +541,20 @@ export const listInterviewRounds = (params: {
   `/interviews/rounds${qs(params)}`,
 );
 
+/** Callers list: every user's caller rounds, one row per round, paginated (from / to optional, inclusive). */
+export const listCallerRounds = (params: {
+  from?: string;
+  to?: string;
+  stage?: string;
+  status?: string;
+  callerId?: string;
+  page: number;
+  limit: number;
+  dir: 'asc' | 'desc';
+}) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>>; pagination: Pagination }>(
+  `/interviews/caller-rounds${qs(params)}`,
+);
+
 export const getInterview = (id: string) =>
   apiFetch<Record<string, unknown>>(`/interviews/${id}`);
 
