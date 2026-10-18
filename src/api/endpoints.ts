@@ -2502,6 +2502,17 @@ export interface BidScreenshot {
   capturedAt: string;
   /** Short-lived signed link; null while the upload is unconfirmed. */
   url: string | null;
+  /** Files attached on the page at this step; empty unless the bidder allowed recording them in the extension. */
+  attachments: BidAttachment[];
+}
+
+/** A file the bidder had attached on the job page at a capture. */
+export interface BidAttachment {
+  /** Full location on the bidder's computer; null when it couldn't be looked up. */
+  path: string | null;
+  /** Which file and why, for when path is null. */
+  name: string;
+  pathError: string | null;
 }
 
 /** `day` and `week` are exclusive; neither means the open daily window. */

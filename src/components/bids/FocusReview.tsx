@@ -473,7 +473,7 @@ export default function FocusReview({
               <strong>{shownNotice}.</strong> Press the action again to apply it anyway.
             </p>
           )}
-          <BidEvidence bid={current} />
+          <BidEvidence bid={current} shots={shots} />
           <ReviewActions
             busy={busy}
             rejectOpen={rejectOpen}
