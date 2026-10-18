@@ -5,7 +5,6 @@ import { CheckCircle2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import { messageOf, notify } from '../../lib/notify';
 import LoadingSpinner from '../LoadingSpinner';
-import AttachedFiles from './AttachedFiles';
 import BidEvidence from './BidEvidence';
 import FocusToolbar from './FocusToolbar';
 import Kbd from './Kbd';
@@ -475,7 +474,6 @@ export default function FocusReview({
             </p>
           )}
           <BidEvidence bid={current} />
-          <AttachedFiles bid={current} shots={shots} />
           <ReviewActions
             busy={busy}
             rejectOpen={rejectOpen}

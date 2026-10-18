@@ -1,4 +1,4 @@
-import { ExternalLink, TriangleAlert } from 'lucide-react';
+import { ExternalLink, Paperclip, TriangleAlert } from 'lucide-react';
 import type { BidScreenshot } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
 import LoadingSpinner from '../LoadingSpinner';
@@ -26,6 +26,30 @@ function NotUploaded({ large = false }: { large?: boolean }) {
     >
       Screenshot didn&apos;t upload
     </div>
+  );
+}
+
+/** Where each file attached on the page at this step was on the bidder's computer (recorded by the extension only
+ *  when the bidder allowed it). */
+function AttachedFiles({ shot }: { shot: BidScreenshot }) {
+  const files = shot.attachments ?? [];
+  if (files.length === 0) return null;
+  return (
+    <ul aria-label="Attached files" className="space-y-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700">
+      {files.map((file, i) => (
+        <li key={`${i}:${file.path ?? file.name}`} className="flex items-start gap-2">
+          <Paperclip size={14} aria-hidden className="mt-0.5 shrink-0 text-muted" />
+          {file.path ? (
+            <span className="min-w-0 break-all font-mono text-xs leading-5">{file.path}</span>
+          ) : (
+            <span className="min-w-0 break-all text-xs leading-5 text-amber-700 dark:text-amber-400">
+              <span className="font-medium">{file.name || 'A file'}</span>: location not recorded
+              {file.pathError ? ` (${file.pathError})` : ''}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -86,6 +110,7 @@ export default function StepViewer({
           </a>
         )}
       </div>
+      <AttachedFiles shot={shot} />
       {/* Keyed so a new step or bid starts scrolled to the top. */}
       <div
         key={`${bidId}:${index}`}
