@@ -2502,6 +2502,23 @@ export interface BidScreenshot {
   capturedAt: string;
   /** Short-lived signed link; null while the upload is unconfirmed. */
   url: string | null;
+  /** Files attached on the page at this step; empty unless the bidder allowed recording them in the extension. */
+  attachments: BidAttachment[];
+}
+
+/** A file the bidder attached on the job page, as Bid Track saw it at a capture. */
+export interface BidAttachment {
+  /** The form's name for the field, e.g. "Resume/CV". */
+  field: string | null;
+  name: string;
+  size: number | null;
+  type: string | null;
+  lastModified: string | null;
+  /** Full location on the bidder's computer; null when it couldn't be looked up (see pathError). */
+  path: string | null;
+  pathError: string | null;
+  /** False once the site took the file out of its field (typical after an instant upload). */
+  inField: boolean;
 }
 
 /** `day` and `week` are exclusive; neither means the open daily window. */
