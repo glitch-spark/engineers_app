@@ -8,9 +8,41 @@ import ModelSelect from '../components/ModelSelect';
 import { useModelChoice } from '../lib/useModelChoice';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
+import type { AccountLookup, JobApplyPromptOption } from '../api/endpoints';
 import { notify } from '../lib/notify';
+import { UnitDetails } from '../components/jobApplies/PromptCell';
 
 const SELECTION_KEY = 'resume-gen-accountIds';
+// The resume unit (template + prompt) picked per profile: accountId → unit id.
+const UNITS_KEY = 'resume-gen-units';
+
+function loadUnitChoice(): Record<string, string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(UNITS_KEY) || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The unit a profile generates with: the one picked here, else its default, else its first (null: no units listed). */
+function chosenUnit(a: AccountLookup, choice: Record<string, string>): JobApplyPromptOption | null {
+  const units = a.units ?? [];
+  return units.find((u) => u.id === choice[a._id])
+    ?? units.find((u) => u.id === a.defaultPromptId)
+    ?? units[0]
+    ?? null;
+}
+
+/** Can generate at all: some unit has an HTML template (older backends: the profile template). */
+function hasAnyTemplate(a: AccountLookup): boolean {
+  return a.units?.length ? a.units.some((u) => u.hasTemplate) : !!a.hasTemplate;
+}
+
+/** Generates with the picked unit: that unit has a template. */
+function readyToGenerate(a: AccountLookup, choice: Record<string, string>): boolean {
+  return a.units?.length ? !!chosenUnit(a, choice)?.hasTemplate : !!a.hasTemplate;
+}
 
 function loadInitialSelection(): string[] {
   try {
@@ -42,6 +74,10 @@ export default function ResumeGeneratorPage() {
   );
 
   const [accountIds, setAccountIds] = useState<string[]>(loadInitialSelection);
+  const [unitChoice, setUnitChoice] = useState<Record<string, string>>(loadUnitChoice);
+  useEffect(() => {
+    try { localStorage.setItem(UNITS_KEY, JSON.stringify(unitChoice)); } catch { /* ignore */ }
+  }, [unitChoice]);
 
   // Drop stale ids (deleted profiles) once the lookup loads.
   useEffect(() => {
@@ -62,8 +98,8 @@ export default function ResumeGeneratorPage() {
   }
 
   const selectableIds = useMemo(
-    () => accounts.filter((a) => a.hasTemplate).map((a) => a._id),
-    [accounts],
+    () => accounts.filter((a) => readyToGenerate(a, unitChoice)).map((a) => a._id),
+    [accounts, unitChoice],
   );
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => accountIds.includes(id));
 
@@ -101,12 +137,20 @@ export default function ResumeGeneratorPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const eligible = accountIds.filter((id) => accounts.find((a) => a._id === id)?.hasTemplate);
+    const eligible = accountIds.filter((id) => {
+      const a = accounts.find((x) => x._id === id);
+      return !!a && readyToGenerate(a, unitChoice);
+    });
     if (eligible.length === 0) {
       notify.warn('Pick at least one profile with an uploaded HTML template');
-      setErrors({ profiles: 'Pick at least one profile with an uploaded HTML template.' });
+      setErrors({ profiles: 'Pick at least one profile whose Template-Prompt has an HTML template.' });
       setProfilesOpen(true);
       return;
+    }
+    // Ticked, but the picked Template-Prompt has no HTML template: say so rather than skip silently.
+    const skipped = accounts.filter((a) => accountIds.includes(a._id) && hasAnyTemplate(a) && !readyToGenerate(a, unitChoice));
+    if (skipped.length) {
+      notify.warn(`Skipped ${skipped.map((a) => a.name).join(', ')}: the picked Template-Prompt has no HTML template`);
     }
     if (!company.trim() || !jobDescription.trim()) {
       notify.warn('Company and job description are required');
@@ -154,6 +198,8 @@ export default function ResumeGeneratorPage() {
         eligible.map((id) =>
           api.enqueueResumeJob({
             accountId: id,
+            // The Template-Prompt picked for this profile (its default unless changed).
+            promptId: (() => { const a = accounts.find((x) => x._id === id); return a ? chosenUnit(a, unitChoice)?.id : undefined; })(),
             company: trimmedCompany,
             jobDescription,
             jobUrl: jobUrl.trim() || undefined,
@@ -194,9 +240,9 @@ export default function ResumeGeneratorPage() {
     if (globalPromptSet) return 0;
     return accountIds.filter((id) => {
       const a = accounts.find((x) => x._id === id);
-      return a?.hasTemplate && !a.hasPrompt;
+      return a && readyToGenerate(a, unitChoice) && !a.hasPrompt;
     }).length;
-  }, [accountIds, accounts, globalPromptSet]);
+  }, [accountIds, accounts, globalPromptSet, unitChoice]);
 
   return (
     <div className="space-y-6">
@@ -254,8 +300,10 @@ export default function ResumeGeneratorPage() {
             <ul className="row-divider border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
               {accounts.map((a) => {
                 const checked = accountIds.includes(a._id);
-                const disabled = !a.hasTemplate;
+                const disabled = !hasAnyTemplate(a);
                 const promptMissing = !a.hasPrompt && !globalPromptSet;
+                const units = a.units ?? [];
+                const unit = chosenUnit(a, unitChoice);
                 return (
                   <li key={a._id} className={disabled ? undefined : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}>
                     <label
@@ -283,6 +331,28 @@ export default function ResumeGeneratorPage() {
                         </span>
                       )}
                     </label>
+                    {!disabled && checked && unit && (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pb-2 pl-10 pr-3">
+                        <span id={`unit-label-${a._id}`} className="text-xs text-muted">Template-Prompt</span>
+                        {units.length > 1 ? (
+                          <select
+                            aria-labelledby={`unit-label-${a._id}`}
+                            className="input w-auto max-w-[18rem] py-1 text-xs"
+                            value={unit.id}
+                            onChange={(e) => setUnitChoice((c) => ({ ...c, [a._id]: e.target.value }))}
+                          >
+                            {units.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name}{u.id === a.defaultPromptId ? ' (default)' : ''}{u.hasTemplate ? '' : ' — no HTML template'}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-xs font-medium text-body" aria-labelledby={`unit-label-${a._id}`}>{unit.name}</span>
+                        )}
+                        <UnitDetails unit={unit} />
+                      </div>
+                    )}
                   </li>
                 );
               })}

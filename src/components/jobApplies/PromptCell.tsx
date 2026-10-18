@@ -92,7 +92,7 @@ export function PromptCell({
 }
 
 /** The selected unit's HTML template and its role marks (styled like the job's), under the Prompt select. */
-function UnitDetails({ unit }: { unit: JobApplyPromptOption }) {
+export function UnitDetails({ unit }: { unit: JobApplyPromptOption }) {
   const roles = unitRoles(unit);
   return (
     <>

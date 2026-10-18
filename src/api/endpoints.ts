@@ -437,6 +437,9 @@ export interface AccountLookup {
   createdBy?: string;
   showInGenerate?: boolean;
   archived?: boolean;
+  /** The profile's resume units (template + prompt), without their texts; missing from older backends. */
+  units?: JobApplyPromptOption[];
+  defaultPromptId?: string | null;
 }
 
 export const lookupAccounts = () =>
@@ -1362,6 +1365,8 @@ export function enqueueResumeJob(body: {
   coverLetterModel?: string;
   screeningModel?: string;
   coverLetterHook?: string;
+  /** The profile's resume unit to generate with; omitted = its default unit. */
+  promptId?: string;
 }) {
   return postJSON<{ jobId: string; status: ResumeJobStatus }>('/resume/generate', body);
 }
