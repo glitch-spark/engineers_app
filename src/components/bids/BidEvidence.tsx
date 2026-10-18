@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
-import type { BidReviewItem, BidStatus } from '../../api/endpoints';
+import type { BidAttachment, BidReviewItem, BidScreenshot, BidStatus } from '../../api/endpoints';
 import { fmtDuration, fmtTime, reasonLabel } from './util';
 import { safeHref } from '../../lib/safeHref';
 
@@ -19,8 +19,36 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** Where each file the bidder attached on the job page was on their computer, once per file across the bid's
+ *  screenshots (the extension records it only when the bidder allowed it). Nothing while the screenshots load. */
+function AttachedFiles({ shots }: { shots: BidScreenshot[] | undefined }) {
+  if (!shots) return null;
+  const files = new Map<string, BidAttachment>();
+  for (const shot of shots) for (const file of shot.attachments ?? []) files.set(file.path ?? `name:${file.name}`, file);
+  return (
+    <Row label={files.size > 1 ? 'Attached files' : 'Attached file'}>
+      {files.size === 0 ? (
+        <span className="text-muted">None recorded</span>
+      ) : (
+        <ul className="space-y-1">
+          {[...files].map(([key, file]) =>
+            file.path ? (
+              <li key={key} className="break-all font-mono text-xs leading-5">{file.path}</li>
+            ) : (
+              <li key={key} className="break-all text-xs leading-5 text-amber-700 dark:text-amber-400">
+                <span className="font-medium">{file.name || 'A file'}</span>: location not recorded
+                {file.pathError ? ` (${file.pathError})` : ''}
+              </li>
+            ),
+          )}
+        </ul>
+      )}
+    </Row>
+  );
+}
+
 /** What the reviewer checks a bid against: who bid, which profile/resume the form should show, and the job. */
-export default function BidEvidence({ bid }: { bid: BidReviewItem }) {
+export default function BidEvidence({ bid, shots }: { bid: BidReviewItem; shots?: BidScreenshot[] }) {
   const flags = [
     !bid.submittedAt && 'Not marked submitted',
     bid.missingUploads > 0 && `Missing upload${bid.missingUploads > 1 ? ` (${bid.missingUploads})` : ''}`,
@@ -81,6 +109,7 @@ export default function BidEvidence({ bid }: { bid: BidReviewItem }) {
         <Row label="Steps">{bid.screenshotCount}</Row>
         <Row label="Duration">{fmtDuration(bid.durationSec)}</Row>
         <Row label="First shot">{fmtTime(bid.firstAt)}</Row>
+        <AttachedFiles shots={shots} />
       </dl>
 
       {(flags.length > 0 || bid.changedSinceReview) && (
