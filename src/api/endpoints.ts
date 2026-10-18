@@ -2506,19 +2506,13 @@ export interface BidScreenshot {
   attachments: BidAttachment[];
 }
 
-/** A file the bidder attached on the job page, as Bid Track saw it at a capture. */
+/** A file the bidder had attached on the job page at a capture. */
 export interface BidAttachment {
-  /** The form's name for the field, e.g. "Resume/CV". */
-  field: string | null;
-  name: string;
-  size: number | null;
-  type: string | null;
-  lastModified: string | null;
-  /** Full location on the bidder's computer; null when it couldn't be looked up (see pathError). */
+  /** Full location on the bidder's computer; null when it couldn't be looked up. */
   path: string | null;
+  /** Which file and why, for when path is null. */
+  name: string;
   pathError: string | null;
-  /** False once the site took the file out of its field (typical after an instant upload). */
-  inField: boolean;
 }
 
 /** `day` and `week` are exclusive; neither means the open daily window. */
