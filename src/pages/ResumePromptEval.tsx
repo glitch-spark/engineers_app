@@ -7,7 +7,6 @@ import type { PromptEvalRun } from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PageHeader from '../components/PageHeader';
-import ResumeTabs from '../components/ResumeTabs';
 import Select from '../components/Select';
 import Tabs from '../components/Tabs';
 import CompareView from '../components/promptEval/CompareView';
@@ -23,7 +22,7 @@ const TABS = [
   { key: 'jds', label: 'Job descriptions' },
 ];
 
-/** Resumes → Prompt Eval: all runs (compare any two to four), one run's detail, and the sample-JD library. */
+/** Sidebar → Prompt Eval: all runs (compare any two to four), one run's detail, and the sample-JD library. */
 export default function ResumePromptEvalPage() {
   const { runId } = useParams<{ runId?: string }>();
   const { pathname } = useLocation();
@@ -156,7 +155,7 @@ export default function ResumePromptEvalPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Resume Prompt Eval"
+        title="Prompt Eval"
         backTo={runId || isCompare ? '/resume/eval' : undefined}
         action={
           <button type="button" className="btn btn-sm" onClick={() => openNew(undefined)}>
@@ -164,7 +163,6 @@ export default function ResumePromptEvalPage() {
           </button>
         }
       />
-      <ResumeTabs />
       {content}
 
       <NewEvalPanel

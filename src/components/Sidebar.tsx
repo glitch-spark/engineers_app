@@ -1,19 +1,27 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 
-const NavLink = ({ href, label, isCollapsed, icon, badge }: {
+function isResumesSection(pathname: string) {
+  return pathname === '/resume' || pathname.startsWith('/resume/generated');
+}
+
+const NavLink = ({ href, label, isCollapsed, icon, badge, nested, isActive }: {
   href: string;
   label: string;
   isCollapsed: boolean;
   icon: React.ReactNode;
   badge?: number;
+  nested?: boolean;
+  isActive?: (pathname: string) => boolean;
 }) => {
   const { pathname } = useLocation();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
+  const active = isActive
+    ? isActive(pathname)
+    : pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       to={href}
-      className={`${active ? 'nav-item-active group' : 'nav-item-inactive group'} ${isCollapsed ? 'justify-center' : ''}`}
+      className={`${active ? 'nav-item-active group' : 'nav-item-inactive group'} ${isCollapsed ? 'justify-center' : ''} ${nested && !isCollapsed ? 'ml-6' : ''}`}
       title={isCollapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
     >
@@ -134,9 +142,21 @@ export default function Sidebar({
             href="/resume"
             label="Resumes"
             isCollapsed={isCollapsed}
+            isActive={isResumesSection}
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            }
+          />
+          <NavLink
+            href="/resume/eval"
+            label="Prompt Eval"
+            isCollapsed={isCollapsed}
+            nested
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6M10 9V3m4 6V3M8.5 9h7l3.2 11.2a1.6 1.6 0 01-1.54 2.05H6.84a1.6 1.6 0 01-1.54-2.05L8.5 9z" />
               </svg>
             }
           />
