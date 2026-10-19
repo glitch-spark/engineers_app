@@ -5,13 +5,12 @@ function isResumesSection(pathname: string) {
   return pathname === '/resume' || pathname.startsWith('/resume/generated');
 }
 
-const NavLink = ({ href, label, isCollapsed, icon, badge, nested, isActive }: {
+const NavLink = ({ href, label, isCollapsed, icon, badge, isActive }: {
   href: string;
   label: string;
   isCollapsed: boolean;
   icon: React.ReactNode;
   badge?: number;
-  nested?: boolean;
   isActive?: (pathname: string) => boolean;
 }) => {
   const { pathname } = useLocation();
@@ -21,7 +20,7 @@ const NavLink = ({ href, label, isCollapsed, icon, badge, nested, isActive }: {
   return (
     <Link
       to={href}
-      className={`${active ? 'nav-item-active group' : 'nav-item-inactive group'} ${isCollapsed ? 'justify-center' : ''} ${nested && !isCollapsed ? 'ml-6' : ''}`}
+      className={`${active ? 'nav-item-active group' : 'nav-item-inactive group'} ${isCollapsed ? 'justify-center' : ''}`}
       title={isCollapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
     >
@@ -153,7 +152,6 @@ export default function Sidebar({
             href="/resume/eval"
             label="Prompt Eval"
             isCollapsed={isCollapsed}
-            nested
             icon={
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6M10 9V3m4 6V3M8.5 9h7l3.2 11.2a1.6 1.6 0 01-1.54 2.05H6.84a1.6 1.6 0 01-1.54-2.05L8.5 9z" />
