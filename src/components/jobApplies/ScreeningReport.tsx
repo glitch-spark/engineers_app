@@ -69,6 +69,7 @@ export default function ScreeningReport({
   assignments,
   checksOnly,
   rescore,
+  approvable,
   onStarted,
   onRunChanged,
 }: {
@@ -80,6 +81,9 @@ export default function ScreeningReport({
   checksOnly?: boolean;
   /** Back at step ② after scoring: start from these picks; scoring again replaces the run's scores. */
   rescore?: { assignments: Record<string, string[]>; selection: { accountId: string; resumeIds: string[] }[]; threshold: number };
+  /** Approve / undo in the job lists, also when the report is otherwise read-only (any time no step is running).
+   * Default: only while the picks can be changed. */
+  approvable?: boolean;
   onStarted?: () => void;
   /** The run's status changed from here (a retry): refresh it. */
   onRunChanged?: () => void;
@@ -310,7 +314,8 @@ export default function ScreeningReport({
         </div>
         {open && (
           <div className="mt-3">
-            <BucketJobs runId={runId} bucket={open} readOnly={readOnly || !!rescore} onChanged={() => void mutate()} onRetried={onRunChanged} />
+            <BucketJobs runId={runId} bucket={open} readOnly={readOnly || !!rescore} approvable={approvable ?? (!readOnly && !rescore)}
+              onChanged={() => void mutate()} onRetried={onRunChanged} />
           </div>
         )}
       </div>

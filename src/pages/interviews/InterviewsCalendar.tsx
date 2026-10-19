@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import useSWR from 'swr';
-import { ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { InterviewRoundRow } from '../../api/endpoints';
 import type { Interview } from '../../components/interview/types';
@@ -14,7 +14,7 @@ import { parseLocalDate, rangeLabel, toEvents } from './calendarShared';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { toWall, zonedDateKey } from '../../lib/interviewTimezone';
 import { useCallers } from '../../lib/useCallers';
-import { CALLER_DOT, UNASSIGNED_CHIP, callerChipClass, callerLabel } from '../../lib/callerColors';
+import { callerChipClass, callerLabel } from '../../lib/callerColors';
 
 /** Week (default) and Month calendar of rounds; click a round to edit it, a slot to create one.
  * `callers`: the Callers calendar — every user's caller rounds, coloured by caller. */
@@ -24,18 +24,15 @@ export default function InterviewsCalendar({
   onOpenRound,
   onNew,
   callers = false,
-  onManageCallers,
 }: {
   filters: InterviewFilters;
   update: (patch: Partial<InterviewFilters>) => void;
   onOpenRound: (iv: Interview, roundId: string) => void;
   onNew: (prefill: { date: string; time?: string }) => void;
   callers?: boolean;
-  /** Shown to Admin / interview managers on the Callers calendar. */
-  onManageCallers?: () => void;
 }) {
   const { tz } = useInterviewTimezone();
-  const { callers: callerList, byId, canManage } = useCallers();
+  const { byId } = useCallers();
   // One Date range drives both views: the calendar shows the period it names.
   const now = toWall(new Date(), tz);
   const { view, anchor: anchorKey } = calendarFromFilters(filters, now);
@@ -80,28 +77,6 @@ export default function InterviewsCalendar({
           ))}
         </div>
       </div>
-
-      {callers && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" aria-label="Caller colours">
-            {callerList.map((c) => (
-              <li key={c._id} className="flex items-center gap-1.5">
-                <span className={`h-2.5 w-2.5 rounded-full ${CALLER_DOT[c.color] ?? 'bg-zinc-400'}`} aria-hidden />
-                {c.name}
-              </li>
-            ))}
-            <li className="flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 rounded-full border ${UNASSIGNED_CHIP}`} aria-hidden />
-              No caller yet
-            </li>
-          </ul>
-          {canManage && onManageCallers && (
-            <button type="button" className="btn-outline btn-sm" onClick={onManageCallers}>
-              <Settings2 size={14} aria-hidden /> Manage callers
-            </button>
-          )}
-        </div>
-      )}
 
       <div className="relative" aria-busy={loading}>
         {view === 'week' ? (

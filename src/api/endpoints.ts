@@ -437,6 +437,9 @@ export interface AccountLookup {
   createdBy?: string;
   showInGenerate?: boolean;
   archived?: boolean;
+  /** The profile's resume units (template + prompt), without their texts; missing from older backends. */
+  units?: JobApplyPromptOption[];
+  defaultPromptId?: string | null;
 }
 
 export const lookupAccounts = () =>
@@ -539,6 +542,20 @@ export const listInterviewRounds = (params: {
   callerId?: string;
 }) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>> }>(
   `/interviews/rounds${qs(params)}`,
+);
+
+/** Callers list: every user's caller rounds, one row per round, paginated (from / to optional, inclusive). */
+export const listCallerRounds = (params: {
+  from?: string;
+  to?: string;
+  stage?: string;
+  status?: string;
+  callerId?: string;
+  page: number;
+  limit: number;
+  dir: 'asc' | 'desc';
+}) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>>; pagination: Pagination }>(
+  `/interviews/caller-rounds${qs(params)}`,
 );
 
 export const getInterview = (id: string) =>
@@ -1362,6 +1379,8 @@ export function enqueueResumeJob(body: {
   coverLetterModel?: string;
   screeningModel?: string;
   coverLetterHook?: string;
+  /** The profile's resume unit to generate with; omitted = its default unit. */
+  promptId?: string;
 }) {
   return postJSON<{ jobId: string; status: ResumeJobStatus }>('/resume/generate', body);
 }

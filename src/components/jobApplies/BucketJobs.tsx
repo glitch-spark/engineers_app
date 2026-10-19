@@ -31,12 +31,15 @@ export default function BucketJobs({
   runId,
   bucket,
   readOnly,
+  approvable,
   onChanged,
   onRetried,
 }: {
   runId: string;
   bucket: JobApplyScreenBucket;
   readOnly?: boolean;
+  /** Approve / undo, also in a read-only list (a scored run: several people check the same links). Default: !readOnly. */
+  approvable?: boolean;
   onChanged: () => void;
   /** The run went back to checking jobs: refresh it so the page shows progress again. */
   onRetried?: () => void;
@@ -50,7 +53,8 @@ export default function BucketJobs({
   const rows = data?.rows ?? [];
   const { setApproved, busyId: approvingId } = useApproveJob(runId, onChanged);
   // A person can approve the jobs in these buckets into Worth applying, and undo an approval there.
-  const canApprove = !readOnly && APPROVABLE_BUCKETS.includes(bucket);
+  const mayApprove = approvable ?? !readOnly;
+  const canApprove = mayApprove && APPROVABLE_BUCKETS.includes(bucket);
   // Worth applying jobs can be moved to Invalid role, and moved back from there, at any step (also once the run is
   // scored and this list is otherwise read-only): several people check the same links.
   const { setInvalid, busyId: invalidatingId } = useInvalidJob(runId, onChanged);
@@ -97,7 +101,7 @@ export default function BucketJobs({
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {rows.map((row) => {
               const isOpen = infoRow === row._id;
-              const undoable = !readOnly && bucket === 'valid' && row.forceInclude;
+              const undoable = mayApprove && bucket === 'valid' && row.forceInclude;
               return (
                 // The whole row is one button that opens the job's info. It is stretched over the row from its
                 // ::after, so the link and the action below (z-10) stay separate controls rather than nested ones.
@@ -190,7 +194,7 @@ export default function BucketJobs({
           runId={runId}
           onClose={() => setInfoRow(null)}
           canEdit
-          canApprove={!readOnly}
+          canApprove={mayApprove}
           onChanged={onChanged}
         />
       )}
