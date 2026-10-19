@@ -7,7 +7,7 @@ import type { EvalRole, PromptEvalRun } from '../../api/endpoints';
 import { formatUsd } from '../../lib/modelCost';
 import { useTheme } from '../../theme/ThemeProvider';
 import { formatDateTime } from '../jobApplies/format';
-import { MAX_COMPARE, ROLE_LABEL, SERIES_COLORS, formatScore, modelShort, runTitle, scoreClass } from './format';
+import { MAX_COMPARE, ROLE_LABEL, SERIES_COLORS, formatScore, judgeLabel, modelShort, runTitle, scoreClass } from './format';
 import RoleRadar, { MetricToggle, type RadarMetric } from './RoleRadar';
 
 type MatrixRow = { jdId: string; role: EvalRole; title: string; company: string };
@@ -90,7 +90,7 @@ export default function CompareView({ ids }: { ids: string[] }) {
                     {run.accountName} · {formatDateTime(run.createdAt)}
                   </div>
                   <div className="mt-0.5 font-mono text-[11px] normal-case tracking-normal text-muted">
-                    {modelShort(run.resumeModelId)} · judge {modelShort(run.judgeModelId)}
+                    {modelShort(run.resumeModelId)} · judge {judgeLabel(run)}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1 normal-case tracking-normal">
                     <span className={scoreClass(run.avgMatch)}>M {formatScore(run.avgMatch)}</span>

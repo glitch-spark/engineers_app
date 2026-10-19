@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Copy, ExternalLink } from 'lucide-react';
-import type { PromptEvalRow, PromptEvalRun } from '../../api/endpoints';
+import type { PromptEvalRow, PromptEvalRun, ScorePart } from '../../api/endpoints';
 import { notify } from '../../lib/notify';
 import { formatUsd } from '../../lib/modelCost';
 import { openTemplatePreview } from '../../lib/templatePreview';
@@ -17,6 +17,42 @@ function NoteList({ title, items }: { title: string; items: string[] | undefined
           <li key={i}>{it}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** A rules-judge score broken into its parts: each part's own 0-100, its weight, and the reason. */
+function PartsTable({ title, total, parts }: { title: string; total: number; parts: ScorePart[] | undefined }) {
+  if (!parts || parts.length === 0) return null;
+  return (
+    <div className="min-w-0">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted">
+        {title} <span className="tabular-nums">{formatScore(total)}</span>
+      </h3>
+      <table className="mt-1 w-full text-sm">
+        <thead className="sr-only">
+          <tr>
+            <th scope="col">Part</th>
+            <th scope="col">Score</th>
+            <th scope="col">Weight</th>
+            <th scope="col">Reason</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {parts.map((p) => (
+            <tr key={p.key} className="align-top">
+              <td className="py-1 pr-2 text-body">{p.label}</td>
+              <td className="py-1 pr-2">
+                <span className={scoreClass(p.score)}>{formatScore(p.score)}</span>
+              </td>
+              <td className="py-1 pr-2 text-xs text-faint tabular-nums whitespace-nowrap" title="Points of the total this part is worth">
+                ×{p.weight}
+              </td>
+              <td className="py-1 text-xs text-muted">{p.detail}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -69,6 +105,7 @@ export default function RowDetailPanel({
 }) {
   const [copied, setCopied] = useState(false);
   const v = row?.verdict;
+  const hasParts = !!(v?.matchParts?.length || v?.believabilityParts?.length);
 
   function preview() {
     if (!row?.resumeHtml) return;
@@ -123,13 +160,27 @@ export default function RowDetailPanel({
 
           {v?.summary && <p className="text-sm text-body">{v.summary}</p>}
 
+          {hasParts && v && (
+            <section className="space-y-3">
+              <h3 className="card-title">Why this score</h3>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <PartsTable title="Match" total={v.matchScore} parts={v.matchParts} />
+                <PartsTable title="Believability" total={v.believabilityScore} parts={v.believabilityParts} />
+              </div>
+              <p className="hint">
+                Match is the weighted average of its parts, the same score Job Applies gives. Believability starts at 100 and
+                each check takes off up to its weight.
+              </p>
+            </section>
+          )}
+
           {v && (
             <div className="grid gap-4 sm:grid-cols-2">
               <NoteList title="Strengths" items={v.strengths} />
               <NoteList title="Missing requirements" items={v.missingRequirements} />
               <NoteList title="Red flags" items={v.redFlags} />
-              <NoteList title="Match notes" items={v.matchNotes} />
-              <NoteList title="Believability notes" items={v.believabilityNotes} />
+              {!hasParts && <NoteList title="Match notes" items={v.matchNotes} />}
+              {!hasParts && <NoteList title="Believability notes" items={v.believabilityNotes} />}
             </div>
           )}
 
@@ -143,7 +194,19 @@ export default function RowDetailPanel({
               tokensOut={row.genOutputTokens}
               cost={row.genCostUsd}
             />
-            {(row.judgeModelId || row.judgeModel) && (
+            {row.judgeModel === 'rules' ? (
+              <p className="text-xs text-muted">
+                <span className="font-medium text-body">Judge:</span> <span className="font-mono">Job Applies rules</span>
+                {row.judgeCached && (
+                  <span className="badge-neutral ml-1" title="The JD reading from an earlier run was reused, no model call">
+                    reading reused
+                  </span>
+                )}
+                <span className="ml-2 tabular-nums" title="This row's share of the one-time JD reading">
+                  {formatUsd(row.judgeCostUsd)}
+                </span>
+              </p>
+            ) : (row.judgeModelId || row.judgeModel) && (
               <ModelLine
                 what="Judge"
                 model={row.judgeModelId ?? row.judgeModel}

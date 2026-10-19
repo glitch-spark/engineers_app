@@ -76,6 +76,11 @@ export function modelShort(id: string | null | undefined): string {
   return i >= 0 ? id.slice(i + 1) : id;
 }
 
+/** The judge as shown in run lists: 'rules' for the Job Applies rules judge, else the model's short name. */
+export function judgeLabel(run: Pick<PromptEvalRun, 'judgeMode' | 'judgeModelId'>): string {
+  return run.judgeMode === 'rules' ? 'rules' : modelShort(run.judgeModelId);
+}
+
 export function formatDuration(ms: number | null | undefined): string {
   if (ms == null) return '';
   if (ms < 1000) return `${ms} ms`;

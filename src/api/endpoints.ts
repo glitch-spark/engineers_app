@@ -1595,7 +1595,22 @@ export interface JudgeVerdict {
   redFlags: string[];
   strengths: string[];
   summary: string;
+  /** Rules judge only: the parts behind each score. */
+  matchParts?: ScorePart[];
+  believabilityParts?: ScorePart[];
 }
+
+/** One part of a rules-judge score: 0-100 on its own, `weight` points of the total. */
+export interface ScorePart {
+  key: string;
+  label: string;
+  score: number;
+  weight: number;
+  detail: string;
+}
+
+/** `llm` asks a judge model per resume; `rules` scores the way Job Applies does, with one cached JD reading. */
+export type JudgeMode = 'llm' | 'rules';
 
 export type PromptEvalRowStatus = 'pending' | 'generating' | 'judging' | 'done' | 'failed';
 export type PromptEvalRunStatus = 'running' | 'done' | 'failed';
@@ -1649,6 +1664,8 @@ export interface PromptEvalRun {
   promptSource: PromptEvalPromptSource;
   resumeModelId?: string | null;
   judgeModelId?: string | null;
+  /** Missing on runs made before the rules judge existed. */
+  judgeMode?: JudgeMode;
   status: PromptEvalRunStatus;
   error?: string | null;
   startedAt: string;
@@ -1685,6 +1702,7 @@ export const createPromptEvalRun = (body: {
   promptBody?: string;
   resumeModel?: string;
   judgeModel?: string;
+  judgeMode?: JudgeMode;
   roles?: EvalRole[];
   jdIds?: string[];
   label?: string;

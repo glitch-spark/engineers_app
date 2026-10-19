@@ -18,6 +18,7 @@ import {
   formatDuration,
   formatScore,
   isRunActive,
+  judgeLabel,
   modelShort,
   runTitle,
   scoreClass,
@@ -101,7 +102,7 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
             {' · resume '}
             <span className="font-mono text-xs">{modelShort(run.resumeModelId)}</span>
             {' · judge '}
-            <span className="font-mono text-xs">{modelShort(run.judgeModelId)}</span>
+            <span className="font-mono text-xs">{judgeLabel(run)}</span>
           </p>
           {run.error && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{run.error}</p>}
         </div>
@@ -128,7 +129,10 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
             <>
               {run.counts.failed > 0 && <span className="text-red-700 dark:text-red-400">{run.counts.failed} failed · </span>}
               {run.cachedRows > 0 ? `${run.cachedRows} resume${run.cachedRows === 1 ? '' : 's'} from cache` : 'all freshly generated'}
-              {run.cachedJudgeRows > 0 && ` · ${run.cachedJudgeRows} verdict${run.cachedJudgeRows === 1 ? '' : 's'} from cache`}
+              {run.cachedJudgeRows > 0 &&
+                (run.judgeMode === 'rules'
+                  ? ` · ${run.cachedJudgeRows} JD reading${run.cachedJudgeRows === 1 ? '' : 's'} reused`
+                  : ` · ${run.cachedJudgeRows} verdict${run.cachedJudgeRows === 1 ? '' : 's'} from cache`)}
             </>
           }
         />
@@ -201,8 +205,14 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
                     {row.genFallbackUsed && <span className="badge-warning ml-1">fallback</span>}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    <span className="font-mono text-xs text-muted">{row.judgeModelId || row.judgeModel ? modelShort(row.judgeModelId ?? row.judgeModel) : '—'}</span>
-                    {row.judgeCached && <span className="badge-neutral ml-1" title="Verdict reused from the cache">cached</span>}
+                    <span className="font-mono text-xs text-muted">
+                      {row.judgeModel === 'rules' ? 'rules' : row.judgeModelId || row.judgeModel ? modelShort(row.judgeModelId ?? row.judgeModel) : '—'}
+                    </span>
+                    {row.judgeCached && (
+                      <span className="badge-neutral ml-1" title={row.judgeModel === 'rules' ? 'JD reading reused from an earlier run' : 'Verdict reused from the cache'}>
+                        cached
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <span className={scoreClass(row.verdict?.matchScore)}>{formatScore(row.verdict?.matchScore)}</span>

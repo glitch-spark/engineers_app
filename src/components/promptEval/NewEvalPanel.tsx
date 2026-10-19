@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
 import { formatUsd } from '../../lib/modelCost';
 import { useModelChoice } from '../../lib/useModelChoice';
+import Segmented from '../jobApplies/Segmented';
 import ModelSelect from '../ModelSelect';
 import ResumePromptField from '../ResumePromptField';
 import Select from '../Select';
@@ -18,7 +19,14 @@ export interface EvalPrefill {
   promptBody?: string;
   jdIds?: string[];
   label?: string;
+  judgeMode?: api.JudgeMode;
 }
+
+const JUDGE_HINT: Record<api.JudgeMode, string> = {
+  llm: 'The judge gets a fresh context: the resume text and the JD only. Pick a model at least as strong as the resume model.',
+  rules:
+    'Scores the way Job Applies does: required terms, keywords, years, title, education and wording overlap for match; stuffing, copied text, unbacked skills and timeline checks for believability. Each JD is read once by a cheap model and reused by later runs, so judging costs about nothing.',
+};
 
 type PromptOrigin = 'profile' | 'global' | 'none' | 'prefill';
 
@@ -70,11 +78,13 @@ export default function NewEvalPanel({
   const [saving, setSaving] = useState(false);
   const resumeModel = useModelChoice('resume');
   const judgeModel = useModelChoice('judge');
+  const [judgeMode, setJudgeMode] = useState<api.JudgeMode>(prefill?.judgeMode ?? 'llm');
 
   // Reset to the caller's intent each time the panel opens.
   useEffect(() => {
     if (!open) return;
     setProfileId(accountId ?? prefill?.accountId ?? '');
+    setJudgeMode(prefill?.judgeMode ?? 'llm');
     setJdIds(prefill?.jdIds ?? []);
     setScope(prefill?.jdIds?.length ? 'custom' : '5');
     setLabel(prefill?.label ?? '');
@@ -133,8 +143,9 @@ export default function NewEvalPanel({
   const dirty = prompt.trim() !== savedPrompt;
   const resumeOpt = resumeModel.options.find((o) => o.id === resumeModel.value);
   const judgeOpt = judgeModel.options.find((o) => o.id === judgeModel.value);
-  const perJd =
-    resumeOpt?.estCostUsd != null && judgeOpt?.estCostUsd != null ? resumeOpt.estCostUsd + judgeOpt.estCostUsd : null;
+  const rules = judgeMode === 'rules';
+  const judgeCost = rules ? 0 : judgeOpt?.estCostUsd;
+  const perJd = resumeOpt?.estCostUsd != null && judgeCost != null ? resumeOpt.estCostUsd + judgeCost : null;
   const estimate = perJd == null ? null : perJd * jdIds.length;
 
   async function saveToProfile() {
@@ -167,7 +178,8 @@ export default function NewEvalPanel({
         accountId: profileId,
         promptBody: prompt,
         resumeModel: resumeModel.value || undefined,
-        judgeModel: judgeModel.value || undefined,
+        judgeModel: rules ? undefined : judgeModel.value || undefined,
+        judgeMode,
         jdIds,
         label: label.trim() || undefined,
       });
@@ -187,7 +199,7 @@ export default function NewEvalPanel({
       open={open}
       onClose={onClose}
       title="New prompt eval"
-      subtitle="Generates one resume per job description, then a judge scores match and believability."
+      subtitle="Generates one resume per job description, then a judge (a model or the Job Applies rules) scores match and believability."
       dirty={dirty && prompt.trim() !== ''}
       wide
       footer={
@@ -197,7 +209,7 @@ export default function NewEvalPanel({
               ? 'Pick job descriptions to see the estimate.'
               : estimate == null
                 ? `${jdIds.length} JD${jdIds.length === 1 ? '' : 's'} · cost n/a`
-                : `${jdIds.length} JD${jdIds.length === 1 ? '' : 's'} · ~${formatUsd(estimate)} (resume + judge)`}
+                : `${jdIds.length} JD${jdIds.length === 1 ? '' : 's'} · ~${formatUsd(estimate)} (${rules ? 'resume; rules judge ~$0' : 'resume + judge'})`}
           </span>
           <button type="button" className="btn-outline text-sm" onClick={onClose} disabled={submitting}>
             Cancel
@@ -257,9 +269,18 @@ export default function NewEvalPanel({
           </div>
 
           <ModelSelect label="Resume model" choice={resumeModel} />
-          <div>
-            <ModelSelect label="Judge model" choice={judgeModel} />
-            <p className="hint mt-1">The judge gets a fresh context: the resume text and the JD only. Pick a model at least as strong as the resume model.</p>
+          <div className="space-y-2">
+            <Segmented
+              label="Judge"
+              value={judgeMode}
+              onChange={setJudgeMode}
+              options={[
+                { value: 'llm', label: 'AI model' },
+                { value: 'rules', label: 'Job Applies rules' },
+              ]}
+            />
+            {!rules && <ModelSelect label="Judge model" choice={judgeModel} />}
+            <p className="hint">{JUDGE_HINT[judgeMode]}</p>
           </div>
         </div>
 
