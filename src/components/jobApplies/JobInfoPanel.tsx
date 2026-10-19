@@ -68,7 +68,7 @@ export default function JobInfoPanel({
   runId: string;
   onClose: () => void;
   canEdit: boolean;
-  /** Show the approve action (before scoring starts). */
+  /** Show the approve action (any time no step is running). */
   canApprove?: boolean;
   /** The job moved between buckets: the counts changed. */
   onChanged?: () => void;

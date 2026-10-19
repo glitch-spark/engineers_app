@@ -833,7 +833,7 @@ export default function JobApplyRun() {
         {stepView === 1 ? (
           <>
             <SourceLine run={run} />
-            <ScreeningReport runId={runId} checksOnly readOnly />
+            <ScreeningReport runId={runId} checksOnly readOnly approvable={!active} />
           </>
         ) : active ? (
           <ScreeningReport runId={runId} readOnly assignments={run.assignments} />
@@ -841,6 +841,7 @@ export default function JobApplyRun() {
           <ScreeningReport
             runId={runId}
             rescore={{ assignments: run.assignments, selection: run.selection, threshold: run.threshold }}
+            approvable
             onStarted={() => {
               setStepView(null);
               void mutateRun();
