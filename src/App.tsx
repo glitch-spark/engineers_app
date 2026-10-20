@@ -17,7 +17,6 @@ import InterviewsAnalyze from './pages/InterviewsAnalyze';
 import InterviewFocus from './pages/InterviewFocus';
 import InterviewReview from './pages/InterviewReview';
 import Resume from './pages/Resume';
-import InterviewPrep from './pages/InterviewPrep';
 import Generated from './pages/Generated';
 import ResumePromptEval from './pages/ResumePromptEval';
 import JobApplies from './pages/JobApplies';
@@ -107,7 +106,7 @@ export default function App() {
       <Route path="/job-applies/:runId" element={<Protected><JobApplyRun /></Protected>} />
       <Route path="/bidders" element={<Protected><Bidders /></Protected>} />
       <Route path="/bids/review" element={<BidReviewRedirect />} />
-      <Route path="/interview-prep" element={<Protected><InterviewPrep /></Protected>} />
+      <Route path="/interview-prep" element={<Navigate to="/dashboard" replace />} />
       <Route path="/preferences" element={<Protected><Preferences /></Protected>} />
       <Route path="/users" element={<Protected><Users /></Protected>} />
       <Route path="/profile" element={<Protected><Profile /></Protected>} />
