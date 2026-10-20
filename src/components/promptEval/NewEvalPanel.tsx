@@ -78,13 +78,13 @@ export default function NewEvalPanel({
   const [saving, setSaving] = useState(false);
   const resumeModel = useModelChoice('resume');
   const judgeModel = useModelChoice('judge');
-  const [judgeMode, setJudgeMode] = useState<api.JudgeMode>(prefill?.judgeMode ?? 'llm');
+  const [judgeMode, setJudgeMode] = useState<api.JudgeMode>(prefill?.judgeMode ?? 'rules');
 
   // Reset to the caller's intent each time the panel opens.
   useEffect(() => {
     if (!open) return;
     setProfileId(accountId ?? prefill?.accountId ?? '');
-    setJudgeMode(prefill?.judgeMode ?? 'llm');
+    setJudgeMode(prefill?.judgeMode ?? 'rules');
     setJdIds(prefill?.jdIds ?? []);
     setScope(prefill?.jdIds?.length ? 'custom' : '5');
     setLabel(prefill?.label ?? '');
@@ -275,8 +275,8 @@ export default function NewEvalPanel({
               value={judgeMode}
               onChange={setJudgeMode}
               options={[
-                { value: 'llm', label: 'AI model' },
                 { value: 'rules', label: 'Job Applies rules' },
+                { value: 'llm', label: 'AI model' },
               ]}
             />
             {!rules && <ModelSelect label="Judge model" choice={judgeModel} />}

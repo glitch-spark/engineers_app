@@ -106,7 +106,7 @@ export default function ResumePromptEvalPage() {
     content = (
       <RunDetail
         runId={runId}
-        onRerun={(run) => openNew({ accountId: run.accountId, promptBody: run.promptBody, jdIds: run.rows.map((r) => r.jdId), label: run.label ?? undefined, judgeMode: run.judgeMode })}
+        onRerun={(run) => openNew({ accountId: run.accountId, promptBody: run.promptBody, jdIds: run.rows.map((r) => r.jdId), label: run.label ?? undefined, judgeMode: run.judgeMode ?? 'llm' })}
       />
     );
   } else if (isCompare) {
