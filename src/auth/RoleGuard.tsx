@@ -17,7 +17,6 @@ const STAFF_ALLOWED = [
   '/job-applies',
   '/bidders',
   '/bids',
-  '/interview-prep',
   '/preferences',
 ];
 
