@@ -17,9 +17,11 @@ import {
   RUN_STATUS_LABEL,
   formatDuration,
   formatScore,
+  UNIT_PICK_LABEL,
   isRunActive,
   judgeLabel,
   modelShort,
+  promptModeLabel,
   runTitle,
   scoreClass,
 } from './format';
@@ -33,6 +35,57 @@ function Stat({ label, value, sub }: { label: string; value: React.ReactNode; su
       <div className="stat-card-value">{value}</div>
       {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
     </div>
+  );
+}
+
+/** Whole-profile runs: how each resume unit scored on the job descriptions it was given. */
+function UnitScores({ run }: { run: PromptEvalRun }) {
+  const units = run.units ?? [];
+  return (
+    <section className="panel p-4">
+      <h3 className="card-title">Score per unit</h3>
+      <p className="hint mt-0.5 mb-2">Averages over the scored job descriptions each unit generated.</p>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="text-xs text-muted">
+            <tr>
+              <th className="py-1 pr-3 text-left font-medium">Unit</th>
+              <th className="py-1 pr-3 text-right font-medium">Match</th>
+              <th className="py-1 pr-3 text-right font-medium">Believability</th>
+              <th className="py-1 pr-3 text-right font-medium">Job descriptions</th>
+              <th className="py-1 text-right font-medium">Picked by hand</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {units.map((u) => {
+              const rows = run.rows.filter((r) => r.unitId === u.id);
+              const score = run.unitScores?.[u.id];
+              const manual = rows.filter((r) => r.unitPick === 'manual').length;
+              return (
+                <tr key={u.id}>
+                  <td className="py-1.5 pr-3">
+                    <span className="text-strong">{u.name}</span>
+                    {u.edited && <span className="badge-info ml-1">edited</span>}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right">
+                    {rows.length ? <span className={scoreClass(score?.match)}>{formatScore(score?.match)}</span> : <span className="text-faint">—</span>}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right">
+                    {rows.length ? (
+                      <span className={scoreClass(score?.believability)}>{formatScore(score?.believability)}</span>
+                    ) : (
+                      <span className="text-faint">—</span>
+                    )}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums">{rows.length || <span className="text-faint">not used</span>}</td>
+                  <td className="py-1.5 text-right tabular-nums">{manual}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -67,6 +120,7 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
   }
 
   const active = isRunActive(run.status);
+  const profileMode = run.promptMode === 'profile';
   // Keep the panel's row fresh while polling.
   const currentRow = openRow ? run.rows.find((r) => r.jdId === openRow.jdId) ?? openRow : null;
 
@@ -103,6 +157,8 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
             <span className="font-mono text-xs">{modelShort(run.resumeModelId)}</span>
             {' · judge '}
             <span className="font-mono text-xs">{judgeLabel(run)}</span>
+            {' · '}
+            {promptModeLabel(run)}
           </p>
           {run.error && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{run.error}</p>}
         </div>
@@ -139,6 +195,8 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
         <Stat label="Cost" value={formatUsd(run.totalCostUsd)} sub={run.durationMs != null ? formatDuration(run.durationMs) : active ? 'running…' : undefined} />
       </div>
 
+      {profileMode && <UnitScores run={run} />}
+
       <div className="grid gap-4 lg:grid-cols-5">
         <section className="panel p-4 lg:col-span-3">
           <header className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -148,9 +206,29 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
           <RoleRadar series={[{ id: run._id, label: runTitle(run), scores: run.roleScores }]} metric={metric} />
         </section>
         <section className="panel p-4 lg:col-span-2">
-          <h3 className="card-title">Prompt used</h3>
-          <p className="hint mt-0.5 mb-2">{PROMPT_SOURCE_LABEL[run.promptSource]}</p>
-          {run.promptBody ? (
+          <h3 className="card-title">{profileMode ? 'Prompts used' : 'Prompt used'}</h3>
+          <p className="hint mt-0.5 mb-2">
+            {profileMode
+              ? 'Each unit’s prompt as this run used it; its template came from the profile.'
+              : `${run.units?.[0] ? `${run.units[0].name} · ` : ''}${PROMPT_SOURCE_LABEL[run.promptSource]}`}
+          </p>
+          {profileMode ? (
+            <ul className="max-h-72 space-y-1 overflow-auto">
+              {(run.units ?? []).map((u) => (
+                <li key={u.id}>
+                  <details className="rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <summary className="flex cursor-pointer items-center gap-2 px-2 py-1 text-sm">
+                      <span className="text-strong">{u.name}</span>
+                      {u.edited && <span className="badge-info">edited for this run</span>}
+                    </summary>
+                    <pre className="whitespace-pre-wrap border-t border-zinc-200 bg-zinc-50 p-2 text-xs text-body dark:border-zinc-700 dark:bg-zinc-900">
+                      {u.body || 'No custom prompt text; the built-in rules ran alone.'}
+                    </pre>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          ) : run.promptBody ? (
             <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-body dark:border-zinc-700 dark:bg-zinc-900">
               {run.promptBody}
             </pre>
@@ -166,6 +244,7 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
             <tr>
               <th className="px-3 py-2 text-left font-medium">Role</th>
               <th className="px-3 py-2 text-left font-medium">Job description</th>
+              {profileMode && <th className="px-3 py-2 text-left font-medium">Unit</th>}
               <th className="px-3 py-2 text-left font-medium">Resume model</th>
               <th className="px-3 py-2 text-left font-medium">Judge</th>
               <th className="px-3 py-2 text-right font-medium">Match</th>
@@ -199,6 +278,16 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
                     <div className="text-strong">{row.jdTitle}</div>
                     <div className="text-xs text-muted">{row.jdCompany}</div>
                   </td>
+                  {profileMode && (
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className="text-body">{row.unitName ?? '—'}</span>
+                      {row.unitPick && (
+                        <span className={`${row.unitPick === 'manual' ? 'badge-info' : 'badge-neutral'} ml-1`} title={row.unitReason ?? undefined}>
+                          {UNIT_PICK_LABEL[row.unitPick]}
+                        </span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2 whitespace-nowrap">
                     <span className="font-mono text-xs text-muted">{modelShort(row.genModelId ?? row.genModel)}</span>
                     {row.genCached && <span className="badge-neutral ml-1" title="Reused from the cache">cached</span>}

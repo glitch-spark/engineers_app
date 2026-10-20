@@ -1612,6 +1612,40 @@ export interface ScorePart {
 /** `llm` asks a judge model per resume; `rules` scores the way Job Applies does, with one cached JD reading. */
 export type JudgeMode = 'llm' | 'rules';
 
+/** `single`: one resume unit on every JD. `profile`: each JD gets the unit Job Applies would pick, or an override. */
+export type PromptMode = 'single' | 'profile';
+/** How a row's unit was chosen: by the Job Applies routing, by hand, or the run's one unit. */
+export type UnitPick = 'auto' | 'manual' | 'single';
+
+/** A resume unit as a run used it. `body` (the prompt text the run froze) is left out of the runs list. */
+export interface EvalUnit {
+  id: string;
+  name: string;
+  roles: string[];
+  body?: string;
+  templateName: string;
+  /** The run's prompt differs from the unit's saved prompt. */
+  edited: boolean;
+}
+
+/** A profile's unit as the eval form lists it. */
+export interface EvalRouteUnit {
+  id: string;
+  name: string;
+  roles: PromptRole[];
+  body: string;
+  templateName: string;
+  hasTemplate: boolean;
+}
+
+export interface EvalRoute {
+  jdId: string;
+  unitId: string;
+  unitName: string;
+  pick: Exclude<UnitPick, 'single'>;
+  reason: string;
+}
+
 export type PromptEvalRowStatus = 'pending' | 'generating' | 'judging' | 'done' | 'failed';
 export type PromptEvalRunStatus = 'running' | 'done' | 'failed';
 export type PromptEvalPromptSource = 'custom' | 'profile' | 'global' | 'none';
@@ -1621,6 +1655,11 @@ export interface PromptEvalRow {
   role: EvalRole;
   jdTitle: string;
   jdCompany: string;
+  /** The resume unit that generated this row; missing on runs from before units. */
+  unitId?: string | null;
+  unitName?: string | null;
+  unitPick?: UnitPick | null;
+  unitReason?: string | null;
   status: PromptEvalRowStatus;
   error?: string | null;
   genModelId?: string | null;
@@ -1666,6 +1705,11 @@ export interface PromptEvalRun {
   judgeModelId?: string | null;
   /** Missing on runs made before the rules judge existed. */
   judgeMode?: JudgeMode;
+  /** Missing on runs made before resume units: read as `single` on the default unit. */
+  promptMode?: PromptMode;
+  units?: EvalUnit[];
+  /** JD id -> unit id picked by hand. */
+  unitOverrides?: Record<string, string>;
   status: PromptEvalRunStatus;
   error?: string | null;
   startedAt: string;
@@ -1676,6 +1720,8 @@ export interface PromptEvalRun {
   avgMatch?: number | null;
   avgBelievability?: number | null;
   roleScores: Partial<Record<EvalRole, PromptEvalRoleScore>>;
+  /** By unit id. */
+  unitScores?: Record<string, PromptEvalRoleScore>;
   totalCostUsd: number;
   cachedRows: number;
   cachedJudgeRows: number;
@@ -1703,10 +1749,20 @@ export const createPromptEvalRun = (body: {
   resumeModel?: string;
   judgeModel?: string;
   judgeMode?: JudgeMode;
+  promptMode?: PromptMode;
+  /** Single mode: the unit to test; undefined = the default unit. */
+  unitId?: string;
+  /** Profile mode: prompt text per unit id for this run (missing = the saved prompt). */
+  unitPrompts?: Record<string, string>;
+  unitOverrides?: Record<string, string>;
   roles?: EvalRole[];
   jdIds?: string[];
   label?: string;
 }) => postJSON<{ runId: string; status: PromptEvalRunStatus; jdCount: number }>('/resume/eval/runs', body);
+
+/** Which unit each JD would get in a whole-profile run, and why. Keyword based: no model call, no cost. */
+export const routeEvalJds = (body: { accountId: string; jdIds: string[]; overrides?: Record<string, string> }) =>
+  postJSON<{ defaultUnitId: string; units: EvalRouteUnit[]; routes: EvalRoute[] }>('/resume/eval/route', body);
 
 export const listPromptEvalRuns = (params?: { accountId?: string; page?: number; limit?: number }) =>
   apiFetch<{ runs: PromptEvalRun[]; pagination: Pagination }>(`/resume/eval/runs${qs(params)}`);

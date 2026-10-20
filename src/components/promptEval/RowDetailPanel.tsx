@@ -5,7 +5,16 @@ import { notify } from '../../lib/notify';
 import { formatUsd } from '../../lib/modelCost';
 import { openTemplatePreview } from '../../lib/templatePreview';
 import SidePanel from '../SidePanel';
-import { ROLE_LABEL, ROW_STATUS_BADGE, ROW_STATUS_LABEL, formatDuration, formatScore, modelShort, scoreClass } from './format';
+import {
+  ROLE_LABEL,
+  ROW_STATUS_BADGE,
+  ROW_STATUS_LABEL,
+  UNIT_PICK_LABEL,
+  formatDuration,
+  formatScore,
+  modelShort,
+  scoreClass,
+} from './format';
 
 function NoteList({ title, items }: { title: string; items: string[] | undefined }) {
   if (!items || items.length === 0) return null;
@@ -185,6 +194,15 @@ export default function RowDetailPanel({
           )}
 
           <div className="space-y-1 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
+            {row.unitName && (
+              <p className="text-xs text-muted">
+                <span className="font-medium text-body">Resume unit:</span> {row.unitName}
+                {row.unitPick && (
+                  <span className={`${row.unitPick === 'manual' ? 'badge-info' : 'badge-neutral'} ml-1`}>{UNIT_PICK_LABEL[row.unitPick]}</span>
+                )}
+                {row.unitReason && <span className="ml-2">{row.unitReason}</span>}
+              </p>
+            )}
             <ModelLine
               what="Resume"
               model={row.genModelId ?? row.genModel}

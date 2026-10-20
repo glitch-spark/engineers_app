@@ -3,7 +3,7 @@ import { Loader2, Trash2 } from 'lucide-react';
 import type { PromptEvalRun } from '../../api/endpoints';
 import { formatUsd } from '../../lib/modelCost';
 import { formatDateTime } from '../jobApplies/format';
-import { RUN_STATUS_BADGE, RUN_STATUS_LABEL, formatScore, isRunActive, judgeLabel, modelShort, scoreClass } from './format';
+import { RUN_STATUS_BADGE, RUN_STATUS_LABEL, formatScore, isRunActive, judgeLabel, modelShort, promptModeLabel, scoreClass } from './format';
 
 /** Runs list: tick runs to compare them, open one for its rows, or delete it. */
 export default function RunsTable({
@@ -100,6 +100,7 @@ export default function RunsTable({
                   <td className="px-3 py-2 font-mono text-xs text-muted whitespace-nowrap">
                     <div title="Resume model">{modelShort(run.resumeModelId)}</div>
                     {!compact && <div title="Judge">judge: {judgeLabel(run)}</div>}
+                    {!compact && <div title="Resume units" className="font-sans">{promptModeLabel(run)}</div>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                     {run.counts.done}/{run.counts.total}
