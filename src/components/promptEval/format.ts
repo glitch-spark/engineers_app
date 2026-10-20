@@ -4,6 +4,7 @@ import type {
   PromptEvalRowStatus,
   PromptEvalRun,
   PromptEvalRunStatus,
+  UnitPick,
 } from '../../api/endpoints';
 import { formatDateTime } from '../jobApplies/format';
 
@@ -75,6 +76,24 @@ export function modelShort(id: string | null | undefined): string {
   const i = id.indexOf(':');
   return i >= 0 ? id.slice(i + 1) : id;
 }
+
+/** The judge as shown in run lists: 'rules' for the Job Applies rules judge, else the model's short name. */
+export function judgeLabel(run: Pick<PromptEvalRun, 'judgeMode' | 'judgeModelId'>): string {
+  return run.judgeMode === 'rules' ? 'rules' : modelShort(run.judgeModelId);
+}
+
+/** How a run used the profile's resume units: the whole profile, one named unit, or (older runs) one prompt. */
+export function promptModeLabel(run: Pick<PromptEvalRun, 'promptMode' | 'units'>): string {
+  const units = run.units ?? [];
+  if (run.promptMode === 'profile') return `whole profile · ${units.length} unit${units.length === 1 ? '' : 's'}`;
+  return units[0] ? `unit: ${units[0].name}` : 'one prompt';
+}
+
+export const UNIT_PICK_LABEL: Record<UnitPick, string> = {
+  auto: 'auto',
+  manual: 'manual',
+  single: 'the run’s unit',
+};
 
 export function formatDuration(ms: number | null | undefined): string {
   if (ms == null) return '';

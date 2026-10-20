@@ -7,7 +7,7 @@ import type { EvalRole, PromptEvalRun } from '../../api/endpoints';
 import { formatUsd } from '../../lib/modelCost';
 import { useTheme } from '../../theme/ThemeProvider';
 import { formatDateTime } from '../jobApplies/format';
-import { MAX_COMPARE, ROLE_LABEL, SERIES_COLORS, formatScore, modelShort, runTitle, scoreClass } from './format';
+import { MAX_COMPARE, ROLE_LABEL, SERIES_COLORS, formatScore, judgeLabel, modelShort, promptModeLabel, runTitle, scoreClass } from './format';
 import RoleRadar, { MetricToggle, type RadarMetric } from './RoleRadar';
 
 type MatrixRow = { jdId: string; role: EvalRole; title: string; company: string };
@@ -90,8 +90,9 @@ export default function CompareView({ ids }: { ids: string[] }) {
                     {run.accountName} · {formatDateTime(run.createdAt)}
                   </div>
                   <div className="mt-0.5 font-mono text-[11px] normal-case tracking-normal text-muted">
-                    {modelShort(run.resumeModelId)} · judge {modelShort(run.judgeModelId)}
+                    {modelShort(run.resumeModelId)} · judge {judgeLabel(run)}
                   </div>
+                  <div className="mt-0.5 text-[11px] normal-case tracking-normal text-muted">{promptModeLabel(run)}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-1 normal-case tracking-normal">
                     <span className={scoreClass(run.avgMatch)}>M {formatScore(run.avgMatch)}</span>
                     <span className={scoreClass(run.avgBelievability)}>B {formatScore(run.avgBelievability)}</span>
@@ -157,7 +158,19 @@ export default function CompareView({ ids }: { ids: string[] }) {
           {runs.map((run) => (
             <div key={run._id} className="panel p-3">
               <div className="mb-2 text-xs font-medium text-body">{runTitle(run)}</div>
-              {run.promptBody ? (
+              {run.promptMode === 'profile' ? (
+                <div className="max-h-96 space-y-2 overflow-auto">
+                  {(run.units ?? []).map((u) => (
+                    <div key={u.id}>
+                      <div className="text-xs font-medium text-strong">
+                        {u.name}
+                        {u.edited && <span className="badge-info ml-1">edited</span>}
+                      </div>
+                      <pre className="whitespace-pre-wrap text-xs text-body">{u.body || 'No custom prompt text.'}</pre>
+                    </div>
+                  ))}
+                </div>
+              ) : run.promptBody ? (
                 <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-body">{run.promptBody}</pre>
               ) : (
                 <p className="text-xs text-muted">No custom prompt text.</p>
