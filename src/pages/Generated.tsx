@@ -15,6 +15,7 @@ import { notify } from '../lib/notify';
 import { archivedLabel, filterProfiles } from '../lib/profileArchive';
 import { useDialog } from '../lib/useDialog';
 import ResumeTabs from '../components/ResumeTabs';
+import { TailoredScore } from '../components/jobApplies/Suggestions';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import ModelSelect from '../components/ModelSelect';
@@ -398,6 +399,7 @@ export default function GeneratedResumesPage() {
                 <th className="px-3 py-2 font-medium">Profile</th>
                 <th className="px-3 py-2 font-medium">Company</th>
                 <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium" title="ATS match score vs the job (Job Applies job or pasted JD), scored as on Job Applies">Score</th>
                 <th className="px-3 py-2 font-medium">LLM</th>
                 <th className="px-3 py-2 font-medium">Time</th>
                 <th className="px-3 py-2 font-medium">Tokens</th>
@@ -598,6 +600,9 @@ function JobRow({
               {job.errorMessage}
             </div>
           )}
+        </td>
+        <td className="px-3 py-2 whitespace-nowrap">
+          {job.matchScore ? <TailoredScore m={job.matchScore} /> : <span className="text-faint">—</span>}
         </td>
         <td className="px-3 py-2">
           <LlmProviderBadge

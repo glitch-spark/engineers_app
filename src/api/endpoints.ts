@@ -1312,6 +1312,8 @@ export interface ResumeJob {
   screeningLlmFallbackUsed?: boolean | null;
   screeningLlmFallbackReason?: string | null;
   matchSnippet?: string;
+  /** Job Applies: the score shown beside it there (this resume vs its job); null for others or until scored. */
+  matchScore?: JobApplyTailoredMatch | null;
   coverLetterText?: string | null;
   coverLetterLlmProvider?: LlmProvider | null;
   coverLetterLlmModel?: string | null;

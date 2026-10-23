@@ -1,5 +1,5 @@
 import { Download, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
-import type { JobApplyProfile, JobApplyRow, JobApplyTailored } from '../../api/endpoints';
+import type { JobApplyProfile, JobApplyRow, JobApplyTailored, JobApplyTailoredMatch } from '../../api/endpoints';
 import { bandClass } from './format';
 import { PromptCell, effectiveUnitId } from './PromptCell';
 
@@ -66,17 +66,21 @@ function TailoredChip({
   );
 }
 
-/** A finished tailored resume's match score with this job, and how far it moved from the uploaded resume's. */
-function TailoredScore({ t }: { t: JobApplyTailored }) {
-  const m = t.match;
-  if (!m) return null;
-  const delta = t.uploadedScore != null ? m.total - t.uploadedScore : null;
+/**
+ * A finished tailored resume's match score with this job, and how far it moved from the uploaded resume's. Also on
+ * the Resume page, which leaves out `uploadedScore` (no comparison).
+ */
+export function TailoredScore({ m, uploadedScore }: { m: JobApplyTailoredMatch; uploadedScore?: number | null }) {
+  const delta = uploadedScore != null ? m.total - uploadedScore : null;
   const title = [
     `Tailored resume vs this job: ${m.total} (${m.band})`,
-    t.uploadedScore != null ? `Best uploaded resume: ${t.uploadedScore}` : 'No uploaded resume scored on this job',
+    uploadedScore !== undefined &&
+      (uploadedScore != null ? `Best uploaded resume: ${uploadedScore}` : 'No uploaded resume scored on this job'),
     m.missing.length ? `Not in the resume: ${m.missing.join(', ')}` : 'Every job term is in the resume',
     ...m.knockouts,
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
   return (
     <span className="inline-flex items-center gap-1" title={title}>
       <span className={bandClass(m.band)} aria-label={`Match score ${m.total}`}>
@@ -255,7 +259,7 @@ export function ProfileCells({
                 <span className="text-sm font-medium" title={t.promptName ? `Tailored with ${t.promptName}` : undefined}>
                   Tailored
                 </span>
-                <TailoredScore t={t} />
+                {t.match && <TailoredScore m={t.match} uploadedScore={t.uploadedScore ?? null} />}
               </TailoredChip>
               {/* The tailored resume's actions, under it */}
               <div className="flex items-center gap-0.5 pl-1">
