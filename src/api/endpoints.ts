@@ -597,12 +597,13 @@ export interface RoundInput {
   caller?: CallerInput;
 }
 
-/** Why an interview has no linked resume. */
+/** Why an interview has no linked resume. `fixed_resume` is no longer offered (forks replaced it); old links keep it. */
 export type NoMatchReason = 'fixed_resume' | 'outside_app' | 'recruiter' | 'referral' | 'name_differs' | 'other';
 
 /** The resume and job an interview came from, frozen when linked (for interview statistics). */
 export interface InterviewResumeLink {
-  kind: 'tailored' | 'uploaded' | 'none';
+  /** fixed: a Job Applies fixed-resume fork. */
+  kind: 'tailored' | 'fixed' | 'uploaded' | 'none';
   linkedBy: 'user' | 'auto';
   linkedAt?: string | null;
   resumeJobId?: string | null;
@@ -625,7 +626,7 @@ export interface InterviewResumeLink {
 /** One company-search result: a generated resume (`t:`) or an uploaded-resume application (`u:`). */
 export interface ResumeMatch {
   matchId: string;
-  kind: 'tailored' | 'uploaded';
+  kind: 'tailored' | 'fixed' | 'uploaded';
   company: string;
   appliedAt: string | null;
   filename?: string | null;
@@ -635,14 +636,8 @@ export interface ResumeMatch {
   score?: JobApplyTailoredMatch | null;
 }
 
-/** What the form sends: the picked search result, or that none was found and why (+ the fixed resume sent). */
-export type ResumeLinkInput =
-  | { matchId: string }
-  | { none: true; reason: NoMatchReason; note?: string; resumeId?: string };
-
-/** "Used a fixed resume": that uploaded resume, scored against the Job URL's job when the app has read it. */
-export const getFixedResumePreview = (accountId: string, resumeId: string, jobUrl: string) =>
-  apiFetch<InterviewResumeLink>(`/interviews/fixed-resume${qs({ accountId, resumeId, jobUrl })}`);
+/** What the form sends: the picked search result, or that none was found and why. */
+export type ResumeLinkInput = { matchId: string } | { none: true; reason: NoMatchReason; note?: string };
 
 export const searchResumeMatches = (accountId: string, q: string) =>
   apiFetch<{ matches: ResumeMatch[] }>(`/interviews/resume-matches${qs({ accountId, q })}`);
@@ -1368,6 +1363,8 @@ export interface ResumeJob {
   matchSnippet?: string;
   /** Job Applies: the score shown beside it there (this resume vs its job); null for others or until scored. */
   matchScore?: JobApplyTailoredMatch | null;
+  /** Job Applies fixed-resume fork: the profile's uploaded resume (this id) copied for the job; not a generation. */
+  fixedFrom?: string | null;
   coverLetterText?: string | null;
   coverLetterLlmProvider?: LlmProvider | null;
   coverLetterLlmModel?: string | null;
@@ -1989,6 +1986,8 @@ export interface JobApplyTailored {
   /** The resume unit (prompt) and HTML template it was tailored with. */
   promptName?: string | null;
   templateName?: string | null;
+  /** A fixed-resume fork: the best uploaded resume (this id), copied for the job instead of tailoring. */
+  fixedFrom?: string | null;
 }
 
 export interface JobApplyTailoredMatch {

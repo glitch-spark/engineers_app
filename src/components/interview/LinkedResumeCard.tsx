@@ -15,7 +15,7 @@ export function reasonLabel(reason?: string | null): string {
 /** Save the linked resume: a tailored one's PDF, or an uploaded one's original file (from the profile). */
 export async function downloadLinkedResume(link: InterviewResumeLink, accountId: string): Promise<void> {
   try {
-    if (link.kind === 'tailored' && link.resumeJobId) {
+    if ((link.kind === 'tailored' || link.kind === 'fixed') && link.resumeJobId) {
       await api.downloadTailoredResume(link.resumeJobId, link.filename || 'Resume.pdf');
     } else if (link.kind === 'uploaded' && link.resumeId) {
       const { url } = await api.getAccountResumeFileUrl(accountId, link.resumeId);
@@ -30,7 +30,7 @@ export async function downloadLinkedResume(link: InterviewResumeLink, accountId:
 export function ResumeScoreCell({ link }: { link?: InterviewResumeLink | null }) {
   if (link?.score) {
     return (
-      <span title={`${link.reason === 'fixed_resume' ? 'Fixed resume' : KIND_LABEL[link.kind as 'tailored' | 'uploaded']}${link.filename ? ` · ${link.filename}` : ''}`}>
+      <span title={`${link.reason === 'fixed_resume' ? 'Fixed resume' : KIND_LABEL[link.kind as 'tailored' | 'fixed' | 'uploaded']}${link.filename ? ` · ${link.filename}` : ''}`}>
         <TailoredScore m={link.score} />
       </span>
     );
@@ -43,7 +43,8 @@ export function ResumeScoreCell({ link }: { link?: InterviewResumeLink | null })
 /** Download button for a linked resume; nothing for a link with no resume. */
 export function LinkedResumeDownload({ link, accountId, compact }: { link: InterviewResumeLink; accountId: string; compact?: boolean }) {
   const [busy, setBusy] = useState(false);
-  if (!((link.kind === 'tailored' && link.resumeJobId) || (link.kind === 'uploaded' && link.resumeId)) || !accountId) return null;
+  const hasFile = ((link.kind === 'tailored' || link.kind === 'fixed') && link.resumeJobId) || (link.kind === 'uploaded' && link.resumeId);
+  if (!hasFile || !accountId) return null;
   const label = `Download ${link.filename || 'resume'}`;
   return (
     <button
@@ -107,7 +108,9 @@ export default function LinkedResumeCard({
       Change
     </button>
   );
-  const title = link?.kind === 'none' ? 'No company found' : link?.reason === 'fixed_resume' ? 'Fixed resume' : 'Linked resume';
+  const title = link?.kind === 'none'
+    ? 'No company found'
+    : link?.kind === 'fixed' || link?.reason === 'fixed_resume' ? 'Fixed resume' : 'Linked resume';
 
   return (
     <section
