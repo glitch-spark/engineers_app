@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Accounts from './pages/Accounts';
 import Transactions from './pages/Transactions';
 import Report from './pages/Report';
+import Statistics from './pages/Statistics';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
 import InterviewsPage from './pages/interviews/InterviewsPage';
@@ -86,6 +87,7 @@ export default function App() {
       <Route path="/accounts/new" element={<Protected><AccountEdit /></Protected>} />
       <Route path="/accounts/:id" element={<Protected><AccountEdit /></Protected>} />
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
+      <Route path="/statistics" element={<Protected><Statistics /></Protected>} />
       <Route path="/report" element={<Protected><Report /></Protected>} />
       <Route path="/weekly-plan" element={<Navigate to="/report" replace />} />
       <Route path="/interviews" element={<Protected><InterviewsPage view="list" /></Protected>} />

@@ -116,6 +116,17 @@ export default function Sidebar({
           />
 
           <NavLink
+            href="/statistics"
+            label="Statistics"
+            isCollapsed={isCollapsed}
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19V5m0 14h16M8 15v-3m4 3V8m4 7v-5" />
+              </svg>
+            }
+          />
+
+          <NavLink
             href="/report"
             label="Plans"
             isCollapsed={isCollapsed}
