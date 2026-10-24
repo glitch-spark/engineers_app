@@ -13,7 +13,11 @@ export function shortDay(iso: string | null | undefined): string {
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export const KIND_LABEL: Record<'tailored' | 'uploaded', string> = { tailored: 'Tailored', uploaded: 'Uploaded' };
+export const KIND_LABEL: Record<'tailored' | 'fixed' | 'uploaded', string> = {
+  tailored: 'Tailored',
+  fixed: 'Fixed',
+  uploaded: 'Uploaded',
+};
 
 /**
  * The Company box of a new interview: typing searches the profile's generated resumes and uploaded-resume

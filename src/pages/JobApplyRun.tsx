@@ -1053,7 +1053,7 @@ export default function JobApplyRun() {
                     <th className="px-3 py-2 font-medium">Profile</th>
                     <th className="px-3 py-2 font-medium">Sample resumes (.pdf)</th>
                     <th className="min-w-[16rem] px-3 py-2 font-medium">Prompt</th>
-                    <th className="px-3 py-2 font-medium">Tailored</th>
+                    <th className="px-3 py-2 font-medium" title="The job's own resume: tailored, or the fixed resume copied for it">Resume</th>
                   </tr>
                 </thead>
                 {rows.map((row) => {

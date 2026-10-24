@@ -1,4 +1,4 @@
-import { Download, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
+import { Download, FileCheck2, Loader2, MessageSquareText, RotateCcw, Sparkles } from 'lucide-react';
 import type { JobApplyProfile, JobApplyRow, JobApplyTailored, JobApplyTailoredMatch } from '../../api/endpoints';
 import { bandClass } from './format';
 import { PromptCell, effectiveUnitId } from './PromptCell';
@@ -253,17 +253,32 @@ export function ProfileCells({
               <TailoredChip
                 picked={isPicked?.(t.jobId) ?? false}
                 onPick={onPick ? (on) => onPick(t.jobId, on) : undefined}
-                label={`${profileName}'s tailored resume`}
+                label={`${profileName}'s ${t.fixedFrom ? 'fixed' : 'tailored'} resume`}
               >
-                <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
-                <span className="text-sm font-medium" title={t.promptName ? `Tailored with ${t.promptName}` : undefined}>
-                  Tailored
+                {t.fixedFrom ? (
+                  <FileCheck2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
+                )}
+                <span
+                  className="text-sm font-medium"
+                  title={t.fixedFrom
+                    ? 'The best uploaded resume, at or above the minimum score, copied for this job'
+                    : t.promptName ? `Tailored with ${t.promptName}` : undefined}
+                >
+                  {t.fixedFrom ? 'Fixed' : 'Tailored'}
                 </span>
                 {t.match && <TailoredScore m={t.match} uploadedScore={t.uploadedScore ?? null} />}
               </TailoredChip>
               {/* The tailored resume's actions, under it */}
               <div className="flex items-center gap-0.5 pl-1">
-              <button type="button" className="btn-icon" onClick={() => onDownloadTailored(t)} title="Download tailored PDF" aria-label={`Download tailored PDF (${profileName})`}>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => onDownloadTailored(t)}
+                title={`Download ${t.fixedFrom ? 'fixed' : 'tailored'} PDF`}
+                aria-label={`Download ${t.fixedFrom ? 'fixed' : 'tailored'} PDF (${profileName})`}
+              >
                 <Download className="h-3.5 w-3.5" aria-hidden />
               </button>
               <a
@@ -280,8 +295,10 @@ export function ProfileCells({
                 type="button"
                 className="btn-icon"
                 onClick={() => onTailor(acc)}
-                title={tailorModel ? `Generate again with ${tailorModel}` : 'Generate again'}
-                aria-label={`Re-tailor for ${profileName}`}
+                title={t.fixedFrom
+                  ? `Tailor a resume instead${tailorModel ? ` with ${tailorModel}` : ''}`
+                  : tailorModel ? `Generate again with ${tailorModel}` : 'Generate again'}
+                aria-label={t.fixedFrom ? `Tailor a resume instead for ${profileName}` : `Re-tailor for ${profileName}`}
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden />
               </button>

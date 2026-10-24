@@ -21,10 +21,9 @@ export type LinkChoice =
   | { mode: 'keep' }
   | { mode: 'search' }
   | { mode: 'match'; matchId: string }
-  | { mode: 'none'; reason: NoMatchReason | ''; note: string; resumeId: string };
+  | { mode: 'none'; reason: NoMatchReason | ''; note: string };
 
 export const NO_MATCH_REASONS: { value: NoMatchReason; label: string }[] = [
-  { value: 'fixed_resume', label: 'Used a fixed resume' },
   { value: 'outside_app', label: 'Applied outside the app' },
   { value: 'recruiter', label: 'Recruiter reached out' },
   { value: 'referral', label: 'Referral' },
@@ -35,14 +34,7 @@ export const NO_MATCH_REASONS: { value: NoMatchReason; label: string }[] = [
 /** What the API gets for the link: nothing (keep the saved one / none picked), the pick, or the reason. */
 export function linkPayload(link: LinkChoice): ResumeLinkInput | undefined {
   if (link.mode === 'match') return { matchId: link.matchId };
-  if (link.mode === 'none' && link.reason) {
-    return {
-      none: true,
-      reason: link.reason,
-      note: link.note.trim(),
-      ...(link.reason === 'fixed_resume' ? { resumeId: link.resumeId } : {}),
-    };
-  }
+  if (link.mode === 'none' && link.reason) return { none: true, reason: link.reason, note: link.note.trim() };
   return undefined;
 }
 
@@ -180,7 +172,6 @@ export function missingFields(
     if (app.link.mode === 'none') {
       if (!app.link.reason) out.push('Reason');
       else if (app.link.reason === 'other' && !app.link.note.trim()) out.push('Note');
-      else if (app.link.reason === 'fixed_resume' && !app.link.resumeId) out.push('Fixed resume');
     }
   }
   if (mode !== 'editDetails' && round) {

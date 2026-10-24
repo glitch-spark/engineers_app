@@ -605,11 +605,18 @@ function JobRow({
           {job.matchScore ? <TailoredScore m={job.matchScore} /> : <span className="text-faint">—</span>}
         </td>
         <td className="px-3 py-2">
-          <LlmProviderBadge
-            provider={job.resumeLlmProvider}
-            model={job.resumeLlmModel}
-            fallbackUsed={job.resumeLlmFallbackUsed}
-          />
+          {job.fixedFrom ? (
+            // A Job Applies fixed-resume fork: no model ran, the uploaded resume was copied for the job.
+            <span className="badge badge-success" title="Fixed resume: the best uploaded resume, copied for this job by Job Applies">
+              Fixed
+            </span>
+          ) : (
+            <LlmProviderBadge
+              provider={job.resumeLlmProvider}
+              model={job.resumeLlmModel}
+              fallbackUsed={job.resumeLlmFallbackUsed}
+            />
+          )}
         </td>
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{elapsed}</td>
         <td className="px-3 py-2 text-xs text-muted whitespace-nowrap tabular-nums" title={
