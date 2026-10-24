@@ -126,7 +126,8 @@ export default function InterviewsPage({ view, callers = false }: { view: View; 
         <InterviewsCalendar
           filters={filters}
           update={update}
-          onOpenRound={(iv, roundId) => setPanel({ interview: iv, mode: 'editRound', roundId })}
+          // Same as the list: the interview's summary first (Edit details, Add next round, edit a round from there).
+          onOpenRound={(iv) => setPanel({ interview: iv, mode: 'view' })}
           onNew={(prefill) => setPanel({ interview: null, mode: 'new', prefill })}
         />
       )}
