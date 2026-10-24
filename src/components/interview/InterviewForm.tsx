@@ -5,6 +5,7 @@ import { messageOf, notify } from '../../lib/notify';
 import {
   blankApplication,
   blankRound,
+  linkPayload,
   missingFields,
   nextStage,
   roundFromEntry,
@@ -30,6 +31,7 @@ function applicationFromInterview(iv: Interview): ApplicationFormState {
     companyName: iv.companyName || '',
     appliedPosition: iv.appliedPosition || '',
     jobUrl: iv.jobUrl || '',
+    link: iv.resumeLink ? { mode: 'keep' } : { mode: 'search' },
   };
 }
 
@@ -112,6 +114,7 @@ export default function InterviewForm({
         companyName: app.companyName.trim(),
         appliedPosition: app.appliedPosition.trim(),
         jobUrl: app.jobUrl.trim(),
+        resumeLink: linkPayload(app.link),
       };
       if (mode === 'new') {
         saved = await api.createInterview({ ...appBody, round: roundPayload(round, tz) });
@@ -146,7 +149,13 @@ export default function InterviewForm({
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
         {error && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{error}</p>}
         {showApp && (
-          <ApplicationFields app={app} onChange={(p) => setApp((a) => ({ ...a, ...p }))} idPrefix={idPrefix} />
+          <ApplicationFields
+            app={app}
+            onChange={(p) => setApp((a) => ({ ...a, ...p }))}
+            idPrefix={idPrefix}
+            savedLink={interview?.resumeLink}
+            interviewId={interview?._id}
+          />
         )}
         {mode === 'editDetails' && history.length > 0 && (
           <section aria-label="Rounds">

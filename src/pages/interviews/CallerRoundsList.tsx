@@ -11,6 +11,7 @@ import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, callerLabel, isUnassigned } from '../../lib/callerColors';
+import RoundTrail from './RoundTrail';
 
 const PAGE_SIZES = [10, 20, 50];
 
@@ -65,6 +66,10 @@ export default function CallerRoundsList({
       </span>
     );
   };
+  // Every round of the row's interview, as on the Interviews list.
+  const roundsCell = (row: InterviewRoundRow) => (
+    <RoundTrail rounds={(data?.interviews?.[row.interviewId] as unknown as Interview | undefined)?.stageHistory ?? []} tz={tz} />
+  );
   const stageCell = (row: InterviewRoundRow) => <span className={`badge ${stageBadgeClass(row.stage)}`}>{stageLabel(row.stage)}</span>;
   const statusCell = (row: InterviewRoundRow) => {
     const s = normalizeInterviewStatus(row.status);
@@ -91,6 +96,7 @@ export default function CallerRoundsList({
                 <th scope="col" className="px-3 py-2.5 text-left">Company</th>
                 <th scope="col" className="px-3 py-2.5 text-left">Stage</th>
                 <th scope="col" className="px-3 py-2.5 text-left">Status</th>
+                <th scope="col" className="px-3 py-2.5 text-left">Rounds</th>
                 <th scope="col" className="px-3 py-2.5 text-left">Caller</th>
                 <th scope="col" className="px-3 py-2.5 text-left">Method</th>
                 <th scope="col" className="px-3 py-2.5 text-left">Owner</th>
@@ -98,11 +104,11 @@ export default function CallerRoundsList({
             </thead>
             <tbody>
               {isLoading && !data ? (
-                <tr><td colSpan={7} className="px-3 py-10 text-center text-muted">
+                <tr><td colSpan={8} className="px-3 py-10 text-center text-muted">
                   <span className="inline-flex items-center gap-2" role="status"><span className="spinner spinner-sm" aria-hidden /> Loading caller rounds…</span>
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">No caller rounds match these filters.</td></tr>
+                <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">No caller rounds match these filters.</td></tr>
               ) : rows.map((row) => {
                 const method = methodOf(row);
                 return (
@@ -116,6 +122,7 @@ export default function CallerRoundsList({
                     </td>
                     <td className="px-3 py-2.5">{stageCell(row)}</td>
                     <td className="px-3 py-2.5">{statusCell(row)}</td>
+                    <td className="px-3 py-2.5">{roundsCell(row)}</td>
                     <td className="px-3 py-2.5">{callerCell(row)}</td>
                     <td className="px-3 py-2.5">
                       <div>{method.label}</div>
@@ -142,7 +149,7 @@ export default function CallerRoundsList({
                   </div>
                   {callerCell(row)}
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-sm">{stageCell(row)}{statusCell(row)}</div>
+                <div className="flex flex-wrap items-center gap-2 text-sm">{stageCell(row)}{statusCell(row)}{roundsCell(row)}</div>
               </div>
             </li>
           ))}
