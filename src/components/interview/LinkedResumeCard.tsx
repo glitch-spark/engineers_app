@@ -26,6 +26,20 @@ export async function downloadLinkedResume(link: InterviewResumeLink, accountId:
   }
 }
 
+/** A table cell's view of an interview's resume score: the badge, else why there's none. */
+export function ResumeScoreCell({ link }: { link?: InterviewResumeLink | null }) {
+  if (link?.score) {
+    return (
+      <span title={`${link.reason === 'fixed_resume' ? 'Fixed resume' : KIND_LABEL[link.kind as 'tailored' | 'uploaded']}${link.filename ? ` · ${link.filename}` : ''}`}>
+        <TailoredScore m={link.score} />
+      </span>
+    );
+  }
+  if (!link) return <span className="text-faint" title="No resume linked yet">—</span>;
+  if (link.kind === 'none') return <span className="text-faint" title={`No company found · ${reasonLabel(link.reason)}`}>—</span>;
+  return <span className="text-xs text-faint" title={link.filename || undefined}>Not scored</span>;
+}
+
 /** Download button for a linked resume; nothing for a link with no resume. */
 export function LinkedResumeDownload({ link, accountId, compact }: { link: InterviewResumeLink; accountId: string; compact?: boolean }) {
   const [busy, setBusy] = useState(false);
