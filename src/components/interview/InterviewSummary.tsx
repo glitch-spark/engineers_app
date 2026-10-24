@@ -16,6 +16,9 @@ import { STATUS_DOT } from '../../pages/interviews/RoundTrail';
 import ActionMenu from '../ActionMenu';
 import ConfirmedBadge, { needsConfirmBadge } from './ConfirmedBadge';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
+import { TailoredScore } from '../jobApplies/Suggestions';
+import { KIND_LABEL } from './CompanyMatchField';
+import { LinkedResumeDownload, reasonLabel } from './LinkedResumeCard';
 import { safeHref } from '../../lib/safeHref';
 
 function when(iso: string | null | undefined, end: string | null | undefined, tz: string): string {
@@ -169,6 +172,28 @@ export default function InterviewSummary({
             ) : iv.jobUrl ? (
               <span className="block truncate">{iv.jobUrl}</span>
             ) : canEdit ? <QuickAdd label="Add job link" onClick={onEditDetails} /> : '—'}
+          </dd>
+          <dt className="text-muted">Resume</dt>
+          <dd className="min-w-0">
+            {iv.resumeLink?.kind === 'none' ? (
+              <span>
+                No company found · {reasonLabel(iv.resumeLink.reason)}
+                {iv.resumeLink.reasonNote && <span className="text-muted"> · {iv.resumeLink.reasonNote}</span>}
+              </span>
+            ) : iv.resumeLink ? (
+              <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
+                <span className="truncate">
+                  {iv.resumeLink.reason === 'fixed_resume' ? 'Fixed resume' : KIND_LABEL[iv.resumeLink.kind]}
+                  {iv.resumeLink.filename ? ` · ${iv.resumeLink.filename}` : ''}
+                </span>
+                {iv.resumeLink.score && <TailoredScore m={iv.resumeLink.score} />}
+                <LinkedResumeDownload
+                  link={iv.resumeLink}
+                  accountId={typeof iv.accountId === 'object' ? iv.accountId._id : iv.accountId}
+                  compact
+                />
+              </span>
+            ) : canEdit ? <QuickAdd label="Link resume" onClick={onEditDetails} /> : '—'}
           </dd>
           {iv.createdAt && (
             <>

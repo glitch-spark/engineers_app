@@ -597,17 +597,71 @@ export interface RoundInput {
   caller?: CallerInput;
 }
 
+/** Why an interview has no linked resume. */
+export type NoMatchReason = 'fixed_resume' | 'outside_app' | 'recruiter' | 'referral' | 'name_differs' | 'other';
+
+/** The resume and job an interview came from, frozen when linked (for interview statistics). */
+export interface InterviewResumeLink {
+  kind: 'tailored' | 'uploaded' | 'none';
+  linkedBy: 'user' | 'auto';
+  linkedAt?: string | null;
+  resumeJobId?: string | null;
+  appliedLogId?: string | null;
+  resumeId?: string | null;
+  matchedCompany?: string | null;
+  source?: 'generator' | 'job_applies' | null;
+  filename?: string | null;
+  promptName?: string | null;
+  resumeModel?: string | null;
+  appliedAt?: string | null;
+  /** Left out of list and calendar feeds; GET /interviews/{id} and the match preview have it. */
+  jobDescription?: string | null;
+  jobUrl?: string | null;
+  score?: JobApplyTailoredMatch | null;
+  reason?: NoMatchReason | null;
+  reasonNote?: string | null;
+}
+
+/** One company-search result: a generated resume (`t:`) or an uploaded-resume application (`u:`). */
+export interface ResumeMatch {
+  matchId: string;
+  kind: 'tailored' | 'uploaded';
+  company: string;
+  appliedAt: string | null;
+  filename?: string | null;
+  source: 'generator' | 'job_applies';
+  promptName?: string | null;
+  jobUrl?: string | null;
+  score?: JobApplyTailoredMatch | null;
+}
+
+/** What the form sends: the picked search result, or that none was found and why (+ the fixed resume sent). */
+export type ResumeLinkInput =
+  | { matchId: string }
+  | { none: true; reason: NoMatchReason; note?: string; resumeId?: string };
+
+/** "Used a fixed resume": that uploaded resume, scored against the Job URL's job when the app has read it. */
+export const getFixedResumePreview = (accountId: string, resumeId: string, jobUrl: string) =>
+  apiFetch<InterviewResumeLink>(`/interviews/fixed-resume${qs({ accountId, resumeId, jobUrl })}`);
+
+export const searchResumeMatches = (accountId: string, q: string) =>
+  apiFetch<{ matches: ResumeMatch[] }>(`/interviews/resume-matches${qs({ accountId, q })}`);
+
+export const getResumeMatch = (accountId: string, matchId: string) =>
+  apiFetch<InterviewResumeLink>(`/interviews/resume-matches/${encodeURIComponent(matchId)}${qs({ accountId })}`);
+
 export interface CreateInterviewBody {
   accountId: string;
   companyName: string;
   appliedPosition?: string;
   jobUrl?: string;
   round: RoundInput;
+  resumeLink?: ResumeLinkInput;
 }
 
 /** Application-level fields, or a status-only update of the current round. */
 export type UpdateInterviewBody =
-  | { accountId?: string; companyName?: string; appliedPosition?: string; jobUrl?: string }
+  | { accountId?: string; companyName?: string; appliedPosition?: string; jobUrl?: string; resumeLink?: ResumeLinkInput }
   | { status: string };
 
 export const createInterview = (body: CreateInterviewBody) =>

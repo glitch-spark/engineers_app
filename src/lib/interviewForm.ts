@@ -1,5 +1,5 @@
 /** Pure state helpers for the Application + Round interview form. */
-import type { CallerInput, InterviewStageEntry, RoundInput } from '../api/endpoints';
+import type { CallerInput, InterviewStageEntry, NoMatchReason, ResumeLinkInput, RoundInput } from '../api/endpoints';
 import { INTERVIEW_STAGE_ORDER, normalizeInterviewStatus, type InterviewStatusValue } from './stageBadge';
 import { browserZone, fromZoned, parseServerTime, zonedDateKey, zonedTime } from './interviewTimezone';
 
@@ -10,7 +10,41 @@ export type ApplicationFormState = {
   companyName: string;
   appliedPosition: string;
   jobUrl: string;
+  link: LinkChoice;
 };
+
+/**
+ * The resume this interview came from. `keep`: the interview's saved link, unchanged (edit). `search`: nothing picked
+ * yet (the Company box searches). `match`: a picked search result. `none`: no company found, and why.
+ */
+export type LinkChoice =
+  | { mode: 'keep' }
+  | { mode: 'search' }
+  | { mode: 'match'; matchId: string }
+  | { mode: 'none'; reason: NoMatchReason | ''; note: string; resumeId: string };
+
+export const NO_MATCH_REASONS: { value: NoMatchReason; label: string }[] = [
+  { value: 'fixed_resume', label: 'Used a fixed resume' },
+  { value: 'outside_app', label: 'Applied outside the app' },
+  { value: 'recruiter', label: 'Recruiter reached out' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'name_differs', label: 'Company name differs' },
+  { value: 'other', label: 'Other' },
+];
+
+/** What the API gets for the link: nothing (keep the saved one / none picked), the pick, or the reason. */
+export function linkPayload(link: LinkChoice): ResumeLinkInput | undefined {
+  if (link.mode === 'match') return { matchId: link.matchId };
+  if (link.mode === 'none' && link.reason) {
+    return {
+      none: true,
+      reason: link.reason,
+      note: link.note.trim(),
+      ...(link.reason === 'fixed_resume' ? { resumeId: link.resumeId } : {}),
+    };
+  }
+  return undefined;
+}
 
 export type RoundFormState = {
   stage: string;
@@ -43,7 +77,7 @@ export const DEFAULT_DURATION_MIN = 60;
 export const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
 
 export function blankApplication(): ApplicationFormState {
-  return { accountId: '', companyName: '', appliedPosition: '', jobUrl: '' };
+  return { accountId: '', companyName: '', appliedPosition: '', jobUrl: '', link: { mode: 'search' } };
 }
 
 /** `tz` is the IANA zone the form's date and time are read in (default: browser). */
@@ -141,6 +175,13 @@ export function missingFields(
   if ((mode === 'new' || mode === 'editDetails') && app) {
     if (!app.accountId) out.push('Profile');
     if (!app.companyName.trim()) out.push('Company');
+    // A new interview links its resume or says why there's none; editing older ones may leave it unlinked.
+    if (mode === 'new' && app.link.mode === 'search') out.push('Resume match or reason');
+    if (app.link.mode === 'none') {
+      if (!app.link.reason) out.push('Reason');
+      else if (app.link.reason === 'other' && !app.link.note.trim()) out.push('Note');
+      else if (app.link.reason === 'fixed_resume' && !app.link.resumeId) out.push('Fixed resume');
+    }
   }
   if (mode !== 'editDetails' && round) {
     if (!round.stage) out.push('Stage');
