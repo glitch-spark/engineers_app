@@ -172,7 +172,7 @@ export function missingFields(
   round: RoundFormState | null,
 ): string[] {
   const out: string[] = [];
-  if ((mode === 'new' || mode === 'editDetails') && app) {
+  if (mode !== 'addRound' && app) {
     if (!app.accountId) out.push('Profile');
     if (!app.companyName.trim()) out.push('Company');
     // A new interview links its resume or says why there's none; editing older ones may leave it unlinked.

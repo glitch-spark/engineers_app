@@ -77,6 +77,8 @@ export default function InterviewForm({
     && ['scheduled', 'completed'].includes(normalizeInterviewStatus(previous.status));
 
   const [app, setApp] = useState<ApplicationFormState>(() => (interview ? applicationFromInterview(interview) : blankApplication()));
+  // As loaded: editing a round saves the application only when it changed.
+  const [savedApp] = useState(app);
   const [round, setRound] = useState<RoundFormState>(() => (entry
     ? roundFromEntry(entry, tz)
     : blankRound({
@@ -97,7 +99,8 @@ export default function InterviewForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const showApp = mode === 'new' || mode === 'editDetails';
+  // Every form but Add round shows the application (company search, linked resume) above the round.
+  const showApp = mode !== 'addRound';
   const showRound = mode !== 'editDetails';
   const missing = missingFields(mode, showApp ? app : null, showRound ? round : null);
   const hintId = `${idPrefix}-missing`;
@@ -126,6 +129,7 @@ export default function InterviewForm({
           markPreviousPassed: previousOpen && markPrevious,
         });
       } else if (mode === 'editRound' && interview && roundId) {
+        if (JSON.stringify(app) !== JSON.stringify(savedApp)) await api.updateInterview(interview._id, appBody);
         const body: api.InterviewStageInput = roundPayload(round, tz);
         if (!round.callerEnabled && entry?.caller?.enabled) body.caller = { enabled: false };
         // Send the tick when it differs from what the server would keep: a new time clears confirmed.

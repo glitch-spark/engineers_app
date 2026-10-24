@@ -20,6 +20,7 @@ import {
   stageLabel,
 } from '../../lib/stageBadge';
 import RoundTrail from './RoundTrail';
+import { ResumeScoreCell } from '../../components/interview/LinkedResumeCard';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 
@@ -166,6 +167,7 @@ export default function InterviewsList({
               <th scope="col" className="px-3 py-2.5 text-left">Caller</th>
               {sortHeader('latest', `Latest round (${zoneAbbrev(new Date(), tz)})`)}
               {sortHeader('status', 'Status')}
+              <th scope="col" className="px-3 py-2.5 text-left">Score</th>
               <th scope="col" className="px-3 py-2.5 text-left">Rounds</th>
               <th scope="col" className="px-3 py-2.5 text-left">Owner</th>
               <th scope="col" className="w-10 px-3 py-2.5"><span className="sr-only">Actions</span></th>
@@ -173,9 +175,9 @@ export default function InterviewsList({
           </thead>
           <tbody>
             {isLoading && !data ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">Loading interviews…</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted">Loading interviews…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">No interviews match these filters.</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted">No interviews match these filters.</td></tr>
             ) : rows.map((iv) => (
               <tr
                 key={iv._id}
@@ -193,6 +195,7 @@ export default function InterviewsList({
                 <td className="px-3 py-2.5">{callerCell(iv)}</td>
                 <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{whenText(iv.scheduledAt, tz)}</td>
                 <td className="px-3 py-2.5">{statusCell(iv)}</td>
+                <td className="px-3 py-2.5"><ResumeScoreCell link={iv.resumeLink} /></td>
                 <td className="px-3 py-2.5"><RoundTrail rounds={iv.stageHistory ?? []} tz={tz} /></td>
                 <td className="px-3 py-2.5"><NameWithAvatar name={iv.ownerName || iv.ownerEmail} size="sm" /></td>
                 <td className="px-3 py-2.5 text-right">{rowMenu(iv)}</td>
@@ -219,6 +222,7 @@ export default function InterviewsList({
                 {iv.caller?.enabled && callerCell(iv)}
                 <span className="tabular-nums text-muted">{whenText(iv.scheduledAt, tz)}</span>
                 {statusCell(iv)}
+                {iv.resumeLink?.score && <ResumeScoreCell link={iv.resumeLink} />}
                 <RoundTrail rounds={iv.stageHistory ?? []} tz={tz} />
               </div>
             </div>
