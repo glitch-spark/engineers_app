@@ -11,6 +11,7 @@ const STAFF_ALLOWED = [
   '/profile',
   '/report',
   '/weekly-plan',
+  '/statistics',
   '/interviews',
   '/interview',
   '/resume',

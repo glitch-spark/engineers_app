@@ -862,6 +862,95 @@ export const getDashboardActivity = (params: { from: string; to: string; userId?
 export const getDashboardNetMonthly = (params: { userId?: string; today?: string }) =>
   apiFetch<DashboardNetMonthly>(`/dashboard/net-monthly${qs(params)}`);
 
+// ---------- statistics: interview rate ----------
+
+export type StatsPeriod = 'week' | 'month';
+export type StatsRegion = 'all' | 'Latam' | 'EU' | 'US';
+
+/** One user's bids, interviews and bid→interview rate in the period and region. */
+export interface InterviewRateRow {
+  userId: string;
+  name: string;
+  image: string | null;
+  /** Applies Done in followed-up daily plans: self + bidder (bidder only under All: it has no region). */
+  bids: number;
+  selfBids: number;
+  bidderBids: number;
+  interviews: number;
+  /** interviews / bids; null with no bids. */
+  rate: number | null;
+  /** Fewer than `minBids` bids: the rate is shown but not ranked. */
+  lowVolume: boolean;
+  /** 1 = best rate; null when not ranked. */
+  rank: number | null;
+  isMe: boolean;
+}
+
+export interface InterviewRatePoint {
+  label: string;
+  start: string;
+  bids: number;
+  interviews: number;
+  rate: number | null;
+  teamBids: number;
+  teamInterviews: number;
+  teamRate: number | null;
+}
+
+export interface InterviewRates {
+  period: StatsPeriod;
+  region: StatsRegion;
+  start: string;
+  end: string;
+  label: string;
+  minBids: number;
+  rows: InterviewRateRow[];
+  totals: { bids: number; selfBids: number; bidderBids: number; interviews: number; rate: number | null };
+  /** Bids split into self + bidder (All only; a region's bids are self applies). */
+  bidderSplit: boolean;
+  /** The viewer's and the team's rate over the last periods, oldest first; the last is the selected period. */
+  trend: InterviewRatePoint[];
+  /** Profiles with no region: counted under All only. */
+  unassignedProfiles: number;
+}
+
+export const getInterviewRates = (params: { period: StatsPeriod; date: string; region: StatsRegion }) =>
+  apiFetch<InterviewRates>(`/metrics/interview-rates${qs(params)}`);
+
+// ---------- statistics: resume compare ----------
+
+/** One profile's resume for a job, in a user's cell. */
+export interface CompareEntry {
+  resumeJobId: string | null;
+  profileName: string;
+  kind: 'tailored' | 'fixed' | null;
+  promptName?: string | null;
+  score: { total: number; band: ScoreBand; missing: string[] } | null;
+  /** A signed download link anyone can open; null when the profile got the interview without a resume for it. */
+  link: string | null;
+  interviewed: boolean;
+}
+
+export interface CompareRow {
+  key: string;
+  company: string;
+  jobUrl: string;
+  interviews: { userId: string; name: string; accountId: string; stage: string | null; date: string | null }[];
+  /** userId → that user's resumes for this job (one per profile). */
+  cells: Record<string, CompareEntry[]>;
+}
+
+export interface ResumeCompare {
+  period: StatsPeriod;
+  label: string;
+  /** Columns: the viewer first, then everyone with a resume for one of the jobs. */
+  users: { userId: string; name: string; isMe: boolean }[];
+  rows: CompareRow[];
+}
+
+export const getResumeCompare = (params: { period: StatsPeriod; date: string; region: StatsRegion; q?: string }) =>
+  apiFetch<ResumeCompare>(`/metrics/resume-compare${qs(params)}`);
+
 export type DashboardCompareRange = 'week' | 'month' | '30d';
 
 export interface DashboardCompareMetric {
