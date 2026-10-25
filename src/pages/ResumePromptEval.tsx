@@ -56,6 +56,8 @@ export default function ResumePromptEvalPage() {
 
   const [pendingDelete, setPendingDelete] = useState<PromptEvalRun | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pendingStop, setPendingStop] = useState<PromptEvalRun | null>(null);
+  const [stopping, setStopping] = useState(false);
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(params);
@@ -79,6 +81,21 @@ export default function ResumePromptEvalPage() {
   function openNew(p?: EvalPrefill) {
     setPrefill(p);
     setShowNew(true);
+  }
+
+  async function confirmStop() {
+    if (!pendingStop) return;
+    setStopping(true);
+    try {
+      await api.stopPromptEvalRun(pendingStop._id);
+      notify.success('Run stopped');
+      setPendingStop(null);
+      await mutate();
+    } catch (err) {
+      notify.error(err, 'Could not stop the run');
+    } finally {
+      setStopping(false);
+    }
   }
 
   async function confirmDelete() {
@@ -158,7 +175,7 @@ export default function ResumePromptEvalPage() {
                 </div>
               )}
             </div>
-            <RunsTable runs={runs} loading={isLoading} selected={selected} onToggle={toggleSelected} onDelete={setPendingDelete} />
+            <RunsTable runs={runs} loading={isLoading} selected={selected} onToggle={toggleSelected} onDelete={setPendingDelete} onStop={setPendingStop} />
           </div>
         ) : (
           <JdLibrary />
@@ -188,6 +205,16 @@ export default function ResumePromptEvalPage() {
           setShowNew(false);
           navigate(`/resume/eval/${id}`);
         }}
+      />
+      <ConfirmDialog
+        open={pendingStop != null}
+        title="Stop this run?"
+        body="No more job descriptions are started. Rows that already finished keep their scores; the rest are marked failed. A model call already in flight may still be billed."
+        confirmLabel="Stop run"
+        tone="default"
+        busy={stopping}
+        onConfirm={confirmStop}
+        onCancel={() => setPendingStop(null)}
       />
       <ConfirmDialog
         open={pendingDelete != null}

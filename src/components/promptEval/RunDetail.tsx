@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { Link, useNavigate } from 'react-router-dom';
-import { GitCompareArrows, Loader2, RotateCcw, Trash2 } from 'lucide-react';
+import { GitCompareArrows, Loader2, RotateCcw, Square, Trash2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { PromptEvalRow, PromptEvalRun } from '../../api/endpoints';
 import { formatUsd } from '../../lib/modelCost';
@@ -99,6 +99,8 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
   const [openRow, setOpenRow] = useState<PromptEvalRow | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(false);
+  const [stopping, setStopping] = useState(false);
 
   if (isLoading && !run) {
     return (
@@ -123,6 +125,20 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
   const profileMode = run.promptMode === 'profile';
   // Keep the panel's row fresh while polling.
   const currentRow = openRow ? run.rows.find((r) => r.jdId === openRow.jdId) ?? openRow : null;
+
+  async function doStop() {
+    setStopping(true);
+    try {
+      await api.stopPromptEvalRun(run!._id);
+      notify.success('Run stopped');
+      setConfirmStop(false);
+      await mutate();
+    } catch (err) {
+      notify.error(err, 'Could not stop the run');
+    } finally {
+      setStopping(false);
+    }
+  }
 
   async function doDelete() {
     setDeleting(true);
@@ -163,6 +179,11 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
           {run.error && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{run.error}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
+          {active && (
+            <button type="button" className="btn-outline btn-sm" onClick={() => setConfirmStop(true)}>
+              <Square className="h-4 w-4" aria-hidden /> Stop run
+            </button>
+          )}
           <button type="button" className="btn-outline btn-sm" onClick={() => onRerun(run)}>
             <RotateCcw className="h-4 w-4" aria-hidden /> Re-run with same settings
           </button>
@@ -329,6 +350,16 @@ export default function RunDetail({ runId, onRerun }: { runId: string; onRerun: 
       </div>
 
       <RowDetailPanel run={run} row={currentRow} onClose={() => setOpenRow(null)} />
+      <ConfirmDialog
+        open={confirmStop}
+        title="Stop this run?"
+        body="No more job descriptions are started. Rows that already finished keep their scores; the rest are marked failed. A model call already in flight may still be billed."
+        confirmLabel="Stop run"
+        tone="default"
+        busy={stopping}
+        onConfirm={doStop}
+        onCancel={() => setConfirmStop(false)}
+      />
       <ConfirmDialog
         open={confirmDelete}
         title="Delete this run?"
