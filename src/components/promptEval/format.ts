@@ -25,12 +25,14 @@ export const RUN_STATUS_LABEL: Record<PromptEvalRunStatus, string> = {
   running: 'Running',
   done: 'Done',
   failed: 'Failed',
+  stopped: 'Stopped',
 };
 
 export const RUN_STATUS_BADGE: Record<PromptEvalRunStatus, string> = {
   running: 'badge-info',
   done: 'badge-success',
   failed: 'badge-danger',
+  stopped: 'badge-warning',
 };
 
 export const ROW_STATUS_LABEL: Record<PromptEvalRowStatus, string> = {

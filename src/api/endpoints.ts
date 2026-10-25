@@ -1752,7 +1752,7 @@ export interface EvalRoute {
 }
 
 export type PromptEvalRowStatus = 'pending' | 'generating' | 'judging' | 'done' | 'failed';
-export type PromptEvalRunStatus = 'running' | 'done' | 'failed';
+export type PromptEvalRunStatus = 'running' | 'done' | 'failed' | 'stopped';
 export type PromptEvalPromptSource = 'custom' | 'profile' | 'global' | 'none';
 
 export interface PromptEvalRow {
@@ -1875,6 +1875,9 @@ export const listPromptEvalRuns = (params?: { accountId?: string; page?: number;
 export const getPromptEvalRun = (id: string) => apiFetch<PromptEvalRun>(`/resume/eval/runs/${id}`);
 
 export const deletePromptEvalRun = (id: string) => del<{ ok: boolean }>(`/resume/eval/runs/${id}`);
+
+/** Stop a running eval: finished rows keep their scores, the rest are marked failed. No-op if it is not running. */
+export const stopPromptEvalRun = (id: string) => postJSON<PromptEvalRun>(`/resume/eval/runs/${id}/stop`, {});
 
 // ---------- job applies ----------
 

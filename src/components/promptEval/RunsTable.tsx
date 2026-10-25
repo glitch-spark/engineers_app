@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Square, Trash2 } from 'lucide-react';
 import type { PromptEvalRun } from '../../api/endpoints';
 import { formatUsd } from '../../lib/modelCost';
 import { formatDateTime } from '../jobApplies/format';
@@ -12,6 +12,7 @@ export default function RunsTable({
   selected,
   onToggle,
   onDelete,
+  onStop,
   showProfile = true,
   compact = false,
 }: {
@@ -20,6 +21,8 @@ export default function RunsTable({
   selected?: Set<string>;
   onToggle?: (id: string) => void;
   onDelete?: (run: PromptEvalRun) => void;
+  /** Shows a Stop button on runs that are still running. */
+  onStop?: (run: PromptEvalRun) => void;
   showProfile?: boolean;
   compact?: boolean;
 }) {
@@ -131,9 +134,16 @@ export default function RunsTable({
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <Link to={`/resume/eval/${run._id}`} className="btn-outline btn-sm">
-                      Open
-                    </Link>
+                    <span className="inline-flex items-center gap-1">
+                      {active && onStop && (
+                        <button type="button" className="btn-outline btn-sm" onClick={() => onStop(run)} aria-label={`Stop ${run.label || run.accountName}`} title="Stop this run">
+                          <Square className="h-3.5 w-3.5" aria-hidden /> Stop
+                        </button>
+                      )}
+                      <Link to={`/resume/eval/${run._id}`} className="btn-outline btn-sm">
+                        Open
+                      </Link>
+                    </span>
                   </td>
                   {onDelete && (
                     <td className="px-3 py-2">
