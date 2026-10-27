@@ -1524,8 +1524,20 @@ function _sanitizeFolderPath(path: string): string {
   return segs.length ? segs.join('/') : 'company';
 }
 
+/** `X-Folder` arrives percent-encoded (headers are Latin-1, company names aren't); a bad escape is kept as sent. */
+function _folderFromHeader(res: Response): string | null {
+  const raw = res.headers.get('X-Folder');
+  if (!raw) return null;
+  try { return decodeURIComponent(raw); } catch { return raw; }
+}
+
 function _filenameFromCD(cd: string | null, fallback: string): string {
   if (!cd) return fallback;
+  // Prefer the RFC 5987 `filename*=UTF-8''...` (the real name) over the plain-ASCII `filename=` fallback.
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+  if (star) {
+    try { return decodeURIComponent(star[1].trim()); } catch { /* fall through */ }
+  }
   const m = /filename="?([^";]+)"?/i.exec(cd);
   return m?.[1] || fallback;
 }
@@ -1562,7 +1574,7 @@ export async function downloadResumeJob(job: ResumeJob): Promise<void> {
     if (dir) {
       const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download?format=pdf`, { headers: baseHeaders });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const folder = _sanitizeFolderPath(res.headers.get('X-Folder') || `${job.profileName || 'profile'}/${job.companyName || 'company'}`);
+      const folder = _sanitizeFolderPath(_folderFromHeader(res) || `${job.profileName || 'profile'}/${job.companyName || 'company'}`);
       const blob = await res.blob();
       try {
         await fsa.writeToFolder(dir, folder, 'Resume.pdf', blob);
@@ -1635,7 +1647,7 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
           if (!id) break;
           const res = await fetch(`${BASE_URL}/resume/jobs/${id}/download?format=pdf`, { headers: baseHeaders });
           if (!res.ok) continue;
-          const folder = _sanitizeFolderPath(res.headers.get('X-Folder') || 'company');
+          const folder = _sanitizeFolderPath(_folderFromHeader(res) || 'company');
           const blob = await res.blob();
           try {
             if (!currentDir) break;
