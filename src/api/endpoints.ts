@@ -2215,7 +2215,14 @@ export interface JobApplyRowDetail extends JobApplyRow {
   info: { editedBy: string; editedAt: string; /** false: this job was read before the correction (sync the run). */ applied: boolean } | null;
 }
 
-/** What a person corrected; only the fields sent change. null clears postedDate / timezoneNote. */
+export interface JobApplyWorkAuth {
+  restricted: boolean;
+  /** ISO-2 codes the hire must be authorized to work in; empty with `restricted`: limited, countries not stated. */
+  countries: string[];
+  note?: string | null;
+}
+
+/** What a person corrected; only the fields sent change. null clears postedDate / workAuthorization / timezoneNote. */
 export interface JobApplyInfoPatch {
   title?: string;
   company?: string;
@@ -2223,6 +2230,7 @@ export interface JobApplyInfoPatch {
   allowedLocations?: { kind: 'country' | 'region'; value: string }[];
   postedDate?: string | null;
   clearance?: 'required' | 'preferred' | 'none';
+  workAuthorization?: JobApplyWorkAuth | null;
   timezoneNote?: string | null;
   jdText?: string;
 }
