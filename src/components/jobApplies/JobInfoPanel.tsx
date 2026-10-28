@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { Check, Loader2, RotateCcw, Undo2, X } from 'lucide-react';
 import * as api from '../../api/endpoints';
-import type { JobApplyInfoPatch } from '../../api/endpoints';
+import type { JobApplyInfoPatch, JobApplyWorkAuth } from '../../api/endpoints';
 import Select from '../Select';
 import { COUNTRIES } from '../../lib/countries';
 import { notify } from '../../lib/notify';
@@ -22,7 +22,15 @@ const CLEARANCE = [
   { value: 'preferred', label: 'Preferred' },
   { value: 'required', label: 'Required' },
 ];
+const WORK_AUTH = [
+  { value: 'none', label: 'No restriction' },
+  { value: 'restricted', label: 'Limited to countries' },
+];
 const COUNTRY_CODES = new Set(COUNTRIES.map((c) => c.code));
+
+/** "US, gb" → ["US", "GB"]: work authorization is per country, so regions are dropped. */
+const parseCountries = (text: string) =>
+  [...new Set(text.split(/[,;\s]+/).map((p) => p.trim().toUpperCase()).filter((c) => COUNTRY_CODES.has(c)))];
 
 type Location = { kind: 'country' | 'region'; value: string };
 
@@ -44,6 +52,8 @@ interface Form {
   locations: string;
   postedDate: string;
   clearance: string;
+  workAuth: string;
+  workAuthCountries: string;
   timezoneNote: string;
   jdText: string;
 }
@@ -94,7 +104,8 @@ export default function JobInfoPanel({
 
   useEffect(() => {
     if (!data || data._id !== rowId) return;
-    const ex = (data.extraction ?? {}) as { clearance?: { level?: string } };
+    const ex = (data.extraction ?? {}) as { clearance?: { level?: string }; workAuthorization?: JobApplyWorkAuth | null };
+    const wa = ex.workAuthorization;
     const f: Form = {
       title: data.title ?? '',
       company: data.company ?? '',
@@ -102,6 +113,8 @@ export default function JobInfoPanel({
       locations: locationsText(data.allowedLocations),
       postedDate: data.postedDate ? data.postedDate.slice(0, 10) : '',
       clearance: ex.clearance?.level ?? 'none',
+      workAuth: wa?.restricted ? 'restricted' : 'none',
+      workAuthCountries: wa?.restricted ? (wa.countries ?? []).join(', ') : '',
       timezoneNote: data.timezoneNote ?? '',
       jdText: data.jdText ?? '',
     };
@@ -132,6 +145,11 @@ export default function JobInfoPanel({
     if (form.locations !== base.locations) patch.allowedLocations = parseLocations(form.locations);
     if (form.postedDate !== base.postedDate) patch.postedDate = form.postedDate || null;
     if (form.clearance !== base.clearance) patch.clearance = form.clearance as JobApplyInfoPatch['clearance'];
+    if (form.workAuth !== base.workAuth || form.workAuthCountries !== base.workAuthCountries) {
+      // The posting's wording no longer describes a corrected restriction, so it is dropped.
+      patch.workAuthorization =
+        form.workAuth === 'none' ? null : { restricted: true, countries: parseCountries(form.workAuthCountries), note: null };
+    }
     if (form.timezoneNote !== base.timezoneNote) patch.timezoneNote = form.timezoneNote.trim() || null;
     if (form.jdText !== base.jdText) patch.jdText = form.jdText;
     setSaving(true);
@@ -162,6 +180,7 @@ export default function JobInfoPanel({
 
   const labelCls = 'block text-xs font-medium text-muted mb-1';
   const ro = !canEdit;
+  const waNote = (data?.extraction as { workAuthorization?: JobApplyWorkAuth | null } | null)?.workAuthorization?.note;
 
   // Approval: a job that was read can be approved from any bucket in APPROVABLE_BUCKETS; one that wasn't has no
   // description to go on yet, so it is pasted below first (saving reads the job again). A job in Invalid role was
@@ -298,6 +317,26 @@ export default function JobInfoPanel({
             <p className="hint mt-1">Two-letter country codes (US, GB) or regions (EU, LATAM, Worldwide), separated by commas. Empty: not stated.</p>
           </div>
           <Select id="ji-clr" label="Security clearance" labelClassName={labelCls} value={form.clearance} onChange={set('clearance')} options={CLEARANCE} disabled={ro} />
+          <div>
+            <Select id="ji-wa" label="Work authorization" labelClassName={labelCls} value={form.workAuth} onChange={set('workAuth')} options={WORK_AUTH} disabled={ro} />
+            {form.workAuth === 'restricted' && (
+              <input
+                id="ji-wa-countries"
+                aria-label="Countries the hire must be authorized to work in"
+                className="input mt-2 w-full text-sm"
+                placeholder="US, GB"
+                value={form.workAuthCountries}
+                onChange={(e) => set('workAuthCountries')(e.target.value)}
+                readOnly={ro}
+              />
+            )}
+            <p className="hint mt-1">
+              {form.workAuth === 'restricted'
+                ? 'Two-letter country codes. A profile in another country is blocked; empty: limited, countries not stated (needs a check).'
+                : 'Only when the posting asks for citizenship, a visa, or the right to work somewhere. Where hires may live goes in Open to.'}
+              {waNote && form.workAuth === base?.workAuth && ` Read as: “${waNote}”.`}
+            </p>
+          </div>
           <div>
             <label className={labelCls} htmlFor="ji-tz">Time zone note</label>
             <input id="ji-tz" className="input w-full text-sm" value={form.timezoneNote} onChange={(e) => set('timezoneNote')(e.target.value)} readOnly={ro} />

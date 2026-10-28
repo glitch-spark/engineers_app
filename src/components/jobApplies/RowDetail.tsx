@@ -172,6 +172,7 @@ export default function RowDetail({
               return (
                 <li key={`${pg.accountId}-${g.name}`} className={TONE_CLASS[chip?.tone ?? tone]} title={g.reason}>
                   {profileNames[pg.accountId] ?? 'Profile'}: {g.name === 'workAuth' ? 'work auth' : g.name} {g.result}
+                  {g.result === 'fail' && g.reason && ` (${g.reason})`}
                 </li>
               );
             }),
