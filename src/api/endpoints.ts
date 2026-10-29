@@ -897,6 +897,14 @@ export interface InterviewRatePoint {
   teamRate: number | null;
 }
 
+/** Self and bidder applies per user, per day of a week or per week of a month. */
+export interface BidsChart {
+  unit: 'day' | 'week';
+  /** Users with bids in the period, oldest account first. `slot` = their place among all ranked users: their color. */
+  users: { userId: string; name: string; slot: number; isMe: boolean }[];
+  buckets: { label: string; start: string; end: string; bids: Record<string, { self: number; bidder: number }> }[];
+}
+
 export interface InterviewRates {
   period: StatsPeriod;
   region: StatsRegion;
@@ -910,6 +918,7 @@ export interface InterviewRates {
   bidderSplit: boolean;
   /** The viewer's and the team's rate over the last periods, oldest first; the last is the selected period. */
   trend: InterviewRatePoint[];
+  bidsChart: BidsChart;
   /** Profiles with no region: counted under All only. */
   unassignedProfiles: number;
 }

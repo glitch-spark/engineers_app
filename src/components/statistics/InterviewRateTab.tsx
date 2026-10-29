@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   LabelList,
   Legend,
   Line,
   LineChart,
+  Rectangle,
   ReferenceLine,
   ResponsiveContainer,
   Scatter,
@@ -16,7 +19,7 @@ import {
   YAxis,
 } from 'recharts';
 import * as api from '../../api/endpoints';
-import type { InterviewRateRow, InterviewRates, StatsPeriod, StatsRegion } from '../../api/endpoints';
+import type { BidsChart, InterviewRateRow, InterviewRates, StatsPeriod, StatsRegion } from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { PERIODS, PeriodNav, REGIONS, Segmented, isoDay } from './controls';
@@ -33,6 +36,21 @@ function seriesColors(dark: boolean) {
   return dark
     ? { me: '#3987e5', team: '#d95926', other: '#a1a1aa', surface: '#09090b' }
     : { me: '#2a78d6', team: '#eb6834', other: '#71717a', surface: '#ffffff' };
+}
+
+/**
+ * One hue per user on the bids chart: the dataviz categorical order, validated adjacent-pair on this app's surfaces.
+ * A user keeps their slot's hue whatever the period or region; past the eighth they share a neutral gray.
+ */
+const USER_HUES = {
+  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
+  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
+};
+/** Bidder applies: the user's hue, lighter, stacked on their self applies. */
+const BIDDER_OPACITY = 0.4;
+
+function userHue(slot: number, dark: boolean): string {
+  return USER_HUES[dark ? 'dark' : 'light'][slot] ?? seriesColors(dark).other;
 }
 
 function pct(rate: number | null | undefined): string {
@@ -100,12 +118,146 @@ export default function InterviewRateTab() {
               </>
             )}
           </p>
+          <BidsPerUser chart={data.bidsChart} split={data.bidderSplit} label={data.label} />
           <RateScatter data={data} />
           <RateTable data={data} />
           <MyTrend data={data} />
         </>
       )}
     </div>
+  );
+}
+
+type BidsBucket = BidsChart['buckets'][number];
+
+function BidsTip({ active, payload, chart: bc, split }: {
+  active?: boolean; payload?: { payload: BidsBucket }[]; chart: BidsChart; split: boolean;
+}) {
+  const chart = useChartTheme();
+  const { theme } = useTheme();
+  const b = active && payload?.[0]?.payload;
+  if (!b) return null;
+  return (
+    <div className="rounded-md border px-3 py-2 text-xs shadow-sm"
+      style={{ background: chart.tooltipBg, borderColor: chart.tooltipBorder, color: chart.tooltipText }}>
+      <div className="mb-1 font-medium">{b.label}</div>
+      <table className="tabular-nums">
+        <tbody>
+          {bc.users.map((u) => {
+            const v = b.bids[u.userId] ?? { self: 0, bidder: 0 };
+            return (
+              <tr key={u.userId}>
+                <td className="pr-3">
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm" style={{ background: userHue(u.slot, theme === 'dark') }} aria-hidden />
+                  {u.isMe ? `${u.name} (you)` : u.name}
+                </td>
+                <td className="text-right font-medium">{(v.self + v.bidder).toLocaleString()}</td>
+                {split && (
+                  <td className="pl-2 text-muted">{v.self.toLocaleString()} self + {v.bidder.toLocaleString()} bidder</td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Each day (week) or week (month): one bar per user, oldest account first; self applies at the bottom, bidder on top. */
+function BidsPerUser({ chart: bc, split, label }: { chart: BidsChart; split: boolean; label: string }) {
+  const chart = useChartTheme();
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
+  const rows = bc.buckets.map((b) => {
+    const row: Record<string, number | string> = { label: b.label };
+    for (const u of bc.users) {
+      row[`s_${u.userId}`] = b.bids[u.userId]?.self ?? 0;
+      row[`b_${u.userId}`] = b.bids[u.userId]?.bidder ?? 0;
+    }
+    return { ...b, ...row };
+  });
+  // Each bar is topped with its user's initial; users sharing one get two letters.
+  const initials = Object.fromEntries(bc.users.map((u) => {
+    const first = (n: string) => n.trim().charAt(0).toUpperCase();
+    const shared = bc.users.some((o) => o.userId !== u.userId && first(o.name) === first(u.name));
+    return [u.userId, shared ? u.name.trim().slice(0, 2) : first(u.name)];
+  }));
+  const initial = (u: BidsChart['users'][number]) =>
+    (p: { x?: number | string; y?: number | string; width?: number | string; index?: number }) => {
+      const v = bc.buckets[p.index ?? -1]?.bids[u.userId];
+      if (!v || !(v.self + v.bidder)) return null;
+      return (
+        <text x={Number(p.x) + Number(p.width) / 2} y={Number(p.y) - 4} textAnchor="middle" fill={chart.tooltipText} fontSize={11}>
+          {initials[u.userId]}
+        </text>
+      );
+    };
+  // The top segment gets the 4px rounded end; a 2px surface gap separates bidder from self.
+  const segment = (u: BidsChart['users'][number], part: 'self' | 'bidder') =>
+    (props: { x?: number; y?: number; width?: number; height?: number; payload?: BidsBucket }) => {
+      const { x = 0, y = 0, width = 0, height = 0, payload } = props;
+      const v = payload?.bids[u.userId] ?? { self: 0, bidder: 0 };
+      if (!height) return <g />;
+      const top = part === 'bidder' || !v.bidder;
+      const h = part === 'bidder' && v.self ? Math.max(0, height - 2) : height;
+      return (
+        <Rectangle x={x} y={y} width={width} height={h} radius={top ? [4, 4, 0, 0] : 0}
+          fill={userHue(u.slot, dark)} fillOpacity={part === 'bidder' ? BIDDER_OPACITY : 1} />
+      );
+    };
+
+  return (
+    <section className="panel p-4" aria-labelledby="ir-bids-title">
+      <h2 id="ir-bids-title" className="card-title">Bids per user</h2>
+      <p className="mb-3 text-xs text-muted">
+        Each {bc.unit}, one bar per user{split ? ': self applies at the bottom, bidder applies on top' : ''}.
+      </p>
+      {bc.users.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted">No bids in this period.</p>
+      ) : (
+        <div className="h-72" role="img" aria-label={`Bids per user each ${bc.unit}, ${label}. Hover a ${bc.unit} for every value.`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} margin={{ top: 20, right: 16, bottom: 0, left: 4 }} barGap={2} barCategoryGap="18%">
+              <CartesianGrid stroke={chart.grid} vertical={false} />
+              <XAxis dataKey="label" stroke={chart.axis} tick={{ fill: chart.axis, fontSize: 12 }} />
+              <YAxis allowDecimals={false} stroke={chart.axis} tick={{ fill: chart.axis, fontSize: 12 }} width={44} />
+              <Tooltip cursor={{ fill: chart.grid, opacity: 0.5 }} content={<BidsTip chart={bc} split={split} />} />
+              {bc.users.flatMap((u) => [
+                <Bar key={`s_${u.userId}`} dataKey={`s_${u.userId}`} stackId={u.userId} isAnimationActive={false}
+                  fill={userHue(u.slot, dark)} shape={segment(u, 'self')}>
+                  {!split && <LabelList content={initial(u)} />}
+                </Bar>,
+                ...(split ? [
+                  <Bar key={`b_${u.userId}`} dataKey={`b_${u.userId}`} stackId={u.userId} isAnimationActive={false}
+                    fill={userHue(u.slot, dark)} shape={segment(u, 'bidder')}>
+                    <LabelList content={initial(u)} />
+                  </Bar>,
+                ] : []),
+              ])}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="Legend">
+        {bc.users.map((u) => (
+          <li key={u.userId} className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: userHue(u.slot, dark) }} aria-hidden />
+            <span className="font-medium text-strong">{initials[u.userId]}</span>
+            {u.isMe ? `${u.name} (you)` : u.name}
+          </li>
+        ))}
+        {split && bc.users.length > 0 && (
+          <li className="inline-flex items-center gap-1.5">
+            <span className="inline-flex flex-col gap-px" aria-hidden>
+              <span className="h-1.5 w-2.5 rounded-t-sm" style={{ background: chart.axis, opacity: BIDDER_OPACITY }} />
+              <span className="h-1.5 w-2.5" style={{ background: chart.axis }} />
+            </span>
+            Light top = bidder, solid = self
+          </li>
+        )}
+      </ul>
+    </section>
   );
 }
 
