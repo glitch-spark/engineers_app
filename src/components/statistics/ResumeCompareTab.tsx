@@ -2,11 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import useSWR from 'swr';
 import { Download, ExternalLink } from 'lucide-react';
 import * as api from '../../api/endpoints';
-import type { CompareEntry, CompareRow, ResumeCompare, StatsPeriod, StatsRegion } from '../../api/endpoints';
+import type { CompareEntry, CompareRow, ResumeCompare } from '../../api/endpoints';
 import { safeHref } from '../../lib/safeHref';
 import { stageLabel } from '../../lib/stageBadge';
 import { bandClass } from '../jobApplies/format';
-import { PERIODS, PeriodNav, REGIONS, Segmented, isoDay } from './controls';
+import { FilterBar, filterParams, filtersError, type StatsFilters } from './controls';
 
 function shortDay(iso: string | null): string {
   if (!iso) return '';
@@ -74,10 +74,8 @@ function JobCell({ row }: { row: CompareRow }) {
  * Resume compare: the jobs that got an interview, one row each, and one column per user with their resume for the
  * same job and its score. A cell that got the interview is highlighted.
  */
-export default function ResumeCompareTab() {
-  const [region, setRegion] = useState<StatsRegion>('all');
-  const [period, setPeriod] = useState<StatsPeriod>('month');
-  const [day, setDay] = useState(() => isoDay(new Date()));
+export default function ResumeCompareTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
+  const params = filterParams(filters);
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   useEffect(() => {
@@ -85,17 +83,14 @@ export default function ResumeCompareTab() {
     return () => clearTimeout(t);
   }, [search]);
   const { data, error, isLoading } = useSWR(
-    ['resume-compare', region, period, day, q],
-    () => api.getResumeCompare({ period, date: day, region, q: q || undefined }),
+    filtersError(filters) ? null : ['resume-compare', params.region, params.period, params.date, params.to, q],
+    () => api.getResumeCompare({ ...params, q: q || undefined }),
     { keepPreviousData: true },
   );
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Segmented label="Region" options={REGIONS} value={region} onChange={setRegion} />
-        <Segmented label="Period" options={PERIODS} value={period} onChange={setPeriod} />
-        <PeriodNav period={period} day={day} label={data?.label} onDay={setDay} />
+      <FilterBar value={filters} onChange={onFilters}>
         <input
           type="search"
           className="input !w-56"
@@ -105,7 +100,7 @@ export default function ResumeCompareTab() {
           aria-label="Search company"
         />
         {isLoading && data && <span className="spinner spinner-sm" role="status" aria-label="Loading" />}
-      </div>
+      </FilterBar>
       <p className="text-xs text-muted">
         Jobs that got an interview in this period. Each column is a person’s resume for the same job and its score;
         the highlighted cell got the interview. “—” means no resume for that job. A region shows its profiles’

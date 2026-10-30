@@ -37,7 +37,8 @@ export default function Tabs({ tabs, value, onChange, children, className, ariaL
 
   return (
     <div className={className}>
-      <div role="tablist" aria-label={ariaLabel} className="tab-nav mb-6 overflow-x-auto">
+      {/* overflow-y-hidden: the active tab's -1px underline would otherwise add a vertical scrollbar. */}
+      <div role="tablist" aria-label={ariaLabel} className="tab-nav mb-6 overflow-x-auto overflow-y-hidden">
         {visible.map((t) => {
           const active = t.key === value;
           return (

@@ -840,14 +840,6 @@ export interface DashboardWeek {
   hasWeeklyPlan: boolean;
 }
 
-export interface DashboardActivity {
-  bucket: 'day' | 'week' | 'month';
-  from: string;
-  to: string;
-  series: { key: string; label: string; self: number; bidder: number; interviews: number }[];
-  totals: { self: number; bidder: number; bids: number; interviews: number };
-}
-
 export interface DashboardNetMonthly {
   months: { period: string; income: number; outcome: number; net: number }[];
   total: number;
@@ -856,15 +848,12 @@ export interface DashboardNetMonthly {
 export const getDashboardWeek = (params: { userId?: string; today?: string }) =>
   apiFetch<DashboardWeek>(`/dashboard/week${qs(params)}`);
 
-export const getDashboardActivity = (params: { from: string; to: string; userId?: string }) =>
-  apiFetch<DashboardActivity>(`/dashboard/activity${qs(params)}`);
-
 export const getDashboardNetMonthly = (params: { userId?: string; today?: string }) =>
   apiFetch<DashboardNetMonthly>(`/dashboard/net-monthly${qs(params)}`);
 
 // ---------- statistics: interview rate ----------
 
-export type StatsPeriod = 'week' | 'month';
+export type StatsPeriod = 'week' | 'month' | 'custom';
 export type StatsRegion = 'all' | 'Latam' | 'EU' | 'US';
 
 /** One user's bids, interviews and bid→interview rate in the period and region. */
@@ -886,15 +875,13 @@ export interface InterviewRateRow {
   isMe: boolean;
 }
 
-export interface InterviewRatePoint {
-  label: string;
-  start: string;
-  bids: number;
-  interviews: number;
-  rate: number | null;
-  teamBids: number;
-  teamInterviews: number;
-  teamRate: number | null;
+/** Counts per user, per day of a week or per week of a month: bids (self, bidder) or interviews (interviews). */
+export interface PerUserChart {
+  unit: 'day' | 'week' | 'month';
+  /** Users with any in the period, oldest account first. `slot` = their place among all ranked users: their color. */
+  users: { userId: string; name: string; slot: number; isMe: boolean }[];
+  /** values: userId → part → count. */
+  buckets: { label: string; start: string; end: string; values: Record<string, Record<string, number>> }[];
 }
 
 export interface InterviewRates {
@@ -908,13 +895,13 @@ export interface InterviewRates {
   totals: { bids: number; selfBids: number; bidderBids: number; interviews: number; rate: number | null };
   /** Bids split into self + bidder (All only; a region's bids are self applies). */
   bidderSplit: boolean;
-  /** The viewer's and the team's rate over the last periods, oldest first; the last is the selected period. */
-  trend: InterviewRatePoint[];
+  bidsChart: PerUserChart;
+  interviewsChart: PerUserChart;
   /** Profiles with no region: counted under All only. */
   unassignedProfiles: number;
 }
 
-export const getInterviewRates = (params: { period: StatsPeriod; date: string; region: StatsRegion }) =>
+export const getInterviewRates = (params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion }) =>
   apiFetch<InterviewRates>(`/metrics/interview-rates${qs(params)}`);
 
 // ---------- statistics: resume compare ----------
@@ -948,7 +935,7 @@ export interface ResumeCompare {
   rows: CompareRow[];
 }
 
-export const getResumeCompare = (params: { period: StatsPeriod; date: string; region: StatsRegion; q?: string }) =>
+export const getResumeCompare = (params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; q?: string }) =>
   apiFetch<ResumeCompare>(`/metrics/resume-compare${qs(params)}`);
 
 export type DashboardCompareRange = 'week' | 'month' | '30d';
