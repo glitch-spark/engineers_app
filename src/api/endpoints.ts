@@ -938,6 +938,57 @@ export interface ResumeCompare {
 export const getResumeCompare = (params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; q?: string }) =>
   apiFetch<ResumeCompare>(`/metrics/resume-compare${qs(params)}`);
 
+// ---------- statistics: callers ----------
+
+/** period: held in the period; outdated: held before it, still awaiting its result; scheduled: not held yet. */
+export type CallerSection = 'period' | 'outdated' | 'scheduled';
+export type CallerRoundResult = 'passed' | 'rejected' | 'canceled' | 'awaiting' | 'scheduled';
+
+export interface CallerStatsCaller {
+  /** null: Unassigned (no caller set on the round). */
+  callerId: string | null;
+  name: string;
+  /** null: Unassigned, or a caller no longer on the list. */
+  color: CallerColor | null;
+  /** passed … awaiting: rounds held in the period; outdated and scheduled: the other two sections. */
+  counts: { passed: number; rejected: number; canceled: number; awaiting: number; outdated: number; scheduled: number };
+  /** passed ÷ (passed + rejected) in the period; null when none is decided. */
+  passRate: number | null;
+}
+
+export interface CallerStatsRound {
+  interviewId: string;
+  roundId: string;
+  callerId: string | null;
+  section: CallerSection;
+  roundDate: string;
+  company: string;
+  stage: string | null;
+  engineer: string;
+  result: CallerRoundResult;
+  /** Awaiting: days since the round was held. */
+  daysWaiting: number | null;
+  /** Scheduled: the round's time has passed but its status wasn't updated. */
+  stale: boolean;
+}
+
+export interface CallerStats {
+  period: StatsPeriod;
+  region: StatsRegion;
+  start: string;
+  end: string;
+  label: string;
+  callers: CallerStatsCaller[];
+  rounds: CallerStatsRound[];
+}
+
+export const getCallerStats = (params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion }) =>
+  apiFetch<CallerStats>(`/metrics/caller-stats${qs(params)}`);
+
+/** A held round awaiting its result is marked rejected (caller managers). */
+export const rejectAwaitingRound = (interviewId: string, roundId: string) =>
+  apiFetch<Record<string, unknown>>(`/interviews/${interviewId}/stages/${roundId}/reject`, { method: 'POST' });
+
 export type DashboardCompareRange = 'week' | 'month' | '30d';
 
 export interface DashboardCompareMetric {
