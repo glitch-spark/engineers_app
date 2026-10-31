@@ -77,7 +77,7 @@ function sortValue(row: Row, key: SortKey): number | string {
   return row[key];
 }
 
-/** Admins' AI spend: who, which feature, which model, over a period in the viewer's time zone. */
+/** AI spend, for every user: who, which feature, which model, over a period in the viewer's time zone. */
 export default function AiUsageCard() {
   const chart = useChartTheme();
   const { theme } = useTheme();

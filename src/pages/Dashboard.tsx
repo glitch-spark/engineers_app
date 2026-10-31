@@ -5,7 +5,6 @@ import ThisWeekCard from '../components/dashboard/ThisWeekCard';
 import NetIncomeCard from '../components/dashboard/NetIncomeCard';
 import CompareCard from '../components/dashboard/CompareCard';
 import TeamOverview from '../components/dashboard/TeamOverview';
-import AiUsageCard from '../components/dashboard/AiUsageCard';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 
@@ -47,10 +46,7 @@ export default function DashboardPage() {
       )}
 
       {isAdmin && !selectedUserId ? (
-        <div className="space-y-6">
-          <TeamOverview onPick={setSelectedUserId} />
-          <AiUsageCard />
-        </div>
+        <TeamOverview onPick={setSelectedUserId} />
       ) : (
         <div className="space-y-6">
           <ThisWeekCard userId={userId} />

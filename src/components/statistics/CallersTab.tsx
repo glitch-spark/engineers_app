@@ -52,7 +52,9 @@ const heldCount = (c: CallerStatsCaller) => c.counts.passed + c.counts.rejected 
  * now (awaiting ones included); rounds from earlier periods still awaiting a result and rounds still scheduled are
  * listed apart.
  */
-export default function CallersTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
+export default function CallersTab({ filters, onFilters, canManage }: {
+  filters: StatsFilters; onFilters: (f: StatsFilters) => void; canManage: boolean;
+}) {
   const params = filterParams(filters);
   const { data, error, isLoading, mutate } = useSWR(
     filtersError(filters) ? null : ['caller-stats', params.region, params.period, params.date, params.to],
@@ -79,7 +81,10 @@ export default function CallersTab({ filters, onFilters }: { filters: StatsFilte
           <span className="spinner spinner-sm" aria-hidden /> Loading…
         </p>
       ) : (
-        <CallersView data={data} picked={picked} onPick={setPicked} sort={sort} onSort={setSort} onChanged={() => mutate()} />
+        <CallersView
+          data={data} picked={picked} onPick={setPicked} sort={sort} onSort={setSort} canManage={canManage}
+          onChanged={() => mutate()}
+        />
       )}
     </div>
   );
@@ -89,9 +94,9 @@ function hasAny(c: CallerStatsCaller): boolean {
   return Object.values(c.counts).some((n) => n > 0);
 }
 
-function CallersView({ data, picked, onPick, sort, onSort, onChanged }: {
+function CallersView({ data, picked, onPick, sort, onSort, canManage, onChanged }: {
   data: CallerStats; picked: string | null; onPick: (key: string) => void;
-  sort: Sort; onSort: (s: Sort) => void; onChanged: () => void;
+  sort: Sort; onSort: (s: Sort) => void; canManage: boolean; onChanged: () => void;
 }) {
   const [confirm, setConfirm] = useState<CallerStatsRound | null>(null);
   const all = useMemo(() => allCallers(data.callers), [data]);
@@ -117,7 +122,8 @@ function CallersView({ data, picked, onPick, sort, onSort, onChanged }: {
       </span>,
     ];
   };
-  const rejectButton = (r: CallerStatsRound) => (
+  // Only caller managers close a round; others see the report.
+  const rejectButton = (r: CallerStatsRound) => canManage && (
     <button key="reject" type="button" className="btn-outline whitespace-nowrap px-2 py-1 text-xs" onClick={() => setConfirm(r)}>
       Mark rejected
     </button>
