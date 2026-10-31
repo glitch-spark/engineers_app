@@ -1,4 +1,4 @@
-/** Periods for the admin AI usage card. Bounds are local midnights in the viewer's time zone, sent as UTC
+/** Periods for the AI usage card. Bounds are local midnights in the viewer's time zone, sent as UTC
  * instants (`to` exclusive) together with the zone name, so the backend buckets hours/days the same way. */
 
 import { mondayOfWeek, toDateInputValue } from './dateRangePresets';

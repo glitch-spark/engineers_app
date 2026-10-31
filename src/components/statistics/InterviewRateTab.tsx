@@ -19,6 +19,7 @@ import * as api from '../../api/endpoints';
 import type { InterviewRateRow, InterviewRates, PerUserChart } from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
+import AiUsageCard from './AiUsageCard';
 import { FilterBar, REGIONS, filterParams, filtersError, type StatsFilters } from './controls';
 
 /** Rate guide lines on the scatter (interviews ÷ bids); the ones that fit the plot are drawn. */
@@ -72,7 +73,8 @@ function niceCeil(n: number): number {
   return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * p).find((v) => v >= n) ?? 10 * p;
 }
 
-/** Every user's interview rate in one view: bids and interviews per user, scatter and ranked table. */
+/** AI usage first, then every user's interview rate in one view: bids and interviews per user, scatter and ranked
+ * table. AI usage keeps its own period: it goes down to the hour. */
 export default function InterviewRateTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
   const params = filterParams(filters);
   const { data, error, isLoading } = useSWR(
@@ -87,6 +89,7 @@ export default function InterviewRateTab({ filters, onFilters }: { filters: Stat
       <FilterBar value={filters} onChange={onFilters}>
         {isLoading && data && <span className="spinner spinner-sm" role="status" aria-label="Loading" />}
       </FilterBar>
+      <AiUsageCard />
 
       {error ? (
         <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the statistics. Try again.</p>
