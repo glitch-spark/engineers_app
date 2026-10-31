@@ -73,8 +73,8 @@ function niceCeil(n: number): number {
   return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * p).find((v) => v >= n) ?? 10 * p;
 }
 
-/** AI usage first, then every user's interview rate in one view: bids and interviews per user, scatter and ranked
- * table. AI usage keeps its own period: it goes down to the hour. */
+/** AI usage first, then every user's interview rate in one view: the ranked table, bids and interviews per user,
+ * and the scatter. AI usage keeps its own period: it goes down to the hour. */
 export default function InterviewRateTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
   const params = filterParams(filters);
   const { data, error, isLoading } = useSWR(
@@ -114,9 +114,9 @@ export default function InterviewRateTab({ filters, onFilters }: { filters: Stat
               </>
             )}
           </p>
+          <RateTable data={data} />
           <PerUserCharts data={data} />
           <RateScatter data={data} />
-          <RateTable data={data} />
         </>
       )}
     </div>
