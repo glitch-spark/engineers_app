@@ -134,7 +134,12 @@ export default function TeamOverview({ onPick }: { onPick: (userId: string) => v
                       <td className="px-3 py-2 text-right tabular-nums" title={`self ${u.bidsSelf} · bidder ${u.bidsBidder}`}>
                         {count.format(u.bids)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{count.format(u.interviews)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {count.format(u.interviews)}
+                        <div className="text-xs text-muted whitespace-nowrap">
+                          Self {u.interviewsSelf} · Caller {u.interviewsCaller}
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums">{currency.format(u.earnings)}</td>
                       <td className={`px-3 py-2 text-right tabular-nums ${lowGoal(u.goalBidsPct) ? WARN : ''}`}>{pct(u.goalBidsPct)}</td>
                       <td className={`px-3 py-2 text-right tabular-nums ${lowGoal(u.goalInterviewsPct) ? WARN : ''}`}>
@@ -157,9 +162,13 @@ export default function TeamOverview({ onPick }: { onPick: (userId: string) => v
 }
 
 function Totals({ totals }: { totals: api.DashboardTeamStats }) {
-  const tiles: { label: string; value: string; hint?: string; warn?: boolean }[] = [
+  const tiles: { label: string; value: string; hint?: string; sub?: string; warn?: boolean }[] = [
     { label: 'Bids', value: count.format(totals.bids), hint: `self ${totals.bidsSelf} · bidder ${totals.bidsBidder}` },
-    { label: 'Interviews', value: count.format(totals.interviews) },
+    {
+      label: 'Interviews',
+      value: count.format(totals.interviews),
+      sub: `Self ${totals.interviewsSelf} · Caller ${totals.interviewsCaller}`,
+    },
     { label: 'Earnings', value: currency.format(totals.earnings) },
     { label: 'Bids goal', value: pct(totals.goalBidsPct), warn: lowGoal(totals.goalBidsPct) },
     { label: 'Interviews goal', value: pct(totals.goalInterviewsPct), warn: lowGoal(totals.goalInterviewsPct) },
@@ -175,6 +184,7 @@ function Totals({ totals }: { totals: api.DashboardTeamStats }) {
         <div key={t.label} className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800" title={t.hint}>
           <dt className="text-xs text-muted">{t.label}</dt>
           <dd className={`text-lg tabular-nums ${t.warn ? WARN : 'font-semibold text-strong'}`}>{t.value}</dd>
+          {t.sub && <dd className="text-xs tabular-nums text-muted">{t.sub}</dd>}
         </div>
       ))}
     </dl>

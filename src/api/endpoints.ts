@@ -454,6 +454,8 @@ export const lookupUsers = (params?: { excludeRole?: string }) =>
 
 // ---------- interviews ----------
 
+export type CallType = 'self' | 'caller';
+
 export interface InterviewListParams {
   page?: number;
   limit?: number;
@@ -463,6 +465,8 @@ export interface InterviewListParams {
   stage?: string;
   status?: string;
   creatorId?: string;
+  /** Who takes the latest round: the owner ('self') or a caller. */
+  callType?: CallType;
   /** Column to sort by; legacy 'asc' | 'desc' means latest round date. */
   sort?: 'latest' | 'company' | 'stage' | 'status' | 'asc' | 'desc';
   dir?: 'asc' | 'desc';
@@ -503,6 +507,8 @@ export const listInterviewRounds = (params: {
   callerOnly?: string;
   /** One caller's rounds; 'unassigned' = no caller yet. */
   callerId?: string;
+  /** Who takes the round: the owner ('self') or a caller. */
+  callType?: CallType;
 }) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>> }>(
   `/interviews/rounds${qs(params)}`,
 );
@@ -830,7 +836,10 @@ export interface DashboardWeek {
     percentile: DashboardPercentile | null;
   };
   interviews: {
+    /** Rounds held this week: `self` the owner took, `caller` a caller took. */
     done: number;
+    self: number;
+    caller: number;
     target: number | null;
     pace: DashboardPace | null;
     percentile: DashboardPercentile | null;
@@ -1024,6 +1033,8 @@ export interface DashboardTeamStats {
   bidsSelf: number;
   bidsBidder: number;
   interviews: number;
+  interviewsSelf: number;
+  interviewsCaller: number;
   earnings: number;
   goalBidsPct: number | null;
   goalInterviewsPct: number | null;

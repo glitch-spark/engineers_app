@@ -7,7 +7,7 @@ import {
   type DateRangePreset,
 } from './dateRangePresets';
 import { browserZone, toWall, zonedDayBounds } from './interviewTimezone';
-import type { listCallerRounds } from '../api/endpoints';
+import type { CallType, listCallerRounds } from '../api/endpoints';
 
 export type ListSort = 'latest' | 'company' | 'stage' | 'status';
 export type SortDir = 'asc' | 'desc';
@@ -21,6 +21,8 @@ export type InterviewFilters = {
   status: string;
   /** Callers calendar: a caller id, 'unassigned', or '' for every caller. */
   caller: string;
+  /** Interviews tab: self or caller interviews ('' for both). */
+  call: CallType | '';
   range: DateRangePreset;
   from: string;
   to: string;
@@ -42,6 +44,7 @@ function defaults(d: FilterDefaults): InterviewFilters {
     stage: '',
     status: '',
     caller: '',
+    call: '',
     range: 'this_week',
     from: '',
     to: '',
@@ -63,6 +66,7 @@ export function parseInterviewFilters(params: URLSearchParams, d: FilterDefaults
     stage: get('stage'),
     status: get('status'),
     caller: get('caller'),
+    call: get('call') === 'self' || get('call') === 'caller' ? (get('call') as CallType) : '',
     range: PRESETS.includes(range) ? range : base.range,
     from: DATE_RE.test(get('from')) ? get('from') : '',
     to: DATE_RE.test(get('to')) ? get('to') : '',
@@ -173,6 +177,7 @@ export function listQuery(
   if (f.profile) q.accountId = f.profile;
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
+  if (f.call) q.callType = f.call;
   return q;
 }
 
@@ -197,6 +202,7 @@ export type RoundsQuery = {
   status?: string;
   callerOnly?: string;
   callerId?: string;
+  callType?: CallType;
 };
 
 /** `range` is YYYY-MM-DD in `tz` with an exclusive `to`; sent as that zone's midnights.
@@ -214,6 +220,7 @@ export function roundsQuery(
   } else {
     if (f.user && f.user !== 'all') q.creatorId = f.user;
     if (f.profile) q.accountId = f.profile;
+    if (f.call) q.callType = f.call;
   }
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
