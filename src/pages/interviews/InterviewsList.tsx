@@ -134,13 +134,16 @@ export default function InterviewsList({
     iv.stage ? <span className={`badge ${stageBadgeClass(iv.stage)}`}>{stageLabel(iv.stage)}</span> : <span className="text-muted">—</span>
   );
 
-  /** Latest round's caller: name, "TBD" when requested but unassigned, "—" when none. */
+  /** Who takes the latest round: Self (the owner), or Caller with the caller's name ("TBD" when unassigned). */
   const callerCell = (iv: Interview) => {
-    if (!iv.caller?.enabled) return <span className="text-muted">—</span>;
+    if (!iv.caller?.enabled) return <span className="badge badge-neutral">Self</span>;
     const name = (iv.caller.callerName || '').trim();
     return (
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-        <PhoneCall size={13} className="shrink-0 text-sky-600" aria-hidden />
+        <span className="badge badge-info inline-flex items-center gap-1">
+          <PhoneCall size={12} className="shrink-0" aria-hidden />
+          Caller
+        </span>
         <span className={!name || name === 'TBD' ? 'text-muted' : ''}>{name && name !== 'TBD' ? name : 'TBD'}</span>
         {needsConfirmBadge(iv.status, iv.scheduledAt) && <ConfirmedBadge confirmed={iv.confirmed} />}
       </span>
@@ -164,7 +167,7 @@ export default function InterviewsList({
               {sortHeader('company', 'Company')}
               <th scope="col" className="px-3 py-2.5 text-left">Profile</th>
               {sortHeader('stage', 'Stage')}
-              <th scope="col" className="px-3 py-2.5 text-left">Caller</th>
+              <th scope="col" className="px-3 py-2.5 text-left whitespace-nowrap">Self / Caller</th>
               {sortHeader('latest', `Latest round (${zoneAbbrev(new Date(), tz)})`)}
               {sortHeader('status', 'Status')}
               <th scope="col" className="px-3 py-2.5 text-left">Score</th>
@@ -219,7 +222,7 @@ export default function InterviewsList({
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 {stageCell(iv)}
-                {iv.caller?.enabled && callerCell(iv)}
+                {callerCell(iv)}
                 <span className="tabular-nums text-muted">{whenText(iv.scheduledAt, tz)}</span>
                 {statusCell(iv)}
                 {iv.resumeLink?.score && <ResumeScoreCell link={iv.resumeLink} />}

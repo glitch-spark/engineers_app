@@ -86,6 +86,7 @@ export default function ThisWeekCard({ userId }: { userId?: string }) {
           target={data.interviews.target}
           pace={data.interviews.pace}
           percentile={data.interviews.percentile}
+          subline={`Self ${data.interviews.self} · Caller ${data.interviews.caller}`}
         />
       </div>
 

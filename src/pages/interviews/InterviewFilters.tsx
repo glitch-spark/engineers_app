@@ -55,6 +55,11 @@ export default function InterviewFilters({
     ...(INTERVIEW_STAGE_ORDER as readonly string[]).map((s) => ({ value: s, label: stageLabel(s) })),
   ];
   const statusOptions = [{ value: '', label: 'All statuses' }, ...INTERVIEW_STATUSES];
+  const callOptions = [
+    { value: '', label: 'Self and caller' },
+    { value: 'self', label: 'Self' },
+    { value: 'caller', label: 'Caller' },
+  ];
 
   return (
     <div className="panel flex flex-wrap items-end gap-3 px-4 py-3">
@@ -72,6 +77,10 @@ export default function InterviewFilters({
           <div className="w-48">
             <label htmlFor="ivf-profile" className="mb-1 block text-xs text-muted">Profile</label>
             <Select id="ivf-profile" value={filters.profile} onChange={(v) => update({ profile: v })} options={profileOptions} />
+          </div>
+          <div className="w-40">
+            <label htmlFor="ivf-call" className="mb-1 block text-xs text-muted">Self / Caller</label>
+            <Select id="ivf-call" value={filters.call} onChange={(v) => update({ call: v as Filters['call'] })} options={callOptions} />
           </div>
         </>
       )}
