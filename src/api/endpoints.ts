@@ -922,7 +922,8 @@ export interface CompareEntry {
   kind: 'tailored' | 'fixed' | null;
   promptName?: string | null;
   score: { total: number; band: ScoreBand; missing: string[] } | null;
-  /** A signed download link anyone can open; null when the profile got the interview without a resume for it. */
+  /** A signed download link anyone can open, as a path on the API (prefix BASE_URL); null when the profile got the
+   * interview without a resume for it. */
   link: string | null;
   interviewed: boolean;
 }
