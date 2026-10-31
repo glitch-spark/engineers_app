@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import useSWR from 'swr';
 import { Download, ExternalLink } from 'lucide-react';
+import { BASE_URL } from '../../api/client';
 import * as api from '../../api/endpoints';
 import type { CompareEntry, CompareRow, ResumeCompare } from '../../api/endpoints';
 import { safeHref } from '../../lib/safeHref';
@@ -33,7 +34,7 @@ function Entry({ e, several }: { e: CompareEntry; several: boolean }) {
       )}
       {e.kind && <span className="text-xs text-muted">{e.kind === 'fixed' ? 'Fixed' : 'Tailored'}</span>}
       {e.link && (
-        <a href={e.link} className="btn-icon" aria-label={`Download ${e.profileName || 'the'} resume`} title="Download resume">
+        <a href={`${BASE_URL}${e.link}`} className="btn-icon" aria-label={`Download ${e.profileName || 'the'} resume`} title="Download resume">
           <Download className="h-3.5 w-3.5" aria-hidden />
         </a>
       )}
