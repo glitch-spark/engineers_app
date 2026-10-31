@@ -143,6 +143,11 @@ function BoardRow({
       <span className="min-w-0 flex-1 truncate">
         <NameWithAvatar name={highlight && isSelf ? 'You' : row.name} imageUrl={row.image} size="sm" />
       </span>
+      {row.self != null && (
+        <span className="shrink-0 whitespace-nowrap text-xs font-normal tabular-nums text-muted">
+          Self {row.self} · Caller {row.caller ?? 0}
+        </span>
+      )}
       <span className="tabular-nums">{format(row)}</span>
     </li>
   );

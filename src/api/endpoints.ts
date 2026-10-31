@@ -1008,6 +1008,9 @@ export interface DashboardCompareMetric {
     image?: string | null;
     value: number;
     rank: number;
+    /** Interviews only: the rounds the user took (self) and a caller took. */
+    self?: number;
+    caller?: number;
   }[];
   /** The viewed user's place; nulls when an admin views nobody. */
   subject: { rank: number | null; value: number | null; outOf: number };
