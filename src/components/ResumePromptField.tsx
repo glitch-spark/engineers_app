@@ -4,7 +4,7 @@ import { Loader2, FileDown } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 
-/** Screening and cover-letter prompts; resume prompts use the backend's RESUME_PROMPT_MAX_CHARS. */
+/** Until the backend's RESUME_PROMPT_MAX_CHARS loads. */
 const DEFAULT_MAX = 30000;
 
 /**
@@ -36,11 +36,9 @@ export default function ResumePromptField({
   defaultSource?: 'none' | 'global';
 }) {
   const [loadingDefault, setLoadingDefault] = useState(false);
-  // Resume prompts: the deployment's limit (GET /resume/limits), shared by every field; 30,000 until it loads.
-  const { data: limits } = useSWR(kind === 'resume' ? 'resume-limits' : null, api.getResumeLimits, {
-    revalidateOnFocus: false,
-  });
-  const MAX = (kind === 'resume' && limits?.promptMaxChars) || DEFAULT_MAX;
+  // The deployment's limit (GET /resume/limits) for every prompt kind, shared by every field; 30,000 until it loads.
+  const { data: limits } = useSWR('resume-limits', api.getResumeLimits, { revalidateOnFocus: false });
+  const MAX = limits?.promptMaxChars || DEFAULT_MAX;
   // Self-labelling so every caller (Preferences, AccountEdit) gets a linked label + hint.
   const id = useId();
 
