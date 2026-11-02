@@ -1,9 +1,11 @@
 import { useId, useState } from 'react';
+import useSWR from 'swr';
 import { Loader2, FileDown } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 
-const MAX = 30000;
+/** Screening and cover-letter prompts; resume prompts use the backend's RESUME_PROMPT_MAX_CHARS. */
+const DEFAULT_MAX = 30000;
 
 /**
  * Editable prompt field for resume or screening prompts. Empty = inherit
@@ -34,6 +36,11 @@ export default function ResumePromptField({
   defaultSource?: 'none' | 'global';
 }) {
   const [loadingDefault, setLoadingDefault] = useState(false);
+  // Resume prompts: the deployment's limit (GET /resume/limits), shared by every field; 30,000 until it loads.
+  const { data: limits } = useSWR(kind === 'resume' ? 'resume-limits' : null, api.getResumeLimits, {
+    revalidateOnFocus: false,
+  });
+  const MAX = (kind === 'resume' && limits?.promptMaxChars) || DEFAULT_MAX;
   // Self-labelling so every caller (Preferences, AccountEdit) gets a linked label + hint.
   const id = useId();
 
@@ -70,7 +77,7 @@ export default function ResumePromptField({
         </label>
         <div className="flex items-center gap-2">
           <span id={`${id}-count`} className="text-[11px] text-faint">
-            {value.length}/{MAX}<span className="sr-only"> characters used</span>
+            {value.length.toLocaleString()}/{MAX.toLocaleString()}<span className="sr-only"> characters used</span>
           </span>
           {defaultSource === 'global' && (
             <button
