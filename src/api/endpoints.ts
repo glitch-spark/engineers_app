@@ -1413,6 +1413,9 @@ export interface ModelOption {
   tag: string;
 }
 
+/** Sizes the backend enforces (its settings): the longest resume prompt. */
+export const getResumeLimits = () => apiFetch<{ promptMaxChars: number }>('/resume/limits');
+
 export function listResumeModels(task: ModelTask) {
   return apiFetch<{ task: ModelTask; defaultId: string | null; providers: ModelProviderInfo[]; models: ModelOption[] }>(
     `/resume/models${qs({ task })}`
