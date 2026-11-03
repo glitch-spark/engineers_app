@@ -40,14 +40,18 @@ export interface ModelChoice {
  * `value` is the remembered choice if the server still offers it, else the server default, else the
  * first model. It is '' when the model list could not load: callers then omit the model from the
  * request and the server picks its default, so generation never depends on this endpoint.
+ *
+ * `scope` 'job_applies' (resume only): the cheap models Job Applies tailors with, remembered apart from the
+ * Resume page's pick.
  */
-export function useModelChoice(task: api.ModelTask): ModelChoice {
+export function useModelChoice(task: api.ModelTask, scope?: 'job_applies'): ModelChoice {
   const { user } = useAuth();
-  const storageKey = `resume-model:${user?.id ?? 'anon'}:${task}`;
-  const { data, isLoading } = useSWR(['resume-models', task], () => api.listResumeModels(task), {
-    shouldRetryOnError: false,
-    revalidateOnFocus: false,
-  });
+  const storageKey = `resume-model:${user?.id ?? 'anon'}:${task}${scope ? `:${scope}` : ''}`;
+  const { data, isLoading } = useSWR(
+    scope ? ['resume-models', task, scope] : ['resume-models', task],
+    () => (scope ? api.listJobAppliesResumeModels() : api.listResumeModels(task)),
+    { shouldRetryOnError: false, revalidateOnFocus: false },
+  );
   const [stored, setStored] = useState<string | null>(() => readStored(storageKey));
   useEffect(() => setStored(readStored(storageKey)), [storageKey]);
 
