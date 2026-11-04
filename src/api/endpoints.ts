@@ -1416,11 +1416,19 @@ export interface ModelOption {
 /** Sizes the backend enforces (its settings): the longest resume prompt. */
 export const getResumeLimits = () => apiFetch<{ promptMaxChars: number }>('/resume/limits');
 
-export function listResumeModels(task: ModelTask) {
-  return apiFetch<{ task: ModelTask; defaultId: string | null; providers: ModelProviderInfo[]; models: ModelOption[] }>(
-    `/resume/models${qs({ task })}`
-  );
+export interface ModelList {
+  task: ModelTask;
+  defaultId: string | null;
+  providers: ModelProviderInfo[];
+  models: ModelOption[];
 }
+
+export function listResumeModels(task: ModelTask) {
+  return apiFetch<ModelList>(`/resume/models${qs({ task })}`);
+}
+
+/** The cheap resume models Job Applies tailors with (the server rejects others there). */
+export const listJobAppliesResumeModels = () => apiFetch<ModelList>('/job-applies/resume-models');
 
 export interface CoverLetterVersion {
   text: string;
@@ -2408,6 +2416,10 @@ export const setJobApplyRowPrompt = (rowId: string, body: { accountId: string; p
 
 export const cancelJobApplyRun = (id: string) => postJSON<JobApplyRun>(`/job-applies/runs/${id}/cancel`, {});
 
+/** Remove the run's tailored resumes still waiting in the queue; ones already generating finish. */
+export const cancelJobApplyTailoring = (id: string) =>
+  postJSON<{ cancelled: number }>(`/job-applies/runs/${id}/cancel-tailoring`, {});
+
 export const retryJobApplyRun = (id: string) => postJSON<{ reset: number }>(`/job-applies/runs/${id}/retry-failed`, {});
 
 export const deleteJobApplyRun = (id: string) => del<{ ok: boolean }>(`/job-applies/runs/${id}`);
@@ -2443,7 +2455,7 @@ export const unmarkJobApplied = (runId: string, marks: JobApplyMarkRef[]) =>
 /** Queue a tailored resume for one job (default: the best-scoring profile). Blank models = server default. */
 export const tailorJobApplyRow = (
   rowId: string,
-  body: { accountId?: string; coverLetter?: boolean; coverLetterModel?: string } = {},
+  body: { accountId?: string; coverLetter?: boolean; resumeModel?: string; coverLetterModel?: string } = {},
 ) => postJSON<{ tailored: JobApplyTailored }>(`/job-applies/rows/${rowId}/tailor`, body);
 
 /**
@@ -2456,6 +2468,8 @@ export const tailorAllJobApplies = (
     accountIds?: string[];
     rowIds?: string[];
     coverLetter?: boolean;
+    /** One of listJobAppliesResumeModels; omit for the server's default. */
+    resumeModel?: string;
     coverLetterModel?: string;
     dryRun?: boolean;
   } = {},

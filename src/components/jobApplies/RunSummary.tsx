@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, RotateCcw, XCircle } from 'lucide-react';
 import type { JobApplyRun, JobApplyView } from '../../api/endpoints';
 import ProgressBar from './ProgressBar';
 import { APPLIED_UI } from './appliedUi';
@@ -28,11 +28,16 @@ export default function RunSummary({
   onView,
   onRetry,
   retrying,
+  onCancelTailoring,
+  cancellingTailoring = false,
 }: {
   run: JobApplyRun;
   onView: (view: JobApplyView) => void;
   onRetry: () => void;
   retrying: boolean;
+  /** Asks to cancel the run's queued tailored resumes; without it there's no Cancel button. */
+  onCancelTailoring?: () => void;
+  cancellingTailoring?: boolean;
 }) {
   const active = isActive(run.status);
   const expiresInMs = run.expiresAt ? new Date(run.expiresAt.endsWith('Z') ? run.expiresAt : `${run.expiresAt}Z`).getTime() - Date.now() : null;
@@ -111,6 +116,12 @@ export default function RunSummary({
             </span>
           )}
           {run.tailoring.failed > 0 && <span className="text-red-700 dark:text-red-400">{run.tailoring.failed} failed</span>}
+          {onCancelTailoring && run.tailoring.queued > 0 && (
+            <button type="button" className="btn-outline btn-sm" onClick={onCancelTailoring} disabled={cancellingTailoring}>
+              {cancellingTailoring ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <XCircle className="h-4 w-4" aria-hidden />}
+              Cancel {run.tailoring.queued} queued
+            </button>
+          )}
         </p>
       )}
       {expiringSoon && run.expiresAt && (

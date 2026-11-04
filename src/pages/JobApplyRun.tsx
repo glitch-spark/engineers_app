@@ -88,9 +88,6 @@ function hostOf(url: string): string {
 
 const pickedModel = (c: ModelChoice) => c.options.find((o) => o.id === c.value);
 
-/** Job Applies always tailors resumes with this model (the server enforces it); only the cover letter model is picked. */
-const RESUME_MODEL = { id: 'openai:gpt-4o-mini', label: 'GPT-4o mini' };
-
 function capitalize(s?: string | null): string {
   return s ? s[0].toUpperCase() + s.slice(1) : '';
 }
@@ -152,7 +149,8 @@ export default function JobApplyRun() {
   const [downloadingPicked, setDownloadingPicked] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [thresholdDraft, setThresholdDraft] = useState<number | null>(null);
-  const [busy, setBusy] = useState<'cancel' | 'retry' | 'bulk' | null>(null);
+  const [busy, setBusy] = useState<'cancel' | 'retry' | 'bulk' | 'cancelTailoring' | null>(null);
+  const [confirmCancelTailoring, setConfirmCancelTailoring] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmTailorAll, setConfirmTailorAll] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -166,14 +164,12 @@ export default function JobApplyRun() {
   // The jobs the open tailor dialog is for: the ones that were selected when it opened, or null for every suggested job.
   const [tailorRowIds, setTailorRowIds] = useState<string[] | null>(null);
   const [tailorPreview, setTailorPreview] = useState<{ queued: number; skippedCap: number } | null>(null);
-  // Picked in the tailor dialog and remembered (shared with the Resume page). '' when the model list can't load: the
-  // server then uses its default.
+  // Picked in the tailor dialog and remembered (the cover letter's shared with the Resume page; the resume's is Job
+  // Applies' own, from its cheap models). '' when the model list can't load: the server then uses its default.
   const coverLetterModel = useModelChoice('cover_letter');
-  // Only for RESUME_MODEL's cost estimate in the tailor dialog (same request and cache as the Resume page's picker).
-  const { data: resumeModels } = useSWR(['resume-models', 'resume'], () => api.listResumeModels('resume'), {
-    shouldRetryOnError: false,
-    revalidateOnFocus: false,
-  });
+  const resumeModel = useModelChoice('resume', 'job_applies');
+  const resumeModelLabel = pickedModel(resumeModel)?.label ?? 'the selected model';
+  const resumeModelId = resumeModel.value || undefined;
   const [since] = useState(localMidnightIso);
   const rowRefs = useRef(new Map<string, HTMLTableSectionElement>());
 
@@ -361,7 +357,7 @@ export default function JobApplyRun() {
       if (tailoringNow.current.has(key)) return;
       tailoringNow.current.add(key);
       try {
-        const { tailored } = await api.tailorJobApplyRow(row._id, { accountId });
+        const { tailored } = await api.tailorJobApplyRow(row._id, { accountId, resumeModel: resumeModelId });
         await mutateRows(
           (prev: RowsPage | undefined) =>
             prev && {
@@ -379,7 +375,7 @@ export default function JobApplyRun() {
         tailoringNow.current.delete(key);
       }
     },
-    [mutateRows, mutateRun],
+    [mutateRows, mutateRun, resumeModelId],
   );
 
   /** Save the resume prompt a profile tailors this job with; the row comes back with the new choice. */
@@ -649,7 +645,7 @@ export default function JobApplyRun() {
   }, []);
 
   // Typical LLM spend of one tailored resume (plus its cover letter when asked) with these models; null if unknown.
-  const resumeCostUsd = resumeModels?.models.find((m) => m.id === RESUME_MODEL.id)?.estCostUsd;
+  const resumeCostUsd = pickedModel(resumeModel)?.estCostUsd;
   const letterCostUsd = tailorCoverLetter ? pickedModel(coverLetterModel)?.estCostUsd : 0;
   const perTailorUsd = resumeCostUsd == null || letterCostUsd == null ? null : resumeCostUsd + letterCostUsd;
 
@@ -660,6 +656,7 @@ export default function JobApplyRun() {
       const res = await api.tailorAllJobApplies(runId, {
         accountIds: [...tailorProfiles],
         ...(tailorRowIds && { rowIds: tailorRowIds }),
+        resumeModel: resumeModelId,
         coverLetter: tailorCoverLetter,
         coverLetterModel: tailorCoverLetter ? coverLetterModel.value || undefined : undefined,
       });
@@ -686,6 +683,22 @@ export default function JobApplyRun() {
       await mutateRun();
     } catch (err) {
       notify.error(err, 'Could not cancel the run');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onCancelTailoring = async () => {
+    setConfirmCancelTailoring(false);
+    setBusy('cancelTailoring');
+    try {
+      const { cancelled } = await api.cancelJobApplyTailoring(runId);
+      notify.success(
+        cancelled ? `Cancelled ${cancelled} queued resume${cancelled === 1 ? '' : 's'}` : 'Nothing was waiting in the queue',
+      );
+      await Promise.all([mutateRows(), mutateRun()]);
+    } catch (err) {
+      notify.error(err, 'Could not cancel tailoring');
     } finally {
       setBusy(null);
     }
@@ -866,6 +879,8 @@ export default function JobApplyRun() {
         }}
         onRetry={onRetry}
         retrying={busy === 'retry'}
+        onCancelTailoring={() => setConfirmCancelTailoring(true)}
+        cancellingTailoring={busy === 'cancelTailoring'}
       />
 
       <div className="toolbar space-y-3">
@@ -944,7 +959,7 @@ export default function JobApplyRun() {
           profileFilter={accountId ? { accountId, name: profileNames[accountId] ?? 'this profile' } : undefined}
           busy={busy !== null}
           updating={recounting}
-          tailorModel={RESUME_MODEL.label}
+          tailorModel={resumeModelLabel}
           onTailor={() => openTailor(null)}
           onExport={() =>
             run.applications && run.applications.needsResume + run.applications.tailoring > 0
@@ -1166,7 +1181,7 @@ export default function JobApplyRun() {
                                         type="button"
                                         className="text-xs font-medium text-violet-700 hover:underline dark:text-violet-300"
                                         onClick={() => void tailorRow(row)}
-                                        title={`Tailor with ${RESUME_MODEL.label}`}
+                                        title={`Tailor with ${resumeModelLabel}`}
                                       >
                                         <Sparkles className="mr-1 inline h-3 w-3" aria-hidden />
                                         Tailor all {toTailor.length} profiles
@@ -1189,7 +1204,7 @@ export default function JobApplyRun() {
                               profileName={profileNames[acc] ?? 'Profile'}
                               hasFile={(id) => !!resumesById.get(id)?.hasFile}
                               onDownload={(s) => download(row, s)}
-                              tailorModel={RESUME_MODEL.label}
+                              tailorModel={resumeModelLabel}
                               onTailor={(a) => void tailor(row, a)}
                               onDownloadTailored={downloadTailored}
                               isPicked={(id) => picked.has(id)}
@@ -1328,10 +1343,7 @@ export default function JobApplyRun() {
               ))}
             </fieldset>
             <div>
-              <span className="form-label mb-1 block">Resume model</span>
-              <p className="text-sm">
-                {RESUME_MODEL.label} <span className="text-zinc-500">· always used for tailoring in Job Applies</span>
-              </p>
+              <ModelSelect label="Resume model" choice={resumeModel} labelClassName="form-label mb-1 block" />
               <p className="hint mt-1">Each job uses the prompt selected in its Prompt column.</p>
             </div>
             <label className="flex items-center gap-2 text-sm">
@@ -1367,6 +1379,21 @@ export default function JobApplyRun() {
           if (tailorPreview?.queued) void tailorAll();
         }}
         onCancel={() => setConfirmTailorAll(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmCancelTailoring}
+        title={`Cancel ${run.tailoring?.queued ?? 0} queued resume${run.tailoring?.queued === 1 ? '' : 's'}?`}
+        body={
+          <p>
+            They won’t be generated and won’t count toward today’s limit. Resumes already generating will finish. You can
+            tailor those jobs again later.
+          </p>
+        }
+        confirmLabel="Yes, cancel them"
+        busy={busy === 'cancelTailoring'}
+        onConfirm={() => void onCancelTailoring()}
+        onCancel={() => setConfirmCancelTailoring(false)}
       />
 
       <ExportSheetDialog
