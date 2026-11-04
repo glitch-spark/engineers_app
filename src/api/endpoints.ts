@@ -184,10 +184,72 @@ export const listAccounts = (params?: {
   userId?: string;
   /** Default (omitted) = active only. */
   status?: 'active' | 'archived' | 'all';
+  /** One of PROFILE_REGIONS, or "none" for profiles without one. Omitted = every region. */
+  region?: string;
 }) =>
   apiFetch<{ accounts: Record<string, unknown>[]; pagination: Pagination }>(
     `/accounts${qs(params)}`
   );
+
+export type ScoreStat = { avg: number | null; n: number };
+
+export type ProfileMetricsRow = {
+  accountId: string;
+  spanWeeks: number;
+  bidsPerWeek: number | null;
+  selfBidsPerWeek: number | null;
+  bidderBidsPerWeek: number | null;
+  interviewsPerWeek: number | null;
+  selfInterviewsPerWeek: number | null;
+  callerInterviewsPerWeek: number | null;
+  /** Fraction (0.0595 = 6.0%). */
+  interviewsPerBid: number | null;
+  lowVolume: boolean;
+  tailorScore: ScoreStat | null;
+  matchScore: ScoreStat | null;
+  /** Tailored resumes generated for the profile in the period (Generator and Job Applies), scored or not. */
+  tailoredResumes: number;
+  /** Totals over the period (All time shows these instead of the per-week values). */
+  bids: number;
+  selfBids: number;
+  bidderBids: number;
+  interviews: number;
+  selfInterviews: number;
+  callerInterviews: number;
+};
+
+export const getProfileMetrics = (params: { weeks: number | 'all'; userId?: string }) =>
+  apiFetch<{
+    start: string; end: string; weeks: number | 'all'; rows: ProfileMetricsRow[];
+    /** All time only: the day self bids started being typed per profile (null when every day counts). */
+    selfBidsSince?: string | null;
+  }>(
+    `/accounts/metrics${qs(params)}`
+  );
+
+/** One profile's metrics: its weekly series (every week of the span, oldest first) and its owner's other active profiles averaged. */
+export type MetricCounts = { selfBids: number; bidderBids: number; selfInterviews: number; callerInterviews: number };
+
+/** The profile Metrics tab's periods: the Statistics ones, plus everything since the profile was created. */
+export type ProfileMetricPeriod = 'week' | 'month' | 'custom' | 'all';
+
+export type ProfileMetricDetail = ProfileMetricsRow & {
+  period: ProfileMetricPeriod;
+  /** The range measured (the current week or month runs to today) and its label ("Oct 2026", "All time"). */
+  start: string;
+  end: string;
+  label: string;
+  /** Every day of the range, oldest first, zeros included; `weekly` sums the same days. */
+  daily: ({ day: string } & MetricCounts)[];
+  weekly: ({ week: string } & MetricCounts)[];
+  /** The owner's other active profiles, averaged (totals and rates); no profile, span or low-volume flag. */
+  peers: Omit<ProfileMetricsRow, 'accountId' | 'spanWeeks' | 'lowVolume'> | null;
+};
+
+export const getProfileMetric = (
+  id: string,
+  params: { period: ProfileMetricPeriod; date?: string; to?: string },
+) => apiFetch<ProfileMetricDetail>(`/accounts/${id}/metrics${qs(params)}`);
 
 export const getAccount = (id: string) =>
   apiFetch<Record<string, unknown>>(`/accounts/${id}`);
@@ -301,6 +363,16 @@ export interface Bids {
   bidsSelfEu: number;
   bidsSelfLatam: number;
   bidsBidder: number;
+  /** Self bids typed per profile (profile id → count); empty or missing for days saved by region. */
+  bidsSelfByProfile?: Record<string, number>;
+}
+
+/** One of the plan owner's profiles, for typing self bids per profile. */
+export interface PlanProfile {
+  id: string;
+  name: string;
+  region: string | null;
+  archived: boolean;
 }
 
 export interface Counts extends Bids {
@@ -339,6 +411,8 @@ export interface DayPlan {
   notes: string;
   /** Set once the day has been followed up. */
   loggedAt: string | null;
+  /** The plan owner's profiles (archived included), by name. */
+  profiles?: PlanProfile[];
 }
 
 /** A day's follow-up: bids done, the daily goal lines with ticks, and notes (posts to Slack). */
@@ -393,7 +467,7 @@ export interface TeamRow {
 }
 
 export const getDayPlans = (weekStart: string, userId?: string) =>
-  apiFetch<{ weekStart: string; days: DayPlan[] }>(`/daily-plans${qs({ weekStart, userId })}`);
+  apiFetch<{ weekStart: string; days: DayPlan[]; profiles?: PlanProfile[] }>(`/daily-plans${qs({ weekStart, userId })}`);
 
 export const getDayPlan = (date: string, userId?: string) =>
   apiFetch<DayPlan>(`/daily-plans/${date}${qs({ userId })}`);

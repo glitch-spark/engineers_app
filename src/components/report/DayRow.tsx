@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import type { Counts, DayPlan } from '../../api/endpoints';
+import type { Counts, DayPlan, PlanProfile } from '../../api/endpoints';
 import { compare, dayLabel, dayState, parseDateParam, preSplitSelf, SELF_REGIONS } from '../../lib/reportWeek';
 import GoalDone from './GoalDone';
 
@@ -17,6 +17,25 @@ function bidParts(goal: Counts, done: Counts): BidPart[] {
     { label: 'Bidder', done: done.bidsBidder, goal: goal.bidsBidder },
   ];
   return parts.filter((p) => p.done > 0 || p.goal > 0);
+}
+
+/** "(Main 20, Second 30)": the day's self bids per profile, when typed that way. */
+function ProfileSplit({ done, profiles }: { done: Counts; profiles: PlanProfile[] }) {
+  const byProfile = done.bidsSelfByProfile ?? {};
+  const shown = profiles.filter((p) => (byProfile[p.id] ?? 0) > 0);
+  if (shown.length === 0) return null;
+  return (
+    <span className="ml-1 text-muted">
+      (
+      {shown.map((p, i) => (
+        <span key={p.id} className="whitespace-nowrap tabular-nums">
+          {i > 0 && ', '}
+          {p.name} <span className="font-medium text-strong">{byProfile[p.id]}</span>
+        </span>
+      ))}
+      )
+    </span>
+  );
 }
 
 /** "(LATAM 20/50, EU 30/50, …)", or just the goals "(LATAM 50, …)" before follow-up. */
@@ -53,11 +72,13 @@ function BidSplit({ parts, showDone }: { parts: BidPart[]; showDone: boolean }) 
 /** One day of the week board: its goal (from the weekly plan), then what was done once followed up. */
 export default function DayRow({
   day,
+  profiles,
   today,
   canEdit,
   onOpen,
 }: {
   day: DayPlan;
+  profiles?: PlanProfile[];
   today: string;
   canEdit: boolean;
   onOpen: () => void;
@@ -71,6 +92,7 @@ export default function DayRow({
   const state = dayState({ date: day.date, today, hasGoal, logged: day.loggedAt !== null });
   const interviews = done.interviewsSelf + done.interviewsCaller;
   const parts = bidParts(goal, done);
+  const typedPerProfile = Object.keys(done.bidsSelfByProfile ?? {}).length > 0;
 
   const interviewsText = (
     <span className="whitespace-nowrap text-muted">
@@ -92,7 +114,7 @@ export default function DayRow({
       <>
         <span>
           <GoalDone label="Bids" done={done.bidsSelf + done.bidsBidder} goal={bidsGoal} />
-          <BidSplit parts={parts} showDone />
+          {typedPerProfile && profiles ? <ProfileSplit done={done} profiles={profiles} /> : <BidSplit parts={parts} showDone />}
         </span>
         {interviewsText}
         {day.goalItems.length > 0 && <span className="text-muted">Goals {ticked}/{day.goalItems.length}</span>}

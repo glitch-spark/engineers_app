@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { ChecklistItem, Counts } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
-import { bidsOf, dateParam, dayLabel, isToday, parseDateParam } from '../../lib/reportWeek';
+import { bidsOf, dateParam, dayLabel, isToday, parseDateParam, withListedProfiles } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import ChecklistEditor, { cleanItems } from './ChecklistEditor';
 import GoalDoneFields from './GoalDoneFields';
@@ -50,7 +50,8 @@ export default function DayPanel({
 
   useEffect(() => {
     if (!data) return;
-    const next: FollowUp = { done: data.done, goalItems: data.goalItems, notes: data.notes };
+    // Only listed profiles: a deleted one's bids would make the save fail.
+    const next: FollowUp = { done: withListedProfiles(data.done, data.profiles), goalItems: data.goalItems, notes: data.notes };
     setForm(next);
     setInitial(JSON.stringify(next));
     setNotesOpen(!!data.notes);
@@ -76,7 +77,7 @@ export default function DayPanel({
     try {
       await api.putDayPlan(date, {
         goalItems: cleanItems(form.goalItems),
-        done: bidsOf(form.done),
+        done: bidsOf(form.done, data?.profiles),
         notes: form.notes,
       });
       await mutate();
@@ -154,6 +155,7 @@ export default function DayPanel({
             done={{ ...form.done, interviewsSelf: data.interviews.self, interviewsCaller: data.interviews.caller }}
             onDone={editable ? (done) => setForm({ ...form, done }) : undefined}
             stages={data.interviews.stages}
+            profiles={data.profiles}
             showDone={canFollowUp}
             readOnly={!editable}
           />

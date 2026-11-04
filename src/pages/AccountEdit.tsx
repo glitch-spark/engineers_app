@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -11,7 +11,14 @@ import { legacyPromptName, promptErrors, unitRoles } from '../components/prompts
 import CountrySelect from '../components/CountrySelect';
 import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
+import ProfileMetricsPanel from '../components/profiles/ProfileMetricsPanel';
+import Tabs from '../components/Tabs';
 import { PROFILE_REGION_OPTIONS } from '../lib/countries';
+
+const PROFILE_TABS = [
+  { key: 'profile', label: 'Profile' },
+  { key: 'metrics', label: 'Metrics' },
+];
 
 type AccShape = {
   _id?: string;
@@ -53,6 +60,16 @@ export default function AccountEditPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const isNew = !id || id === 'new';
+  // The open tab lives in the URL (?tab=metrics), so a link or a reload lands on it.
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'metrics' ? 'metrics' : 'profile';
+  const setTab = (key: string) =>
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (key === 'metrics') next.set('tab', key);
+      else next.delete('tab');
+      return next;
+    }, { replace: true });
 
   const [name, setName] = useState('');
   const [country, setCountry] = useState('');
@@ -222,52 +239,58 @@ export default function AccountEditPage() {
     <div className="space-y-6">
       <PageHeader title="Edit profile" backTo="/accounts" />
 
-      <Section
-        title="Profile name"
-        desc="A label to distinguish this profile in dropdowns. Optional country and region show next to the name on Interviews."
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_minmax(8rem,10rem)] gap-4">
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-name">Profile name</label>
-            <input
-              id="profile-name"
-              className="input w-full text-sm"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={renameProfile}
-              placeholder="e.g. AI Full-stack, Backend, QA Engineer"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-country">
-              Country <span className="text-faint font-normal">(optional)</span>
-            </label>
-            <CountrySelect id="profile-country" value={country} onChange={saveCountry} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-region">
-              Region <span className="text-faint font-normal">(optional)</span>
-            </label>
-            <Select
-              id="profile-region"
-              value={region}
-              onChange={saveRegion}
-              options={PROFILE_REGION_OPTIONS}
-              className="text-sm"
-            />
-          </div>
-        </div>
-      </Section>
+      <Tabs tabs={PROFILE_TABS} value={tab} onChange={setTab} ariaLabel="Profile sections">
+        {tab === 'metrics' ? <ProfileMetricsPanel accountId={id!} /> : (
+          <div className="space-y-6">
+            <Section
+              title="Profile name"
+              desc="A label to distinguish this profile in dropdowns. Optional country and region show next to the name on Interviews."
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_minmax(8rem,10rem)] gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-name">Profile name</label>
+                  <input
+                    id="profile-name"
+                    className="input w-full text-sm"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onBlur={renameProfile}
+                    placeholder="e.g. AI Full-stack, Backend, QA Engineer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-country">
+                    Country <span className="text-faint font-normal">(optional)</span>
+                  </label>
+                  <CountrySelect id="profile-country" value={country} onChange={saveCountry} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1" htmlFor="profile-region">
+                    Region <span className="text-faint font-normal">(optional)</span>
+                  </label>
+                  <Select
+                    id="profile-region"
+                    value={region}
+                    onChange={saveRegion}
+                    options={PROFILE_REGION_OPTIONS}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+            </Section>
 
-      <Section
-        title="Resumes"
-        desc="Upload this profile's resumes as PDFs. Their text is what Job Applies scores against each job; keep one resume per stack."
-      >
-        <ResumesSection accountId={id!} />
-      </Section>
+            <Section
+              title="Resumes"
+              desc="Upload this profile's resumes as PDFs. Their text is what Job Applies scores against each job; keep one resume per stack."
+            >
+              <ResumesSection accountId={id!} />
+            </Section>
 
-      <PromptsBlock accountId={id!} />
-      <PromptEvalBlock accountId={id!} />
+            <PromptsBlock accountId={id!} />
+            <PromptEvalBlock accountId={id!} />
+          </div>
+        )}
+      </Tabs>
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import type { Counts, InterviewStages } from '../../api/endpoints';
-import { preSplitSelf, SELF_REGIONS, withSelfRegion, type SelfRegionField } from '../../lib/reportWeek';
+import type { Counts, InterviewStages, PlanProfile } from '../../api/endpoints';
+import { preSplitSelf, REGION_FIELD, selfRegionsTotal, SELF_REGIONS, withProfileBids, withSelfRegion, type SelfRegionField } from '../../lib/reportWeek';
 import { stageBadgeClass } from '../../lib/stageBadge';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -13,6 +13,9 @@ const STAGE_COLOR_KEY: Record<string, string> = {
 // Every row shares these columns so headers, inputs and read-only values line up.
 const ROW_WITH_DONE = 'grid grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] items-start gap-3';
 const ROW_GOAL_ONLY = 'grid grid-cols-[minmax(0,1fr)_6.5rem] items-start gap-3';
+
+// The typed counts; `bidsSelfByProfile` is a map, not a cell.
+type NumberField = Exclude<keyof Counts, 'bidsSelfByProfile'>;
 
 function NumberInput({
   value, onChange, label,
@@ -64,7 +67,8 @@ function StageChips({ stages }: { stages?: Record<string, number> }) {
 /** Goal | Done for bids and interviews.
  *
  *  Bids: goal and done are typed; self bids per region (US, EU, LATAM), which
- *  add up to the self total. Interviews: the goal is typed on the week
+ *  add up to the self total. With `profiles` (the day follow-up), self bids are
+ *  typed per profile and the region rows turn into read-only sums. Interviews: the goal is typed on the week
  *  only; done always comes from the Interviews page (read-only, with stages).
  */
 export default function GoalDoneFields({
@@ -73,6 +77,7 @@ export default function GoalDoneFields({
   done,
   onDone,
   stages,
+  profiles,
   showDone = true,
   showInterviewGoal = false,
   readOnly = false,
@@ -82,16 +87,30 @@ export default function GoalDoneFields({
   done: Counts;
   onDone?: (next: Counts) => void;
   stages?: InterviewStages;
+  profiles?: PlanProfile[];
   showDone?: boolean;
   showInterviewGoal?: boolean;
   readOnly?: boolean;
 }) {
   const row = showDone ? ROW_WITH_DONE : ROW_GOAL_ONLY;
 
-  const set = (c: Counts, field: keyof Counts, n: number): Counts =>
+  const byProfile = done.bidsSelfByProfile ?? {};
+  const typedPerProfile = Object.keys(byProfile).length > 0;
+  const shownProfiles = (profiles ?? []).filter((p) => !p.archived || p.id in byProfile); // zero entries stay in the map, so a cleared row stays
+  // Per-profile mode: the region Done cells are sums of the profiles' bids. Only with a profile row to type in
+  // (all archived and none with bids: the regions stay editable).
+  const perProfile = showDone && shownProfiles.length > 0;
+  const regionLabel = (p: PlanProfile) =>
+    SELF_REGIONS.find((r) => r.field === (p.region ? REGION_FIELD[p.region] : undefined))?.label ?? p.region ?? 'no region';
+  const otherRegions = (profiles ?? []).reduce(
+    (sum, p) => (p.region && REGION_FIELD[p.region] ? sum : sum + (byProfile[p.id] ?? 0)),
+    0,
+  );
+
+  const set = (c: Counts, field: NumberField, n: number): Counts =>
     SELF_REGIONS.some((r) => r.field === field) ? withSelfRegion(c, field as SelfRegionField, n) : { ...c, [field]: n };
 
-  const goalCell = (field: keyof Counts, label: string) =>
+  const goalCell = (field: NumberField, label: string) =>
     readOnly || !onGoal ? (
       <ValueBox value={goal[field] ?? 0} muted />
     ) : (
@@ -103,7 +122,9 @@ export default function GoalDoneFields({
       <span className="pt-2 text-sm text-body">{label}</span>
       {goalCell(field, `Bids ${label.toLowerCase()}`)}
       {showDone && (
-        readOnly || !onDone ? (
+        perProfile && field !== 'bidsBidder' ? (
+          <ValueBox value={done[field] ?? 0} title={`Sum of your ${SELF_REGIONS.find((r) => r.field === field)?.label} profiles`} />
+        ) : readOnly || !onDone ? (
           <ValueBox value={done[field] ?? 0} />
         ) : (
           <NumberInput value={done[field] ?? 0} label={`Bids ${label.toLowerCase()} done`} onChange={(n) => onDone(set(done, field, n))} />
@@ -112,21 +133,54 @@ export default function GoalDoneFields({
     </div>
   );
 
-  // Self bids saved before the region split: shown as-is until a region is typed.
+  // The self total beyond US / EU / LATAM: other-region profiles' bids (a week's sum), or a pre-split total.
   const preSplitGoal = preSplitSelf(goal);
-  const preSplitDone = showDone ? preSplitSelf(done) : 0;
+  // Typed per profile, the self total also holds the other regions' bids: not pre-split.
+  const preSplitDone = showDone && !(perProfile && typedPerProfile) ? preSplitSelf(done) : 0;
+  // Only a pre-split day followed up by region is replaced by typing a region.
+  const replacedByRegion = !readOnly && !!onDone && !perProfile && !typedPerProfile && preSplitDone > 0;
   const preSplitRow = (preSplitGoal > 0 || preSplitDone > 0) && (
     <div className={`${row} py-1`}>
       <div className="min-w-0 pt-2 text-sm text-body">
-        Self (no region)
+        Self (other regions)
         <div className="text-[11px] text-muted">
-          Saved before the region split{!readOnly && (onGoal || onDone) ? ' · typing a region replaces it' : ''}
+          Canada, Asia, no region, or saved before the region split{replacedByRegion ? ' · typing a region replaces it' : ''}
         </div>
       </div>
       <ValueBox value={preSplitGoal} muted />
       {showDone && <ValueBox value={preSplitDone} />}
     </div>
   );
+
+  const otherRow = perProfile && otherRegions > 0 && (
+    <div className={`${row} py-1`}>
+      <span className="pt-2 text-sm text-body">Self (other regions)</span>
+      <span className="pt-2 text-right text-xs text-muted">—</span>
+      <ValueBox value={otherRegions} />
+    </div>
+  );
+
+  const profileRow = (p: PlanProfile) => {
+    const label = `Self · ${p.name} (${regionLabel(p)})`;
+    return (
+      <div key={p.id} className={`${row} py-1`}>
+        <span className="min-w-0 break-words pt-2 text-sm text-body">{label}</span>
+        <span className="pt-2 text-right text-xs text-muted">—</span>
+        {readOnly || !onDone ? (
+          <ValueBox value={byProfile[p.id] ?? 0} />
+        ) : (
+          <NumberInput
+            value={byProfile[p.id] ?? 0}
+            label={`${label} done`}
+            onChange={(n) => onDone(withProfileBids(done, { ...byProfile, [p.id]: n }, profiles ?? []))}
+          />
+        )}
+      </div>
+    );
+  };
+
+  // A day saved by region, before typing per profile existed.
+  const savedByRegion = perProfile && !readOnly && !!onDone && !typedPerProfile && selfRegionsTotal(done) > 0;
 
   const interviewRow = (field: 'interviewsSelf' | 'interviewsCaller', label: string, chips?: Record<string, number>) => (
     <div key={field} className={`${row} py-1`}>
@@ -150,6 +204,13 @@ export default function GoalDoneFields({
         <h3 className="form-label mb-0.5">Bids</h3>
         {SELF_REGIONS.map((r) => bidRow(r.field, `Self (${r.label})`))}
         {preSplitRow}
+        {otherRow}
+        {perProfile && shownProfiles.map(profileRow)}
+        {savedByRegion && (
+          <p className="py-1 text-[11px] text-muted">
+            Saved by region: {SELF_REGIONS.map((r) => `${r.label} ${done[r.field] ?? 0}`).join(' · ')} — typing per profile replaces it
+          </p>
+        )}
         {bidRow('bidsBidder', 'Bidder')}
       </section>
       {(showDone || showInterviewGoal) && (
