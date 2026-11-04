@@ -80,10 +80,11 @@ export default function AccountsPage() {
     })
   );
 
-  // Metrics load on their own key so the list never waits on them.
+  // Metrics load on their own key so the list never waits on them. Archived profiles have none: no request then.
   const { data: metricsData, error: metricsError, isLoading: metricsLoading } = useSWR(
-    ['account-metrics', weeks, isAdmin ? userId : ''] as const,
-    () => api.getProfileMetrics({ weeks, ...(isAdmin && userId ? { userId } : {}) })
+    profileStatus === 'archived' ? null : (['account-metrics', weeks, isAdmin ? userId : ''] as const),
+    () => api.getProfileMetrics({ weeks, ...(isAdmin && userId ? { userId } : {}) }),
+    { revalidateOnFocus: false }
   );
   const metricsById = useMemo(
     () => new Map((metricsData?.rows ?? []).map((r) => [r.accountId, r])),
