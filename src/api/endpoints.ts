@@ -301,6 +301,16 @@ export interface Bids {
   bidsSelfEu: number;
   bidsSelfLatam: number;
   bidsBidder: number;
+  /** Self bids typed per profile (profile id → count); empty or missing for days saved by region. */
+  bidsSelfByProfile?: Record<string, number>;
+}
+
+/** One of the plan owner's profiles, for typing self bids per profile. */
+export interface PlanProfile {
+  id: string;
+  name: string;
+  region: string | null;
+  archived: boolean;
 }
 
 export interface Counts extends Bids {
@@ -339,6 +349,8 @@ export interface DayPlan {
   notes: string;
   /** Set once the day has been followed up. */
   loggedAt: string | null;
+  /** The plan owner's profiles (archived included), by name. */
+  profiles?: PlanProfile[];
 }
 
 /** A day's follow-up: bids done, the daily goal lines with ticks, and notes (posts to Slack). */
@@ -393,7 +405,7 @@ export interface TeamRow {
 }
 
 export const getDayPlans = (weekStart: string, userId?: string) =>
-  apiFetch<{ weekStart: string; days: DayPlan[] }>(`/daily-plans${qs({ weekStart, userId })}`);
+  apiFetch<{ weekStart: string; days: DayPlan[]; profiles?: PlanProfile[] }>(`/daily-plans${qs({ weekStart, userId })}`);
 
 export const getDayPlan = (date: string, userId?: string) =>
   apiFetch<DayPlan>(`/daily-plans/${date}${qs({ userId })}`);

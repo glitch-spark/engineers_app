@@ -152,6 +152,7 @@ export default function ReportPage() {
                   <DayRow
                     key={day.date}
                     day={day}
+                    profiles={daysQuery.data?.profiles}
                     today={today}
                     canEdit={!readOnly}
                     onOpen={() => setOpenDay(day.date)}

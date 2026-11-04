@@ -154,6 +154,7 @@ export default function DayPanel({
             done={{ ...form.done, interviewsSelf: data.interviews.self, interviewsCaller: data.interviews.caller }}
             onDone={editable ? (done) => setForm({ ...form, done }) : undefined}
             stages={data.interviews.stages}
+            profiles={data.profiles}
             showDone={canFollowUp}
             readOnly={!editable}
           />

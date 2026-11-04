@@ -2,7 +2,7 @@
  *  Weeks start on Monday; Monday–Saturday are working days and Sunday
  *  belongs to the week that just ended.
  */
-import type { Bids, Counts } from '../api/endpoints';
+import type { Bids, Counts, PlanProfile } from '../api/endpoints';
 import { mondayOfWeek, toDateInputValue } from './dateRangePresets';
 
 export type CompareState = 'met' | 'short' | 'over' | 'none';
@@ -114,9 +114,33 @@ export function withSelfRegion<T extends Bids>(c: T, field: SelfRegionField, n: 
   return { ...next, bidsSelf: selfRegionsTotal(next) };
 }
 
+/** Profile region (as the API names it) → the self field it adds to. */
+export const REGION_FIELD: Record<string, SelfRegionField> = {
+  US: 'bidsSelfUs',
+  EU: 'bidsSelfEu',
+  Latam: 'bidsSelfLatam',
+};
+
+/** `c` with self bids typed per profile: the three regions and the self total
+ *  follow from the profiles, as the server derives them on save. Canada, Asia
+ *  and no-region profiles count in the self total only. */
+export function withProfileBids<T extends Bids>(c: T, byProfile: Record<string, number>, profiles: PlanProfile[]): T {
+  const next: T = { ...c, bidsSelfByProfile: byProfile, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bidsSelf: 0 };
+  for (const p of profiles) {
+    const n = byProfile[p.id] ?? 0;
+    const field = p.region ? REGION_FIELD[p.region] : undefined;
+    if (field) next[field] += n;
+    next.bidsSelf += n;
+  }
+  return next;
+}
+
 /** Just the bid fields, for a save. */
 export function bidsOf(c: Bids): Bids {
   return {
+    ...(c.bidsSelfByProfile && Object.keys(c.bidsSelfByProfile).length > 0
+      ? { bidsSelfByProfile: c.bidsSelfByProfile }
+      : {}),
     bidsSelf: c.bidsSelf,
     bidsSelfUs: c.bidsSelfUs ?? 0,
     bidsSelfEu: c.bidsSelfEu ?? 0,
