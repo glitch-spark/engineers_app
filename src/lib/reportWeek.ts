@@ -125,7 +125,14 @@ export const REGION_FIELD: Record<string, SelfRegionField> = {
  *  follow from the profiles, as the server derives them on save. Canada, Asia
  *  and no-region profiles count in the self total only. */
 export function withProfileBids<T extends Bids>(c: T, byProfile: Record<string, number>, profiles: PlanProfile[]): T {
-  const next: T = { ...c, bidsSelfByProfile: byProfile, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bidsSelf: 0 };
+  const next: T = {
+    ...c,
+    bidsSelfByProfile: listedOnly(byProfile, profiles),
+    bidsSelfUs: 0,
+    bidsSelfEu: 0,
+    bidsSelfLatam: 0,
+    bidsSelf: 0,
+  };
   for (const p of profiles) {
     const n = byProfile[p.id] ?? 0;
     const field = p.region ? REGION_FIELD[p.region] : undefined;
@@ -135,12 +142,23 @@ export function withProfileBids<T extends Bids>(c: T, byProfile: Record<string, 
   return next;
 }
 
-/** Just the bid fields, for a save. */
-export function bidsOf(c: Bids): Bids {
+/** The entries of `byProfile` for listed profiles: a deleted profile's id
+ *  stays in a saved day's map, and the server refuses unknown ids. */
+function listedOnly(byProfile: Record<string, number>, profiles: PlanProfile[]): Record<string, number> {
+  const listed = new Set(profiles.map((p) => p.id));
+  return Object.fromEntries(Object.entries(byProfile).filter(([id]) => listed.has(id)));
+}
+
+/** `c` with its per-profile self bids limited to `profiles` (as given; unchanged without them). */
+export function withListedProfiles<T extends Bids>(c: T, profiles?: PlanProfile[]): T {
+  return profiles && c.bidsSelfByProfile ? { ...c, bidsSelfByProfile: listedOnly(c.bidsSelfByProfile, profiles) } : c;
+}
+
+/** Just the bid fields, for a save; with `profiles`, only their per-profile bids are sent. */
+export function bidsOf(c: Bids, profiles?: PlanProfile[]): Bids {
+  const byProfile = withListedProfiles(c, profiles).bidsSelfByProfile;
   return {
-    ...(c.bidsSelfByProfile && Object.keys(c.bidsSelfByProfile).length > 0
-      ? { bidsSelfByProfile: c.bidsSelfByProfile }
-      : {}),
+    ...(byProfile && Object.keys(byProfile).length > 0 ? { bidsSelfByProfile: byProfile } : {}),
     bidsSelf: c.bidsSelf,
     bidsSelfUs: c.bidsSelfUs ?? 0,
     bidsSelfEu: c.bidsSelfEu ?? 0,
