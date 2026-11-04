@@ -104,7 +104,7 @@ export default function GoalDoneFields({
     (sum, p) => (p.region && REGION_FIELD[p.region] ? sum : sum + (byProfile[p.id] ?? 0)),
     0,
   );
-  const shownProfiles = (profiles ?? []).filter((p) => !p.archived || (byProfile[p.id] ?? 0) > 0);
+  const shownProfiles = (profiles ?? []).filter((p) => !p.archived || p.id in byProfile); // zero entries stay in the map, so a cleared row stays
 
   const set = (c: Counts, field: NumberField, n: number): Counts =>
     SELF_REGIONS.some((r) => r.field === field) ? withSelfRegion(c, field as SelfRegionField, n) : { ...c, [field]: n };
@@ -134,7 +134,8 @@ export default function GoalDoneFields({
 
   // Self bids saved before the region split: shown as-is until a region is typed.
   const preSplitGoal = preSplitSelf(goal);
-  const preSplitDone = showDone ? preSplitSelf(done) : 0;
+  // Typed per profile, the self total also holds the other regions' bids: not pre-split.
+  const preSplitDone = showDone && !(perProfile && typedPerProfile) ? preSplitSelf(done) : 0;
   const preSplitRow = (preSplitGoal > 0 || preSplitDone > 0) && (
     <div className={`${row} py-1`}>
       <div className="min-w-0 pt-2 text-sm text-body">
