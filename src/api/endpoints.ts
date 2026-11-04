@@ -215,7 +215,8 @@ export const getProfileMetrics = (params: { weeks: number; userId?: string }) =>
 /** One profile's metrics: its weekly series (every week of the span, oldest first) and its owner's other active profiles averaged. */
 export type ProfileMetricDetail = ProfileMetricsRow & {
   weekly: { week: string; selfBids: number; bidderBids: number; selfInterviews: number; callerInterviews: number }[];
-  peers: ProfileMetricsRow | null;
+  /** Averages only: no profile, span or low-volume flag. */
+  peers: Omit<ProfileMetricsRow, 'accountId' | 'spanWeeks' | 'lowVolume'> | null;
 };
 
 export const getProfileMetric = (id: string, params: { weeks: number }) =>
