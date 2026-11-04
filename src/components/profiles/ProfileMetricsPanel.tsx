@@ -253,12 +253,12 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
                       <YAxis allowDecimals={false} {...axis} width={40} />
                       {tooltip}
                       <Legend wrapperStyle={{ fontSize: 12, color: chart.axis }} />
-                      <Line dataKey="interviews" name="Total" type="monotone" stroke={c.interviews} strokeWidth={2}
+                      <Line dataKey="interviews" name="Total" type="linear" stroke={c.interviews} strokeWidth={2}
                         dot={view === 'week' ? { r: 3, fill: c.interviews } : false} isAnimationActive={false} />
-                      <Line dataKey="selfInterviews" name="Self" type="monotone" stroke={c.self} strokeWidth={1.5}
-                        dot={false} isAnimationActive={false} />
-                      <Line dataKey="callerInterviews" name="Caller" type="monotone" stroke={c.caller} strokeWidth={1.5}
-                        strokeDasharray="4 3" dot={false} isAnimationActive={false} />
+                      <Line dataKey="selfInterviews" name="Self" type="linear" stroke={c.self} strokeWidth={1.5}
+                        dot={view === 'week' ? { r: 2.5, fill: c.self } : false} isAnimationActive={false} />
+                      <Line dataKey="callerInterviews" name="Caller" type="linear" stroke={c.caller} strokeWidth={1.5}
+                        strokeDasharray="4 3" dot={view === 'week' ? { r: 2.5, fill: c.caller } : false} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
