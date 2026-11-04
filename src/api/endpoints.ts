@@ -184,6 +184,8 @@ export const listAccounts = (params?: {
   userId?: string;
   /** Default (omitted) = active only. */
   status?: 'active' | 'archived' | 'all';
+  /** One of PROFILE_REGIONS, or "none" for profiles without one. Omitted = every region. */
+  region?: string;
 }) =>
   apiFetch<{ accounts: Record<string, unknown>[]; pagination: Pagination }>(
     `/accounts${qs(params)}`

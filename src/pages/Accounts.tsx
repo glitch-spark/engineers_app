@@ -8,7 +8,7 @@ import ActionMenu from '../components/ActionMenu';
 import ConfirmDialog from '../components/ConfirmDialog';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
-import { countryFlag, countryName } from '../lib/countries';
+import { countryFlag, countryName, PROFILE_REGIONS } from '../lib/countries';
 import { PROFILE_STATUS_OPTIONS, type ProfileStatus } from '../lib/profileArchive';
 import { WEEK_OPTIONS, readWeeks, writeWeeks, fmtPerWeek, fmtRate, fmtScore } from '../lib/profileMetrics';
 
@@ -56,6 +56,7 @@ export default function AccountsPage() {
   const isAdmin = user?.role === 'admin';
   const [userId, setUserId] = useState('');
   const [profileStatus, setProfileStatus] = useState<ProfileStatus>('active');
+  const [region, setRegion] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Acc | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [weeks, setWeeks] = useState(readWeeks);
@@ -70,12 +71,13 @@ export default function AccountsPage() {
   }, [searchTerm]);
 
   const { data, mutate, isLoading } = useSWR(
-    ['accounts', currentPage, pageSize, debouncedSearch, isAdmin ? userId : '', profileStatus] as const,
+    ['accounts', currentPage, pageSize, debouncedSearch, isAdmin ? userId : '', profileStatus, region] as const,
     () => api.listAccounts({
       page: currentPage,
       limit: pageSize,
       search: debouncedSearch,
       status: profileStatus,
+      ...(region ? { region } : {}),
       ...(isAdmin && userId ? { userId } : {}),
     })
   );
@@ -294,6 +296,20 @@ export default function AccountsPage() {
             onChange={(e) => { setProfileStatus(e.target.value as ProfileStatus); setCurrentPage(1); }}
           >
             {PROFILE_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
+        <div className="w-32">
+          <label className="block text-xs text-muted mb-1" htmlFor="accounts-region">Region</label>
+          <select
+            id="accounts-region"
+            className="select focus-ring w-full text-sm"
+            value={region}
+            onChange={(e) => { setRegion(e.target.value); setCurrentPage(1); }}
+          >
+            <option value="">All regions</option>
+            {PROFILE_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            <option value="none">No region</option>
           </select>
         </div>
 
