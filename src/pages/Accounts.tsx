@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
@@ -10,6 +10,27 @@ import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
 import { countryFlag, countryName } from '../lib/countries';
 import { PROFILE_STATUS_OPTIONS, type ProfileStatus } from '../lib/profileArchive';
+import { WEEK_OPTIONS, readWeeks, writeWeeks, fmtPerWeek, fmtRate, fmtScore } from '../lib/profileMetrics';
+
+type SortKey = 'bids' | 'interviews' | 'rate' | 'score';
+
+const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number | null => {
+  if (!m || m.spanWeeks === 0) return null;
+  switch (key) {
+    case 'bids': return m.bidsPerWeek;
+    case 'interviews': return m.interviewsPerWeek;
+    case 'rate': return m.interviewsPerBid;
+    case 'score': return m.tailorScore?.avg ?? m.matchScore?.avg ?? null;
+  }
+};
+
+const scoreCell = (m: api.ProfileMetricsRow) => {
+  const parts = [
+    m.tailorScore && m.tailorScore.n > 0 ? `T ${fmtScore(m.tailorScore)}` : '',
+    m.matchScore && m.matchScore.n > 0 ? `M ${fmtScore(m.matchScore)}` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : '—';
+};
 
 type Acc = {
   _id: string;
@@ -37,6 +58,8 @@ export default function AccountsPage() {
   const [profileStatus, setProfileStatus] = useState<ProfileStatus>('active');
   const [pendingDelete, setPendingDelete] = useState<Acc | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [weeks, setWeeks] = useState(readWeeks);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -55,6 +78,16 @@ export default function AccountsPage() {
       status: profileStatus,
       ...(isAdmin && userId ? { userId } : {}),
     })
+  );
+
+  // Metrics load on their own key so the list never waits on them.
+  const { data: metricsData, error: metricsError, isLoading: metricsLoading } = useSWR(
+    ['account-metrics', weeks, isAdmin ? userId : ''] as const,
+    () => api.getProfileMetrics({ weeks, ...(isAdmin && userId ? { userId } : {}) })
+  );
+  const metricsById = useMemo(
+    () => new Map((metricsData?.rows ?? []).map((r) => [r.accountId, r])),
+    [metricsData]
   );
 
   // The lookup lists every user; /users is paginated (10 by default), which cut the filter short.
@@ -101,6 +134,47 @@ export default function AccountsPage() {
     ];
   };
 
+  // Four <td>s: Bids/wk, Interviews/wk, Intv/bid, Score.
+  const metricCells = (a: Acc): ReactNode => {
+    const dashes = (title?: string) => [0, 1, 2, 3].map((i) => (
+      <td key={i} className="px-4 py-2.5 text-muted" title={title}>—</td>
+    ));
+    if (a.archived || metricsError) return dashes();
+    if (metricsLoading) {
+      return [0, 1, 2, 3].map((i) => (
+        <td key={i} className="px-4 py-2.5"><div className="skeleton h-4 w-12" aria-hidden /></td>
+      ));
+    }
+    const m = metricsById.get(a._id);
+    if (!m) return dashes();
+    if (m.spanWeeks === 0) return dashes('Not enough history yet');
+    const split = (text: string) => <div className="text-[11px] text-muted">{text}</div>;
+    return (
+      <>
+        <td className="px-4 py-2.5 whitespace-nowrap">
+          <div>{fmtPerWeek(m.bidsPerWeek)}</div>
+          {split(`${fmtPerWeek(m.selfBidsPerWeek)} self · ${fmtPerWeek(m.bidderBidsPerWeek)} bidder`)}
+        </td>
+        <td className="px-4 py-2.5 whitespace-nowrap">
+          <div>{fmtPerWeek(m.interviewsPerWeek)}</div>
+          {split(`${fmtPerWeek(m.selfInterviewsPerWeek)} self · ${fmtPerWeek(m.callerInterviewsPerWeek)} caller`)}
+        </td>
+        <td
+          className={`px-4 py-2.5 whitespace-nowrap ${m.lowVolume ? 'text-muted' : ''}`}
+          title={m.lowVolume ? 'Fewer than 30 bids — too few to rank' : undefined}
+        >
+          {fmtRate(m.interviewsPerBid)}
+        </td>
+        <td
+          className="px-4 py-2.5 whitespace-nowrap"
+          title={`Tailor score n=${m.tailorScore?.n ?? 0} · Job-match score n=${m.matchScore?.n ?? 0}`}
+        >
+          {scoreCell(m)}
+        </td>
+      </>
+    );
+  };
+
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
     setCurrentPage(1);
@@ -122,7 +196,27 @@ export default function AccountsPage() {
     }
   };
 
-  const accounts = (data?.accounts as Acc[]) || [];
+  const changeWeeks = (n: number) => {
+    setWeeks(n);
+    writeWeeks(n);
+  };
+
+  // First click sorts descending, the next ascending; rows without a value always go last.
+  const toggleSort = (key: SortKey) =>
+    setSort((s) => (s?.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }));
+
+  const rawAccounts = (data?.accounts as Acc[]) || [];
+  const accounts = useMemo(() => {
+    if (!sort) return rawAccounts;
+    const val = (a: Acc) => (a.archived ? null : sortValue(metricsById.get(a._id), sort.key));
+    const sign = sort.dir === 'desc' ? -1 : 1;
+    return [...rawAccounts].sort((a, b) => {
+      const x = val(a);
+      const y = val(b);
+      if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;
+      return (x - y) * sign;
+    });
+  }, [rawAccounts, sort, metricsById]);
   const pagination = data?.pagination;
 
   return (
@@ -193,6 +287,18 @@ export default function AccountsPage() {
           </select>
         </div>
 
+        <div className="w-36">
+          <label className="block text-xs text-muted mb-1" htmlFor="accounts-period">Period</label>
+          <select
+            id="accounts-period"
+            className="select focus-ring w-full text-sm"
+            value={weeks}
+            onChange={(e) => changeWeeks(Number(e.target.value))}
+          >
+            {WEEK_OPTIONS.map((w) => <option key={w} value={w}>Last {w} weeks</option>)}
+          </select>
+        </div>
+
         <div className="w-28">
           <label className="block text-xs text-muted mb-1" htmlFor="accounts-page-size">Show</label>
           <select
@@ -227,13 +333,31 @@ export default function AccountsPage() {
         </div>
       )}
 
+      {metricsError && <p role="status" className="text-xs text-muted">Couldn't load metrics</p>}
+
       <div className="table-wrap">
         <table className="min-w-full text-sm">
           <thead className="table-head">
             <tr>
               <th className="px-4 py-2.5">Name</th>
               <th className="px-4 py-2.5">Region</th>
-              <th className="px-4 py-2.5">Country</th>
+              {([
+                ['bids', 'Bids/wk'],
+                ['interviews', 'Interviews/wk'],
+                ['rate', 'Intv/bid'],
+                ['score', 'Score'],
+              ] as const).map(([key, label]) => (
+                <th
+                  key={key}
+                  className="px-4 py-2.5 whitespace-nowrap"
+                  aria-sort={sort?.key === key ? (sort.dir === 'desc' ? 'descending' : 'ascending') : undefined}
+                >
+                  <button type="button" className="uppercase tracking-wide hover:underline" onClick={() => toggleSort(key)}>
+                    {label}
+                    {sort?.key === key && <span aria-hidden> {sort.dir === 'desc' ? '↓' : '↑'}</span>}
+                  </button>
+                </th>
+              ))}
               <th className="px-4 py-2.5">Owner</th>
               <th className="px-4 py-2.5 w-24 text-center" title="Include in Resume Generator profile picker">
                 Generate
@@ -244,7 +368,7 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted">
+                <td colSpan={9} className="px-4 py-8 text-center text-muted">
                   <div role="status" className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading profiles...
@@ -253,7 +377,7 @@ export default function AccountsPage() {
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-muted">
+                <td colSpan={9} className="px-3 py-6 text-center text-muted">
                   {debouncedSearch
                     ? `No profiles found matching "${debouncedSearch}"`
                     : profileStatus === 'archived' ? 'No archived profiles.' : 'No profiles found.'}
@@ -277,17 +401,17 @@ export default function AccountsPage() {
                     <span className="badge badge-neutral ml-2">Archived</span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-muted">{a.region || '—'}</td>
                 <td className="px-4 py-2.5">
-                  {a.country ? (
+                  {a.country || a.region ? (
                     <span className="inline-flex items-center gap-1.5">
-                      <span aria-hidden>{countryFlag(a.country)}</span>
-                      <span>{countryName(a.country)}</span>
+                      {a.country && <span aria-hidden title={countryName(a.country)}>{countryFlag(a.country)}</span>}
+                      <span className="text-muted">{a.region || '—'}</span>
                     </span>
                   ) : (
                     <span className="text-muted">—</span>
                   )}
                 </td>
+                {metricCells(a)}
                 <td className="px-4 py-2.5"><NameWithAvatar name={a.ownerName} imageUrl={a.ownerImage} /></td>
                 <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-center">

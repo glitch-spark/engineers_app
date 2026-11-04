@@ -189,6 +189,29 @@ export const listAccounts = (params?: {
     `/accounts${qs(params)}`
   );
 
+export type ScoreStat = { avg: number | null; n: number };
+
+export type ProfileMetricsRow = {
+  accountId: string;
+  spanWeeks: number;
+  bidsPerWeek: number | null;
+  selfBidsPerWeek: number | null;
+  bidderBidsPerWeek: number | null;
+  interviewsPerWeek: number | null;
+  selfInterviewsPerWeek: number | null;
+  callerInterviewsPerWeek: number | null;
+  /** Fraction (0.0595 = 6.0%). */
+  interviewsPerBid: number | null;
+  lowVolume: boolean;
+  tailorScore: ScoreStat | null;
+  matchScore: ScoreStat | null;
+};
+
+export const getProfileMetrics = (params: { weeks: number; userId?: string }) =>
+  apiFetch<{ start: string; end: string; weeks: number; rows: ProfileMetricsRow[] }>(
+    `/accounts/metrics${qs(params)}`
+  );
+
 export const getAccount = (id: string) =>
   apiFetch<Record<string, unknown>>(`/accounts/${id}`);
 
