@@ -62,7 +62,7 @@ export default function WeekGoalCard({
           </div>
           <p className="mt-2 text-[11px] text-muted">
             Interviews are counted from the Interviews page.
-            {bySelfRegion && preSplitSelf(done) > 0 && ` Plus ${preSplitSelf(done)} self bids saved before the region split.`}
+            {bySelfRegion && preSplitSelf(done) > 0 && ` Plus ${preSplitSelf(done)} self bids outside US / EU / LATAM (other regions, or saved before the region split).`}
           </p>
 
           {week.goalItems.length > 0 && (

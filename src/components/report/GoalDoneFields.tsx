@@ -94,17 +94,18 @@ export default function GoalDoneFields({
 }) {
   const row = showDone ? ROW_WITH_DONE : ROW_GOAL_ONLY;
 
-  // Per-profile mode: the region Done cells are sums of the profiles' bids.
-  const perProfile = showDone && !!profiles && profiles.length > 0;
   const byProfile = done.bidsSelfByProfile ?? {};
   const typedPerProfile = Object.keys(byProfile).length > 0;
+  const shownProfiles = (profiles ?? []).filter((p) => !p.archived || p.id in byProfile); // zero entries stay in the map, so a cleared row stays
+  // Per-profile mode: the region Done cells are sums of the profiles' bids. Only with a profile row to type in
+  // (all archived and none with bids: the regions stay editable).
+  const perProfile = showDone && shownProfiles.length > 0;
   const regionLabel = (p: PlanProfile) =>
     SELF_REGIONS.find((r) => r.field === (p.region ? REGION_FIELD[p.region] : undefined))?.label ?? p.region ?? 'no region';
   const otherRegions = (profiles ?? []).reduce(
     (sum, p) => (p.region && REGION_FIELD[p.region] ? sum : sum + (byProfile[p.id] ?? 0)),
     0,
   );
-  const shownProfiles = (profiles ?? []).filter((p) => !p.archived || p.id in byProfile); // zero entries stay in the map, so a cleared row stays
 
   const set = (c: Counts, field: NumberField, n: number): Counts =>
     SELF_REGIONS.some((r) => r.field === field) ? withSelfRegion(c, field as SelfRegionField, n) : { ...c, [field]: n };
@@ -132,16 +133,18 @@ export default function GoalDoneFields({
     </div>
   );
 
-  // Self bids saved before the region split: shown as-is until a region is typed.
+  // The self total beyond US / EU / LATAM: other-region profiles' bids (a week's sum), or a pre-split total.
   const preSplitGoal = preSplitSelf(goal);
   // Typed per profile, the self total also holds the other regions' bids: not pre-split.
   const preSplitDone = showDone && !(perProfile && typedPerProfile) ? preSplitSelf(done) : 0;
+  // Only a pre-split day followed up by region is replaced by typing a region.
+  const replacedByRegion = !readOnly && !!onDone && !perProfile && !typedPerProfile && preSplitDone > 0;
   const preSplitRow = (preSplitGoal > 0 || preSplitDone > 0) && (
     <div className={`${row} py-1`}>
       <div className="min-w-0 pt-2 text-sm text-body">
-        Self (no region)
+        Self (other regions)
         <div className="text-[11px] text-muted">
-          Saved before the region split{!readOnly && (onGoal || onDone) ? ' · typing a region replaces it' : ''}
+          Canada, Asia, no region, or saved before the region split{replacedByRegion ? ' · typing a region replaces it' : ''}
         </div>
       </div>
       <ValueBox value={preSplitGoal} muted />
