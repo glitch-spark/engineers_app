@@ -26,8 +26,8 @@ const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number |
 
 const scoreCell = (m: api.ProfileMetricsRow) => {
   const parts = [
-    m.tailorScore && m.tailorScore.n > 0 ? `T ${fmtScore(m.tailorScore)}` : '',
-    m.matchScore && m.matchScore.n > 0 ? `M ${fmtScore(m.matchScore)}` : '',
+    m.tailorScore && m.tailorScore.n > 0 ? `Tailor ${fmtScore(m.tailorScore)}` : '',
+    m.matchScore && m.matchScore.n > 0 ? `Match ${fmtScore(m.matchScore)}` : '',
   ].filter(Boolean);
   return parts.length ? parts.join(' · ') : '—';
 };
