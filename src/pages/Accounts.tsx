@@ -139,35 +139,44 @@ export default function AccountsPage() {
     const dashes = (title?: string) => [0, 1, 2, 3].map((i) => (
       <td key={i} className="px-4 py-2.5 text-muted" title={title}>—</td>
     ));
-    if (a.archived || metricsError) return dashes();
+    if (a.archived) return dashes('No metrics for archived profiles');
+    if (metricsError) return dashes("Couldn't load metrics");
     if (metricsLoading) {
       return [0, 1, 2, 3].map((i) => (
         <td key={i} className="px-4 py-2.5"><div className="skeleton h-4 w-12" aria-hidden /></td>
       ));
     }
     const m = metricsById.get(a._id);
-    if (!m) return dashes();
+    if (!m) return dashes('Not loaded yet');
     if (m.spanWeeks === 0) return dashes('Not enough history yet');
     const split = (text: string) => <div className="text-[11px] text-muted">{text}</div>;
     return (
       <>
-        <td className="px-4 py-2.5 whitespace-nowrap">
+        <td className="px-4 py-2.5 whitespace-nowrap" title={m.bidsPerWeek == null ? 'Not enough history yet' : undefined}>
           <div>{fmtPerWeek(m.bidsPerWeek)}</div>
           {split(`${fmtPerWeek(m.selfBidsPerWeek)} self · ${fmtPerWeek(m.bidderBidsPerWeek)} bidder`)}
         </td>
-        <td className="px-4 py-2.5 whitespace-nowrap">
+        <td className="px-4 py-2.5 whitespace-nowrap" title={m.interviewsPerWeek == null ? 'Not enough history yet' : undefined}>
           <div>{fmtPerWeek(m.interviewsPerWeek)}</div>
           {split(`${fmtPerWeek(m.selfInterviewsPerWeek)} self · ${fmtPerWeek(m.callerInterviewsPerWeek)} caller`)}
         </td>
         <td
           className={`px-4 py-2.5 whitespace-nowrap ${m.lowVolume ? 'text-muted' : ''}`}
-          title={m.lowVolume ? 'Fewer than 30 bids — too few to rank' : undefined}
+          title={
+            m.interviewsPerBid == null
+              ? 'No bids in this period'
+              : m.lowVolume ? 'Fewer than 30 bids — too few to rank' : undefined
+          }
         >
           {fmtRate(m.interviewsPerBid)}
         </td>
         <td
           className="px-4 py-2.5 whitespace-nowrap"
-          title={`Tailor score n=${m.tailorScore?.n ?? 0} · Job-match score n=${m.matchScore?.n ?? 0}`}
+          title={
+            scoreCell(m) === '—'
+              ? 'No scored applications yet'
+              : `Tailor score n=${m.tailorScore?.n ?? 0} · Job-match score n=${m.matchScore?.n ?? 0}`
+          }
         >
           {scoreCell(m)}
         </td>
@@ -404,7 +413,7 @@ export default function AccountsPage() {
                 <td className="px-4 py-2.5">
                   {a.country || a.region ? (
                     <span className="inline-flex items-center gap-1.5">
-                      {a.country && <span aria-hidden title={countryName(a.country)}>{countryFlag(a.country)}</span>}
+                      {a.country && <span role="img" aria-label={countryName(a.country)} title={countryName(a.country)}>{countryFlag(a.country)}</span>}
                       <span className="text-muted">{a.region || '—'}</span>
                     </span>
                   ) : (
