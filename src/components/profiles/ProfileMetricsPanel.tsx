@@ -212,6 +212,53 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
             <p className="text-sm text-muted">No days in this range yet</p>
           ) : (
             <>
+              <div>
+                <h3 className="form-label mb-1">Bids per {unit}</h3>
+                <div
+                  className="h-[220px]"
+                  role="img"
+                  aria-label={`Self and bidder bids per ${unit}, ${range}. The table below lists every value.`}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={points} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
+                      <CartesianGrid stroke={chart.grid} vertical={false} />
+                      <XAxis dataKey="label" {...axis} minTickGap={12} />
+                      <YAxis allowDecimals={false} {...axis} width={40} />
+                      {tooltip}
+                      <Legend wrapperStyle={{ fontSize: 12, color: chart.axis }} />
+                      <Bar dataKey="selfBids" name="Self" stackId="bids" fill={c.bids} isAnimationActive={false} />
+                      <Bar dataKey="bidderBids" name="Bidder" stackId="bids" fill={c.bids} fillOpacity={FADED_OPACITY}
+                        isAnimationActive={false} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="form-label mb-1">Interviews per {unit}</h3>
+                <div
+                  className="h-[200px]"
+                  role="img"
+                  aria-label={`Interview rounds per ${unit} (total, self, caller), ${range}. The table below lists every value.`}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={points} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
+                      <CartesianGrid stroke={chart.grid} vertical={false} />
+                      <XAxis dataKey="label" {...axis} minTickGap={12} />
+                      <YAxis allowDecimals={false} {...axis} width={40} />
+                      {tooltip}
+                      <Legend wrapperStyle={{ fontSize: 12, color: chart.axis }} />
+                      <Line dataKey="interviews" name="Total" type="linear" stroke={c.interviews} strokeWidth={2}
+                        dot={view === 'week' ? { r: 3, fill: c.interviews } : false} isAnimationActive={false} />
+                      <Line dataKey="selfInterviews" name="Self" type="linear" stroke={c.self} strokeWidth={1.5}
+                        dot={view === 'week' ? { r: 2.5, fill: c.self } : false} isAnimationActive={false} />
+                      <Line dataKey="callerInterviews" name="Caller" type="linear" stroke={c.caller} strokeWidth={1.5}
+                        strokeDasharray="4 3" dot={view === 'week' ? { r: 2.5, fill: c.caller } : false} isAnimationActive={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
               <div className="table-wrap max-h-96 overflow-y-auto">
                 <table className="min-w-full text-sm">
                   <thead className="table-head sticky top-0">
@@ -245,53 +292,6 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
                     </tr>
                   </tbody>
                 </table>
-              </div>
-
-              <div>
-                <h3 className="form-label mb-1">Bids per {unit}</h3>
-                <div
-                  className="h-[220px]"
-                  role="img"
-                  aria-label={`Self and bidder bids per ${unit}, ${range}. The table above lists every value.`}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={points} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
-                      <CartesianGrid stroke={chart.grid} vertical={false} />
-                      <XAxis dataKey="label" {...axis} minTickGap={12} />
-                      <YAxis allowDecimals={false} {...axis} width={40} />
-                      {tooltip}
-                      <Legend wrapperStyle={{ fontSize: 12, color: chart.axis }} />
-                      <Bar dataKey="selfBids" name="Self" stackId="bids" fill={c.bids} isAnimationActive={false} />
-                      <Bar dataKey="bidderBids" name="Bidder" stackId="bids" fill={c.bids} fillOpacity={FADED_OPACITY}
-                        isAnimationActive={false} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="form-label mb-1">Interviews per {unit}</h3>
-                <div
-                  className="h-[200px]"
-                  role="img"
-                  aria-label={`Interview rounds per ${unit} (total, self, caller), ${range}. The table above lists every value.`}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={points} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
-                      <CartesianGrid stroke={chart.grid} vertical={false} />
-                      <XAxis dataKey="label" {...axis} minTickGap={12} />
-                      <YAxis allowDecimals={false} {...axis} width={40} />
-                      {tooltip}
-                      <Legend wrapperStyle={{ fontSize: 12, color: chart.axis }} />
-                      <Line dataKey="interviews" name="Total" type="linear" stroke={c.interviews} strokeWidth={2}
-                        dot={view === 'week' ? { r: 3, fill: c.interviews } : false} isAnimationActive={false} />
-                      <Line dataKey="selfInterviews" name="Self" type="linear" stroke={c.self} strokeWidth={1.5}
-                        dot={view === 'week' ? { r: 2.5, fill: c.self } : false} isAnimationActive={false} />
-                      <Line dataKey="callerInterviews" name="Caller" type="linear" stroke={c.caller} strokeWidth={1.5}
-                        strokeDasharray="4 3" dot={view === 'week' ? { r: 2.5, fill: c.caller } : false} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
               </div>
             </>
           )}
