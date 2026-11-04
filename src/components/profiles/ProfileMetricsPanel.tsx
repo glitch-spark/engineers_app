@@ -34,7 +34,7 @@ type Filters = { period: api.ProfileMetricPeriod; day: string; from: string; to:
 
 function initialFilters(): Filters {
   const today = new Date();
-  return { period: 'month', day: isoDay(today), from: isoDay(new Date(today.getFullYear(), today.getMonth(), 1)), to: isoDay(today) };
+  return { period: 'all', day: isoDay(today), from: isoDay(new Date(today.getFullYear(), today.getMonth(), 1)), to: isoDay(today) };
 }
 
 /** A day or a week's Monday (`2026-10-06`) as `Oct 6`; read as UTC so the date never shifts with the viewer's
