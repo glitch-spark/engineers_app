@@ -207,10 +207,21 @@ export type ProfileMetricsRow = {
   lowVolume: boolean;
   tailorScore: ScoreStat | null;
   matchScore: ScoreStat | null;
+  /** Totals over the period (All time shows these instead of the per-week values). */
+  bids: number;
+  selfBids: number;
+  bidderBids: number;
+  interviews: number;
+  selfInterviews: number;
+  callerInterviews: number;
 };
 
-export const getProfileMetrics = (params: { weeks: number; userId?: string }) =>
-  apiFetch<{ start: string; end: string; weeks: number; rows: ProfileMetricsRow[] }>(
+export const getProfileMetrics = (params: { weeks: number | 'all'; userId?: string }) =>
+  apiFetch<{
+    start: string; end: string; weeks: number | 'all'; rows: ProfileMetricsRow[];
+    /** All time only: the day self bids started being typed per profile (null when every day counts). */
+    selfBidsSince?: string | null;
+  }>(
     `/accounts/metrics${qs(params)}`
   );
 

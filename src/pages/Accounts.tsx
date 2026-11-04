@@ -10,15 +10,17 @@ import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
 import { countryFlag, countryName, PROFILE_REGIONS } from '../lib/countries';
 import { PROFILE_STATUS_OPTIONS, type ProfileStatus } from '../lib/profileArchive';
-import { WEEK_OPTIONS, readWeeks, writeWeeks, fmtPerWeek, fmtRate, fmtScore } from '../lib/profileMetrics';
+import {
+  WEEK_OPTIONS, readListPeriod, writeListPeriod, fmtCount, fmtPerWeek, fmtRate, fmtScore, type ListPeriod,
+} from '../lib/profileMetrics';
 
 type SortKey = 'bids' | 'interviews' | 'rate' | 'score';
 
-const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number | null => {
+const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey, allTime: boolean): number | null => {
   if (!m || m.spanWeeks === 0) return null;
   switch (key) {
-    case 'bids': return m.bidsPerWeek;
-    case 'interviews': return m.interviewsPerWeek;
+    case 'bids': return allTime ? m.bids : m.bidsPerWeek;
+    case 'interviews': return allTime ? m.interviews : m.interviewsPerWeek;
     case 'rate': return m.interviewsPerBid;
     case 'score': return m.tailorScore?.avg ?? m.matchScore?.avg ?? null;
   }
@@ -59,7 +61,8 @@ export default function AccountsPage() {
   const [region, setRegion] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Acc | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [weeks, setWeeks] = useState(readWeeks);
+  const [weeks, setWeeks] = useState<ListPeriod>(readListPeriod);
+  const allTime = weeks === 'all';
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
@@ -153,6 +156,21 @@ export default function AccountsPage() {
     if (!m) return dashes('Not loaded yet');
     if (m.spanWeeks === 0) return dashes('Not enough history yet');
     const split = (text: string) => <div className="text-[11px] text-muted">{text}</div>;
+    if (allTime) {
+      return (
+        <>
+          <td className="px-4 py-2.5 whitespace-nowrap" title={selfSinceNote}>
+            <div>{fmtCount(m.bids)}</div>
+            {split(`${fmtCount(m.selfBids)} self · ${fmtCount(m.bidderBids)} bidder`)}
+          </td>
+          <td className="px-4 py-2.5 whitespace-nowrap">
+            <div>{fmtCount(m.interviews)}</div>
+            {split(`${fmtCount(m.selfInterviews)} self · ${fmtCount(m.callerInterviews)} caller`)}
+          </td>
+          {rateAndScore(m)}
+        </>
+      );
+    }
     return (
       <>
         <td className="px-4 py-2.5 whitespace-nowrap" title={m.bidsPerWeek == null ? 'Not enough history yet' : undefined}>
@@ -163,29 +181,36 @@ export default function AccountsPage() {
           <div>{fmtPerWeek(m.interviewsPerWeek)}</div>
           {split(`${fmtPerWeek(m.selfInterviewsPerWeek)} self · ${fmtPerWeek(m.callerInterviewsPerWeek)} caller`)}
         </td>
-        <td
-          className={`px-4 py-2.5 whitespace-nowrap ${m.lowVolume ? 'text-muted' : ''}`}
-          title={
-            m.interviewsPerBid == null
-              ? 'No bids in this period'
-              : m.lowVolume ? 'Fewer than 30 bids — too few to rank' : undefined
-          }
-        >
-          {fmtRate(m.interviewsPerBid)}
-        </td>
-        <td
-          className="px-4 py-2.5 whitespace-nowrap"
-          title={
-            scoreCell(m) === '—'
-              ? 'No scored applications yet'
-              : `Tailor score n=${m.tailorScore?.n ?? 0} · Job-match score n=${m.matchScore?.n ?? 0}`
-          }
-        >
-          {scoreCell(m)}
-        </td>
+        {rateAndScore(m)}
       </>
     );
   };
+
+  // Intv/bid and Score: the same in every period.
+  const rateAndScore = (m: api.ProfileMetricsRow): ReactNode => (
+    <>
+      <td
+        className={`px-4 py-2.5 whitespace-nowrap ${m.lowVolume ? 'text-muted' : ''}`}
+        title={
+          m.interviewsPerBid == null
+            ? 'No bids in this period'
+            : m.lowVolume ? 'Fewer than 30 bids — too few to rank' : undefined
+        }
+      >
+        {fmtRate(m.interviewsPerBid)}
+      </td>
+      <td
+        className="px-4 py-2.5 whitespace-nowrap"
+        title={
+          scoreCell(m) === '—'
+            ? 'No scored applications yet'
+            : `Tailor score n=${m.tailorScore?.n ?? 0} · Job-match score n=${m.matchScore?.n ?? 0}`
+        }
+      >
+        {scoreCell(m)}
+      </td>
+    </>
+  );
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
@@ -208,10 +233,15 @@ export default function AccountsPage() {
     }
   };
 
-  const changeWeeks = (n: number) => {
-    setWeeks(n);
-    writeWeeks(n);
+  const changePeriod = (p: ListPeriod) => {
+    setWeeks(p);
+    writeListPeriod(p);
   };
+  const selfSince = metricsData?.selfBidsSince;
+  const selfSinceNote = `Self bids are counted from ${
+    selfSince ? new Date(`${selfSince}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+      : 'the day they started being typed per profile'
+  }`;
 
   // First click sorts descending, the next ascending; rows without a value always go last.
   const toggleSort = (key: SortKey) =>
@@ -220,7 +250,7 @@ export default function AccountsPage() {
   const rawAccounts = (data?.accounts as Acc[]) || [];
   const accounts = useMemo(() => {
     if (!sort) return rawAccounts;
-    const val = (a: Acc) => (a.archived ? null : sortValue(metricsById.get(a._id), sort.key));
+    const val = (a: Acc) => (a.archived ? null : sortValue(metricsById.get(a._id), sort.key, allTime));
     const sign = sort.dir === 'desc' ? -1 : 1;
     return [...rawAccounts].sort((a, b) => {
       const x = val(a);
@@ -228,7 +258,7 @@ export default function AccountsPage() {
       if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;
       return (x - y) * sign;
     });
-  }, [rawAccounts, sort, metricsById]);
+  }, [rawAccounts, sort, metricsById, allTime]);
   const pagination = data?.pagination;
 
   return (
@@ -319,9 +349,10 @@ export default function AccountsPage() {
             id="accounts-period"
             className="select focus-ring w-full text-sm"
             value={weeks}
-            onChange={(e) => changeWeeks(Number(e.target.value))}
+            onChange={(e) => changePeriod(e.target.value === 'all' ? 'all' : Number(e.target.value))}
           >
             {WEEK_OPTIONS.map((w) => <option key={w} value={w}>Last {w} weeks</option>)}
+            <option value="all">All time</option>
           </select>
         </div>
 
@@ -368,8 +399,8 @@ export default function AccountsPage() {
               <th className="px-4 py-2.5">Name</th>
               <th className="px-4 py-2.5">Region</th>
               {([
-                ['bids', 'Bids/wk'],
-                ['interviews', 'Interviews/wk'],
+                ['bids', allTime ? 'Bids' : 'Bids/wk'],
+                ['interviews', allTime ? 'Interviews' : 'Interviews/wk'],
                 ['rate', 'Intv/bid'],
                 ['score', 'Score'],
               ] as const).map(([key, label]) => (
@@ -377,6 +408,7 @@ export default function AccountsPage() {
                   key={key}
                   className="px-4 py-2.5 whitespace-nowrap"
                   aria-sort={sort?.key === key ? (sort.dir === 'desc' ? 'descending' : 'ascending') : undefined}
+                  title={allTime && key === 'bids' ? selfSinceNote : undefined}
                 >
                   <button type="button" className="uppercase tracking-wide hover:underline" onClick={() => toggleSort(key)}>
                     {label}

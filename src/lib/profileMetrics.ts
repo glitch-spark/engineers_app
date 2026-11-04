@@ -13,6 +13,27 @@ export function readWeeks(): number {
   }
 }
 
+/** The Profiles list's period: completed weeks, or every day since each profile was created. */
+export type ListPeriod = number | 'all';
+
+export function readListPeriod(): ListPeriod {
+  try {
+    if (localStorage.getItem(WEEKS_KEY) === 'all') return 'all';
+  } catch {
+    // Private windows can throw: fall back to the default below.
+  }
+  return readWeeks();
+}
+
+/** Stored under the same key as the weeks; the profile page reads `all` as its default 4 weeks. */
+export function writeListPeriod(p: ListPeriod) {
+  try {
+    localStorage.setItem(WEEKS_KEY, String(p));
+  } catch {
+    // Private windows can throw; the period just isn't remembered.
+  }
+}
+
 export function writeWeeks(n: number) {
   try {
     localStorage.setItem(WEEKS_KEY, String(n));
@@ -46,6 +67,11 @@ export function writeView(v: MetricsView) {
 export function fmtPerWeek(n: number | null): string {
   if (n == null) return '—';
   return n.toFixed(1).replace(/\.0$/, '');
+}
+
+/** A whole count with thousands separators (`1,240`). */
+export function fmtCount(n: number): string {
+  return n.toLocaleString('en-US');
 }
 
 /** A fraction as a percentage with one decimal (`0.0595` → `6.0%`). */
