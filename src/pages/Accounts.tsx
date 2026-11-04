@@ -11,7 +11,8 @@ import PageHeader from '../components/PageHeader';
 import { countryFlag, countryName, PROFILE_REGIONS } from '../lib/countries';
 import { PROFILE_STATUS_OPTIONS, type ProfileStatus } from '../lib/profileArchive';
 import {
-  WEEK_OPTIONS, readListPeriod, writeListPeriod, fmtCount, fmtPerWeek, fmtRate, fmtScore, type ListPeriod,
+  WEEK_OPTIONS, readListPeriod, writeListPeriod, fmtCount, fmtPerWeek, fmtRate, fmtScore, tailoredText,
+  type ListPeriod,
 } from '../lib/profileMetrics';
 
 type SortKey = 'bids' | 'interviews' | 'rate' | 'score';
@@ -199,9 +200,9 @@ export default function AccountsPage() {
         }
       >
         <div>{scoreCell(m)}</div>
-        <div className="text-[11px] text-muted">
-          {fmtCount(m.tailoredResumes)} {m.tailoredResumes === 1 ? 'resume' : 'resumes'} tailored
-        </div>
+        {tailoredText(m.tailoredResumes) && (
+          <div className="text-[11px] text-muted">{tailoredText(m.tailoredResumes)}</div>
+        )}
       </td>
     </>
   );

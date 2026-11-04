@@ -73,8 +73,14 @@ export function fmtPerWeek(n: number | null): string {
 }
 
 /** A whole count with thousands separators (`1,240`). */
-export function fmtCount(n: number): string {
-  return n.toLocaleString('en-US');
+/** `—` when the value is missing (a backend from before the field existed, e.g. mid-deploy). */
+export function fmtCount(n: number | null | undefined): string {
+  return n == null ? '—' : n.toLocaleString('en-US');
+}
+
+/** `12 resumes tailored`; null when the backend didn't send the count. */
+export function tailoredText(n: number | null | undefined): string | null {
+  return n == null ? null : `${fmtCount(n)} ${n === 1 ? 'resume' : 'resumes'} tailored`;
 }
 
 /** A fraction as a percentage with one decimal (`0.0595` → `6.0%`). */

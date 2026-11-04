@@ -17,7 +17,8 @@ import * as api from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
 import {
-  WEEK_OPTIONS, readView, readWeeks, writeView, writeWeeks, fmtPerWeek, fmtRate, fmtScore, type MetricsView,
+  WEEK_OPTIONS, readView, readWeeks, writeView, writeWeeks, fmtPerWeek, fmtRate, fmtScore, tailoredText,
+  type MetricsView,
 } from '../../lib/profileMetrics';
 
 /** Hues from the Interview rate charts' slots: bids in blue (bidder bids its lighter part); interviews total in
@@ -200,7 +201,7 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
               {noHistory ? dash(history) : !scored ? (
                 <>
                   {dash('No scored resumes yet')}
-                  {split(`${m.tailoredResumes} ${m.tailoredResumes === 1 ? 'resume' : 'resumes'} tailored`)}
+                  {tailoredText(m.tailoredResumes) && split(tailoredText(m.tailoredResumes)!)}
                 </>
               ) : (
                 <>
@@ -210,7 +211,7 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
                       <span className="text-lg font-semibold tabular-nums text-strong">{fmtScore(s.mine)}</span>
                     </div>
                   ))}
-                  {split(`${m.tailoredResumes} ${m.tailoredResumes === 1 ? 'resume' : 'resumes'} tailored`)}
+                  {tailoredText(m.tailoredResumes) && split(tailoredText(m.tailoredResumes)!)}
                   {scores.map((s) => (
                     <PeerLine key={s.label} label={s.label} mine={s.mine?.avg} peer={s.peer?.avg} fmt={(n) => fmtScore({ avg: n, n: 0 })} />
                   ))}
