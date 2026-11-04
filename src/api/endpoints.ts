@@ -207,6 +207,8 @@ export type ProfileMetricsRow = {
   lowVolume: boolean;
   tailorScore: ScoreStat | null;
   matchScore: ScoreStat | null;
+  /** Tailored resumes generated for the profile in the period (Generator and Job Applies), scored or not. */
+  tailoredResumes: number;
   /** Totals over the period (All time shows these instead of the per-week values). */
   bids: number;
   selfBids: number;
@@ -232,8 +234,12 @@ export type ProfileMetricDetail = ProfileMetricsRow & {
   /** Every day of the span, oldest first, zeros included; `weekly` sums the same days. */
   daily: ({ day: string } & MetricCounts)[];
   weekly: ({ week: string } & MetricCounts)[];
-  /** Averages only: no profile, span or low-volume flag. */
-  peers: Omit<ProfileMetricsRow, 'accountId' | 'spanWeeks' | 'lowVolume'> | null;
+  /** Averages only: no profile, span, low-volume flag or totals. */
+  peers: Omit<
+    ProfileMetricsRow,
+    'accountId' | 'spanWeeks' | 'lowVolume' | 'tailoredResumes' | 'bids' | 'selfBids' | 'bidderBids'
+    | 'interviews' | 'selfInterviews' | 'callerInterviews'
+  > | null;
 };
 
 export const getProfileMetric = (id: string, params: { weeks: number }) =>

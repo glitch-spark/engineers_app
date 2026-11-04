@@ -196,8 +196,13 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
               )}
             </Tile>
 
-            <Tile title="Avg scores">
-              {noHistory ? dash(history) : !scored ? dash('No scored applications yet') : (
+            <Tile title="Resume scores">
+              {noHistory ? dash(history) : !scored ? (
+                <>
+                  {dash('No scored resumes yet')}
+                  {split(`${m.tailoredResumes} ${m.tailoredResumes === 1 ? 'resume' : 'resumes'} tailored`)}
+                </>
+              ) : (
                 <>
                   {scores.map((s) => (
                     <div key={s.label} className="flex items-baseline justify-between gap-2">
@@ -205,6 +210,7 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
                       <span className="text-lg font-semibold tabular-nums text-strong">{fmtScore(s.mine)}</span>
                     </div>
                   ))}
+                  {split(`${m.tailoredResumes} ${m.tailoredResumes === 1 ? 'resume' : 'resumes'} tailored`)}
                   {scores.map((s) => (
                     <PeerLine key={s.label} label={s.label} mine={s.mine?.avg} peer={s.peer?.avg} fmt={(n) => fmtScore({ avg: n, n: 0 })} />
                   ))}

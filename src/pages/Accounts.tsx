@@ -193,11 +193,15 @@ export default function AccountsPage() {
         className="px-4 py-2.5 whitespace-nowrap"
         title={
           scoreCell(m) === '—'
-            ? 'No scored applications yet'
-            : `Tailor score n=${m.tailorScore?.n ?? 0} · Job-match score n=${m.matchScore?.n ?? 0}`
+            ? 'No scored resumes yet'
+            : `Tailor: average of ${m.tailorScore?.n ?? 0} scored tailored resumes · `
+              + `Match: average of ${m.matchScore?.n ?? 0} applies with an uploaded resume`
         }
       >
-        {scoreCell(m)}
+        <div>{scoreCell(m)}</div>
+        <div className="text-[11px] text-muted">
+          {fmtCount(m.tailoredResumes)} {m.tailoredResumes === 1 ? 'resume' : 'resumes'} tailored
+        </div>
       </td>
     </>
   );
@@ -392,7 +396,7 @@ export default function AccountsPage() {
                 ['bids', 'Bids'],
                 ['interviews', 'Interviews'],
                 ['rate', 'Intv/bid'],
-                ['score', 'Score'],
+                ['score', 'Resume score'],
               ] as const).map(([key, label]) => (
                 <th
                   key={key}
