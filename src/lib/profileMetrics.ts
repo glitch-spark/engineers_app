@@ -2,17 +2,6 @@ import type { ScoreStat } from '../api/endpoints';
 
 export const WEEK_OPTIONS = [4, 8, 12] as const;
 
-const WEEKS_KEY = 'profileMetricsWeeks';
-
-export function readWeeks(): number {
-  try {
-    const n = Number(localStorage.getItem(WEEKS_KEY));
-    return (WEEK_OPTIONS as readonly number[]).includes(n) ? n : 4;
-  } catch {
-    return 4;
-  }
-}
-
 /** The Profiles list's period: completed weeks, or every day since each profile was created. */
 export type ListPeriod = number | 'all';
 
@@ -32,14 +21,6 @@ export function readListPeriod(): ListPeriod {
 export function writeListPeriod(p: ListPeriod) {
   try {
     localStorage.setItem(LIST_PERIOD_KEY, String(p));
-  } catch {
-    // Private windows can throw; the period just isn't remembered.
-  }
-}
-
-export function writeWeeks(n: number) {
-  try {
-    localStorage.setItem(WEEKS_KEY, String(n));
   } catch {
     // Private windows can throw; the period just isn't remembered.
   }

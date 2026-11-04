@@ -230,20 +230,26 @@ export const getProfileMetrics = (params: { weeks: number | 'all'; userId?: stri
 /** One profile's metrics: its weekly series (every week of the span, oldest first) and its owner's other active profiles averaged. */
 export type MetricCounts = { selfBids: number; bidderBids: number; selfInterviews: number; callerInterviews: number };
 
+/** The profile Metrics tab's periods: the Statistics ones, plus everything since the profile was created. */
+export type ProfileMetricPeriod = 'week' | 'month' | 'custom' | 'all';
+
 export type ProfileMetricDetail = ProfileMetricsRow & {
-  /** Every day of the span, oldest first, zeros included; `weekly` sums the same days. */
+  period: ProfileMetricPeriod;
+  /** The range measured (the current week or month runs to today) and its label ("Oct 2026", "All time"). */
+  start: string;
+  end: string;
+  label: string;
+  /** Every day of the range, oldest first, zeros included; `weekly` sums the same days. */
   daily: ({ day: string } & MetricCounts)[];
   weekly: ({ week: string } & MetricCounts)[];
-  /** Averages only: no profile, span, low-volume flag or totals. */
-  peers: Omit<
-    ProfileMetricsRow,
-    'accountId' | 'spanWeeks' | 'lowVolume' | 'tailoredResumes' | 'bids' | 'selfBids' | 'bidderBids'
-    | 'interviews' | 'selfInterviews' | 'callerInterviews'
-  > | null;
+  /** The owner's other active profiles, averaged (totals and rates); no profile, span or low-volume flag. */
+  peers: Omit<ProfileMetricsRow, 'accountId' | 'spanWeeks' | 'lowVolume'> | null;
 };
 
-export const getProfileMetric = (id: string, params: { weeks: number }) =>
-  apiFetch<ProfileMetricDetail>(`/accounts/${id}/metrics${qs(params)}`);
+export const getProfileMetric = (
+  id: string,
+  params: { period: ProfileMetricPeriod; date?: string; to?: string },
+) => apiFetch<ProfileMetricDetail>(`/accounts/${id}/metrics${qs(params)}`);
 
 export const getAccount = (id: string) =>
   apiFetch<Record<string, unknown>>(`/accounts/${id}`);
