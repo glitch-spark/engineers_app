@@ -16,19 +16,22 @@ export function readWeeks(): number {
 /** The Profiles list's period: completed weeks, or every day since each profile was created. */
 export type ListPeriod = number | 'all';
 
+// Kept apart from the profile page's weeks, so picking a period there doesn't change the list's.
+const LIST_PERIOD_KEY = 'profileListPeriod';
+
+/** All time until a period is picked on the list. */
 export function readListPeriod(): ListPeriod {
   try {
-    if (localStorage.getItem(WEEKS_KEY) === 'all') return 'all';
+    const n = Number(localStorage.getItem(LIST_PERIOD_KEY));
+    return (WEEK_OPTIONS as readonly number[]).includes(n) ? n : 'all';
   } catch {
-    // Private windows can throw: fall back to the default below.
+    return 'all';
   }
-  return readWeeks();
 }
 
-/** Stored under the same key as the weeks; the profile page reads `all` as its default 4 weeks. */
 export function writeListPeriod(p: ListPeriod) {
   try {
-    localStorage.setItem(WEEKS_KEY, String(p));
+    localStorage.setItem(LIST_PERIOD_KEY, String(p));
   } catch {
     // Private windows can throw; the period just isn't remembered.
   }

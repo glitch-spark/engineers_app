@@ -16,11 +16,11 @@ import {
 
 type SortKey = 'bids' | 'interviews' | 'rate' | 'score';
 
-const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey, allTime: boolean): number | null => {
+const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number | null => {
   if (!m || m.spanWeeks === 0) return null;
   switch (key) {
-    case 'bids': return allTime ? m.bids : m.bidsPerWeek;
-    case 'interviews': return allTime ? m.interviews : m.interviewsPerWeek;
+    case 'bids': return m.bids;
+    case 'interviews': return m.interviews;
     case 'rate': return m.interviewsPerBid;
     case 'score': return m.tailorScore?.avg ?? m.matchScore?.avg ?? null;
   }
@@ -156,30 +156,20 @@ export default function AccountsPage() {
     if (!m) return dashes('Not loaded yet');
     if (m.spanWeeks === 0) return dashes('Not enough history yet');
     const split = (text: string) => <div className="text-[11px] text-muted">{text}</div>;
-    if (allTime) {
-      return (
-        <>
-          <td className="px-4 py-2.5 whitespace-nowrap" title={selfSinceNote}>
-            <div>{fmtCount(m.bids)}</div>
-            {split(`${fmtCount(m.selfBids)} self · ${fmtCount(m.bidderBids)} bidder`)}
-          </td>
-          <td className="px-4 py-2.5 whitespace-nowrap">
-            <div>{fmtCount(m.interviews)}</div>
-            {split(`${fmtCount(m.selfInterviews)} self · ${fmtCount(m.callerInterviews)} caller`)}
-          </td>
-          {rateAndScore(m)}
-        </>
-      );
-    }
+    // Totals over the selected period; the weekly average is in the tooltip.
+    const perWeek = (n: number | null) => `${fmtPerWeek(n)} per week on average`;
     return (
       <>
-        <td className="px-4 py-2.5 whitespace-nowrap" title={m.bidsPerWeek == null ? 'Not enough history yet' : undefined}>
-          <div>{fmtPerWeek(m.bidsPerWeek)}</div>
-          {split(`${fmtPerWeek(m.selfBidsPerWeek)} self · ${fmtPerWeek(m.bidderBidsPerWeek)} bidder`)}
+        <td
+          className="px-4 py-2.5 whitespace-nowrap"
+          title={allTime ? `${perWeek(m.bidsPerWeek)}. ${selfSinceNote}` : perWeek(m.bidsPerWeek)}
+        >
+          <div>{fmtCount(m.bids)}</div>
+          {split(`${fmtCount(m.selfBids)} self · ${fmtCount(m.bidderBids)} bidder`)}
         </td>
-        <td className="px-4 py-2.5 whitespace-nowrap" title={m.interviewsPerWeek == null ? 'Not enough history yet' : undefined}>
-          <div>{fmtPerWeek(m.interviewsPerWeek)}</div>
-          {split(`${fmtPerWeek(m.selfInterviewsPerWeek)} self · ${fmtPerWeek(m.callerInterviewsPerWeek)} caller`)}
+        <td className="px-4 py-2.5 whitespace-nowrap" title={perWeek(m.interviewsPerWeek)}>
+          <div>{fmtCount(m.interviews)}</div>
+          {split(`${fmtCount(m.selfInterviews)} self · ${fmtCount(m.callerInterviews)} caller`)}
         </td>
         {rateAndScore(m)}
       </>
@@ -250,7 +240,7 @@ export default function AccountsPage() {
   const rawAccounts = (data?.accounts as Acc[]) || [];
   const accounts = useMemo(() => {
     if (!sort) return rawAccounts;
-    const val = (a: Acc) => (a.archived ? null : sortValue(metricsById.get(a._id), sort.key, allTime));
+    const val = (a: Acc) => (a.archived ? null : sortValue(metricsById.get(a._id), sort.key));
     const sign = sort.dir === 'desc' ? -1 : 1;
     return [...rawAccounts].sort((a, b) => {
       const x = val(a);
@@ -258,7 +248,7 @@ export default function AccountsPage() {
       if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;
       return (x - y) * sign;
     });
-  }, [rawAccounts, sort, metricsById, allTime]);
+  }, [rawAccounts, sort, metricsById]);
   const pagination = data?.pagination;
 
   return (
@@ -399,8 +389,8 @@ export default function AccountsPage() {
               <th className="px-4 py-2.5">Name</th>
               <th className="px-4 py-2.5">Region</th>
               {([
-                ['bids', allTime ? 'Bids' : 'Bids/wk'],
-                ['interviews', allTime ? 'Interviews' : 'Interviews/wk'],
+                ['bids', 'Bids'],
+                ['interviews', 'Interviews'],
                 ['rate', 'Intv/bid'],
                 ['score', 'Score'],
               ] as const).map(([key, label]) => (
