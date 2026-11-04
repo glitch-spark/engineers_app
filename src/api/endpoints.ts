@@ -212,6 +212,15 @@ export const getProfileMetrics = (params: { weeks: number; userId?: string }) =>
     `/accounts/metrics${qs(params)}`
   );
 
+/** One profile's metrics: its weekly series (every week of the span, oldest first) and its owner's other active profiles averaged. */
+export type ProfileMetricDetail = ProfileMetricsRow & {
+  weekly: { week: string; selfBids: number; bidderBids: number; selfInterviews: number; callerInterviews: number }[];
+  peers: ProfileMetricsRow | null;
+};
+
+export const getProfileMetric = (id: string, params: { weeks: number }) =>
+  apiFetch<ProfileMetricDetail>(`/accounts/${id}/metrics${qs(params)}`);
+
 export const getAccount = (id: string) =>
   apiFetch<Record<string, unknown>>(`/accounts/${id}`);
 

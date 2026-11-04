@@ -11,6 +11,7 @@ import { legacyPromptName, promptErrors, unitRoles } from '../components/prompts
 import CountrySelect from '../components/CountrySelect';
 import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
+import ProfileMetricsPanel from '../components/profiles/ProfileMetricsPanel';
 import { PROFILE_REGION_OPTIONS } from '../lib/countries';
 
 type AccShape = {
@@ -221,6 +222,8 @@ export default function AccountEditPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Edit profile" backTo="/accounts" />
+
+      <ProfileMetricsPanel accountId={id!} />
 
       <Section
         title="Profile name"
