@@ -21,6 +21,27 @@ export function writeWeeks(n: number) {
   }
 }
 
+/** The profile Metrics tab's charts and table: one point per day or per week. */
+export type MetricsView = 'day' | 'week';
+
+const VIEW_KEY = 'profileMetricsView';
+
+export function readView(): MetricsView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'day' ? 'day' : 'week';
+  } catch {
+    return 'week';
+  }
+}
+
+export function writeView(v: MetricsView) {
+  try {
+    localStorage.setItem(VIEW_KEY, v);
+  } catch {
+    // Private windows can throw; the view just isn't remembered.
+  }
+}
+
 /** One decimal with a trailing `.0` dropped (`42`, `2.5`). */
 export function fmtPerWeek(n: number | null): string {
   if (n == null) return '—';
