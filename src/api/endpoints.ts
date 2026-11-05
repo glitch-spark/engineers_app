@@ -2950,6 +2950,62 @@ export interface BidWeek {
 export const bidsWeek = (params: { week?: string; includeArchived?: boolean; ownerId?: string }) =>
   apiFetch<BidWeek>(`/bids/week${qs(params)}`);
 
+export interface BidPerformanceRow {
+  id: string;
+  name: string;
+  ownerName: string | null;
+  profileId: string | null;
+  profileName: string | null;
+  status: string;
+  /** Bids per week, aligned with `BidPerformance.weeks`. */
+  weekly: number[];
+  total: number;
+  approved: number;
+  pending: number;
+  rejected: number;
+  previousTotal: number;
+  /** Fraction (0.122 = +12%); null when the previous total is 0. */
+  change: number | null;
+  longestStreak: number;
+  currentStreak: number;
+  hitDays: number;
+  weekdays: number;
+  /** Fraction; null with no weekdays counted. */
+  hitRate: number | null;
+  avgPerWeekday: number | null;
+  interviews: number | null;
+  sharedProfile: boolean;
+  per100: number | null;
+  lastBidAt: string | null;
+}
+
+export interface BidPerformance {
+  period: StatsPeriod;
+  start: string;
+  end: string;
+  label: string;
+  recordsStart: string | null;
+  weeks: { start: string; end: string; partial: boolean }[];
+  bidders: BidPerformanceRow[];
+  totals: {
+    total: number;
+    interviews: number;
+    hitRate: number | null;
+    avgPerWeekday: number | null;
+    per100: number | null;
+  };
+  /** Bidder ids, best first. */
+  top: { bids: string[]; streak: string[]; interviews: string[]; conversion: string[] };
+}
+
+export const getBidPerformance = (params: {
+  period: 'week' | 'month' | 'custom';
+  date?: string;
+  to?: string;
+  includeArchived?: boolean;
+  ownerId?: string;
+}) => apiFetch<BidPerformance>(`/bids/performance${qs(params)}`);
+
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
 
 export const bidScreenshots = (id: string) => apiFetch<BidScreenshot[]>(`/bids/${id}/screenshots`);
