@@ -6,7 +6,9 @@ import ConfirmDialog from '../ConfirmDialog';
 import { CALLER_DOT } from '../../lib/callerColors';
 import { notify } from '../../lib/notify';
 import { interviewStatusBadgeClass, stageLabel } from '../../lib/stageBadge';
-import { FilterBar, Segmented, filterParams, filtersError, type StatsFilters } from './controls';
+import { FilterBar, REGIONS, Segmented, filterParams, filtersError, type StatsFilters } from './controls';
+import { FileDown } from 'lucide-react';
+import { exportCallerStatsPdf } from '../../lib/callerStatsPdf';
 
 type Sort = 'date' | 'company';
 const SORTS: { value: Sort; label: string }[] = [
@@ -99,6 +101,7 @@ function CallersView({ data, picked, onPick, sort, onSort, canManage, onChanged 
   sort: Sort; onSort: (s: Sort) => void; canManage: boolean; onChanged: () => void;
 }) {
   const [confirm, setConfirm] = useState<CallerStatsRound | null>(null);
+  const [exporting, setExporting] = useState(false);
   const all = useMemo(() => allCallers(data.callers), [data]);
   // All callers until one is picked.
   const current = data.callers.find((c) => keyOf(c) === picked) ?? all;
@@ -122,6 +125,24 @@ function CallersView({ data, picked, onPick, sort, onSort, canManage, onChanged 
       </span>,
     ];
   };
+  // The PDF is what the screen shows: the picked caller (or every caller), this period, this sort.
+  const exportPdf = async () => {
+    setExporting(true);
+    try {
+      await exportCallerStatsPdf({
+        name, isAll, periodLabel: data.label,
+        regionLabel: REGIONS.find((r) => r.value === data.region)?.label ?? data.region,
+        callers: isAll ? data.callers : [current],
+        total: isAll ? all : undefined,
+        callerName: (r) => callerOf.get(keyOf(r))?.name ?? 'Unassigned',
+        period: section('period'), outdated: section('outdated'), scheduled: section('scheduled'),
+      });
+    } catch (e) {
+      notify.error(e, 'Couldn’t export the PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
   // Only caller managers close a round; others see the report.
   const rejectButton = (r: CallerStatsRound) => canManage && (
     <button key="reject" type="button" className="btn-outline whitespace-nowrap px-2 py-1 text-xs" onClick={() => setConfirm(r)}>
@@ -140,6 +161,14 @@ function CallersView({ data, picked, onPick, sort, onSort, canManage, onChanged 
         <div className="flex flex-wrap items-center gap-3 px-4 pt-4">
           <h2 id="cs-period-title" className="card-title mr-auto">{name} · {data.label}</h2>
           <Segmented label="Sort rounds" options={SORTS} value={sort} onChange={onSort} />
+          <button
+            type="button" className="btn-outline flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm"
+            onClick={exportPdf} disabled={exporting}
+            title={isAll ? 'Every caller’s statistics for this period, as a PDF' : `${name}’s statistics for this period, as a PDF`}
+          >
+            {exporting ? <span className="spinner spinner-sm" aria-hidden /> : <FileDown className="h-4 w-4" aria-hidden />}
+            {isAll ? 'Export all callers (PDF)' : `Export ${name} (PDF)`}
+          </button>
         </div>
         <p className="px-4 pb-3 text-xs text-muted">Caller rounds held in this period, with their result now.</p>
         <RoundsTable
