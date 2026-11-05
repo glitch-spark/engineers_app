@@ -117,11 +117,11 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
     { label: 'Best conversion', ids: data.top.conversion, value: (r) => `${fixed(r.per100, 2)} / 100` },
   ] : [];
 
-  const SortHead = ({ k, label, title, className = '' }: { k: SortKey; label: string; title?: string; className?: string }) => {
+  const sortHead = (k: SortKey, label: string, title?: string) => {
     const active = sort?.key === k;
     const Icon = active ? (sort.dir === 'desc' ? ArrowDown : ArrowUp) : ChevronsUpDown;
     return (
-      <th className={`px-4 py-2.5 text-right ${className}`} aria-sort={active ? (sort.dir === 'desc' ? 'descending' : 'ascending') : 'none'}>
+      <th key={k} className="px-4 py-2.5 text-right" aria-sort={active ? (sort.dir === 'desc' ? 'descending' : 'ascending') : 'none'}>
         <button type="button" title={title} onClick={() => toggleSort(k)}
           className="inline-flex items-center gap-1 whitespace-nowrap uppercase hover:text-strong">
           {label}
@@ -191,7 +191,7 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
             ))}
           </div>
 
-          {data.recordsStart && data.recordsStart > data.start && (
+          {data.recordsStart && data.recordsStart.slice(0, 10) > data.start.slice(0, 10) && (
             <p className="text-xs text-muted">
               Bids before {dayLabel(data.recordsStart, true)} were counted from screenshot folders and aren't included.
             </p>
@@ -206,16 +206,16 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
                   <tr>
                     <th className="px-4 py-2.5 text-left">Bidder</th>
                     {weeks.map((w, i) => (
-                      <SortHead key={w.start} k={`w${i}`} label={`${dayLabel(w.start)}${w.partial ? '*' : ''}`}
-                        title={`${dayLabel(w.start)} – ${dayLabel(w.end)}${w.partial ? ' (partial week)' : ''}`} />
+                      sortHead(`w${i}`, `${dayLabel(w.start)}${w.partial ? '*' : ''}`,
+                        `${dayLabel(w.start)} – ${dayLabel(w.end)}${w.partial ? ' (partial week)' : ''}`)
                     ))}
-                    <SortHead k="total" label="Total" title="Approved + pending bids; hover a value for the split" />
-                    <SortHead k="longestStreak" label="Streak" title="Longest run of weekdays with 50+ bids" />
-                    <SortHead k="hitRate" label="Hit rate" title="Weekdays with 50+ bids out of weekdays counted" />
-                    <SortHead k="avgPerWeekday" label="Avg / weekday" title="Total bids per weekday counted" />
-                    <SortHead k="interviews" label="Interviews" title="Interview rounds held on the bidder's profile" />
-                    <SortHead k="per100" label="Per 100 bids" title="Interviews per 100 bids" />
-                    <SortHead k="lastBidAt" label="Last bid" />
+                    {sortHead("total", "Total", "Approved + pending bids; hover a value for the split")}
+                    {sortHead("longestStreak", "Streak", "Longest run of weekdays with 50+ bids")}
+                    {sortHead("hitRate", "Hit rate", "Weekdays with 50+ bids out of weekdays counted")}
+                    {sortHead("avgPerWeekday", "Avg / weekday", "Total bids per weekday counted")}
+                    {sortHead("interviews", "Interviews", "Interview rounds held on the bidder's profile")}
+                    {sortHead("per100", "Per 100 bids", "Interviews per 100 bids")}
+                    {sortHead("lastBidAt", "Last bid")}
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
