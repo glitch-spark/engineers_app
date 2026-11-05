@@ -14,11 +14,13 @@ import BidderFormModal from '../components/bidders/BidderFormModal';
 import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDialog';
 import SummaryTiles, { type Tile } from '../components/bidders/SummaryTiles';
 import TeamWeekTable from '../components/bidders/TeamWeekTable';
+import PerformanceTab from '../components/bidders/PerformanceTab';
+import Tabs from '../components/Tabs';
 import WeekNav from '../components/bidders/WeekNav';
 import { dateInZone } from '../components/bidders/weekDates';
 
-/** URL state: week, bidder, day, tab (history), mode (focus), bid, owner (admin filter). */
-type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner';
+/** URL state: week, bidder, day, tab (history), mode (focus), bid, owner (admin filter), view (performance tab). */
+type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view';
 
 function statusText(b: api.Bidder | undefined, row: api.BidWeekRow) {
   if (row.status === 'archived') return 'Archived';
@@ -30,6 +32,11 @@ function statusText(b: api.Bidder | undefined, row: api.BidWeekRow) {
   return <span className={expired ? 'text-red-600' : undefined}>Invited · expires {formatInviteDate(b.inviteExpiresAt)}</span>;
 }
 
+const VIEW_TABS = [
+  { key: 'pay', label: 'Pay week' },
+  { key: 'performance', label: 'Performance' },
+];
+
 export default function BiddersPage() {
   const [params, setParams] = useSearchParams();
   const week = params.get('week');
@@ -37,6 +44,7 @@ export default function BiddersPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const ownerId = isAdmin ? params.get('owner') ?? '' : '';
+  const performance = !bidderId && params.get('view') === 'performance';
   const [showArchived, setShowArchived] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [inviteShown, setInviteShown] = useState<{ name: string; invite: api.BidderInvite } | null>(null);
@@ -152,26 +160,10 @@ export default function BiddersPage() {
     ];
   };
 
-  return (
+  const main = (
     <div className="space-y-5">
-      {focus && (
-        <FocusReview
-          key={`${'day' in focus.scope ? focus.scope.day : focus.scope.week}|${bidderId ?? ''}|${focus.startAt ?? ''}`}
-          scope={focus.scope}
-          bidderId={bidderId ?? undefined}
-          startAt={focus.startAt}
-          ids={focus.ids}
-          set={focus.set}
-          onExit={exitFocus}
-        />
-      )}
-      <PageHeader
-        title="Bidders"
-        action={!bidderId && <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>}
-      />
-
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <WeekNav week={weekKey} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />
+        {performance ? <div /> : <WeekNav week={weekKey} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />}
         {!bidderId && (
           <div className="flex flex-wrap items-center gap-3">
             {isAdmin && (
@@ -190,7 +182,13 @@ export default function BiddersPage() {
         )}
       </div>
 
-      {board.error ? (
+      {performance ? (
+        <PerformanceTab
+          ownerId={ownerId}
+          includeArchived={showArchived}
+          onOpenBidder={(id, wk) => setParam({ bidder: id, week: wk, view: null, day: null, tab: null })}
+        />
+      ) : board.error ? (
         <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
           Couldn&apos;t load the week.{' '}
           <button type="button" className="underline" onClick={() => board.mutate()}>Retry</button>
@@ -256,6 +254,39 @@ export default function BiddersPage() {
             }
           />
         </>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {focus && (
+        <FocusReview
+          key={`${'day' in focus.scope ? focus.scope.day : focus.scope.week}|${bidderId ?? ''}|${focus.startAt ?? ''}`}
+          scope={focus.scope}
+          bidderId={bidderId ?? undefined}
+          startAt={focus.startAt}
+          ids={focus.ids}
+          set={focus.set}
+          onExit={exitFocus}
+        />
+      )}
+      <PageHeader
+        title="Bidders"
+        action={!bidderId && <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>}
+      />
+
+      {bidderId ? (
+        main
+      ) : (
+        <Tabs
+          tabs={VIEW_TABS}
+          value={performance ? 'performance' : 'pay'}
+          onChange={(k) => setParam({ view: k === 'performance' ? 'performance' : null })}
+          ariaLabel="Bidders sections"
+        >
+          {main}
+        </Tabs>
       )}
 
       <BidderFormModal
