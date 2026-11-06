@@ -3,7 +3,6 @@ import { INTERVIEW_STATUSES } from '../../lib/stageBadge';
 import { DURATION_OPTIONS, type RoundFormState } from '../../lib/interviewForm';
 import StagePicker from './StagePicker';
 import CallerFields from './CallerFields';
-import { TranscriptUploadButton } from './TranscriptUploadButton';
 import { fromZoned, zoneAbbrev } from '../../lib/interviewTimezone';
 
 function durationLabel(min: number): string {
@@ -105,17 +104,6 @@ export default function RoundFields({
         <label htmlFor={id('note')} className="block text-sm font-medium mb-1">Notes</label>
         <textarea id={id('note')} className="input min-h-[72px]" value={round.note} disabled={disabled}
           onChange={(e) => onChange({ note: e.target.value })} />
-      </div>
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <label htmlFor={id('transcript')} className="block text-sm font-medium">Transcript</label>
-          {!disabled && (
-            <TranscriptUploadButton hasTranscript={!!round.transcript} onLoad={(raw) => onChange({ transcript: raw })} />
-          )}
-        </div>
-        <textarea id={id('transcript')} className="input min-h-[96px] font-mono text-xs" value={round.transcript}
-          disabled={disabled} placeholder="Paste the transcript, or upload a file"
-          onChange={(e) => onChange({ transcript: e.target.value })} />
       </div>
     </fieldset>
   );

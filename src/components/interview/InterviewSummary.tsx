@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { CalendarClock, Copy, ExternalLink, FileText, NotebookPen, PhoneCall, Video } from 'lucide-react';
+import { CalendarClock, Copy, ExternalLink, NotebookPen, PhoneCall, Video } from 'lucide-react';
 import type { InterviewStageEntry } from '../../api/endpoints';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
-import { meetingLink, notesPreview, relativeWhen, spotlightRound, stagesReached, wordCount } from '../../lib/interviewPanelInfo';
+import { meetingLink, notesPreview, relativeWhen, spotlightRound, stagesReached } from '../../lib/interviewPanelInfo';
 import { notify } from '../../lib/notify';
 import {
   INTERVIEW_STATUSES,
@@ -229,7 +229,6 @@ export default function InterviewSummary({
           {rounds.map((e) => {
             const status = normalizeInterviewStatus(e.status);
             const preview = notesPreview(e.note);
-            const words = wordCount(e.transcript);
             const open = expanded.has(e.id);
             return (
               <li key={e.id} className="relative">
@@ -268,9 +267,6 @@ export default function InterviewSummary({
                       <PhoneCall size={12} aria-hidden /> {e.caller.callerName && e.caller.callerName !== 'TBD' ? e.caller.callerName : 'Caller TBD'}
                       {needsConfirmBadge(e.status, e.scheduledAt, now) && <ConfirmedBadge confirmed={e.confirmed} />}
                     </span>
-                  )}
-                  {words > 0 && (
-                    <span className="inline-flex items-center gap-1"><FileText size={12} aria-hidden /> Transcript · {words.toLocaleString()} words</span>
                   )}
                 </div>
                 {preview && (

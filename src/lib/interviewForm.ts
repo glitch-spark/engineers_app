@@ -68,7 +68,6 @@ export type RoundFormState = {
   status: InterviewStatusValue;
   interviewerName: string;
   note: string;
-  transcript: string;
   callerEnabled: boolean;
   /** The saved caller's name (shown when it is not on the caller list). */
   callerName: string;
@@ -108,7 +107,6 @@ export function blankRound(
     status: 'scheduled',
     interviewerName: '',
     note: '',
-    transcript: '',
     callerEnabled: !!opts.callerEnabled,
     callerName: '',
     callerId: '',
@@ -135,7 +133,6 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     status: normalizeInterviewStatus(e.status) || 'scheduled',
     interviewerName: e.interviewerName || '',
     note: e.note || '',
-    transcript: e.transcript || '',
     callerEnabled: !!caller?.enabled,
     callerName: typedName,
     callerId,
@@ -166,7 +163,6 @@ export function roundPayload(r: RoundFormState, tz: string = browserZone()): Rou
     status: r.status,
     interviewerName: r.interviewerName.trim(),
     note: r.note,
-    transcript: r.transcript,
     ...(caller ? { caller } : {}),
   };
 }

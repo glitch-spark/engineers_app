@@ -1,4 +1,4 @@
-/** Shared date-range presets for Interviews List / Live / Analyze and Transactions filters. */
+/** Shared date-range presets for Interviews List / Live and Transactions filters. */
 
 export type DateRangePreset =
   | 'prev_week'

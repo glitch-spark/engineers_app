@@ -9,7 +9,6 @@ import {
   Minus,
   Pencil,
   Plus,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -32,7 +31,6 @@ import {
   stageLabel,
 } from '../lib/stageBadge';
 import ThemeToggle from '../components/ThemeToggle';
-import { TranscriptUploadButton } from '../components/interview/TranscriptUploadButton';
 import { formatScheduledDate } from '../components/interview/format';
 import type { Interview } from '../components/interview/types';
 import { safeHref } from '../lib/safeHref';
@@ -149,9 +147,6 @@ export default function InterviewFocusPage() {
             <ArrowLeft size={16} aria-hidden /> Interviews
           </Link>
           <div className="flex items-center gap-1.5">
-            <Link to={`/interviews/${iv._id}/review`} className="btn-outline btn-sm">
-              <Sparkles size={14} aria-hidden /> AI Review
-            </Link>
             {canEdit && (
               <button type="button" className="btn-outline btn-sm" onClick={() => setPanel({ mode: 'editDetails' })}>
                 Edit details
@@ -407,11 +402,11 @@ function StageStepper({
   );
 }
 
-type WorkspaceTab = 'script' | 'notes' | 'questions';
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const AUTOSAVE_MS = 800;
 
+/** A round's header and its notes, saved as you type. */
 function StageWorkspace({
   interviewId,
   entry,
@@ -428,12 +423,10 @@ function StageWorkspace({
   onSaved: (next: Record<string, unknown>) => unknown;
 }) {
   const { tz } = useInterviewTimezone();
-  const [tab, setTab] = useState<WorkspaceTab>('script');
-  const [transcript, setTranscript] = useState(entry.transcript ?? '');
   const [note, setNote] = useState(entry.note ?? '');
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
-  const pending = useRef<{ transcript?: string; note?: string }>({});
+  const pending = useRef<{ note?: string }>({});
   const timer = useRef<number | null>(null);
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
@@ -444,7 +437,7 @@ function StageWorkspace({
       timer.current = null;
     }
     const body = pending.current;
-    if (body.transcript === undefined && body.note === undefined) return;
+    if (body.note === undefined) return;
     pending.current = {};
     setSaveState('saving');
     try {
@@ -461,31 +454,11 @@ function StageWorkspace({
   // Switching stages unmounts this workspace; don't drop unsaved typing.
   useEffect(() => () => { void flush(); }, [flush]);
 
-  const queue = (patch: { transcript?: string; note?: string }) => {
+  const queue = (patch: { note?: string }) => {
     pending.current = { ...pending.current, ...patch };
     setSaveState('idle');
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => { void flush(); }, AUTOSAVE_MS);
-  };
-
-  const tabs: { key: WorkspaceTab; label: string }[] = [
-    { key: 'script', label: 'Script' },
-    { key: 'notes', label: 'Notes' },
-    { key: 'questions', label: 'Questions' },
-  ];
-  const contentTabRefs = useRef<Partial<Record<WorkspaceTab, HTMLButtonElement | null>>>({});
-
-  const onContentTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
-    let next = -1;
-    if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
-    else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
-    else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = tabs.length - 1;
-    if (next < 0) return;
-    e.preventDefault();
-    const key = tabs[next].key;
-    setTab(key);
-    contentTabRefs.current[key]?.focus();
   };
 
   return (
@@ -518,179 +491,23 @@ function StageWorkspace({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3 px-5 pt-4">
-        <div className="segmented" role="tablist" aria-label="Stage content">
-          {tabs.map((t, i) => (
-            <button
-              key={t.key}
-              ref={(el) => { contentTabRefs.current[t.key] = el; }}
-              type="button"
-              role="tab"
-              id={`stage-content-tab-${t.key}`}
-              aria-selected={tab === t.key}
-              aria-controls="stage-content-panel"
-              tabIndex={tab === t.key ? 0 : -1}
-              onClick={() => setTab(t.key)}
-              onKeyDown={(e) => onContentTabKeyDown(e, i)}
-              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-                tab === t.key
-                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      <div className="p-5">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label htmlFor="stage-note" className="form-label">Notes for this round</label>
+          <span className="text-xs text-faint" aria-live="polite">
+            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Not saved' : ''}
+          </span>
         </div>
-        <span className="text-xs text-faint" aria-live="polite">
-          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Not saved' : ''}
-        </span>
-      </div>
-
-      <div
-        className="p-5"
-        role="tabpanel"
-        id="stage-content-panel"
-        aria-labelledby={`stage-content-tab-${tab}`}
-      >
-        {tab === 'script' && (
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label htmlFor="stage-script" className="form-label">Interview script</label>
-              {canEdit && (
-                <TranscriptUploadButton
-                  hasTranscript={!!transcript}
-                  onLoad={(raw) => { setTranscript(raw); queue({ transcript: raw }); }}
-                />
-              )}
-            </div>
-            <textarea
-              id="stage-script"
-              className="input min-h-[420px] resize-y font-mono text-xs leading-relaxed"
-              value={transcript}
-              readOnly={!canEdit}
-              onChange={(e) => { setTranscript(e.target.value); queue({ transcript: e.target.value }); }}
-              onBlur={() => { void flush(); }}
-              placeholder={canEdit ? 'Paste or upload the transcript for this round…' : 'No script for this round.'}
-            />
-            <p className="hint mt-1.5">Questions are extracted from this round&apos;s script automatically after it is saved.</p>
-          </div>
-        )}
-        {tab === 'notes' && (
-          <div>
-            <label htmlFor="stage-note" className="form-label mb-2 block">Notes for this round</label>
-            <textarea
-              id="stage-note"
-              className="input min-h-[280px] resize-y leading-relaxed"
-              value={note}
-              readOnly={!canEdit}
-              onChange={(e) => { setNote(e.target.value); queue({ note: e.target.value }); }}
-              onBlur={() => { void flush(); }}
-              placeholder={canEdit ? 'What went well, what to prepare for next time…' : 'No notes for this round.'}
-            />
-          </div>
-        )}
-        {tab === 'questions' && (
-          <ExtractedQuestions
-            interviewId={interviewId}
-            stageId={entry.id}
-            hasTranscript={!!transcript.trim()}
-            canEdit={canEdit}
-          />
-        )}
+        <textarea
+          id="stage-note"
+          className="input min-h-[280px] resize-y leading-relaxed"
+          value={note}
+          readOnly={!canEdit}
+          onChange={(e) => { setNote(e.target.value); queue({ note: e.target.value }); }}
+          onBlur={() => { void flush(); }}
+          placeholder={canEdit ? 'What went well, what to prepare for next time…' : 'No notes for this round.'}
+        />
       </div>
     </section>
   );
-}
-
-function ExtractedQuestions({
-  interviewId,
-  stageId,
-  hasTranscript,
-  canEdit,
-}: {
-  interviewId: string;
-  stageId: string;
-  hasTranscript: boolean;
-  canEdit: boolean;
-}) {
-  const { data, mutate, isLoading } = useSWR(
-    ['interview-questions', interviewId, stageId],
-    () => api.listInterviewQuestions(interviewId, stageId),
-    { refreshInterval: 8000 },
-  );
-  const [reextracting, setReextracting] = useState(false);
-
-  async function reextract() {
-    setReextracting(true);
-    try {
-      await api.reextractInterview(interviewId, stageId);
-      notify.success('Re-extraction queued');
-      setTimeout(() => mutate(), 1500);
-    } catch (err) {
-      notify.error(err, 'Could not re-extract');
-    } finally {
-      setReextracting(false);
-    }
-  }
-
-  const questions = data?.questions ?? [];
-
-  return (
-    <div>
-      <p className="sr-only" role="status">
-        {hasTranscript && questions.length > 0
-          ? `${questions.length} extracted ${questions.length === 1 ? 'question' : 'questions'}`
-          : ''}
-      </p>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="form-label">Extracted questions</span>
-        {hasTranscript && canEdit && (
-          <button type="button" onClick={reextract} disabled={reextracting} className="link text-xs disabled:opacity-50">
-            {reextracting ? 'Queuing…' : 'Re-extract'}
-          </button>
-        )}
-      </div>
-      {!hasTranscript ? (
-        <div className="text-xs italic text-faint">Add a script for this round to enable extraction.</div>
-      ) : isLoading && questions.length === 0 ? (
-        <div className="text-xs text-faint" role="status">Loading…</div>
-      ) : questions.length === 0 ? (
-        <div className="text-xs italic text-faint">
-          No extracted questions yet. Extraction runs automatically when a script is saved (~30-60s).
-          Use Re-extract if it didn&apos;t trigger.
-        </div>
-      ) : (
-        <ol className="space-y-2">
-          {questions.map((q, i) => (
-            <li key={q._id} className="panel p-3">
-              <div className="mb-1 flex items-start justify-between gap-2">
-                <p className="flex-1 text-sm font-medium text-strong">
-                  <span className="mr-2 text-faint">{i + 1}.</span>
-                  {q.question}
-                </p>
-                {q.score != null && (
-                  <span className={`text-xs font-semibold ${scoreTextColor(q.score)}`}>{q.score}/10</span>
-                )}
-              </div>
-              {q.candidateAnswer && <p className="mb-1.5 whitespace-pre-wrap text-sm text-body">{q.candidateAnswer}</p>}
-              {q.scoreRationale && (
-                <p className="mb-1 text-xs text-muted"><strong>Why:</strong> {q.scoreRationale}</p>
-              )}
-              {q.improvementTip && (
-                <p className="text-xs text-blue-700 dark:text-blue-400"><strong>Tip:</strong> {q.improvementTip}</p>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
-
-function scoreTextColor(n: number): string {
-  if (n >= 8) return 'text-green-700 dark:text-green-400';
-  if (n >= 6) return 'text-blue-700 dark:text-blue-400';
-  if (n >= 4) return 'text-amber-700 dark:text-amber-400';
-  return 'text-red-700 dark:text-red-400';
 }
