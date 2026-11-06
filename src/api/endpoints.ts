@@ -1,4 +1,4 @@
-import { apiFetch, BASE_URL, getToken, type ApiFetchOptions } from './client';
+import { ApiError, apiFetch, BASE_URL, getToken, type ApiFetchOptions } from './client';
 
 // ---------- shared types ----------
 
@@ -2453,11 +2453,19 @@ export async function downloadTailoredResume(jobId: string, filename: string): P
   });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
-    try { const data = await res.json(); message = data.error || data.detail || message; } catch { /* ignore */ }
-    throw new Error(message);
+    let data: unknown = null;
+    try { data = await res.json(); const d = data as { error?: string; detail?: string }; message = d.error || d.detail || message; } catch { /* ignore */ }
+    // 410: the file is missing from storage (POST /resume/jobs/{id}/restore-pdf makes it again).
+    throw new ApiError(res.status, data, message);
   }
   _saveBlob(await res.blob(), filename);
 }
+
+/** Makes a completed resume's missing PDF again: regenerated from its stored job description and prompt, or a fixed
+ * resume copied again from the profile's file. Takes about a minute; download it afterwards. */
+export const restoreResumePdf = (jobId: string) =>
+  postJSON<{ jobId: string; kind: 'regenerated' | 'copied'; filename: string }>(`/resume/jobs/${jobId}/restore-pdf`, {});
+
 
 /** A resume to download from Tailor & apply, and where it goes (`<Profile>/<Company>` + `Resume.pdf`). */
 export type JobApplyDownloadFile =

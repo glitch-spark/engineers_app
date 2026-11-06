@@ -5,6 +5,7 @@ import Modal from '../Modal';
 import { notify } from '../../lib/notify';
 import { saveInterviewBrief } from '../../lib/interviewBriefPdf';
 import type { Interview } from './types';
+import { isMissingFile, useResumeRestore } from './useResumeRestore';
 
 type ResumeFile = { id: string; filename: string; uploadedAt: string | null };
 
@@ -37,12 +38,14 @@ async function saveLinkedResume(link: InterviewResumeLink | null, accountId: str
 
 /**
  * Download brief: the round's brief PDF, then the resume the interview came from as its own file. With no linked
- * resume, a picker offers the profile's stored resumes. Render `dialog` once in the component using it.
+ * resume, a picker offers the profile's stored resumes; a linked resume whose file is missing can be made again.
+ * Render `dialog` once in the component using it.
  */
 export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: string) => Promise<void>; busy: boolean; dialog: ReactNode } {
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState<{ accountId: string; files: ResumeFile[]; chosen: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const restore = useResumeRestore();
 
   const start = async (iv: Interview, roundId: string) => {
     if (busy) return;
@@ -53,6 +56,8 @@ export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: 
       try {
         if (await saveLinkedResume(link, accountId)) return;
       } catch (err) {
+        // Its file is missing (made before the Nov 5 storage move): offer to make it again.
+        if (isMissingFile(err) && link && restore.offer(link)) return;
         notify.error(err, 'The brief is saved, but the linked resume could not be downloaded');
         return;
       }
@@ -89,7 +94,7 @@ export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: 
     }
   };
 
-  const dialog = pick && (
+  const pickDialog = pick && (
     <Modal open onClose={() => setPick(null)} title="Resume to send with the brief">
       <div className="space-y-4">
         <p className="text-sm text-muted">
@@ -120,5 +125,5 @@ export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: 
     </Modal>
   );
 
-  return { start, busy, dialog };
+  return { start, busy, dialog: pickDialog || restore.dialog || null };
 }
