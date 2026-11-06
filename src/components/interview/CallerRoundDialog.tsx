@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { Download, ExternalLink, Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import Modal from '../Modal';
 import Select from '../Select';
 import { notify } from '../../lib/notify';
+import { useBriefDownload } from './useBriefDownload';
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, isUnassigned } from '../../lib/callerColors';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
@@ -33,6 +34,7 @@ export default function CallerRoundDialog({
   const typedName = caller?.callerName && caller.callerName !== 'TBD' ? caller.callerName : '';
   const [pick, setPick] = useState(savedId);
   const [saving, setSaving] = useState(false);
+  const { start: startBrief, busy: briefing, dialog: briefDialog } = useBriefDownload(tz);
   useEffect(() => setPick(savedId), [savedId]);
 
   const unassigned = isUnassigned({ callerId: caller?.callerId, callerName: caller?.callerName });
@@ -49,6 +51,8 @@ export default function CallerRoundDialog({
     ...(savedId && !known ? [{ value: savedId, label: `${typedName || 'Caller'} (not on the list)` }] : []),
   ];
 
+  const brief = () => startBrief(interview, roundId);
+
   const save = async () => {
     setSaving(true);
     try {
@@ -61,6 +65,9 @@ export default function CallerRoundDialog({
       setSaving(false);
     }
   };
+
+  // The resume picker replaces this dialog while it's open, so the two never stack.
+  if (briefDialog) return <>{briefDialog}</>;
 
   return (
     <Modal open onClose={onClose} title={`${interview.companyName || 'Interview'} · ${stageLabel(entry?.stage)}`}>
@@ -106,7 +113,11 @@ export default function CallerRoundDialog({
           </p>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" className="btn-outline btn-sm" onClick={() => void brief()} disabled={briefing}
+            title="A PDF of this round, plus the resume, to share with whoever takes the interview">
+            <Download size={14} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
+          </button>
           <button type="button" className="btn-outline btn-sm" onClick={onOpenInterview}>
             <ExternalLink size={14} aria-hidden /> Open interview
           </button>

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { CalendarClock, Copy, ExternalLink, FileText, NotebookPen, PhoneCall, Video } from 'lucide-react';
+import { CalendarClock, Copy, Download, ExternalLink, NotebookPen, PhoneCall, Video } from 'lucide-react';
 import type { InterviewStageEntry } from '../../api/endpoints';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
-import { meetingLink, notesPreview, relativeWhen, spotlightRound, stagesReached, wordCount } from '../../lib/interviewPanelInfo';
+import { meetingLink, notesPreview, relativeWhen, spotlightRound, stagesReached } from '../../lib/interviewPanelInfo';
 import { notify } from '../../lib/notify';
+import { useBriefDownload } from './useBriefDownload';
 import {
   INTERVIEW_STATUSES,
   interviewStatusBadgeClass,
@@ -90,6 +91,10 @@ export default function InterviewSummary({
     }
   };
 
+  // The round's brief as a PDF plus its resume, to share with whoever takes the interview.
+  const { start: startBrief, busy: briefing, dialog: briefDialog } = useBriefDownload(tz);
+  const brief = (roundId: string) => startBrief(iv, roundId);
+
   const toggle = (id: string) => setExpanded((prev) => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id);
@@ -102,6 +107,7 @@ export default function InterviewSummary({
 
   return (
     <div className="flex-1 space-y-5 overflow-y-auto p-4">
+      {briefDialog}
       {spot && spotRound && (
         <section
           aria-label={spot.kind === 'next' ? 'Next round' : 'Last round'}
@@ -109,15 +115,22 @@ export default function InterviewSummary({
             ? 'border-sky-200 bg-sky-50/70 dark:border-sky-900 dark:bg-sky-950/30'
             : 'border-zinc-200 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-900/40'}`}
         >
-          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-            <CalendarClock size={13} aria-hidden />
-            {spot.kind === 'next' ? 'Next round' : 'Last round'}
-            {spotRound.scheduledAt && (
-              <span className="normal-case tracking-normal font-medium text-body">
-                · {relativeWhen(new Date(spotRound.scheduledAt), now, tz)}
-              </span>
-            )}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+              <CalendarClock size={13} aria-hidden />
+              {spot.kind === 'next' ? 'Next round' : 'Last round'}
+              {spotRound.scheduledAt && (
+                <span className="normal-case tracking-normal font-medium text-body">
+                  · {relativeWhen(new Date(spotRound.scheduledAt), now, tz)}
+                </span>
+              )}
+            </p>
+            <button type="button" className="btn-outline btn-sm shrink-0" disabled={briefing}
+              title="A PDF of this round, plus the resume, to share with whoever takes the interview"
+              onClick={() => void brief(spotRound.id)}>
+              <Download size={13} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
+            </button>
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={`badge ${stageBadgeClass(spotRound.stage)}`}>{stageLabel(spotRound.stage)}</span>
             <span className="text-sm tabular-nums text-body">{when(spotRound.scheduledAt, spotRound.endsAt, tz)}</span>
@@ -160,6 +173,12 @@ export default function InterviewSummary({
       <section aria-label="Details">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Details</h3>
         <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+          <dt className="text-muted">Applied by</dt>
+          <dd>
+            {iv.appliedBy
+              ? (iv.appliedBy.kind === 'self' ? 'Self' : iv.appliedBy.bidderName || 'A bidder')
+              : canEdit ? <QuickAdd label="Set who applied" onClick={onEditDetails} /> : 'Not set'}
+          </dd>
           <dt className="text-muted">Position</dt>
           <dd>{iv.appliedPosition || (canEdit ? <QuickAdd label="Add position" onClick={onEditDetails} /> : '—')}</dd>
           <dt className="text-muted">Job post</dt>
@@ -223,7 +242,6 @@ export default function InterviewSummary({
           {rounds.map((e) => {
             const status = normalizeInterviewStatus(e.status);
             const preview = notesPreview(e.note);
-            const words = wordCount(e.transcript);
             const open = expanded.has(e.id);
             return (
               <li key={e.id} className="relative">
@@ -244,15 +262,16 @@ export default function InterviewSummary({
                     ) : (
                       <span className={`badge ${interviewStatusBadgeClass(status)}`}>{interviewStatusLabel(status)}</span>
                     )}
-                    {canEdit && (
-                      <ActionMenu
-                        label={`Actions for ${stageLabel(e.stage)} round`}
-                        items={[
+                    <ActionMenu
+                      label={`Actions for ${stageLabel(e.stage)} round`}
+                      items={[
+                        { label: 'Download brief', onSelect: () => void brief(e.id) },
+                        ...(canEdit ? [
                           { label: 'Edit round', onSelect: () => onEditRound(e.id) },
                           { label: 'Delete round', danger: true, onSelect: () => onDeleteRound(e.id) },
-                        ]}
-                      />
-                    )}
+                        ] : []),
+                      ]}
+                    />
                   </span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
@@ -262,9 +281,6 @@ export default function InterviewSummary({
                       <PhoneCall size={12} aria-hidden /> {e.caller.callerName && e.caller.callerName !== 'TBD' ? e.caller.callerName : 'Caller TBD'}
                       {needsConfirmBadge(e.status, e.scheduledAt, now) && <ConfirmedBadge confirmed={e.confirmed} />}
                     </span>
-                  )}
-                  {words > 0 && (
-                    <span className="inline-flex items-center gap-1"><FileText size={12} aria-hidden /> Transcript · {words.toLocaleString()} words</span>
                   )}
                 </div>
                 {preview && (

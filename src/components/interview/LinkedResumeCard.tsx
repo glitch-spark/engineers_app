@@ -7,13 +7,17 @@ import { notify } from '../../lib/notify';
 import { safeHref } from '../../lib/safeHref';
 import { TailoredScore } from '../jobApplies/Suggestions';
 import { KIND_LABEL, shortDay } from './CompanyMatchField';
+import { isMissingFile, useResumeRestore } from './useResumeRestore';
 
 export function reasonLabel(reason?: string | null): string {
   return NO_MATCH_REASONS.find((r) => r.value === reason)?.label ?? 'No reason given';
 }
 
-/** Save the linked resume: a tailored one's PDF, or an uploaded one's original file (from the profile). */
-export async function downloadLinkedResume(link: InterviewResumeLink, accountId: string): Promise<void> {
+/** Save the linked resume: a tailored one's PDF, or an uploaded one's original file (from the profile). `onMissing`
+ * gets a resume whose file is missing from storage (true = it handled it). */
+export async function downloadLinkedResume(
+  link: InterviewResumeLink, accountId: string, onMissing?: (link: InterviewResumeLink) => boolean,
+): Promise<void> {
   try {
     if ((link.kind === 'tailored' || link.kind === 'fixed') && link.resumeJobId) {
       await api.downloadTailoredResume(link.resumeJobId, link.filename || 'Resume.pdf');
@@ -22,6 +26,7 @@ export async function downloadLinkedResume(link: InterviewResumeLink, accountId:
       window.open(url, '_blank', 'noopener');
     }
   } catch (err) {
+    if (onMissing && isMissingFile(err) && onMissing(link)) return;
     notify.error(err, 'Download failed');
   }
 }
@@ -43,25 +48,29 @@ export function ResumeScoreCell({ link }: { link?: InterviewResumeLink | null })
 /** Download button for a linked resume; nothing for a link with no resume. */
 export function LinkedResumeDownload({ link, accountId, compact }: { link: InterviewResumeLink; accountId: string; compact?: boolean }) {
   const [busy, setBusy] = useState(false);
+  const restore = useResumeRestore();
   const hasFile = ((link.kind === 'tailored' || link.kind === 'fixed') && link.resumeJobId) || (link.kind === 'uploaded' && link.resumeId);
   if (!hasFile || !accountId) return null;
   const label = `Download ${link.filename || 'resume'}`;
   return (
-    <button
-      type="button"
-      className={compact ? 'btn-icon' : 'btn-outline btn-sm'}
-      disabled={busy}
-      title={label}
-      aria-label={label}
-      onClick={async () => {
-        setBusy(true);
-        await downloadLinkedResume(link, accountId);
-        setBusy(false);
-      }}
-    >
-      {busy ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Download size={13} aria-hidden />}
-      {!compact && ' Download'}
-    </button>
+    <>
+      {restore.dialog}
+      <button
+        type="button"
+        className={compact ? 'btn-icon' : 'btn-outline btn-sm'}
+        disabled={busy}
+        title={label}
+        aria-label={label}
+        onClick={async () => {
+          setBusy(true);
+          await downloadLinkedResume(link, accountId, restore.offer);
+          setBusy(false);
+        }}
+      >
+        {busy ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Download size={13} aria-hidden />}
+        {!compact && ' Download'}
+      </button>
+    </>
   );
 }
 

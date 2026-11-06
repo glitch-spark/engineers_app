@@ -14,9 +14,7 @@ import Statistics from './pages/Statistics';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
 import InterviewsPage from './pages/interviews/InterviewsPage';
-import InterviewsAnalyze from './pages/InterviewsAnalyze';
 import InterviewFocus from './pages/InterviewFocus';
-import InterviewReview from './pages/InterviewReview';
 import Resume from './pages/Resume';
 import Generated from './pages/Generated';
 import ResumePromptEval from './pages/ResumePromptEval';
@@ -95,10 +93,8 @@ export default function App() {
       <Route path="/interviews/callers" element={<Protected><InterviewsPage view="list" callers /></Protected>} />
       <Route path="/interviews/callers/calendar" element={<Protected><InterviewsPage view="calendar" callers /></Protected>} />
       <Route path="/interviews/live" element={<Navigate to="/interviews/calendar" replace />} />
-      <Route path="/interviews/analyze" element={<Protected><InterviewsAnalyze /></Protected>} />
       <Route path="/interviews/:id" element={<LegacyInterviewRedirect />} />
       <Route path="/interview/:id" element={<Standalone><InterviewFocus /></Standalone>} />
-      <Route path="/interviews/:id/review" element={<Protected><InterviewReview /></Protected>} />
       <Route path="/resume" element={<Protected><Resume /></Protected>} />
       <Route path="/resume/generated" element={<Protected><Generated /></Protected>} />
       <Route path="/resume/eval" element={<Protected><ResumePromptEval /></Protected>} />

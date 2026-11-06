@@ -64,10 +64,22 @@ export default function InterviewFilters({
   return (
     <div className="panel flex flex-wrap items-end gap-3 px-4 py-3">
       {callersView ? (
-        <div className="w-48">
-          <label htmlFor="ivf-caller" className="mb-1 block text-xs text-muted">Caller</label>
-          <Select id="ivf-caller" value={filters.caller} onChange={(v) => update({ caller: v })} options={callerOptions} />
-        </div>
+        <>
+          <div className="w-48">
+            <label htmlFor="ivf-owner" className="mb-1 block text-xs text-muted">User</label>
+            <Select
+              id="ivf-owner"
+              value={filters.owner}
+              onChange={(v) => update({ owner: v })}
+              // "All users" is '' here: the Callers tab shows everyone's caller rounds by default.
+              options={userOptions.map((o) => (o.value === 'all' ? { ...o, value: '' } : o))}
+            />
+          </div>
+          <div className="w-48">
+            <label htmlFor="ivf-caller" className="mb-1 block text-xs text-muted">Caller</label>
+            <Select id="ivf-caller" value={filters.caller} onChange={(v) => update({ caller: v })} options={callerOptions} />
+          </div>
+        </>
       ) : (
         <>
           <div className="w-44">

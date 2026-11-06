@@ -230,7 +230,7 @@ export default function InterviewPanel({
         title={confirm?.kind === 'interview' ? 'Delete interview?' : 'Delete round?'}
         body={confirm?.kind === 'interview'
           ? `Deletes this interview and its ${rounds.length} round${rounds.length === 1 ? '' : 's'}.`
-          : "Deletes this round's notes, transcript and extracted questions."}
+          : "Deletes this round and its notes."}
         disabledReason={confirm?.kind === 'round' && rounds.length <= 1 ? 'An interview needs at least one round.' : undefined}
         busy={busy}
         onConfirm={runDelete}

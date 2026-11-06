@@ -1,4 +1,4 @@
-import { apiFetch, BASE_URL, getToken, type ApiFetchOptions } from './client';
+import { ApiError, apiFetch, BASE_URL, getToken, type ApiFetchOptions } from './client';
 
 // ---------- shared types ----------
 
@@ -273,6 +273,10 @@ export const uploadAccountResume = (accountId: string, file: File, markdown: str
 /** Short-lived download link for a resume's original file (404 when only the text is stored). */
 export const getAccountResumeFileUrl = (accountId: string, resumeId: string) =>
   apiFetch<{ url: string }>(`/accounts/${accountId}/resumes/${resumeId}/file`);
+
+/** The profile's resumes whose original file is stored (owner, admin or interview manager). */
+export const listAccountResumeFiles = (accountId: string) =>
+  apiFetch<{ resumes: { id: string; filename: string; uploadedAt: string | null }[] }>(`/accounts/${accountId}/resume-files`);
 
 // ---------- transactions ----------
 
@@ -594,6 +598,8 @@ export const listCallerRounds = (params: {
   stage?: string;
   status?: string;
   callerId?: string;
+  /** Only this user's interviews. */
+  creatorId?: string;
   page: number;
   limit: number;
   dir: 'asc' | 'desc';
@@ -603,43 +609,6 @@ export const listCallerRounds = (params: {
 
 export const getInterview = (id: string) =>
   apiFetch<Record<string, unknown>>(`/interviews/${id}`);
-
-export interface AiInterviewChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-export interface AiInterviewChatResponse {
-  reply: string;
-  model: string;
-  promptTokens: number;
-  completionTokens: number;
-}
-
-export const interviewChat = (
-  interviewId: string,
-  body: { messages: AiInterviewChatMessage[]; rubric?: boolean },
-) =>
-  postJSON<AiInterviewChatResponse>(`/ai-review/interview/${interviewId}/chat`, body);
-
-export interface InterviewChatLog {
-  _id: string;
-  interviewId: string;
-  userId: string;
-  question: string;
-  answer: string;
-  model?: string;
-  rubric?: boolean;
-  createdAt: string;
-}
-
-export const interviewChatHistory = (interviewId: string, limit = 100) =>
-  apiFetch<{ logs: InterviewChatLog[] }>(
-    `/ai-review/interview/${interviewId}/chat/history?limit=${limit}`,
-  );
-
-export const clearInterviewChatHistory = (interviewId: string) =>
-  del<{ deleted: number }>(`/ai-review/interview/${interviewId}/chat/history`);
 
 export type CallerMethod = 'video' | 'phone_hushed' | 'phone_slynumber';
 
@@ -725,6 +694,27 @@ export const searchResumeMatches = (accountId: string, q: string) =>
 export const getResumeMatch = (accountId: string, matchId: string) =>
   apiFetch<InterviewResumeLink>(`/interviews/resume-matches/${encodeURIComponent(matchId)}${qs({ accountId })}`);
 
+/** Who applied for the job: the profile's owner, or one of the owner's bidders. */
+export type AppliedByInput = { kind: 'self' } | { kind: 'bidder'; bidderId: string };
+
+export interface InterviewAppliedBy {
+  kind: 'self' | 'bidder';
+  bidderId?: string | null;
+  /** The bidder's name when it was saved. */
+  bidderName?: string | null;
+}
+
+export interface AppliedByOption {
+  id: string;
+  name: string;
+  /** Assigned to the interview's profile. */
+  onProfile: boolean;
+}
+
+/** The profile owner's active bidders, for "Applied by". */
+export const getAppliedByOptions = (accountId: string) =>
+  apiFetch<{ bidders: AppliedByOption[] }>(`/interviews/applied-by-options${qs({ accountId })}`);
+
 export interface CreateInterviewBody {
   accountId: string;
   companyName: string;
@@ -732,11 +722,15 @@ export interface CreateInterviewBody {
   jobUrl?: string;
   round: RoundInput;
   resumeLink?: ResumeLinkInput;
+  appliedBy?: AppliedByInput;
 }
 
 /** Application-level fields, or a status-only update of the current round. */
 export type UpdateInterviewBody =
-  | { accountId?: string; companyName?: string; appliedPosition?: string; jobUrl?: string; resumeLink?: ResumeLinkInput }
+  | {
+    accountId?: string; companyName?: string; appliedPosition?: string; jobUrl?: string; resumeLink?: ResumeLinkInput;
+    appliedBy?: AppliedByInput;
+  }
   | { status: string };
 
 export const createInterview = (body: CreateInterviewBody) =>
@@ -1213,105 +1207,6 @@ export const getLeaderboard = (params: {
   range?: number;
   limit?: number;
 }) => apiFetch<LeaderboardResponse>(`/metrics/leaderboard${qs(params)}`);
-
-// ---------- interview analyze ----------
-
-export interface CommunicationStyle {
-  pacing?: string;
-  structure?: string;
-  verbosity?: string;
-  confidence?: string;
-}
-
-export interface ShineEntry { topic: string; evidence?: string }
-export interface StumbleEntry { topic: string; failureMode?: string; evidence?: string }
-export interface ShineMove { move: string; why?: string }
-
-export interface InterviewAnalyzeStage {
-  stage: string;
-  stageLabel: string;
-  interviewCount: number;
-  overallScore: number;
-  topQuestions: { question: string; frequency: number; exampleScore: number }[];
-  askedAlways: string[];
-  youShineOn: ShineEntry[];
-  youStumbleOn: StumbleEntry[];
-  communicationStyle: CommunicationStyle;
-  styleImprovements: string[];
-  drills: string[];
-}
-
-export interface InterviewAnalyzeWeakSpot {
-  topic: string;
-  stage: string;
-  explanation: string;
-  tip: string;
-}
-
-export interface InterviewAnalyzeResult {
-  stages: InterviewAnalyzeStage[];
-  weakSpots: InterviewAnalyzeWeakSpot[];
-  styleProfile: string;
-  signatureStrengths: string[];
-  blindSpots: string[];
-  howToShine: ShineMove[];
-  interviewTactics: string[];
-  redFlags: string[];
-  uncertaintyTopics: string[];
-  overallTips: string[];
-}
-
-export interface InterviewQuestion {
-  _id: string;
-  interviewId: string;
-  userId: string;
-  accountId?: string | null;
-  stage?: string | null;
-  companyName?: string | null;
-  question: string;
-  candidateAnswer: string;
-  score?: number | null;
-  scoreRationale?: string | null;
-  improvementTip?: string | null;
-  createdAt?: string;
-}
-
-export const listInterviewQuestions = (id: string, stageId?: string) =>
-  apiFetch<{ questions: InterviewQuestion[] }>(`/interviews/${id}/questions${qs({ stageId })}`);
-
-export const reextractInterview = (id: string, stageId?: string) =>
-  postJSON<{ ok: boolean; message: string }>(`/interviews/${id}/extract${qs({ stageId })}`, {});
-
-export interface AnalyzeChatRequest {
-  accountId?: string;
-  stages?: string[];
-  fromDate?: string;
-  toDate?: string;
-  filterContext: Record<string, unknown>;
-  result: Record<string, unknown>;
-  messages: { role: 'user' | 'assistant'; content: string }[];
-}
-
-export const analyzeChat = (body: AnalyzeChatRequest) =>
-  postJSON<{ reply: string; model: string; promptTokens: number; completionTokens: number }>(
-    '/interviews/analyze/chat',
-    body,
-  );
-
-export function analyzeInterviews(body: {
-  accountId?: string;
-  stages?: string[];
-  fromDate?: string;
-  toDate?: string;
-}) {
-  return postJSON<{
-    interviewCount: number;
-    transcriptCount: number;
-    questionCount?: number;
-    filterContext?: Record<string, unknown>;
-    result: InterviewAnalyzeResult;
-  }>('/interviews/analyze', body);
-}
 
 // ---------- skills (admin CRUD; list available to any auth user) ----------
 
@@ -2558,11 +2453,19 @@ export async function downloadTailoredResume(jobId: string, filename: string): P
   });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
-    try { const data = await res.json(); message = data.error || data.detail || message; } catch { /* ignore */ }
-    throw new Error(message);
+    let data: unknown = null;
+    try { data = await res.json(); const d = data as { error?: string; detail?: string }; message = d.error || d.detail || message; } catch { /* ignore */ }
+    // 410: the file is missing from storage (POST /resume/jobs/{id}/restore-pdf makes it again).
+    throw new ApiError(res.status, data, message);
   }
   _saveBlob(await res.blob(), filename);
 }
+
+/** Makes a completed resume's missing PDF again: regenerated from its stored job description and prompt, or a fixed
+ * resume copied again from the profile's file. Takes about a minute; download it afterwards. */
+export const restoreResumePdf = (jobId: string) =>
+  postJSON<{ jobId: string; kind: 'regenerated' | 'copied'; filename: string }>(`/resume/jobs/${jobId}/restore-pdf`, {});
+
 
 /** A resume to download from Tailor & apply, and where it goes (`<Profile>/<Company>` + `Resume.pdf`). */
 export type JobApplyDownloadFile =
@@ -2975,6 +2878,14 @@ export interface BidPerformanceRow {
   avgPerWeekday: number | null;
   interviews: number | null;
   sharedProfile: boolean;
+  /** Names of the other active bidders on this bidder's profile. */
+  sharedWith: string[];
+  /** The profile's owner typed self bids on it in the period. */
+  profileSelfBids: boolean;
+  /** Of `interviews`: untagged ones on the profile (from before "Applied by"), counted for every bidder on it. */
+  untaggedInterviews: number;
+  /** One entry per weekday of the period: "none" = not active (not created yet, archived, before records). */
+  days: { day: string; bids: number; state: 'hit' | 'miss' | 'open' | 'none' }[];
   per100: number | null;
   lastBidAt: string | null;
 }

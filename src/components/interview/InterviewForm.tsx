@@ -3,6 +3,8 @@ import * as api from '../../api/endpoints';
 import { ApiError } from '../../api/client';
 import { messageOf, notify } from '../../lib/notify';
 import {
+  SELF,
+  appliedByPayload,
   blankApplication,
   blankRound,
   linkPayload,
@@ -32,6 +34,9 @@ function applicationFromInterview(iv: Interview): ApplicationFormState {
     appliedPosition: iv.appliedPosition || '',
     jobUrl: iv.jobUrl || '',
     link: iv.resumeLink ? { mode: 'keep' } : { mode: 'search' },
+    appliedBy: iv.appliedBy ? (iv.appliedBy.kind === 'self' ? SELF : iv.appliedBy.bidderId || '') : '',
+    // Saved already: a profile change doesn't replace it.
+    appliedByTouched: !!iv.appliedBy,
   };
 }
 
@@ -118,6 +123,8 @@ export default function InterviewForm({
         appliedPosition: app.appliedPosition.trim(),
         jobUrl: app.jobUrl.trim(),
         resumeLink: linkPayload(app.link),
+        // Sent when new or changed, so an edit never re-checks a bidder saved earlier.
+        appliedBy: mode === 'new' || app.appliedBy !== savedApp.appliedBy ? appliedByPayload(app.appliedBy) : undefined,
       };
       if (mode === 'new') {
         saved = await api.createInterview({ ...appBody, round: roundPayload(round, tz) });
@@ -159,6 +166,8 @@ export default function InterviewForm({
             idPrefix={idPrefix}
             savedLink={interview?.resumeLink}
             interviewId={interview?._id}
+            savedAppliedBy={interview?.appliedBy}
+            autoAppliedBy={mode === 'new'}
           />
         )}
         {mode === 'editDetails' && history.length > 0 && (

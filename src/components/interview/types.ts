@@ -1,5 +1,7 @@
 /** Interview shapes shared by the interview pages and components. */
-import type { CallerMethod, InterviewCaller, InterviewResumeLink, InterviewStageEntry } from '../../api/endpoints';
+import type {
+  CallerMethod, InterviewAppliedBy, InterviewCaller, InterviewResumeLink, InterviewStageEntry,
+} from '../../api/endpoints';
 
 export type { CallerMethod, InterviewCaller };
 
@@ -25,6 +27,7 @@ export type Interview = {
   interviewerName?: string | null;
   appliedPosition?: string | null;
   jobUrl?: string | null;
+  mainTechStack?: string | null;
   /** Legacy interview-level text; per-round text lives on `stageHistory` entries. */
   transcript?: string;
   note?: string;
@@ -34,6 +37,8 @@ export type Interview = {
   confirmed?: boolean;
   /** The resume and job it came from, or why none was found; null on interviews not linked yet. */
   resumeLink?: InterviewResumeLink | null;
+  /** Who applied for the job; null on interviews from before the field existed. */
+  appliedBy?: InterviewAppliedBy | null;
   ownerName?: string | null;
   ownerEmail?: string | null;
   createdAt?: string;

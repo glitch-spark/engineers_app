@@ -79,11 +79,6 @@ export function notesPreview(note?: string | null): string {
   return flat.length > 140 ? `${flat.slice(0, 139)}…` : flat;
 }
 
-export function wordCount(text?: string | null): number {
-  const t = (text || '').trim();
-  return t ? t.split(/\s+/).length : 0;
-}
-
 /** "Tuoc Nguyen · United States" (country name, since flag emoji don't render on Windows). */
 export function profileText(account?: { name?: string; email?: string; country?: string | null; region?: string | null } | null): string {
   if (!account) return '';
