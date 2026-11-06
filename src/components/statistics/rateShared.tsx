@@ -20,6 +20,20 @@ export function useInterviewRates(filters: StatsFilters) {
   );
 }
 
+/** A row of headline numbers. */
+export function StatTiles({ tiles }: { tiles: { label: string; value: string }[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {tiles.map((t) => (
+        <div key={t.label} className="stat-card p-4">
+          <p className="stat-card-label">{t.label}</p>
+          <p className="stat-card-value mt-1 tabular-nums">{t.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** The filter bar, then the tab's content once the report is loaded (loading and error states otherwise). */
 export function StatsBody({ filters, onFilters, children }: {
   filters: StatsFilters; onFilters: (f: StatsFilters) => void; children: (data: InterviewRates) => ReactNode;

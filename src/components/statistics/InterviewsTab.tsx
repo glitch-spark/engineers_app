@@ -1,92 +1,53 @@
 import { useMemo, useState } from 'react';
-import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import { CartesianGrid, LabelList, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from 'recharts';
-import * as api from '../../api/endpoints';
 import type { InterviewRateRow, InterviewRates } from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
-import { FilterBar, REGIONS, filterParams, filtersError, type StatsFilters } from './controls';
-import { PerUserBars, initialsFor, niceCeil, pct, seriesColors } from './rateShared';
+import { REGIONS, type StatsFilters } from './controls';
+import { PerUserBars, StatTiles, StatsBody, initialsFor, niceCeil, pct, seriesColors } from './rateShared';
 
 /** Rate guide lines on the scatter (interviews ÷ bids); the ones that fit the plot are drawn. */
 const GUIDE_RATES = [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5];
 
-/** Bids as "self (+bidder)" under All, where bidder applies are known; just the number in a region. */
-function BidsCell({ self, bidder, split }: { self: number; bidder: number; split: boolean }) {
+/** Statistics → Interviews: rounds held per user, split by who took them (the user or a caller), how bids turn into
+ * interviews, and the ranking by rate. */
+export default function InterviewsTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
   return (
-    <span title={split ? `${self.toLocaleString()} self + ${bidder.toLocaleString()} by bidders` : 'Self applies typed for this region'}>
-      {self.toLocaleString()}
-      {split && <span className="ml-1 text-muted">(+{bidder.toLocaleString()})</span>}
-    </span>
-  );
-}
-
-/** Every user's interview rate in one view: the ranked table, bids and interviews per user, and the scatter. */
-export default function InterviewRateTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
-  const params = filterParams(filters);
-  const { data, error, isLoading } = useSWR(
-    filtersError(filters) ? null : ['interview-rates', params.period, params.date, params.to, params.region],
-    () => api.getInterviewRates(params),
-    { keepPreviousData: true },
-  );
-  const region = data?.region ?? filters.region;
-
-  return (
-    <div className="space-y-4">
-      <FilterBar value={filters} onChange={onFilters}>
-        {isLoading && data && <span className="spinner spinner-sm" role="status" aria-label="Loading" />}
-      </FilterBar>
-
-      {error ? (
-        <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the statistics. Try again.</p>
-      ) : !data ? (
-        <p className="panel flex items-center gap-2 p-6 text-sm text-muted" role="status">
-          <span className="spinner spinner-sm" aria-hidden /> Loading statistics…
-        </p>
-      ) : (
+    <StatsBody filters={filters} onFilters={onFilters}>
+      {(data) => (
         <>
           <p className="text-xs text-muted">
-            Bids are the applies Done in followed-up daily plans.{' '}
-            {region === 'all'
-              ? 'All counts self and bidder applies.'
-              : region === 'US'
-                ? 'US counts the self applies typed for US plus the bidder applies (bidders apply to US jobs only).'
-                : `${REGIONS.find((r) => r.value === region)?.label} counts the self applies typed for it.`}
-            {region !== 'all' && data.unassignedProfiles > 0 && (
+            Interviews are the rounds held (canceled rounds, AI interviews and home assessments don’t count): self = the
+            user took it, caller = a caller took it.{' '}
+            {data.region !== 'all' && (
               <>
-                {' '}Interviews follow their profile’s region: {data.unassignedProfiles} profile
-                {data.unassignedProfiles === 1 ? ' has' : 's have'} none.{' '}
-                <Link to="/accounts" className="link">Set regions</Link>
+                {REGIONS.find((r) => r.value === data.region)?.label} counts the interviews on its profiles.
+                {data.unassignedProfiles > 0 && (
+                  <>
+                    {' '}{data.unassignedProfiles} profile{data.unassignedProfiles === 1 ? ' has' : 's have'} no region.{' '}
+                    <Link to="/accounts" className="link">Set regions</Link>
+                  </>
+                )}
               </>
             )}
           </p>
-          <RateTable data={data} />
-          <PerUserCharts data={data} />
+          <StatTiles tiles={[
+            { label: 'Interviews', value: data.totals.interviews.toLocaleString() },
+            { label: 'Self-taken', value: data.totals.selfInterviews.toLocaleString() },
+            { label: 'Caller-taken', value: data.totals.callerInterviews.toLocaleString() },
+            { label: 'Interviews per bid', value: pct(data.totals.rate) },
+          ]} />
+          <PerUserBars id="iv-per-user" title="Interviews per user" chart={data.interviewsChart}
+            initials={initialsFor(data.interviewsChart.users)} period={data.label}
+            note={`Each ${data.interviewsChart.unit}, one bar per user: rounds the user took at the bottom, caller rounds on top.`}
+            empty="No interviews in this period."
+            parts={[{ key: 'self', label: 'self' }, { key: 'caller', label: 'caller', faded: true }]} />
           <RateScatter data={data} />
+          <RateTable data={data} />
         </>
       )}
-    </div>
-  );
-}
-
-/** Bids, then interviews: one bar per user each day (week) or week (month), oldest account first. */
-function PerUserCharts({ data }: { data: InterviewRates }) {
-  const unit = data.bidsChart.unit;
-  const seen = new Map([...data.bidsChart.users, ...data.interviewsChart.users].map((u) => [u.userId, u]));
-  const initials = initialsFor([...seen.values()]);
-  return (
-    <>
-      <PerUserBars id="ir-bids" title="Bids per user" chart={data.bidsChart} initials={initials} period={data.label}
-        note={`Each ${unit}, one bar per user${true ? ': self applies at the bottom, bidder applies on top' : ''}.`}
-        empty="No bids in this period."
-        parts={true
-          ? [{ key: 'self', label: 'self' }, { key: 'bidder', label: 'bidder', faded: true }]
-          : [{ key: 'self', label: 'self' }]} />
-      <PerUserBars id="ir-interviews" title="Interviews per user" chart={data.interviewsChart} initials={initials}
-        period={data.label} note={`Each ${unit}, one bar per user: interview rounds held.`}
-        empty="No interviews in this period." parts={[{ key: 'interviews', label: 'interviews' }]} />
-    </>
+    </StatsBody>
   );
 }
 
@@ -191,7 +152,7 @@ function RateScatter({ data }: { data: InterviewRates }) {
   );
 }
 
-type SortKey = 'rank' | 'name' | 'bids' | 'interviews' | 'rate';
+type SortKey = 'rank' | 'name' | 'bids' | 'interviews' | 'selfInterviews' | 'callerInterviews' | 'rate';
 
 function RateTable({ data }: { data: InterviewRates }) {
   const { theme } = useTheme();
@@ -237,29 +198,34 @@ function RateTable({ data }: { data: InterviewRates }) {
       </p>
       <div className="table-wrap rounded-none border-0">
         <table className="min-w-full text-sm">
-          <caption className="sr-only">Bids, interviews and interview rate per person</caption>
+          <caption className="sr-only">Bids, interviews (self and caller) and interview rate per person</caption>
           <thead className="table-head">
             <tr>
               {header('rank', '#')}
               {header('name', 'User')}
-              {header('bids', true ? 'Bids self (+bidder)' : 'Bids (self)', 'text-right')}
+              {header('bids', 'Bids', 'text-right')}
               {header('interviews', 'Interviews', 'text-right')}
+              {header('selfInterviews', 'Self', 'text-right')}
+              {header('callerInterviews', 'Caller', 'text-right')}
               {header('rate', 'Rate')}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={5} className="px-3 py-8 text-center text-muted">No bids or interviews in this period.</td></tr>
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">No bids or interviews in this period.</td></tr>
             ) : rows.map((r) => (
               <tr key={r.userId} className={r.isMe ? 'bg-sky-50 dark:bg-sky-950/30' : 'table-row'}>
                 <td className="px-3 py-2.5 tabular-nums text-muted">{r.rank ?? '—'}</td>
                 <td className="px-3 py-2.5 font-medium text-strong">
                   {r.name}{r.isMe && <span className="badge badge-info ml-2">You</span>}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
-                  <BidsCell self={r.selfBids} bidder={r.bidderBids} split={true} />
+                <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums"
+                  title={`${r.selfBids.toLocaleString()} self + ${r.bidderBids.toLocaleString()} bidder`}>
+                  {r.bids.toLocaleString()}
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{r.interviews.toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{r.selfInterviews.toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{r.callerInterviews.toLocaleString()}</td>
                 <td className="px-3 py-2.5">
                   <span className="flex items-center gap-2" title={r.lowVolume ? `Under ${data.minBids} bids: not ranked` : undefined}>
                     <span className={`w-14 tabular-nums ${r.lowVolume ? 'text-faint' : 'font-medium text-strong'}`}>{pct(r.rate)}</span>
@@ -281,10 +247,10 @@ function RateTable({ data }: { data: InterviewRates }) {
               <tr className="border-t border-zinc-200 font-medium dark:border-zinc-800">
                 <td className="px-3 py-2.5" />
                 <td className="px-3 py-2.5 text-strong">Team total</td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
-                  <BidsCell self={data.totals.selfBids} bidder={data.totals.bidderBids} split={true} />
-                </td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{data.totals.bids.toLocaleString()}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{data.totals.interviews.toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{data.totals.selfInterviews.toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{data.totals.callerInterviews.toLocaleString()}</td>
                 <td className="px-3 py-2.5 tabular-nums">{pct(data.totals.rate)}</td>
               </tr>
             </tfoot>
