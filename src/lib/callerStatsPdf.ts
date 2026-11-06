@@ -40,7 +40,8 @@ const BADGE: Record<Result, { fill: RGB; text: RGB; border: RGB; strike?: boolea
 };
 
 const pct = (r: number | null) => (r == null ? '–' : `${Math.round(r * 100)}%`);
-const pts = (v: number | null) => (v == null ? '–' : `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v * 1000) / 10).toFixed(1)} pts`);
+// ASCII '-': the PDF's built-in Helvetica has no Unicode minus sign (it prints garbled).
+const pts = (v: number | null) => (v == null ? '–' : `${v >= 0 ? '+' : '-'}${Math.abs(Math.round(v * 1000) / 10).toFixed(1)} pts`);
 
 function day(iso: string): string {
   const d = new Date(iso);
