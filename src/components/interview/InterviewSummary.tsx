@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { CalendarClock, Copy, ExternalLink, NotebookPen, PhoneCall, Video } from 'lucide-react';
+import { CalendarClock, Copy, Download, ExternalLink, NotebookPen, PhoneCall, Video } from 'lucide-react';
 import type { InterviewStageEntry } from '../../api/endpoints';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 import { meetingLink, notesPreview, relativeWhen, spotlightRound, stagesReached } from '../../lib/interviewPanelInfo';
 import { notify } from '../../lib/notify';
+import { saveInterviewBrief } from '../../lib/interviewBriefPdf';
 import {
   INTERVIEW_STATUSES,
   interviewStatusBadgeClass,
@@ -90,6 +91,20 @@ export default function InterviewSummary({
     }
   };
 
+  const [briefing, setBriefing] = useState(false);
+  /** The round's brief as a PDF, to share with whoever takes the interview. */
+  const brief = async (roundId: string) => {
+    if (briefing) return;
+    setBriefing(true);
+    try {
+      await saveInterviewBrief(iv, roundId, tz);
+    } catch (err) {
+      notify.error(err, 'Could not create the brief');
+    } finally {
+      setBriefing(false);
+    }
+  };
+
   const toggle = (id: string) => setExpanded((prev) => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id);
@@ -109,15 +124,22 @@ export default function InterviewSummary({
             ? 'border-sky-200 bg-sky-50/70 dark:border-sky-900 dark:bg-sky-950/30'
             : 'border-zinc-200 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-900/40'}`}
         >
-          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-            <CalendarClock size={13} aria-hidden />
-            {spot.kind === 'next' ? 'Next round' : 'Last round'}
-            {spotRound.scheduledAt && (
-              <span className="normal-case tracking-normal font-medium text-body">
-                · {relativeWhen(new Date(spotRound.scheduledAt), now, tz)}
-              </span>
-            )}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+              <CalendarClock size={13} aria-hidden />
+              {spot.kind === 'next' ? 'Next round' : 'Last round'}
+              {spotRound.scheduledAt && (
+                <span className="normal-case tracking-normal font-medium text-body">
+                  · {relativeWhen(new Date(spotRound.scheduledAt), now, tz)}
+                </span>
+              )}
+            </p>
+            <button type="button" className="btn-outline btn-sm shrink-0" disabled={briefing}
+              title="A PDF of this round to share with whoever takes the interview"
+              onClick={() => void brief(spotRound.id)}>
+              <Download size={13} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
+            </button>
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={`badge ${stageBadgeClass(spotRound.stage)}`}>{stageLabel(spotRound.stage)}</span>
             <span className="text-sm tabular-nums text-body">{when(spotRound.scheduledAt, spotRound.endsAt, tz)}</span>
@@ -249,15 +271,16 @@ export default function InterviewSummary({
                     ) : (
                       <span className={`badge ${interviewStatusBadgeClass(status)}`}>{interviewStatusLabel(status)}</span>
                     )}
-                    {canEdit && (
-                      <ActionMenu
-                        label={`Actions for ${stageLabel(e.stage)} round`}
-                        items={[
+                    <ActionMenu
+                      label={`Actions for ${stageLabel(e.stage)} round`}
+                      items={[
+                        { label: 'Download brief', onSelect: () => void brief(e.id) },
+                        ...(canEdit ? [
                           { label: 'Edit round', onSelect: () => onEditRound(e.id) },
                           { label: 'Delete round', danger: true, onSelect: () => onDeleteRound(e.id) },
-                        ]}
-                      />
-                    )}
+                        ] : []),
+                      ]}
+                    />
                   </span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">

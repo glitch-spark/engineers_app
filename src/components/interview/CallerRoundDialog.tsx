@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { Download, ExternalLink, Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import Modal from '../Modal';
 import Select from '../Select';
 import { notify } from '../../lib/notify';
+import { saveInterviewBrief } from '../../lib/interviewBriefPdf';
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, isUnassigned } from '../../lib/callerColors';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
@@ -33,6 +34,7 @@ export default function CallerRoundDialog({
   const typedName = caller?.callerName && caller.callerName !== 'TBD' ? caller.callerName : '';
   const [pick, setPick] = useState(savedId);
   const [saving, setSaving] = useState(false);
+  const [briefing, setBriefing] = useState(false);
   useEffect(() => setPick(savedId), [savedId]);
 
   const unassigned = isUnassigned({ callerId: caller?.callerId, callerName: caller?.callerName });
@@ -48,6 +50,17 @@ export default function CallerRoundDialog({
     ...callers.map((c) => ({ value: c._id, label: c.name })),
     ...(savedId && !known ? [{ value: savedId, label: `${typedName || 'Caller'} (not on the list)` }] : []),
   ];
+
+  const brief = async () => {
+    setBriefing(true);
+    try {
+      await saveInterviewBrief(interview, roundId, tz);
+    } catch (err) {
+      notify.error(err, 'Could not create the brief');
+    } finally {
+      setBriefing(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -106,7 +119,11 @@ export default function CallerRoundDialog({
           </p>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" className="btn-outline btn-sm" onClick={() => void brief()} disabled={briefing}
+            title="A PDF of this round to share with whoever takes the interview">
+            <Download size={14} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
+          </button>
           <button type="button" className="btn-outline btn-sm" onClick={onOpenInterview}>
             <ExternalLink size={14} aria-hidden /> Open interview
           </button>

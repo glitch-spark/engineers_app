@@ -27,6 +27,7 @@ export type Interview = {
   interviewerName?: string | null;
   appliedPosition?: string | null;
   jobUrl?: string | null;
+  mainTechStack?: string | null;
   /** Legacy interview-level text; per-round text lives on `stageHistory` entries. */
   transcript?: string;
   note?: string;

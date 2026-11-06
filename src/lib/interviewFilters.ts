@@ -21,6 +21,8 @@ export type InterviewFilters = {
   status: string;
   /** Callers calendar: a caller id, 'unassigned', or '' for every caller. */
   caller: string;
+  /** Callers tab: one user's interviews, or '' for every user (kept apart from `user`, which defaults to you). */
+  owner: string;
   /** Interviews tab: self or caller interviews ('' for both). */
   call: CallType | '';
   range: DateRangePreset;
@@ -44,6 +46,7 @@ function defaults(d: FilterDefaults): InterviewFilters {
     stage: '',
     status: '',
     caller: '',
+    owner: '',
     call: '',
     range: 'this_week',
     from: '',
@@ -66,6 +69,7 @@ export function parseInterviewFilters(params: URLSearchParams, d: FilterDefaults
     stage: get('stage'),
     status: get('status'),
     caller: get('caller'),
+    owner: get('owner'),
     call: get('call') === 'self' || get('call') === 'caller' ? (get('call') as CallType) : '',
     range: PRESETS.includes(range) ? range : base.range,
     from: DATE_RE.test(get('from')) ? get('from') : '',
@@ -190,6 +194,7 @@ export function callerRoundsQuery(f: InterviewFilters, limit: number, now = new 
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
   if (f.caller) q.callerId = f.caller;
+  if (f.owner) q.creatorId = f.owner;
   return q;
 }
 
@@ -217,6 +222,7 @@ export function roundsQuery(
   if (callers) {
     q.callerOnly = 'true';
     if (f.caller) q.callerId = f.caller;
+    if (f.owner) q.creatorId = f.owner;
   } else {
     if (f.user && f.user !== 'all') q.creatorId = f.user;
     if (f.profile) q.accountId = f.profile;

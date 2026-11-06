@@ -594,6 +594,8 @@ export const listCallerRounds = (params: {
   stage?: string;
   status?: string;
   callerId?: string;
+  /** Only this user's interviews. */
+  creatorId?: string;
   page: number;
   limit: number;
   dir: 'asc' | 'desc';
