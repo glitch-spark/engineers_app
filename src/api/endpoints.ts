@@ -1640,7 +1640,7 @@ export async function downloadResumeJob(job: ResumeJob): Promise<void> {
       throw new Error("That folder no longer exists on disk. Pick a different folder and try again.");
     }
     if (dir) {
-      const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download?format=pdf`, { headers: baseHeaders });
+      const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download?format=pdf`, { headers: baseHeaders, cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const folder = _sanitizeFolderPath(_folderFromHeader(res) || `${job.profileName || 'profile'}/${job.companyName || 'company'}`);
       const blob = await res.blob();
@@ -1658,7 +1658,7 @@ export async function downloadResumeJob(job: ResumeJob): Promise<void> {
   }
 
   // Fallback — server-built zip.
-  const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download`, { headers: baseHeaders });
+  const res = await fetch(`${BASE_URL}/resume/jobs/${job._id}/download`, { headers: baseHeaders, cache: 'no-store' });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     try {
@@ -1713,7 +1713,7 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
         while (queue.length) {
           const id = queue.shift();
           if (!id) break;
-          const res = await fetch(`${BASE_URL}/resume/jobs/${id}/download?format=pdf`, { headers: baseHeaders });
+          const res = await fetch(`${BASE_URL}/resume/jobs/${id}/download?format=pdf`, { headers: baseHeaders, cache: 'no-store' });
           if (!res.ok) continue;
           const folder = _sanitizeFolderPath(_folderFromHeader(res) || 'company');
           const blob = await res.blob();
@@ -1736,6 +1736,7 @@ export async function bulkDownloadResumeJobs(jobIds: string[]): Promise<void> {
   // Fallback — one big zip.
   const res = await fetch(`${BASE_URL}/resume/jobs/bulk-download`, {
     method: 'POST',
+    cache: 'no-store',
     headers: { ...baseHeaders, 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobIds }),
   });
@@ -2483,7 +2484,9 @@ export const tailorAllJobApplies = (
 /** Download a generated (tailored) resume PDF by its generation job id. */
 export async function downloadTailoredResume(jobId: string, filename: string): Promise<void> {
   const token = getToken();
+  // no-store: a remade PDF (restore-pdf) must not be shadowed by a cached "missing" answer.
   const res = await fetch(`${BASE_URL}/resume/jobs/${jobId}/download?format=pdf`, {
+    cache: 'no-store',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
@@ -2559,7 +2562,7 @@ export async function downloadJobApplyResumes(
             f.kind === 'tailored'
               ? `${BASE_URL}/resume/jobs/${f.tailoredJobId}/download?format=pdf`
               : `${BASE_URL}/job-applies/rows/${f.rowId}/resume-file?${new URLSearchParams({ accountId: f.accountId, resumeId: f.resumeId })}`;
-          const res = await fetch(url, { headers });
+          const res = await fetch(url, { headers, cache: 'no-store' });
           if (!res.ok) continue;
           const blob = await res.blob();
           const folder = _sanitizeFolderPath(f.folder);
