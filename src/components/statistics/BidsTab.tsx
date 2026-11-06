@@ -1,12 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { InterviewRateRow, InterviewRates } from '../../api/endpoints';
 import { type StatsFilters } from './controls';
-import { PerUserBars, StatTiles, StatsBody, initialsFor, pct } from './rateShared';
-
-function day(iso: string): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-}
+import { PerUserBars, RecordsNote, StatTiles, StatsBody, initialsFor, pct } from './rateShared';
 
 /** Statistics → Bids: self bids (typed in daily plans) and bidder bids (Bid Track records) per user. */
 export default function BidsTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
@@ -29,11 +24,7 @@ export default function BidsTab({ filters, onFilters }: { filters: StatsFilters;
             note={`Each ${data.bidsChart.unit}, one bar per user: self bids at the bottom, bidder bids on top.`}
             empty="No bids in this period."
             parts={[{ key: 'self', label: 'self' }, { key: 'bidder', label: 'bidder', faded: true }]} />
-          {data.bidsRecordsStart && data.start < data.bidsRecordsStart && (
-            <p className="-mt-2 text-xs text-muted">
-              Bidder bids are counted from Bid Track, which starts {day(data.bidsRecordsStart)}.
-            </p>
-          )}
+          <RecordsNote data={data} />
           <BidsTable data={data} />
         </>
       )}

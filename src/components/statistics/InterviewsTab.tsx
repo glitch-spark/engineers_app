@@ -5,7 +5,7 @@ import type { InterviewRateRow, InterviewRates } from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { REGIONS, type StatsFilters } from './controls';
-import { PerUserBars, StatTiles, StatsBody, initialsFor, niceCeil, pct, seriesColors } from './rateShared';
+import { PerUserBars, RecordsNote, StatTiles, StatsBody, initialsFor, niceCeil, pct, seriesColors } from './rateShared';
 
 /** Rate guide lines on the scatter (interviews ÷ bids); the ones that fit the plot are drawn. */
 const GUIDE_RATES = [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5];
@@ -32,6 +32,7 @@ export default function InterviewsTab({ filters, onFilters }: { filters: StatsFi
               </>
             )}
           </p>
+          <RecordsNote data={data} rates />
           <StatTiles tiles={[
             { label: 'Interviews', value: data.totals.interviews.toLocaleString() },
             { label: 'Self-taken', value: data.totals.selfInterviews.toLocaleString() },

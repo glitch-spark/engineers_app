@@ -20,6 +20,20 @@ export function useInterviewRates(filters: StatsFilters) {
   );
 }
 
+/** A period that starts before Bid Track's first record has no bidder bids for those days: say so. `rates` adds
+ * what that does to interviews per bid and the ranking (the Interviews tab). */
+export function RecordsNote({ data, rates }: { data: InterviewRates; rates?: boolean }) {
+  if (!data.bidsRecordsStart || data.start >= data.bidsRecordsStart) return null;
+  const first = new Date(`${data.bidsRecordsStart}T00:00:00Z`)
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return (
+    <p className="text-xs text-amber-700 dark:text-amber-300" role="note">
+      Bidder bids are counted from Bid Track, which starts {first}.
+      {rates && ' Before that, bids are self bids only, so interviews per bid and the ranking run high for this period.'}
+    </p>
+  );
+}
+
 /** A row of headline numbers. */
 export function StatTiles({ tiles }: { tiles: { label: string; value: string }[] }) {
   return (
