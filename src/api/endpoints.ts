@@ -725,6 +725,27 @@ export const searchResumeMatches = (accountId: string, q: string) =>
 export const getResumeMatch = (accountId: string, matchId: string) =>
   apiFetch<InterviewResumeLink>(`/interviews/resume-matches/${encodeURIComponent(matchId)}${qs({ accountId })}`);
 
+/** Who applied for the job: the profile's owner, or one of the owner's bidders. */
+export type AppliedByInput = { kind: 'self' } | { kind: 'bidder'; bidderId: string };
+
+export interface InterviewAppliedBy {
+  kind: 'self' | 'bidder';
+  bidderId?: string | null;
+  /** The bidder's name when it was saved. */
+  bidderName?: string | null;
+}
+
+export interface AppliedByOption {
+  id: string;
+  name: string;
+  /** Assigned to the interview's profile. */
+  onProfile: boolean;
+}
+
+/** The profile owner's active bidders, for "Applied by". */
+export const getAppliedByOptions = (accountId: string) =>
+  apiFetch<{ bidders: AppliedByOption[] }>(`/interviews/applied-by-options${qs({ accountId })}`);
+
 export interface CreateInterviewBody {
   accountId: string;
   companyName: string;
@@ -732,11 +753,15 @@ export interface CreateInterviewBody {
   jobUrl?: string;
   round: RoundInput;
   resumeLink?: ResumeLinkInput;
+  appliedBy?: AppliedByInput;
 }
 
 /** Application-level fields, or a status-only update of the current round. */
 export type UpdateInterviewBody =
-  | { accountId?: string; companyName?: string; appliedPosition?: string; jobUrl?: string; resumeLink?: ResumeLinkInput }
+  | {
+    accountId?: string; companyName?: string; appliedPosition?: string; jobUrl?: string; resumeLink?: ResumeLinkInput;
+    appliedBy?: AppliedByInput;
+  }
   | { status: string };
 
 export const createInterview = (body: CreateInterviewBody) =>
@@ -2979,6 +3004,8 @@ export interface BidPerformanceRow {
   sharedWith: string[];
   /** The profile's owner typed self bids on it in the period. */
   profileSelfBids: boolean;
+  /** Of `interviews`: untagged ones on the profile (from before "Applied by"), counted for every bidder on it. */
+  untaggedInterviews: number;
   /** One entry per weekday of the period: "none" = not active (not created yet, archived, before records). */
   days: { day: string; bids: number; state: 'hit' | 'miss' | 'open' | 'none' }[];
   per100: number | null;

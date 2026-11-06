@@ -67,7 +67,7 @@ const HELP = {
   streak: `Weekdays in a row with ${TARGET}+ approved + pending bids (a ${TARGET}+ day). Weekends are skipped and never break a streak. Today counts once it reaches ${TARGET}.`,
   hitRate: `Share of the bidder's weekdays in the period that were ${TARGET}+ days. One dot per weekday: filled = ${TARGET}+, hollow = under ${TARGET}, amber = today so far, faint = not active yet.`,
   avg: 'Total bids divided by the weekdays counted for the hit rate.',
-  interviews: 'Interview rounds held on the bidder\'s profile in the period. Canceled rounds, AI interviews and home assessments don\'t count. A shared profile shows the profile\'s total.',
+  interviews: 'Interview rounds held in the period on interviews where this bidder applied ("Applied by" on the interview), plus untagged older interviews on the bidder\'s profile. Canceled rounds, AI interviews and home assessments don\'t count.',
   per100: 'Interviews per 100 bids, shown from 100 bids.',
 };
 
@@ -111,14 +111,14 @@ function DayStrip({ days }: { days: BidPerformanceRow['days'] }) {
   );
 }
 
-/** "shared with Bo, Cy" / "shared with the owner's self bids": why a profile's interviews aren't this bidder's alone. */
+/** "N untagged, shared with Bo": interviews without "Applied by" on a shared profile count for every bidder on it. */
 function sharedNote(r: BidPerformanceRow): { text: string; title: string } | null {
-  if (!r.sharedProfile) return null;
+  if (!r.sharedProfile || r.untaggedInterviews === 0) return null;
   const who = [...r.sharedWith, ...(r.profileSelfBids ? ["owner's self bids"] : [])];
-  if (who.length === 0) return { text: 'shared profile', title: 'Other bids use this profile too' };
+  const n = r.untaggedInterviews;
   return {
-    text: `shared with ${who.join(', ')}`,
-    title: `Interviews are counted per profile${r.profileName ? ` (${r.profileName})` : ''}, so they include interviews from ${who.join(' and ')} too.`,
+    text: `${n} untagged${who.length ? `, shared with ${who.join(', ')}` : ''}`,
+    title: `${n} ${n === 1 ? 'interview has' : 'interviews have'} no "Applied by" yet, so ${n === 1 ? 'it counts' : 'they count'} for every bidder on ${r.profileName || 'this profile'}${who.length ? ` (also ${who.join(' and ')})` : ''}. Set "Applied by" on the interview to credit the right one.`,
   };
 }
 
@@ -323,7 +323,7 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
                 </div>
                 <div>
                   <dt className="font-medium text-strong">Interviews</dt>
-                  <dd className="text-muted">Rounds held on the bidder's profile. When other bidders or the owner's own bids use the same profile, the interviews are the profile's, shared with them.</dd>
+                  <dd className="text-muted">Rounds held on interviews this bidder applied for ("Applied by" on the interview). Older interviews without "Applied by" count for every bidder on their profile until someone sets it.</dd>
                 </div>
               </dl>
             </details>

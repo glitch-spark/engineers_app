@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import Select from '../Select';
 import * as api from '../../api/endpoints';
 import { formatProfileLabel } from '../../lib/countries';
 import { archivedLabel, pickerProfiles } from '../../lib/profileArchive';
-import { NO_MATCH_REASONS, type ApplicationFormState } from '../../lib/interviewForm';
-import type { InterviewResumeLink, NoMatchReason } from '../../api/endpoints';
+import { NO_MATCH_REASONS, SELF, defaultAppliedBy, type ApplicationFormState } from '../../lib/interviewForm';
+import type { InterviewAppliedBy, InterviewResumeLink, NoMatchReason } from '../../api/endpoints';
 import CompanyMatchField from './CompanyMatchField';
 import LinkedResumeCard from './LinkedResumeCard';
 
@@ -24,6 +24,8 @@ export default function ApplicationFields({
   idPrefix,
   savedLink,
   interviewId,
+  savedAppliedBy,
+  autoAppliedBy,
 }: {
   app: ApplicationFormState;
   onChange: (patch: Partial<ApplicationFormState>) => void;
@@ -32,6 +34,10 @@ export default function ApplicationFields({
   /** Editing: the interview's current link, shown while `app.link` is `keep`. */
   savedLink?: InterviewResumeLink | null;
   interviewId?: string;
+  /** Editing: who applied as saved (its bidder stays listed after being archived or moved). */
+  savedAppliedBy?: InterviewAppliedBy | null;
+  /** New interview: fill "Applied by" with the profile's default until the user picks. */
+  autoAppliedBy?: boolean;
 }) {
   const link = app.link;
   const matchId = link.mode === 'match' ? link.matchId : '';
@@ -51,6 +57,30 @@ export default function ApplicationFields({
       label: archivedLabel(formatProfileLabel(a.name, a.country, a._id, a.region), a.archived),
     }));
   }, [rows, initialAccountId]);
+  const { data: appliedOptions, error: appliedError } = useSWR(
+    app.accountId ? ['applied-by-options', app.accountId] : null,
+    () => api.getAppliedByOptions(app.accountId),
+  );
+  const bidders = appliedOptions?.bidders;
+  // A new interview starts on the profile's default (its only bidder, else Self) until the user picks.
+  useEffect(() => {
+    if (!autoAppliedBy || app.appliedByTouched || !bidders) return;
+    const next = defaultAppliedBy(bidders);
+    if (next !== app.appliedBy) onChange({ appliedBy: next });
+  }, [autoAppliedBy, app.appliedByTouched, app.appliedBy, bidders, onChange]);
+  const appliedByOptions = useMemo(() => {
+    const list = bidders ?? [];
+    const out = [
+      { value: SELF, label: 'Self (the profile owner applied)' },
+      ...list.filter((b) => b.onProfile).map((b) => ({ value: b.id, label: `${b.name} (bidder on this profile)` })),
+      ...list.filter((b) => !b.onProfile).map((b) => ({ value: b.id, label: `${b.name} (bidder on another profile)` })),
+    ];
+    const saved = savedAppliedBy?.kind === 'bidder' ? savedAppliedBy : null;
+    if (saved?.bidderId && !list.some((b) => b.id === saved.bidderId)) {
+      out.push({ value: saved.bidderId, label: `${saved.bidderName || 'Bidder'} (archived or moved)` });
+    }
+    return out;
+  }, [bidders, savedAppliedBy]);
   const id = (k: string) => `${idPrefix}-app-${k}`;
   const req = <span className="text-red-700 dark:text-red-400" aria-hidden> *</span>;
 
@@ -63,11 +93,39 @@ export default function ApplicationFields({
           id={id('profile')}
           value={app.accountId}
           // A linked resume belongs to the old profile: search again (a no-match reason still holds).
-          onChange={(v) => onChange({ accountId: v, link: link.mode === 'none' ? link : { mode: 'search' } })}
+          onChange={(v) => onChange({
+            accountId: v,
+            link: link.mode === 'none' ? link : { mode: 'search' },
+            // Not picked by hand: the new profile's default replaces it once its bidders load.
+            ...(app.appliedByTouched ? {} : { appliedBy: '' }),
+          })}
           options={[{ value: '', label: 'Select profile…' }, ...options]}
           disabled={disabled}
         />
       </div>
+      {app.accountId && (
+        <div>
+          <label htmlFor={id('applied-by')} className="block text-sm font-medium mb-1">
+            Applied by{autoAppliedBy && req}
+          </label>
+          <Select
+            id={id('applied-by')}
+            value={app.appliedBy}
+            onChange={(v) => onChange({ appliedBy: v, appliedByTouched: true })}
+            options={[
+              { value: '', label: !bidders && !appliedError ? 'Loading…' : autoAppliedBy ? 'Who applied for this job?' : 'Not set' },
+              ...appliedByOptions,
+            ]}
+            disabled={disabled}
+            ariaDescribedBy={id('applied-by-hint')}
+          />
+          <p id={id('applied-by-hint')} className="mt-1 text-xs text-muted">
+            {appliedError
+              ? "Couldn't load the bidders: you can still pick Self."
+              : 'Interviews count for this bidder on Bidders → Performance.'}
+          </p>
+        </div>
+      )}
       <div>
         <label htmlFor={id('company')} className="block text-sm font-medium mb-1">Company{req}</label>
         {link.mode === 'search' ? (

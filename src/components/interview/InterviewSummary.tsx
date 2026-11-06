@@ -160,6 +160,12 @@ export default function InterviewSummary({
       <section aria-label="Details">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Details</h3>
         <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+          <dt className="text-muted">Applied by</dt>
+          <dd>
+            {iv.appliedBy
+              ? (iv.appliedBy.kind === 'self' ? 'Self' : iv.appliedBy.bidderName || 'A bidder')
+              : canEdit ? <QuickAdd label="Set who applied" onClick={onEditDetails} /> : 'Not set'}
+          </dd>
           <dt className="text-muted">Position</dt>
           <dd>{iv.appliedPosition || (canEdit ? <QuickAdd label="Add position" onClick={onEditDetails} /> : '—')}</dd>
           <dt className="text-muted">Job post</dt>

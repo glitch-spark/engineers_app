@@ -1,5 +1,7 @@
 /** Pure state helpers for the Application + Round interview form. */
-import type { CallerInput, InterviewStageEntry, NoMatchReason, ResumeLinkInput, RoundInput } from '../api/endpoints';
+import type {
+  AppliedByInput, AppliedByOption, CallerInput, InterviewStageEntry, NoMatchReason, ResumeLinkInput, RoundInput,
+} from '../api/endpoints';
 import { INTERVIEW_STAGE_ORDER, normalizeInterviewStatus, type InterviewStatusValue } from './stageBadge';
 import { browserZone, fromZoned, parseServerTime, zonedDateKey, zonedTime } from './interviewTimezone';
 
@@ -11,7 +13,25 @@ export type ApplicationFormState = {
   appliedPosition: string;
   jobUrl: string;
   link: LinkChoice;
+  /** Who applied: '' = not set, SELF, or a bidder id. */
+  appliedBy: string;
+  /** Picked by hand: the profile's default no longer replaces it. */
+  appliedByTouched: boolean;
 };
+
+export const SELF = 'self';
+
+/** The default "Applied by" for a profile: its only bidder when it has exactly one, otherwise Self. */
+export function defaultAppliedBy(bidders: AppliedByOption[]): string {
+  const mine = bidders.filter((b) => b.onProfile);
+  return mine.length === 1 ? mine[0].id : SELF;
+}
+
+/** What the API gets for "Applied by": nothing when not set. */
+export function appliedByPayload(value: string): AppliedByInput | undefined {
+  if (!value) return undefined;
+  return value === SELF ? { kind: 'self' } : { kind: 'bidder', bidderId: value };
+}
 
 /**
  * The resume this interview came from. `keep`: the interview's saved link, unchanged (edit). `search`: nothing picked
@@ -69,7 +89,10 @@ export const DEFAULT_DURATION_MIN = 60;
 export const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
 
 export function blankApplication(): ApplicationFormState {
-  return { accountId: '', companyName: '', appliedPosition: '', jobUrl: '', link: { mode: 'search' } };
+  return {
+    accountId: '', companyName: '', appliedPosition: '', jobUrl: '', link: { mode: 'search' }, appliedBy: '',
+    appliedByTouched: false,
+  };
 }
 
 /** `tz` is the IANA zone the form's date and time are read in (default: browser). */
@@ -167,6 +190,8 @@ export function missingFields(
   if (mode !== 'addRound' && app) {
     if (!app.accountId) out.push('Profile');
     if (!app.companyName.trim()) out.push('Company');
+    // A new interview says who applied; older ones may stay unset until someone picks.
+    if (mode === 'new' && !app.appliedBy) out.push('Applied by');
     // A new interview links its resume or says why there's none; editing older ones may leave it unlinked.
     if (mode === 'new' && app.link.mode === 'search') out.push('Resume match or reason');
     if (app.link.mode === 'none') {
