@@ -2975,6 +2975,12 @@ export interface BidPerformanceRow {
   avgPerWeekday: number | null;
   interviews: number | null;
   sharedProfile: boolean;
+  /** Names of the other active bidders on this bidder's profile. */
+  sharedWith: string[];
+  /** The profile's owner typed self bids on it in the period. */
+  profileSelfBids: boolean;
+  /** One entry per weekday of the period: "none" = not active (not created yet, archived, before records). */
+  days: { day: string; bids: number; state: 'hit' | 'miss' | 'open' | 'none' }[];
   per100: number | null;
   lastBidAt: string | null;
 }

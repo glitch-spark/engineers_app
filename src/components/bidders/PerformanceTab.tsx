@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Info } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { BidPerformanceRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
@@ -47,6 +47,83 @@ function relativeTime(iso: string, now: number): string {
 const pct = (n: number | null) => (n == null ? '—' : `${Math.round(n * 100)}%`);
 const fixed = (n: number | null, digits: number) => (n == null ? '—' : n.toFixed(digits));
 
+/** Bids a weekday needs to be a 50+ day (the server's TARGET). */
+const TARGET = 50;
+
+const utcDay = (day: string) => new Date(`${day.slice(0, 10)}T00:00:00Z`);
+
+/** A week column's dates: `Nov 1 (Sun)` for one day, `Nov 2–5`, or `Oct 27–Nov 2` across months. */
+function weekLabel(w: { start: string; end: string }): string {
+  if (w.start === w.end) {
+    return `${dayLabel(w.start)} (${utcDay(w.start).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })})`;
+  }
+  const s = utcDay(w.start);
+  const e = utcDay(w.end);
+  return s.getUTCMonth() === e.getUTCMonth() ? `${dayLabel(w.start)}–${e.getUTCDate()}` : `${dayLabel(w.start)}–${dayLabel(w.end)}`;
+}
+
+const HELP = {
+  total: 'Approved + pending bids in the period. Rejected bids don\'t count. Hover a value for the split.',
+  streak: `Weekdays in a row with ${TARGET}+ approved + pending bids (a ${TARGET}+ day). Weekends are skipped and never break a streak. Today counts once it reaches ${TARGET}.`,
+  hitRate: `Share of the bidder's weekdays in the period that were ${TARGET}+ days. One dot per weekday: filled = ${TARGET}+, hollow = under ${TARGET}, amber = today so far, faint = not active yet.`,
+  avg: 'Total bids divided by the weekdays counted for the hit rate.',
+  interviews: 'Interview rounds held on the bidder\'s profile in the period. Canceled rounds, AI interviews and home assessments don\'t count. A shared profile shows the profile\'s total.',
+  per100: 'Interviews per 100 bids, shown from 100 bids.',
+};
+
+const DOT: Record<BidPerformanceRow['days'][number]['state'], { cls: string; text: string }> = {
+  hit: { cls: 'bg-emerald-500 dark:bg-emerald-400', text: `${TARGET}+ day` },
+  miss: { cls: 'border border-zinc-400 dark:border-zinc-500', text: `under ${TARGET}` },
+  open: { cls: 'border border-amber-500 bg-amber-200 dark:bg-amber-500/40', text: `today so far, not ${TARGET} yet` },
+  none: { cls: 'bg-zinc-200 dark:bg-zinc-700', text: 'not active (not created yet or archived)' },
+};
+
+function Dot({ state }: { state: keyof typeof DOT }) {
+  return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${DOT[state].cls}`} aria-hidden />;
+}
+
+/** One dot per weekday, grouped by week, each with its date and bids on hover. */
+function DayStrip({ days }: { days: BidPerformanceRow['days'] }) {
+  const weeks: BidPerformanceRow['days'][] = [];
+  let monday = '';
+  for (const d of days) {
+    const date = utcDay(d.day);
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    const key = date.toISOString().slice(0, 10);
+    if (key !== monday) {
+      weeks.push([]);
+      monday = key;
+    }
+    weeks[weeks.length - 1].push(d);
+  }
+  return (
+    <div className="mt-1 flex flex-wrap justify-end gap-x-1.5 gap-y-1" aria-hidden>
+      {weeks.map((w) => (
+        <span key={w[0].day} className="flex gap-0.5">
+          {w.map((d) => (
+            <span key={d.day} title={`${utcDay(d.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}: ${fmtCount(d.bids)} bids · ${DOT[d.state].text}`}>
+              <Dot state={d.state} />
+            </span>
+          ))}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** "shared with Bo, Cy" / "shared with the owner's self bids": why a profile's interviews aren't this bidder's alone. */
+function sharedNote(r: BidPerformanceRow): { text: string; title: string } | null {
+  if (!r.sharedProfile) return null;
+  const who = [...r.sharedWith, ...(r.profileSelfBids ? ["owner's self bids"] : [])];
+  if (who.length === 0) return { text: 'shared profile', title: 'Other bids use this profile too' };
+  return {
+    text: `shared with ${who.join(', ')}`,
+    title: `Interviews are counted per profile${r.profileName ? ` (${r.profileName})` : ''}, so they include interviews from ${who.join(' and ')} too.`,
+  };
+}
+
+const HELP_KEY = 'bidders.performance.help';
+
 type SortKey = 'total' | 'longestStreak' | 'hitRate' | 'avgPerWeekday' | 'interviews' | 'per100' | 'lastBidAt' | `w${number}`;
 type Sort = { key: SortKey; dir: 'desc' | 'asc' } | null;
 
@@ -78,6 +155,21 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
   const isAdmin = user?.role === 'admin';
   const [f, setFilters] = useState<Filters>(initialFilters);
   const [sort, setSort] = useState<Sort>(null);
+  const [helpOpen, setHelpOpen] = useState(() => {
+    try {
+      return localStorage.getItem(HELP_KEY) !== 'closed';
+    } catch {
+      return true;
+    }
+  });
+  const toggleHelp = (open: boolean) => {
+    setHelpOpen(open);
+    try {
+      localStorage.setItem(HELP_KEY, open ? 'open' : 'closed');
+    } catch {
+      /* the panel just won't remember */
+    }
+  };
   const rangeError = filtersError({ ...f, region: 'all' });
   const params = f.period === 'custom' ? { period: f.period, date: f.from, to: f.to } : { period: f.period, date: f.day };
   const { data, error, isLoading, mutate } = useSWR(
@@ -117,16 +209,25 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
     { label: 'Best conversion', ids: data.top.conversion, value: (r) => `${fixed(r.per100, 2)} / 100` },
   ] : [];
 
-  const sortHead = (k: SortKey, label: string, title?: string) => {
+  /** A sortable header; `help` adds an info icon whose hover text explains the column. */
+  const sortHead = (k: SortKey, label: string, title?: string, help?: string) => {
     const active = sort?.key === k;
     const Icon = active ? (sort.dir === 'desc' ? ArrowDown : ArrowUp) : ChevronsUpDown;
     return (
       <th key={k} className="px-4 py-2.5 text-right" aria-sort={active ? (sort.dir === 'desc' ? 'descending' : 'ascending') : 'none'}>
-        <button type="button" title={title} onClick={() => toggleSort(k)}
-          className="inline-flex items-center gap-1 whitespace-nowrap uppercase hover:text-strong">
-          {label}
-          <Icon className={`h-3 w-3 ${active ? '' : 'opacity-40'}`} aria-hidden />
-        </button>
+        <span className="inline-flex items-center gap-1">
+          {help && (
+            <span title={help} className="cursor-help text-muted hover:text-strong">
+              <Info className="h-3 w-3" aria-hidden />
+              <span className="sr-only">{help}</span>
+            </span>
+          )}
+          <button type="button" title={title ?? help} onClick={() => toggleSort(k)}
+            className="inline-flex items-center gap-1 whitespace-nowrap uppercase hover:text-strong">
+            {label}
+            <Icon className={`h-3 w-3 ${active ? '' : 'opacity-40'}`} aria-hidden />
+          </button>
+        </span>
       </th>
     );
   };
@@ -197,6 +298,37 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
             </p>
           )}
 
+          {data.bidders.length > 0 && (
+            <details className="panel text-sm" open={helpOpen}
+              onToggle={(e) => toggleHelp((e.currentTarget as HTMLDetailsElement).open)}>
+              <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-muted">
+                <span className="font-medium text-strong">How to read streaks and hit rate</span>
+                <span className="inline-flex items-center gap-1.5"><Dot state="hit" /> {TARGET}+ bids</span>
+                <span className="inline-flex items-center gap-1.5"><Dot state="miss" /> under {TARGET}</span>
+                <span className="inline-flex items-center gap-1.5"><Dot state="open" /> today so far</span>
+                <span className="inline-flex items-center gap-1.5"><Dot state="none" /> not active</span>
+              </summary>
+              <dl className="grid gap-x-6 gap-y-2 border-t border-zinc-100 px-4 py-3 text-xs sm:grid-cols-2 dark:border-zinc-800">
+                <div>
+                  <dt className="font-medium text-strong">{TARGET}+ day</dt>
+                  <dd className="text-muted">A weekday (Mon–Fri) with {TARGET} or more approved + pending bids. Days run to 6:30 pm Central, as in Bid Track.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-strong">Streak</dt>
+                  <dd className="text-muted">{TARGET}+ days in a row. "Best" is the longest run in the period, "current" the run still going. Weekends are skipped and never break it; a weekday under {TARGET} does.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-strong">Hit rate</dt>
+                  <dd className="text-muted">{TARGET}+ days out of the bidder's weekdays in the period. Days before the bidder was added, or after it was archived, don't count. Today counts once it reaches {TARGET}.</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-strong">Interviews</dt>
+                  <dd className="text-muted">Rounds held on the bidder's profile. When other bidders or the owner's own bids use the same profile, the interviews are the profile's, shared with them.</dd>
+                </div>
+              </dl>
+            </details>
+          )}
+
           {data.bidders.length === 0 ? (
             <div className="empty-state"><p className="empty-state-title">No bidders in this period</p></div>
           ) : (
@@ -206,15 +338,15 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
                   <tr>
                     <th className="px-4 py-2.5 text-left">Bidder</th>
                     {weeks.map((w, i) => (
-                      sortHead(`w${i}`, `${dayLabel(w.start)}${w.partial ? '*' : ''}`,
-                        `${dayLabel(w.start)} – ${dayLabel(w.end)}${w.partial ? ' (partial week)' : ''}`)
+                      sortHead(`w${i}`, weekLabel(w),
+                        `Bids ${dayLabel(w.start)} – ${dayLabel(w.end)}${w.partial ? ' (part of the week)' : ''}`)
                     ))}
-                    {sortHead("total", "Total", "Approved + pending bids; hover a value for the split")}
-                    {sortHead("longestStreak", "Streak", "Longest run of weekdays with 50+ bids")}
-                    {sortHead("hitRate", "Hit rate", "Weekdays with 50+ bids out of weekdays counted")}
-                    {sortHead("avgPerWeekday", "Avg / weekday", "Total bids per weekday counted")}
-                    {sortHead("interviews", "Interviews", "Interview rounds held on the bidder's profile")}
-                    {sortHead("per100", "Per 100 bids", "Interviews per 100 bids")}
+                    {sortHead('total', 'Total', undefined, HELP.total)}
+                    {sortHead('longestStreak', 'Streak', undefined, HELP.streak)}
+                    {sortHead('hitRate', 'Hit rate', undefined, HELP.hitRate)}
+                    {sortHead('avgPerWeekday', 'Avg / weekday', undefined, HELP.avg)}
+                    {sortHead('interviews', 'Interviews', undefined, HELP.interviews)}
+                    {sortHead('per100', 'Per 100 bids', undefined, HELP.per100)}
                     {sortHead("lastBidAt", "Last bid")}
                   </tr>
                 </thead>
@@ -242,24 +374,31 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
                           <Change value={r.change} />
                         </td>
                         <td className="px-4 py-2 text-right">
-                          <div>{fmtCount(r.longestStreak)}</div>
-                          {r.currentStreak > 0 && <div className="text-[11px] text-muted">now {fmtCount(r.currentStreak)}</div>}
+                          <div>{fmtCount(r.longestStreak)} {r.longestStreak === 1 ? 'day' : 'days'}</div>
+                          {r.weekdays > 0 && (
+                            <div className="whitespace-nowrap text-[11px] text-muted">
+                              current {fmtCount(r.currentStreak)} · best {fmtCount(r.longestStreak)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-2 text-right">
                           <div>{pct(r.hitRate)}</div>
                           {r.weekdays > 0 && (
-                            <div className="text-[11px] text-muted">{r.hitDays} of {r.weekdays} weekdays</div>
+                            <div className="whitespace-nowrap text-[11px] text-muted">
+                              {r.hitDays} of {r.weekdays} weekdays at {TARGET}+
+                            </div>
                           )}
+                          {r.days.length > 0 && r.days.length <= 31 && <DayStrip days={r.days} />}
                         </td>
                         <td className="px-4 py-2 text-right">{fixed(r.avgPerWeekday, 1)}</td>
                         <td className="px-4 py-2 text-right">
                           <div>{fmtCount(r.interviews)}</div>
-                          {r.sharedProfile && (
-                            <div className="text-[11px] text-muted"
-                              title="Other bidders or self bids use this profile too, so its interviews come from their bids as well">
-                              shared profile
-                            </div>
-                          )}
+                          {(() => {
+                            const note = sharedNote(r);
+                            return note && (
+                              <div className="ml-auto max-w-[12rem] text-[11px] text-muted" title={note.title}>{note.text}</div>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-2 text-right">
                           {r.per100 == null ? (
