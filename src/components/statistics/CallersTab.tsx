@@ -10,7 +10,7 @@ import { exportCallerStatsPdf } from '../../lib/callerStatsPdf';
 import { interviewStatusBadgeClass, stageLabel } from '../../lib/stageBadge';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { FilterBar, REGIONS, Segmented, filterParams, filtersError, type StatsFilters } from './controls';
-import { StatTiles, pct } from './rateShared';
+import { ServerUpdateNote, StatTiles, pct } from './rateShared';
 
 type Sort = 'date' | 'company';
 const SORTS: { value: Sort; label: string }[] = [
@@ -83,7 +83,8 @@ export default function CallersTab({ filters, onFilters }: { filters: StatsFilte
           <span className="spinner spinner-sm" aria-hidden /> Loading…
         </p>
       ) : (
-        <CallersView data={data} picked={picked} onPick={setPicked} />
+        // An older server's response has no team totals: wait for the backend deploy instead of crashing.
+        !data.team ? <ServerUpdateNote /> : <CallersView data={data} picked={picked} onPick={setPicked} />
       )}
     </div>
   );

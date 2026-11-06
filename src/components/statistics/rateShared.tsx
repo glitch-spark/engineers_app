@@ -34,6 +34,16 @@ export function RecordsNote({ data, rates }: { data: InterviewRates; rates?: boo
   );
 }
 
+/** The page is newer than the server it talks to (the frontend deploys before the backend is approved): say so
+ * instead of crashing on fields the older server doesn't send. */
+export function ServerUpdateNote() {
+  return (
+    <p className="panel p-6 text-sm text-muted" role="status">
+      These statistics need the latest server update. Reload this page once the backend is deployed.
+    </p>
+  );
+}
+
 /** A row of headline numbers. */
 export function StatTiles({ tiles }: { tiles: { label: string; value: string }[] }) {
   return (
@@ -64,7 +74,7 @@ export function StatsBody({ filters, onFilters, children }: {
         <p className="panel flex items-center gap-2 p-6 text-sm text-muted" role="status">
           <span className="spinner spinner-sm" aria-hidden /> Loading statistics…
         </p>
-      ) : children(data)}
+      ) : data.totals.selfInterviews === undefined ? <ServerUpdateNote /> : children(data)}
     </div>
   );
 }
