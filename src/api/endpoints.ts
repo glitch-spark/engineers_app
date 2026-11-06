@@ -2659,7 +2659,7 @@ export const exportJobApplyChecks = (runId: string, body: { sheetUrl?: string; d
 
 /**
  * Append the run's applications with a resume to send (one row per job × profile: Profile, Company Name, Job Title,
- * Job URL, Download Resume) to today's "Apply · <date>" tab of the shared Google Sheet. Without `sheetUrl` the last one
+ * Job URL, Download Resume, Match Score, Band) to today's "Apply · <date>" tab of the shared Google Sheet. Without `sheetUrl` the last one
  * used is reused; `dryRun` only counts and checks access.
  */
 export const exportJobApplySheet = (runId: string, body: { sheetUrl?: string; dryRun?: boolean } = {}) =>

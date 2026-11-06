@@ -57,7 +57,7 @@ function exportedToast(message: string, sheetUrl: string) {
 
 /**
  * Export to the shared Google Sheet. "apply" (step ③): one row per job × profile with a resume to send (Profile,
- * Company Name, Job Title, Job URL, Download Resume) to today's "Apply · <date>" tab; jobs waiting for a tailored
+ * Company Name, Job Title, Job URL, Download Resume, Match Score, Band) to today's "Apply · <date>" tab; jobs waiting for a tailored
  * resume are added by a later export. "checks" (step ② onward): the run's Checks tab, every job with its company, URL,
  * title, posting date, location, clearance, work mode and status, replaced on each export.
  */
@@ -176,8 +176,8 @@ export default function ExportSheetDialog({
             </>
           ) : (
             <>
-              Adds one row per job and profile with a resume to send (Profile, Company Name, Job Title, Job URL, Download Resume) to
-              today’s tab of your shared sheet: the tailored resume when it’s done, otherwise the matching uploaded one. Jobs still
+              Adds one row per job and profile with a resume to send (Profile, Company Name, Job Title, Job URL, Download Resume, Match
+              Score, Band) to today’s tab of your shared sheet: the tailored resume when it’s done, otherwise the matching uploaded one. Jobs still
               waiting for a tailored resume are added when you export again after tailoring. To send the same rows to another
               sheet, paste its link: rows are skipped only if they’re already in that sheet.
             </>
