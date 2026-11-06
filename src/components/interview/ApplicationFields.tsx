@@ -103,29 +103,32 @@ export default function ApplicationFields({
           disabled={disabled}
         />
       </div>
-      {app.accountId && (
-        <div>
-          <label htmlFor={id('applied-by')} className="block text-sm font-medium mb-1">
-            Applied by{autoAppliedBy && req}
-          </label>
-          <Select
-            id={id('applied-by')}
-            value={app.appliedBy}
-            onChange={(v) => onChange({ appliedBy: v, appliedByTouched: true })}
-            options={[
-              { value: '', label: !bidders && !appliedError ? 'Loading…' : autoAppliedBy ? 'Who applied for this job?' : 'Not set' },
-              ...appliedByOptions,
-            ]}
-            disabled={disabled}
-            ariaDescribedBy={id('applied-by-hint')}
-          />
-          <p id={id('applied-by-hint')} className="mt-1 text-xs text-muted">
-            {appliedError
-              ? "Couldn't load the bidders: you can still pick Self."
-              : 'Interviews count for this bidder on Bidders → Performance.'}
-          </p>
-        </div>
-      )}
+      <div>
+        <label htmlFor={id('applied-by')} className="block text-sm font-medium mb-1">
+          Applied by{autoAppliedBy && req}
+        </label>
+        <Select
+          id={id('applied-by')}
+          value={app.appliedBy}
+          onChange={(v) => onChange({ appliedBy: v, appliedByTouched: true })}
+          options={[
+            {
+              value: '',
+              label: !app.accountId ? 'Pick a profile first'
+                : !bidders && !appliedError ? 'Loading…'
+                  : autoAppliedBy ? 'Who applied for this job?' : 'Not set',
+            },
+            ...(app.accountId ? appliedByOptions : []),
+          ]}
+          disabled={disabled || !app.accountId}
+          ariaDescribedBy={id('applied-by-hint')}
+        />
+        <p id={id('applied-by-hint')} className="mt-1 text-xs text-muted">
+          {appliedError
+            ? "Couldn't load the bidders: you can still pick Self."
+            : 'Self, or the bidder who applied. Interviews count for that bidder on Bidders → Performance.'}
+        </p>
+      </div>
       <div>
         <label htmlFor={id('company')} className="block text-sm font-medium mb-1">Company{req}</label>
         {link.mode === 'search' ? (
