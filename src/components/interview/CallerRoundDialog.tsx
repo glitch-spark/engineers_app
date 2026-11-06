@@ -4,7 +4,7 @@ import * as api from '../../api/endpoints';
 import Modal from '../Modal';
 import Select from '../Select';
 import { notify } from '../../lib/notify';
-import { saveInterviewBrief } from '../../lib/interviewBriefPdf';
+import { useBriefDownload } from './useBriefDownload';
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, isUnassigned } from '../../lib/callerColors';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
@@ -34,7 +34,7 @@ export default function CallerRoundDialog({
   const typedName = caller?.callerName && caller.callerName !== 'TBD' ? caller.callerName : '';
   const [pick, setPick] = useState(savedId);
   const [saving, setSaving] = useState(false);
-  const [briefing, setBriefing] = useState(false);
+  const { start: startBrief, busy: briefing, dialog: briefDialog } = useBriefDownload(tz);
   useEffect(() => setPick(savedId), [savedId]);
 
   const unassigned = isUnassigned({ callerId: caller?.callerId, callerName: caller?.callerName });
@@ -51,16 +51,7 @@ export default function CallerRoundDialog({
     ...(savedId && !known ? [{ value: savedId, label: `${typedName || 'Caller'} (not on the list)` }] : []),
   ];
 
-  const brief = async () => {
-    setBriefing(true);
-    try {
-      await saveInterviewBrief(interview, roundId, tz);
-    } catch (err) {
-      notify.error(err, 'Could not create the brief');
-    } finally {
-      setBriefing(false);
-    }
-  };
+  const brief = () => startBrief(interview, roundId);
 
   const save = async () => {
     setSaving(true);
@@ -74,6 +65,9 @@ export default function CallerRoundDialog({
       setSaving(false);
     }
   };
+
+  // The resume picker replaces this dialog while it's open, so the two never stack.
+  if (briefDialog) return <>{briefDialog}</>;
 
   return (
     <Modal open onClose={onClose} title={`${interview.companyName || 'Interview'} · ${stageLabel(entry?.stage)}`}>
@@ -121,7 +115,7 @@ export default function CallerRoundDialog({
 
         <div className="flex flex-wrap justify-end gap-2">
           <button type="button" className="btn-outline btn-sm" onClick={() => void brief()} disabled={briefing}
-            title="A PDF of this round to share with whoever takes the interview">
+            title="A PDF of this round, plus the resume, to share with whoever takes the interview">
             <Download size={14} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
           </button>
           <button type="button" className="btn-outline btn-sm" onClick={onOpenInterview}>

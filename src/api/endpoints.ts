@@ -274,6 +274,10 @@ export const uploadAccountResume = (accountId: string, file: File, markdown: str
 export const getAccountResumeFileUrl = (accountId: string, resumeId: string) =>
   apiFetch<{ url: string }>(`/accounts/${accountId}/resumes/${resumeId}/file`);
 
+/** The profile's resumes whose original file is stored (owner, admin or interview manager). */
+export const listAccountResumeFiles = (accountId: string) =>
+  apiFetch<{ resumes: { id: string; filename: string; uploadedAt: string | null }[] }>(`/accounts/${accountId}/resume-files`);
+
 // ---------- transactions ----------
 
 export interface TransactionUserTotal {

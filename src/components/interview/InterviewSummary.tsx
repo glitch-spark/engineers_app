@@ -4,7 +4,7 @@ import type { InterviewStageEntry } from '../../api/endpoints';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 import { meetingLink, notesPreview, relativeWhen, spotlightRound, stagesReached } from '../../lib/interviewPanelInfo';
 import { notify } from '../../lib/notify';
-import { saveInterviewBrief } from '../../lib/interviewBriefPdf';
+import { useBriefDownload } from './useBriefDownload';
 import {
   INTERVIEW_STATUSES,
   interviewStatusBadgeClass,
@@ -91,19 +91,9 @@ export default function InterviewSummary({
     }
   };
 
-  const [briefing, setBriefing] = useState(false);
-  /** The round's brief as a PDF, to share with whoever takes the interview. */
-  const brief = async (roundId: string) => {
-    if (briefing) return;
-    setBriefing(true);
-    try {
-      await saveInterviewBrief(iv, roundId, tz);
-    } catch (err) {
-      notify.error(err, 'Could not create the brief');
-    } finally {
-      setBriefing(false);
-    }
-  };
+  // The round's brief as a PDF plus its resume, to share with whoever takes the interview.
+  const { start: startBrief, busy: briefing, dialog: briefDialog } = useBriefDownload(tz);
+  const brief = (roundId: string) => startBrief(iv, roundId);
 
   const toggle = (id: string) => setExpanded((prev) => {
     const next = new Set(prev);
@@ -117,6 +107,7 @@ export default function InterviewSummary({
 
   return (
     <div className="flex-1 space-y-5 overflow-y-auto p-4">
+      {briefDialog}
       {spot && spotRound && (
         <section
           aria-label={spot.kind === 'next' ? 'Next round' : 'Last round'}
@@ -135,7 +126,7 @@ export default function InterviewSummary({
               )}
             </p>
             <button type="button" className="btn-outline btn-sm shrink-0" disabled={briefing}
-              title="A PDF of this round to share with whoever takes the interview"
+              title="A PDF of this round, plus the resume, to share with whoever takes the interview"
               onClick={() => void brief(spotRound.id)}>
               <Download size={13} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
             </button>

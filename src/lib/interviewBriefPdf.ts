@@ -1,4 +1,4 @@
-import { getInterview, type InterviewStageEntry } from '../api/endpoints';
+import { getInterview, type InterviewResumeLink, type InterviewStageEntry } from '../api/endpoints';
 import type { Interview } from '../components/interview/types';
 import { CALLER_METHOD_OPTIONS } from '../components/interview/types';
 import { formatInZone, parseServerTime, zoneAbbrev, zonedDateKey } from './interviewTimezone';
@@ -185,15 +185,16 @@ export async function downloadInterviewBrief(b: InterviewBrief): Promise<void> {
   doc.save(interviewBriefFilename(b));
 }
 
-/** Downloads the brief for `roundId`. The job description needs the full interview, which only its owner, admins and
- * interview managers can open: anyone else gets the brief without it. */
-export async function saveInterviewBrief(iv: Interview, roundId: string, tz: string): Promise<void> {
-  let jd = '';
+/** Downloads the brief for `roundId` and returns the interview's resume link (from the full interview when it could be
+ * opened). The job description needs the full interview, which only its owner, admins and interview managers can
+ * open: anyone else gets the brief without it. */
+export async function saveInterviewBrief(iv: Interview, roundId: string, tz: string): Promise<InterviewResumeLink | null> {
+  let full: { resumeLink?: InterviewResumeLink | null } | null = null;
   try {
-    const full = (await getInterview(iv._id)) as { resumeLink?: { jobDescription?: string | null } | null };
-    jd = full.resumeLink?.jobDescription || '';
+    full = (await getInterview(iv._id)) as { resumeLink?: InterviewResumeLink | null };
   } catch {
     /* not allowed to open it: no job description */
   }
-  await downloadInterviewBrief(interviewBrief(iv, roundId, tz, jd));
+  await downloadInterviewBrief(interviewBrief(iv, roundId, tz, full?.resumeLink?.jobDescription || ''));
+  return full?.resumeLink ?? iv.resumeLink ?? null;
 }
