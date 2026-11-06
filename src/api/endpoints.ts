@@ -1024,36 +1024,60 @@ export const getResumeCompare = (params: { period: StatsPeriod; date: string; to
 
 // ---------- statistics: callers ----------
 
-/** period: held in the period; outdated: held before it, still awaiting its result; scheduled: not held yet. */
-export type CallerSection = 'period' | 'outdated' | 'scheduled';
 export type CallerRoundResult = 'passed' | 'rejected' | 'canceled' | 'awaiting' | 'scheduled';
+export type CallerRoundGroup = 'intro' | 'tech' | 'hiring' | 'panel' | 'final';
 
-export interface CallerStatsCaller {
+/** One round type's interviews done (passed + rejected + awaiting) and pass rate. */
+export interface CallerStatsGroup {
+  done: number;
+  passed: number;
+  rejected: number;
+  /** passed ÷ (passed + rejected); null when none is decided. */
+  passRate: number | null;
+}
+
+/** A set of rounds (a caller's, every caller round, or self rounds) in the period. */
+export interface CallerStatsTotals {
+  /** canceled and scheduled aren't done; scheduled = still marked scheduled. */
+  counts: Record<CallerRoundResult, number>;
+  /** passed + rejected + awaiting. */
+  done: number;
+  passRate: number | null;
+  byType: Record<CallerRoundGroup, CallerStatsGroup>;
+}
+
+export interface CallerStatsCaller extends CallerStatsTotals {
   /** null: Unassigned (no caller set on the round). */
   callerId: string | null;
   name: string;
   /** null: Unassigned, or a caller no longer on the list. */
   color: CallerColor | null;
-  /** passed … awaiting: rounds held in the period; outdated and scheduled: the other two sections. */
-  counts: { passed: number; rejected: number; canceled: number; awaiting: number; outdated: number; scheduled: number };
-  /** passed ÷ (passed + rejected) in the period; null when none is decided. */
-  passRate: number | null;
+  /** At least 5 decided rounds: its pass rate is ranked. */
+  ranked: boolean;
+  /** Pass rate minus the team's caller pass rate (fraction); null when either is null. */
+  vsTeam: number | null;
 }
 
 export interface CallerStatsRound {
   interviewId: string;
-  roundId: string;
+  roundId: string | null;
   callerId: string | null;
-  section: CallerSection;
   roundDate: string;
   company: string;
   stage: string | null;
   engineer: string;
+  /** A round held in the period: passed, rejected, awaiting or canceled. */
   result: CallerRoundResult;
-  /** Awaiting: days since the round was held. */
-  daysWaiting: number | null;
-  /** Scheduled: the round's time has passed but its status wasn't updated. */
-  stale: boolean;
+}
+
+export interface CallerStatsWeekly {
+  unit: 'day' | 'week' | 'month';
+  buckets: {
+    label: string; start: string; end: string;
+    all: { done: number; passRate: number | null };
+    /** callerId (or 'unassigned') → that caller's rounds in the bucket. */
+    callers: Record<string, { done: number; passRate: number | null }>;
+  }[];
 }
 
 export interface CallerStats {
@@ -1063,6 +1087,11 @@ export interface CallerStats {
   end: string;
   label: string;
   callers: CallerStatsCaller[];
+  /** Every caller round (Unassigned included). */
+  team: CallerStatsTotals;
+  /** Rounds without a caller. */
+  self: CallerStatsTotals;
+  weekly: CallerStatsWeekly;
   rounds: CallerStatsRound[];
 }
 

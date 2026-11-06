@@ -1,31 +1,37 @@
-import type { CallerStatsCaller, CallerStatsRound } from '../api/endpoints';
+import type { CallerRoundGroup, CallerStatsCaller, CallerStatsRound, CallerStatsTotals } from '../api/endpoints';
 import { stageLabel } from './stageBadge';
 
 /** What the Callers tab shows for one caller (or All callers), ready to print. Rounds come in the tab's sort order. */
 export interface CallerStatsExport {
   /** The caller's name, or 'All callers'. */
   name: string;
-  /** All callers: the rounds tables get a Caller column and the summary one row per caller plus a total. */
+  /** All callers: the tables get a row per caller (and a Caller column for rounds) plus the team row. */
   isAll: boolean;
   periodLabel: string;
   regionLabel: string;
-  /** Summary rows: the one caller, or every caller. */
+  /** Summary rows: the one caller, or every caller with rounds. */
   callers: CallerStatsCaller[];
-  /** All callers: the summed row. */
-  total?: CallerStatsCaller;
+  /** Every caller round, and rounds without a caller, for the period. */
+  team: CallerStatsTotals;
+  self: CallerStatsTotals;
+  /** Rounds held in the period. */
+  rows: CallerStatsRound[];
   callerName: (r: CallerStatsRound) => string;
-  period: CallerStatsRound[];
-  outdated: CallerStatsRound[];
-  scheduled: CallerStatsRound[];
 }
 
-const RESULT: Record<CallerStatsRound['result'], string> = {
+const GROUPS: { key: CallerRoundGroup; label: string }[] = [
+  { key: 'intro', label: 'Intro' }, { key: 'tech', label: 'Tech' }, { key: 'hiring', label: 'Hiring' },
+  { key: 'panel', label: 'Panel' }, { key: 'final', label: 'Final' },
+];
+
+type Result = CallerStatsRound['result'];
+const RESULT: Record<Result, string> = {
   passed: 'Passed', rejected: 'Rejected', canceled: 'Canceled', awaiting: 'Awaiting result', scheduled: 'Scheduled',
 };
 
 type RGB = [number, number, number];
 /** The Callers page's result badges (Tailwind 100 / 800 / 200): fill, text, border. Canceled is struck through. */
-const BADGE: Record<CallerStatsRound['result'], { fill: RGB; text: RGB; border: RGB; strike?: boolean }> = {
+const BADGE: Record<Result, { fill: RGB; text: RGB; border: RGB; strike?: boolean }> = {
   passed: { fill: [209, 250, 229], text: [6, 95, 70], border: [167, 243, 208] },
   rejected: { fill: [254, 226, 226], text: [153, 27, 27], border: [254, 202, 202] },
   canceled: { fill: [244, 244, 245], text: [113, 113, 122], border: [228, 228, 231], strike: true },
@@ -34,14 +40,11 @@ const BADGE: Record<CallerStatsRound['result'], { fill: RGB; text: RGB; border: 
 };
 
 const pct = (r: number | null) => (r == null ? '–' : `${Math.round(r * 100)}%`);
-const waited = (n: number | null) => `${n ?? 0} day${n === 1 ? '' : 's'}`;
-const held = (c: CallerStatsCaller) => c.counts.passed + c.counts.rejected + c.counts.awaiting;
+const pts = (v: number | null) => (v == null ? '–' : `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v * 1000) / 10).toFixed(1)} pts`);
 
 function day(iso: string): string {
   const d = new Date(iso);
-  return isNaN(d.getTime())
-    ? ''
-    : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 /** `callers-<name>-<period>.pdf`, safe on every OS. */
@@ -57,7 +60,7 @@ export async function exportCallerStatsPdf(x: CallerStatsExport): Promise<void> 
   const margin = 40;
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const head = { fillColor: [39, 39, 42] as [number, number, number], textColor: 255, fontStyle: 'bold' as const };
+  const head = { fillColor: [39, 39, 42] as RGB, textColor: 255, fontStyle: 'bold' as const };
   const base = { margin: { left: margin, right: margin, bottom: 50 }, styles: { fontSize: 9, cellPadding: 5 }, headStyles: head };
   const endY = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
 
@@ -68,102 +71,90 @@ export async function exportCallerStatsPdf(x: CallerStatsExport): Promise<void> 
   doc.setFontSize(10);
   doc.setTextColor(90);
   doc.text(`Period: ${x.periodLabel}   ·   Region: ${x.regionLabel}   ·   Generated: ${new Date().toLocaleString()}`, margin, 68);
-  doc.text('Interviews = rounds held in the period (passed + rejected + awaiting). Pass rate = passed ÷ (passed + rejected).', margin, 82);
+  doc.text('Interviews done = passed + rejected + awaiting (canceled not counted). Pass rate = passed ÷ (passed + rejected).', margin, 82);
   doc.setTextColor(0);
 
-  // Summary: one row per caller, plus the total with All callers.
-  const summaryRow = (c: CallerStatsCaller) => [
-    c.name, held(c), c.counts.canceled, c.counts.passed, c.counts.rejected, c.counts.awaiting, pct(c.passRate),
-    c.counts.outdated, c.counts.scheduled,
-  ];
-  autoTable(doc, {
-    ...base,
-    startY: 96,
-    head: [['Caller', 'Interviews', 'Canceled', 'Passed', 'Rejected', 'Awaiting', 'Pass rate', 'Outdated pending', 'Scheduled']],
-    body: x.callers.map(summaryRow),
-    foot: x.total ? [summaryRow(x.total)] : undefined,
-    footStyles: { fillColor: [228, 228, 231], textColor: 0, fontStyle: 'bold' },
-    showFoot: 'lastPage',
-    // Numbers right-aligned, header and total included.
-    didParseCell: (h) => { if (h.column.index > 0) h.cell.styles.halign = 'right'; },
-  });
-
-  const callerCol = x.isAll ? ['Caller'] : [];
-  const callerCell = (r: CallerStatsRound) => (x.isAll ? [x.callerName(r)] : []);
-  const common = (r: CallerStatsRound) => [day(r.roundDate), ...callerCell(r), r.company || 'Untitled company', stageLabel(r.stage)];
-
-  /** `badges`: each row's last cell drawn as a colored pill, as on the Callers page. */
-  const section = (
-    title: string, note: string, columns: string[], rows: (string | number)[][], empty: string,
-    badges?: (keyof typeof BADGE)[],
-  ) => {
+  const title = (text: string, note: string) => {
     let y = endY() + 28;
     if (y > pageH - 110) { doc.addPage(); y = 50; }
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text(title, margin, y);
+    doc.text(text, margin, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(90);
     doc.text(note, margin, y + 13);
     doc.setTextColor(0);
-    autoTable(doc, {
-      ...base,
-      startY: y + 22,
-      head: [columns],
-      body: rows.length ? rows : [[{ content: empty, colSpan: columns.length, styles: { halign: 'center', textColor: 120 } }]],
-      // The text stays in the cell for its width; the pill is drawn in its place.
-      willDrawCell: (h) => {
-        if (badges && rows.length && h.section === 'body' && h.column.index === columns.length - 1) h.cell.text = [];
-      },
-      didDrawCell: (h) => {
-        if (!badges || !rows.length || h.section !== 'body' || h.column.index !== columns.length - 1) return;
-        const b = BADGE[badges[h.row.index]];
-        const label = String(rows[h.row.index][columns.length - 1]);
-        doc.setFontSize(8);
-        const w = doc.getTextWidth(label) + 12;
-        const bh = 13;
-        const bx = h.cell.x + 5;
-        const by = h.cell.y + (h.cell.height - bh) / 2;
-        doc.setFillColor(...b.fill);
-        doc.setDrawColor(...b.border);
-        doc.setLineWidth(0.6);
-        doc.roundedRect(bx, by, w, bh, 3, 3, 'FD');
-        doc.setTextColor(...b.text);
-        doc.text(label, bx + 6, by + bh / 2, { baseline: 'middle' });
-        if (b.strike) {
-          doc.setDrawColor(...b.text);
-          doc.line(bx + 6, by + bh / 2, bx + w - 6, by + bh / 2);
-        }
-        doc.setTextColor(0);
-      },
-    });
+    return y + 22;
   };
 
-  section(
-    `Rounds held · ${x.period.length}`,
-    'Caller rounds held in this period, with their result now.',
-    ['Date', ...callerCol, 'Company', 'Round', 'Result'],
-    x.period.map((r) => [...common(r), r.result === 'awaiting' ? `${RESULT.awaiting} · ${waited(r.daysWaiting)}` : RESULT[r.result]]),
-    'No caller rounds held in this period.',
-    x.period.map((r) => r.result),
-  );
-  section(
-    `Outdated pending · ${x.outdated.length}`,
-    'Held before this period and still awaiting the result.',
-    ['Date', ...callerCol, 'Company', 'Round', 'Waiting'],
-    x.outdated.map((r) => [...common(r), waited(r.daysWaiting)]),
-    'No older rounds awaiting a result.',
-  );
-  section(
-    `Scheduled · ${x.scheduled.length}`,
-    'Not held yet.',
-    ['Date', ...callerCol, 'Company', 'Round', 'Note'],
-    x.scheduled.map((r) => [...common(r), r.stale ? 'Date passed, status not updated' : '']),
-    'Nothing scheduled.',
-  );
+  // Summary: one row per caller, plus every caller as the team row.
+  const summaryRow = (name: string, t: CallerStatsTotals, vsTeam: number | null) => [
+    name, t.done, pct(t.passRate), pts(vsTeam), t.counts.passed, t.counts.rejected, t.counts.awaiting, t.counts.canceled,
+  ];
+  autoTable(doc, {
+    ...base,
+    startY: 96,
+    head: [['Caller', 'Interviews done', 'Pass rate', 'vs team', 'Passed', 'Rejected', 'Awaiting', 'Canceled']],
+    body: x.callers.map((c) => summaryRow(c.name, c, c.vsTeam)),
+    foot: x.isAll ? [summaryRow('All callers', x.team, null)] : undefined,
+    footStyles: { fillColor: [228, 228, 231], textColor: 0, fontStyle: 'bold' },
+    showFoot: 'lastPage',
+    didParseCell: (h) => { if (h.column.index > 0) h.cell.styles.halign = 'right'; },
+  });
 
-  // Page numbers last, once the page count is known.
+  // Pass rate by round type, with all callers and self rounds for comparison.
+  const typeRow = (name: string, t: CallerStatsTotals) => [
+    name, ...GROUPS.map((g) => (t.byType[g.key].done ? `${pct(t.byType[g.key].passRate)} · ${t.byType[g.key].done}` : '–')),
+  ];
+  autoTable(doc, {
+    ...base,
+    startY: title('Pass rate by round type', 'Each cell: pass rate · interviews done. Self = rounds people took themselves.'),
+    head: [['Caller', ...GROUPS.map((g) => g.label)]],
+    body: [
+      ...x.callers.filter((c) => c.done > 0).map((c) => typeRow(c.name, c)),
+      ...(x.isAll ? [typeRow('All callers', x.team)] : []),
+      typeRow('Self (no caller)', x.self),
+    ],
+    didParseCell: (h) => { if (h.column.index > 0) h.cell.styles.halign = 'center'; },
+  });
+
+  // Rounds held, the result drawn as a colored pill as on the page.
+  const columns = ['Date', ...(x.isAll ? ['Caller'] : []), 'Company', 'Round', 'Engineer', 'Result'];
+  const rows = x.rows.map((r) => [
+    day(r.roundDate), ...(x.isAll ? [x.callerName(r)] : []), r.company || 'Untitled company', stageLabel(r.stage), r.engineer,
+    RESULT[r.result],
+  ]);
+  const last = columns.length - 1;
+  autoTable(doc, {
+    ...base,
+    startY: title(`Rounds held · ${x.rows.length}`, 'Caller rounds held in this period, with their result now.'),
+    head: [columns],
+    body: rows.length ? rows : [[{ content: 'No caller rounds held in this period.', colSpan: columns.length, styles: { halign: 'center', textColor: 120 } }]],
+    willDrawCell: (h) => { if (rows.length && h.section === 'body' && h.column.index === last) h.cell.text = []; },
+    didDrawCell: (h) => {
+      if (!rows.length || h.section !== 'body' || h.column.index !== last) return;
+      const b = BADGE[x.rows[h.row.index].result];
+      const label = RESULT[x.rows[h.row.index].result];
+      doc.setFontSize(8);
+      const w = doc.getTextWidth(label) + 12;
+      const bh = 13;
+      const bx = h.cell.x + 5;
+      const by = h.cell.y + (h.cell.height - bh) / 2;
+      doc.setFillColor(...b.fill);
+      doc.setDrawColor(...b.border);
+      doc.setLineWidth(0.6);
+      doc.roundedRect(bx, by, w, bh, 3, 3, 'FD');
+      doc.setTextColor(...b.text);
+      doc.text(label, bx + 6, by + bh / 2, { baseline: 'middle' });
+      if (b.strike) {
+        doc.setDrawColor(...b.text);
+        doc.line(bx + 6, by + bh / 2, bx + w - 6, by + bh / 2);
+      }
+      doc.setTextColor(0);
+    },
+  });
+
   const pages = doc.getNumberOfPages();
   doc.setFontSize(8);
   doc.setTextColor(120);
