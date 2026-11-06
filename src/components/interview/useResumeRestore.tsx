@@ -29,9 +29,13 @@ export function useResumeRestore(): { offer: (link: InterviewResumeLink) => bool
     if (!target) return;
     setWorking(true);
     try {
-      const out = await api.restoreResumePdf(target.jobId);
+      // 409 "the file is there": made already (an earlier click, or another person): just download it.
+      const out = await api.restoreResumePdf(target.jobId).catch((err) => {
+        if (err instanceof ApiError && err.status === 409 && /file is there/i.test(err.message)) return null;
+        throw err;
+      });
       await api.downloadTailoredResume(target.jobId, target.filename);
-      notify.success(out.kind === 'copied' ? 'Resume copied again and downloaded' : 'Resume regenerated and downloaded');
+      notify.success(!out ? 'Resume downloaded' : out.kind === 'copied' ? 'Resume copied again and downloaded' : 'Resume regenerated and downloaded');
       setTarget(null);
     } catch (err) {
       notify.error(err, target.copy ? 'Could not copy the resume again' : 'Could not regenerate the resume');
