@@ -938,11 +938,14 @@ export interface InterviewRateRow {
   userId: string;
   name: string;
   image: string | null;
-  /** Applies Done in followed-up daily plans: self + bidder (bidder only under All: it has no region). */
+  /** Self applies typed in followed-up daily plans + bidder bids from Bid Track (approved + pending). */
   bids: number;
   selfBids: number;
   bidderBids: number;
   interviews: number;
+  /** Of `interviews`: rounds the user took, and rounds a caller took. */
+  selfInterviews: number;
+  callerInterviews: number;
   /** interviews / bids; null with no bids. */
   rate: number | null;
   /** Fewer than `minBids` bids: the rate is shown but not ranked. */
@@ -952,7 +955,7 @@ export interface InterviewRateRow {
   isMe: boolean;
 }
 
-/** Counts per user, per day of a week or per week of a month: bids (self, bidder) or interviews (interviews). */
+/** Counts per user, per day of a week or per week of a month: bids (self, bidder) or interviews (self, caller). */
 export interface PerUserChart {
   unit: 'day' | 'week' | 'month';
   /** Users with any in the period, oldest account first. `slot` = their place among all ranked users: their color. */
@@ -969,9 +972,12 @@ export interface InterviewRates {
   label: string;
   minBids: number;
   rows: InterviewRateRow[];
-  totals: { bids: number; selfBids: number; bidderBids: number; interviews: number; rate: number | null };
-  /** Bids split into self + bidder (All only; a region's bids are self applies). */
-  bidderSplit: boolean;
+  totals: {
+    bids: number; selfBids: number; bidderBids: number; interviews: number; selfInterviews: number;
+    callerInterviews: number; rate: number | null;
+  };
+  /** The first Bid Track record's day (YYYY-MM-DD): bidder bids before it are 0. Null with no records. */
+  bidsRecordsStart: string | null;
   bidsChart: PerUserChart;
   interviewsChart: PerUserChart;
   /** Profiles with no region: counted under All only. */

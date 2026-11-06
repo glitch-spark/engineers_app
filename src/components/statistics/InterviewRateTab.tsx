@@ -1,60 +1,16 @@
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  LabelList,
-  Rectangle,
-  ReferenceLine,
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { CartesianGrid, LabelList, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from 'recharts';
 import * as api from '../../api/endpoints';
-import type { InterviewRateRow, InterviewRates, PerUserChart } from '../../api/endpoints';
+import type { InterviewRateRow, InterviewRates } from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { FilterBar, REGIONS, filterParams, filtersError, type StatsFilters } from './controls';
+import { PerUserBars, initialsFor, niceCeil, pct, seriesColors } from './rateShared';
 
 /** Rate guide lines on the scatter (interviews ÷ bids); the ones that fit the plot are drawn. */
 const GUIDE_RATES = [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5];
-
-/**
- * Series colors, validated with the dataviz palette checker on this app's surfaces (white / zinc-950): You = blue,
- * Team = orange (categorical slots 1 and 2). Other users are a neutral gray: identity there comes from each dot's
- * name label and the table, not color.
- */
-function seriesColors(dark: boolean) {
-  return dark
-    ? { me: '#3987e5', team: '#d95926', other: '#a1a1aa', surface: '#09090b' }
-    : { me: '#2a78d6', team: '#eb6834', other: '#71717a', surface: '#ffffff' };
-}
-
-/**
- * One hue per user on the bids and interviews charts: the dataviz categorical order, validated adjacent-pair on this app's surfaces.
- * A user keeps their slot's hue whatever the period or region; past the eighth they share a neutral gray.
- */
-const USER_HUES = {
-  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
-  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
-};
-/** A bar's lighter part (bidder applies, stacked on self applies): the user's hue at this opacity. */
-const FADED_OPACITY = 0.4;
-
-function userHue(slot: number, dark: boolean): string {
-  return USER_HUES[dark ? 'dark' : 'light'][slot] ?? seriesColors(dark).other;
-}
-
-function pct(rate: number | null | undefined): string {
-  if (rate == null) return '—';
-  const v = rate * 100;
-  return `${v > 0 && v < 1 ? v.toFixed(2) : v.toFixed(1)}%`; // plan-based rates are often under 1%
-}
 
 /** Bids as "self (+bidder)" under All, where bidder applies are known; just the number in a region. */
 function BidsCell({ self, bidder, split }: { self: number; bidder: number; split: boolean }) {
@@ -64,12 +20,6 @@ function BidsCell({ self, bidder, split }: { self: number; bidder: number; split
       {split && <span className="ml-1 text-muted">(+{bidder.toLocaleString()})</span>}
     </span>
   );
-}
-
-/** A round number at or above `n`, for axis tops: steps of 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8 × 10^k keep the plot tight. */
-function niceCeil(n: number): number {
-  const p = 10 ** Math.floor(Math.log10(Math.max(n, 1)));
-  return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * p).find((v) => v >= n) ?? 10 * p;
 }
 
 /** Every user's interview rate in one view: the ranked table, bids and interviews per user, and the scatter. */
@@ -120,54 +70,6 @@ export default function InterviewRateTab({ filters, onFilters }: { filters: Stat
   );
 }
 
-type ChartUser = PerUserChart['users'][number];
-type ChartBucket = PerUserChart['buckets'][number];
-/** A bar's parts, bottom to top; a faded part is drawn lighter in the user's hue. */
-type Part = { key: string; label: string; faded?: boolean };
-
-/** Each user's initial for the bar labels; users sharing one get two letters. */
-function initialsFor(users: ChartUser[]): Record<string, string> {
-  const first = (n: string) => n.trim().charAt(0).toUpperCase();
-  return Object.fromEntries(users.map((u) => {
-    const shared = users.some((o) => o.userId !== u.userId && first(o.name) === first(u.name));
-    return [u.userId, shared ? u.name.trim().slice(0, 2) : first(u.name)];
-  }));
-}
-
-function PerUserTip({ active, payload, chart: pc, parts }: {
-  active?: boolean; payload?: { payload: ChartBucket }[]; chart: PerUserChart; parts: Part[];
-}) {
-  const chart = useChartTheme();
-  const { theme } = useTheme();
-  const b = active && payload?.[0]?.payload;
-  if (!b) return null;
-  return (
-    <div className="rounded-md border px-3 py-2 text-xs shadow-sm"
-      style={{ background: chart.tooltipBg, borderColor: chart.tooltipBorder, color: chart.tooltipText }}>
-      <div className="mb-1 font-medium">{b.label}</div>
-      <table className="tabular-nums">
-        <tbody>
-          {pc.users.map((u) => {
-            const v = b.values[u.userId] ?? {};
-            return (
-              <tr key={u.userId}>
-                <td className="pr-3">
-                  <span className="mr-1.5 inline-block h-2 w-2 rounded-sm" style={{ background: userHue(u.slot, theme === 'dark') }} aria-hidden />
-                  {u.isMe ? `${u.name} (you)` : u.name}
-                </td>
-                <td className="text-right font-medium">{parts.reduce((n, p) => n + (v[p.key] ?? 0), 0).toLocaleString()}</td>
-                {parts.length > 1 && (
-                  <td className="pl-2 text-muted">{parts.map((p) => `${(v[p.key] ?? 0).toLocaleString()} ${p.label}`).join(' + ')}</td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 /** Bids, then interviews: one bar per user each day (week) or week (month), oldest account first. */
 function PerUserCharts({ data }: { data: InterviewRates }) {
   const unit = data.bidsChart.unit;
@@ -176,103 +78,15 @@ function PerUserCharts({ data }: { data: InterviewRates }) {
   return (
     <>
       <PerUserBars id="ir-bids" title="Bids per user" chart={data.bidsChart} initials={initials} period={data.label}
-        note={`Each ${unit}, one bar per user${data.bidderSplit ? ': self applies at the bottom, bidder applies on top' : ''}.`}
+        note={`Each ${unit}, one bar per user${true ? ': self applies at the bottom, bidder applies on top' : ''}.`}
         empty="No bids in this period."
-        parts={data.bidderSplit
+        parts={true
           ? [{ key: 'self', label: 'self' }, { key: 'bidder', label: 'bidder', faded: true }]
           : [{ key: 'self', label: 'self' }]} />
       <PerUserBars id="ir-interviews" title="Interviews per user" chart={data.interviewsChart} initials={initials}
         period={data.label} note={`Each ${unit}, one bar per user: interview rounds held.`}
         empty="No interviews in this period." parts={[{ key: 'interviews', label: 'interviews' }]} />
     </>
-  );
-}
-
-function PerUserBars({ id, title, note, empty, chart: pc, parts, initials, period }: {
-  id: string; title: string; note: string; empty: string; chart: PerUserChart; parts: Part[];
-  initials: Record<string, string>; period: string;
-}) {
-  const chart = useChartTheme();
-  const { theme } = useTheme();
-  const dark = theme === 'dark';
-  const rows = pc.buckets.map((b) => {
-    const row: Record<string, number | string> = { label: b.label };
-    for (const u of pc.users) parts.forEach((p, i) => { row[`${i}_${u.userId}`] = b.values[u.userId]?.[p.key] ?? 0; });
-    return { ...b, ...row };
-  });
-  const total = (b: ChartBucket | undefined, u: ChartUser) => parts.reduce((n, p) => n + (b?.values[u.userId]?.[p.key] ?? 0), 0);
-  // Each bar is topped with its user's initial and total, running upward so neighbours' labels never collide. Bars
-  // too thin for the text (narrow screens) leave it to the tooltip.
-  const label = (u: ChartUser) =>
-    (p: { x?: number | string; y?: number | string; width?: number | string; index?: number }) => {
-      const n = total(pc.buckets[p.index ?? -1], u);
-      if (!n || Number(p.width) < 11) return null;
-      const x = Number(p.x) + Number(p.width) / 2;
-      const y = Number(p.y) - 4;
-      return (
-        <text x={x} y={y} transform={`rotate(-90 ${x} ${y})`} dominantBaseline="central" fill={chart.tooltipText}
-          fontSize={10} style={{ fontVariantNumeric: 'tabular-nums' }}>
-          <tspan fontWeight={600}>{initials[u.userId]}</tspan> {n.toLocaleString()}
-        </text>
-      );
-    };
-  // The top part gets the 4px rounded end; a 2px surface gap separates it from the parts below.
-  const segment = (u: ChartUser, i: number) =>
-    (props: { x?: number; y?: number; width?: number; height?: number; payload?: ChartBucket }) => {
-      const { x = 0, y = 0, width = 0, height = 0, payload } = props;
-      const v = payload?.values[u.userId] ?? {};
-      if (!height) return <g />;
-      const top = parts.slice(i + 1).every((p) => !v[p.key]);
-      const h = parts.slice(0, i).some((p) => v[p.key]) ? Math.max(0, height - 2) : height;
-      return (
-        <Rectangle x={x} y={y} width={width} height={h} radius={top ? [4, 4, 0, 0] : 0}
-          fill={userHue(u.slot, dark)} fillOpacity={parts[i].faded ? FADED_OPACITY : 1} />
-      );
-    };
-
-  return (
-    <section className="panel p-4" aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} className="card-title">{title}</h2>
-      <p className="mb-3 text-xs text-muted">{note}</p>
-      {pc.users.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted">{empty}</p>
-      ) : (
-        <div className="h-72" role="img" aria-label={`${title} each ${pc.unit}, ${period}. Hover a ${pc.unit} for every value.`}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rows} margin={{ top: 48, right: 16, bottom: 0, left: 4 }} barGap={2} barCategoryGap="18%">
-              <CartesianGrid stroke={chart.grid} vertical={false} />
-              <XAxis dataKey="label" stroke={chart.axis} tick={{ fill: chart.axis, fontSize: 12 }} />
-              <YAxis allowDecimals={false} stroke={chart.axis} tick={{ fill: chart.axis, fontSize: 12 }} width={44} />
-              <Tooltip cursor={{ fill: chart.grid, opacity: 0.5 }} content={<PerUserTip chart={pc} parts={parts} />} />
-              {pc.users.flatMap((u) => parts.map((_, i) => (
-                <Bar key={`${i}_${u.userId}`} dataKey={`${i}_${u.userId}`} stackId={u.userId} isAnimationActive={false}
-                  fill={userHue(u.slot, dark)} shape={segment(u, i)}>
-                  {i === parts.length - 1 && <LabelList content={label(u)} />}
-                </Bar>
-              )))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="Legend">
-        {pc.users.map((u) => (
-          <li key={u.userId} className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: userHue(u.slot, dark) }} aria-hidden />
-            <span className="font-medium text-strong">{initials[u.userId]}</span>
-            {u.isMe ? `${u.name} (you)` : u.name}
-          </li>
-        ))}
-        {parts.some((p) => p.faded) && pc.users.length > 0 && (
-          <li className="inline-flex items-center gap-1.5">
-            <span className="inline-flex flex-col gap-px" aria-hidden>
-              <span className="h-1.5 w-2.5 rounded-t-sm" style={{ background: chart.axis, opacity: FADED_OPACITY }} />
-              <span className="h-1.5 w-2.5" style={{ background: chart.axis }} />
-            </span>
-            Light top = {parts.filter((p) => p.faded).map((p) => p.label).join(', ')}, solid = {parts.find((p) => !p.faded)?.label}
-          </li>
-        )}
-      </ul>
-    </section>
   );
 }
 
@@ -428,7 +242,7 @@ function RateTable({ data }: { data: InterviewRates }) {
             <tr>
               {header('rank', '#')}
               {header('name', 'User')}
-              {header('bids', data.bidderSplit ? 'Bids self (+bidder)' : 'Bids (self)', 'text-right')}
+              {header('bids', true ? 'Bids self (+bidder)' : 'Bids (self)', 'text-right')}
               {header('interviews', 'Interviews', 'text-right')}
               {header('rate', 'Rate')}
             </tr>
@@ -443,7 +257,7 @@ function RateTable({ data }: { data: InterviewRates }) {
                   {r.name}{r.isMe && <span className="badge badge-info ml-2">You</span>}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
-                  <BidsCell self={r.selfBids} bidder={r.bidderBids} split={data.bidderSplit} />
+                  <BidsCell self={r.selfBids} bidder={r.bidderBids} split={true} />
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{r.interviews.toLocaleString()}</td>
                 <td className="px-3 py-2.5">
@@ -468,7 +282,7 @@ function RateTable({ data }: { data: InterviewRates }) {
                 <td className="px-3 py-2.5" />
                 <td className="px-3 py-2.5 text-strong">Team total</td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
-                  <BidsCell self={data.totals.selfBids} bidder={data.totals.bidderBids} split={data.bidderSplit} />
+                  <BidsCell self={data.totals.selfBids} bidder={data.totals.bidderBids} split={true} />
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{data.totals.interviews.toLocaleString()}</td>
                 <td className="px-3 py-2.5 tabular-nums">{pct(data.totals.rate)}</td>
