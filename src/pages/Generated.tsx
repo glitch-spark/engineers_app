@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import * as api from '../api/endpoints';
+import { ApiError } from '../api/client';
 import type { ResumeJob, ResumeJobStatus, ResumeJobStep, ScreeningPair } from '../api/endpoints';
 import { notify } from '../lib/notify';
 import { archivedLabel, filterProfiles } from '../lib/profileArchive';
@@ -17,6 +18,7 @@ import { useDialog } from '../lib/useDialog';
 import ResumeTabs from '../components/ResumeTabs';
 import { TailoredScore } from '../components/jobApplies/Suggestions';
 import PageHeader from '../components/PageHeader';
+import ConfirmDialog from '../components/ConfirmDialog';
 import Select from '../components/Select';
 import ModelSelect from '../components/ModelSelect';
 import { useModelChoice } from '../lib/useModelChoice';
@@ -503,6 +505,8 @@ function JobRow({
 }) {
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** The server's warning that an interview links to this resume, while asking to delete it anyway. */
+  const [linkedWarning, setLinkedWarning] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const created = job.createdAt ? new Date(job.createdAt) : null;
   const generated = job.completedAt ? new Date(job.completedAt) : null;
@@ -525,15 +529,18 @@ function JobRow({
     }
   }
 
-  async function remove() {
-    if (!confirm('Delete this build?')) return;
+  async function remove(force = false) {
+    if (!force && !confirm('Delete this build?')) return;
     setDeleting(true);
     try {
-      await api.deleteResumeJob(job._id);
+      await api.deleteResumeJob(job._id, force);
       notify.success('Build deleted');
+      setLinkedWarning(null);
       onChanged();
     } catch (err) {
-      notify.error(err, 'Delete failed');
+      // 409: an interview links to this resume. Ask again, naming it.
+      if (!force && err instanceof ApiError && err.status === 409) setLinkedWarning(err.message);
+      else notify.error(err, 'Delete failed');
     } finally {
       setDeleting(false);
     }
@@ -694,7 +701,7 @@ function JobRow({
             </button>
             <button
               type="button"
-              onClick={remove}
+              onClick={() => void remove()}
               disabled={deleting || inFlight}
               className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted disabled:opacity-50"
               title={inFlight ? 'Cannot delete while running' : 'Delete'}
@@ -702,6 +709,15 @@ function JobRow({
             >
               <Trash2 className="w-4 h-4" aria-hidden />
             </button>
+            <ConfirmDialog
+              open={!!linkedWarning}
+              title="Resume linked to an interview"
+              body={linkedWarning}
+              confirmLabel="Delete anyway"
+              busy={deleting}
+              onConfirm={() => void remove(true)}
+              onCancel={() => setLinkedWarning(null)}
+            />
           </div>
         </td>
       </tr>
