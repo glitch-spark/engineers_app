@@ -7,6 +7,7 @@ import { notify } from '../../lib/notify';
 import { safeHref } from '../../lib/safeHref';
 import { TailoredScore } from '../jobApplies/Suggestions';
 import { KIND_LABEL, shortDay } from './CompanyMatchField';
+import { isDeletedResume } from './useDeletedResume';
 import { isMissingFile, useResumeRestore } from './useResumeRestore';
 
 export function reasonLabel(reason?: string | null): string {
@@ -27,6 +28,11 @@ export async function downloadLinkedResume(
     }
   } catch (err) {
     if (onMissing && isMissingFile(err) && onMissing(link)) return;
+    if (isDeletedResume(err) && link.resumeJobId) {
+      // The record is gone (deleted in Generated resumes), or this person may not open it.
+      notify.error("This resume can't be opened: it was deleted, or it isn't yours to open. Link another resume to this interview.");
+      return;
+    }
     notify.error(err, 'Download failed');
   }
 }

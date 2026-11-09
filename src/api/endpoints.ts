@@ -1574,8 +1574,9 @@ export function getResumeJob(id: string) {
   return apiFetch<ResumeJob>(`/resume/jobs/${id}`);
 }
 
-export function deleteResumeJob(id: string) {
-  return del<{ ok: boolean }>(`/resume/jobs/${id}`);
+/** A resume an interview links to answers 409 naming the interview(s) unless `force`. */
+export function deleteResumeJob(id: string, force = false) {
+  return del<{ ok: boolean }>(`/resume/jobs/${id}${force ? '?force=true' : ''}`);
 }
 
 export function retryResumeJob(id: string) {
