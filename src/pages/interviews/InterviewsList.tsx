@@ -18,7 +18,9 @@ import {
   normalizeInterviewStatus,
   stageBadgeClass,
   stageLabel,
+  statusNotePrompt,
 } from '../../lib/stageBadge';
+import { useStatusNotePrompt } from '../../components/interview/StatusNoteDialog';
 import RoundTrail from './RoundTrail';
 import { ResumeScoreCell } from '../../components/interview/LinkedResumeCard';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
@@ -67,11 +69,21 @@ export default function InterviewsList({
     return user?.role === 'admin' || owner === user?.id;
   };
 
+  const { prompt: askStatusNote, dialog: statusNoteDialog } = useStatusNotePrompt();
+
   const setTipStatus = async (iv: Interview, status: string) => {
     const tip = iv.stageHistory?.[iv.stageHistory.length - 1];
     if (!tip) return;
+    const body: api.InterviewStageInput = { status };
+    if (statusNotePrompt(status)) {
+      const note = await askStatusNote(
+        status, `${iv.companyName || 'Interview'} · ${stageLabel(tip.stage)}`, tip.status === status ? tip.statusNote : '',
+      );
+      if (note === null) return;
+      body.statusNote = note;
+    }
     try {
-      await api.updateInterviewStage(iv._id, tip.id, { status });
+      await api.updateInterviewStage(iv._id, tip.id, body);
       notify.success('Status updated');
       mutate();
     } catch (err) {
@@ -159,6 +171,7 @@ export default function InterviewsList({
 
   return (
     <div className="space-y-3">
+      {statusNoteDialog}
       <div className="table-wrap hidden sm:block">
         <table className="min-w-full text-sm">
           <caption className="sr-only">Interviews</caption>

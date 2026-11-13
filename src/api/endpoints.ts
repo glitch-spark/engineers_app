@@ -561,6 +561,8 @@ export interface InterviewRoundRow {
   roundId: string;
   stage: string;
   status: string | null;
+  /** The recruiter's reason (canceled) or feedback (passed / rejected). */
+  statusNote?: string | null;
   scheduledAt: string;
   endsAt: string | null;
   companyName: string | null;
@@ -643,6 +645,8 @@ export interface RoundInput {
   interviewerName?: string;
   note?: string;
   transcript?: string;
+  /** Why the round got its status: the recruiter's reason (canceled) or feedback (passed / rejected). */
+  statusNote?: string;
   caller?: CallerInput;
 }
 
@@ -751,6 +755,8 @@ export interface InterviewStageEntry {
   status?: string | null;
   transcript?: string;
   note?: string;
+  /** Why the round got its status: the recruiter's reason (canceled) or feedback (passed / rejected). */
+  statusNote?: string;
   interviewerName?: string | null;
   endsAt?: string | null;
   caller?: InterviewCaller | null;
@@ -761,7 +767,11 @@ export interface InterviewStageEntry {
 /** `confirmed` only on caller rounds (owner or admin). */
 export type InterviewStageInput = Partial<RoundInput> & { confirmed?: boolean };
 
-export const addInterviewStage = (id: string, body: RoundInput & { markPreviousPassed?: boolean }) =>
+/** `previousStatusNote`: the caller's feedback on the previous round, saved when it is marked passed. */
+export const addInterviewStage = (
+  id: string,
+  body: RoundInput & { markPreviousPassed?: boolean; previousStatusNote?: string },
+) =>
   postJSON<Record<string, unknown>>(`/interviews/${id}/stages`, body);
 
 export const updateInterviewStage = (id: string, stageId: string, body: InterviewStageInput) =>
@@ -2725,6 +2735,9 @@ export const resetBidderLogin = (id: string) => postJSON<BidderInvite>(`/bidders
 export const updateBidder = (id: string, body: BidderInput) => putJSON<Bidder>(`/bidders/${id}`, body);
 
 export const archiveBidder = (id: string) => del<null>(`/bidders/${id}`);
+
+/** Undo an archive. A registered bidder signs in to the extension again; an unregistered one needs a new code. */
+export const restoreBidder = (id: string) => postJSON<Bidder>(`/bidders/${id}/restore`, {});
 
 export const bidderLiveCounts = () => apiFetch<Record<string, BidderLiveCount>>('/bidders/live-counts');
 

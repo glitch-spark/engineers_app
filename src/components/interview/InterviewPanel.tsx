@@ -9,7 +9,10 @@ import NameWithAvatar from '../NameWithAvatar';
 import ActionMenu from '../ActionMenu';
 import InterviewSummary from './InterviewSummary';
 import type { InterviewFormMode } from '../../lib/interviewForm';
-import { interviewStatusBadgeClass, interviewStatusLabel, stageBadgeClass, stageLabel } from '../../lib/stageBadge';
+import {
+  interviewStatusBadgeClass, interviewStatusLabel, stageBadgeClass, stageLabel, statusNotePrompt,
+} from '../../lib/stageBadge';
+import { useStatusNotePrompt } from './StatusNoteDialog';
 import ConfirmDialog from '../ConfirmDialog';
 import InterviewForm, { type RoundPrefill } from './InterviewForm';
 import type { Interview } from './types';
@@ -57,7 +60,8 @@ export default function InterviewPanel({
   const [roundId, setRoundId] = useState<string | undefined>(initialRoundId);
   const [confirm, setConfirm] = useState<{ kind: 'round'; id: string } | { kind: 'interview' } | null>(null);
   const [busy, setBusy] = useState(false);
-  useDialog(open && !confirm, panelRef, onClose);
+  const { prompt: askStatusNote, dialog: statusNoteDialog, asking } = useStatusNotePrompt();
+  useDialog(open && !confirm && !asking, panelRef, onClose);
 
   // Reset the mode only when the panel opens or switches interview — a refreshed
   // copy of the same interview (after a save) must not reopen the form.
@@ -87,8 +91,15 @@ export default function InterviewPanel({
 
   const setRoundStatus = async (id: string, status: string) => {
     if (!iv) return;
+    const body: api.InterviewStageInput = { status };
+    if (statusNotePrompt(status)) {
+      const entry = iv.stageHistory?.find((e) => e.id === id);
+      const note = await askStatusNote(status, stageLabel(entry?.stage), entry?.status === status ? entry?.statusNote : '');
+      if (note === null) return; // backed out: the round keeps its status
+      body.statusNote = note;
+    }
     try {
-      const saved = await api.updateInterviewStage(iv._id, id, { status });
+      const saved = await api.updateInterviewStage(iv._id, id, body);
       applySaved(saved as unknown as Interview);
       notify.success('Status updated');
     } catch (err) {
@@ -224,6 +235,8 @@ export default function InterviewPanel({
           />
         )}
       </aside>
+
+      {statusNoteDialog}
 
       <ConfirmDialog
         open={!!confirm}

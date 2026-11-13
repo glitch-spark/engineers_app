@@ -6,9 +6,11 @@ import ConfirmDialog from '../ConfirmDialog';
 import BidderFormModal from './BidderFormModal';
 import InviteDialog from './InviteDialog';
 
+const FAILED = { reset: 'Failed to reset login', archive: 'Failed to archive bidder', restore: 'Failed to restore bidder' };
+
 /**
- * The ⋯ menu of one bidder with its dialogs: Edit, New invite code, Reset login, Archive; an archived bidder only
- * offers History (when `onHistory` is given).
+ * The ⋯ menu of one bidder with its dialogs: Edit, New invite code, Reset login, Archive; an archived bidder offers
+ * History (when `onHistory` is given) and Restore.
  */
 export default function BidderActions({
   bidder,
@@ -21,7 +23,7 @@ export default function BidderActions({
 }) {
   const [editing, setEditing] = useState(false);
   const [invite, setInvite] = useState<api.BidderInvite | null>(null);
-  const [confirm, setConfirm] = useState<'reset' | 'archive' | null>(null);
+  const [confirm, setConfirm] = useState<'reset' | 'archive' | 'restore' | null>(null);
   const [busy, setBusy] = useState(false);
 
   const newInvite = async () => {
@@ -40,6 +42,10 @@ export default function BidderActions({
         const fresh = await api.resetBidderLogin(bidder._id);
         setConfirm(null);
         setInvite(fresh);
+      } else if (confirm === 'restore') {
+        await api.restoreBidder(bidder._id);
+        notify.success(`${bidder.name} restored`);
+        setConfirm(null);
       } else {
         await api.archiveBidder(bidder._id);
         notify.success(`${bidder.name} archived`);
@@ -47,7 +53,7 @@ export default function BidderActions({
       }
       onChanged();
     } catch (err) {
-      notify.error(err, confirm === 'reset' ? 'Failed to reset login' : 'Failed to archive bidder');
+      notify.error(err, FAILED[confirm ?? 'archive']);
     } finally {
       setBusy(false);
     }
@@ -55,7 +61,7 @@ export default function BidderActions({
 
   const history = onHistory ? [{ label: 'History', onSelect: onHistory }] : [];
   const items = bidder.archivedAt
-    ? history
+    ? [...history, { label: 'Restore', onSelect: () => setConfirm('restore') }]
     : [
         { label: 'Edit', onSelect: () => setEditing(true) },
         ...(bidder.status === 'invited' ? [{ label: 'New invite code', onSelect: newInvite }] : []),
@@ -98,6 +104,19 @@ export default function BidderActions({
         body={`Archive ${bidder.name}? They'll stop appearing in reports. History is kept.`}
         confirmLabel="Archive"
         tone="danger"
+        busy={busy}
+        onConfirm={run}
+        onCancel={() => setConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={confirm === 'restore'}
+        title="Restore bidder"
+        body={bidder.registeredAt
+          ? `Restore ${bidder.name}? They're back in lists and reports, and sign in to the extension again with their username and password.`
+          : `Restore ${bidder.name}? They're back in lists and reports. Use New invite code so they can register the extension.`}
+        confirmLabel="Restore"
+        tone="default"
         busy={busy}
         onConfirm={run}
         onCancel={() => setConfirm(null)}

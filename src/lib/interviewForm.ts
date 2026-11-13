@@ -2,7 +2,7 @@
 import type {
   AppliedByInput, AppliedByOption, CallerInput, InterviewStageEntry, NoMatchReason, ResumeLinkInput, RoundInput,
 } from '../api/endpoints';
-import { INTERVIEW_STAGE_ORDER, normalizeInterviewStatus, type InterviewStatusValue } from './stageBadge';
+import { INTERVIEW_STAGE_ORDER, normalizeInterviewStatus, statusNotePrompt, type InterviewStatusValue } from './stageBadge';
 import { browserZone, fromZoned, parseServerTime, zonedDateKey, zonedTime } from './interviewTimezone';
 
 export type InterviewFormMode = 'new' | 'editDetails' | 'addRound' | 'editRound';
@@ -68,6 +68,8 @@ export type RoundFormState = {
   status: InterviewStatusValue;
   interviewerName: string;
   note: string;
+  /** The recruiter's reason (Canceled) or feedback (Passed / Rejected); sent only with those statuses. */
+  statusNote: string;
   callerEnabled: boolean;
   /** The saved caller's name (shown when it is not on the caller list). */
   callerName: string;
@@ -107,6 +109,7 @@ export function blankRound(
     status: 'scheduled',
     interviewerName: '',
     note: '',
+    statusNote: '',
     callerEnabled: !!opts.callerEnabled,
     callerName: '',
     callerId: '',
@@ -133,6 +136,7 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     status: normalizeInterviewStatus(e.status) || 'scheduled',
     interviewerName: e.interviewerName || '',
     note: e.note || '',
+    statusNote: e.statusNote || '',
     callerEnabled: !!caller?.enabled,
     callerName: typedName,
     callerId,
@@ -163,6 +167,7 @@ export function roundPayload(r: RoundFormState, tz: string = browserZone()): Rou
     status: r.status,
     interviewerName: r.interviewerName.trim(),
     note: r.note,
+    statusNote: statusNotePrompt(r.status) ? r.statusNote.trim() : '',
     ...(caller ? { caller } : {}),
   };
 }

@@ -1,5 +1,5 @@
 import Select from '../Select';
-import { INTERVIEW_STATUSES } from '../../lib/stageBadge';
+import { INTERVIEW_STATUSES, STATUS_NOTE_MAX, statusNotePrompt } from '../../lib/stageBadge';
 import { DURATION_OPTIONS, type RoundFormState } from '../../lib/interviewForm';
 import StagePicker from './StagePicker';
 import CallerFields from './CallerFields';
@@ -42,6 +42,7 @@ export default function RoundFields({
     : [...DURATION_OPTIONS, round.durationMin].sort((a, b) => a - b);
   // Abbreviation for the round's own date (EST vs EDT), in the chosen zone.
   const tzLabel = zoneAbbrev(round.date ? fromZoned(round.date, round.time || '12:00', tz) : new Date(), tz);
+  const noteCopy = statusNotePrompt(round.status);
 
   return (
     <fieldset className="space-y-3">
@@ -62,6 +63,14 @@ export default function RoundFields({
           />
         </div>
       </div>
+      {noteCopy && (
+        <div>
+          <label htmlFor={id('status-note')} className="block text-sm font-medium mb-1">{noteCopy.label}</label>
+          <textarea id={id('status-note')} className="input min-h-[72px]" value={round.statusNote} disabled={disabled}
+            maxLength={STATUS_NOTE_MAX} placeholder={noteCopy.placeholder}
+            onChange={(e) => onChange({ statusNote: e.target.value })} />
+        </div>
+      )}
       <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3">
         <div>
           <label htmlFor={id('date')} className="block text-sm font-medium mb-1">Date{req}</label>
