@@ -28,6 +28,52 @@ export function normalizeInterviewStatus(status?: string | null): InterviewStatu
   return INTERVIEW_STATUSES.some((x) => x.value === mapped) ? (mapped as InterviewStatusValue) : '';
 }
 
+/** Longest reason / feedback the API accepts. */
+export const STATUS_NOTE_MAX = 2000;
+
+type StatusNoteCopy = { title: string; statusLabel: string; label: string; placeholder: string; hint: string; short: string };
+
+/**
+ * Statuses that ask why: Canceled keeps the recruiter's reason; Passed (on to the next round) and Rejected the
+ * feedback. Optional; saved on the round as `statusNote`.
+ */
+const STATUS_NOTE_COPY: Partial<Record<InterviewStatusValue, StatusNoteCopy>> = {
+  canceled: {
+    title: 'Cancel round',
+    statusLabel: 'Canceled',
+    label: "Recruiter's reason",
+    placeholder: 'Why was it canceled? e.g. "Recruiter said the role was filled internally"',
+    hint: 'Shown on the round. Leave empty if no reason was given.',
+    short: 'Reason',
+  },
+  passed: {
+    title: 'Passed to next round',
+    statusLabel: 'Passed',
+    label: "Caller's feedback",
+    placeholder: 'How did it go? Feedback from the caller or the recruiter',
+    hint: 'Shown on the round so the next caller can prepare. Leave empty if there is none yet.',
+    short: 'Feedback',
+  },
+  rejected: {
+    title: 'Reject round',
+    statusLabel: 'Rejected',
+    label: 'Feedback',
+    placeholder: 'Why was it rejected? Feedback from the caller or the recruiter',
+    hint: 'Shown on the round. Leave empty if no feedback was given.',
+    short: 'Feedback',
+  },
+};
+
+export function statusNotePrompt(status?: string | null): StatusNoteCopy | null {
+  const s = normalizeInterviewStatus(status);
+  return (s && STATUS_NOTE_COPY[s]) || null;
+}
+
+/** "Reason" / "Feedback" for a saved note; "Note" for a status that doesn't ask. */
+export function statusNoteLabel(status?: string | null): string {
+  return statusNotePrompt(status)?.short ?? 'Note';
+}
+
 export function interviewStatusLabel(status?: string | null): string {
   const s = normalizeInterviewStatus(status);
   return INTERVIEW_STATUSES.find((x) => x.value === s)?.label ?? '—';

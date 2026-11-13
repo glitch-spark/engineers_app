@@ -29,6 +29,7 @@ import {
   normalizeInterviewStage,
   stageBadgeClass,
   stageLabel,
+  statusNoteLabel,
 } from '../lib/stageBadge';
 import ThemeToggle from '../components/ThemeToggle';
 import { formatScheduledDate } from '../components/interview/format';
@@ -482,6 +483,11 @@ function StageWorkspace({
             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${interviewStatusBadgeClass(entry.status)}`}>
               {interviewStatusLabel(entry.status)}
             </span>
+          )}
+          {entry.statusNote?.trim() && (
+            <p className="basis-full whitespace-pre-wrap text-sm text-body">
+              <span className="font-medium text-strong">{statusNoteLabel(entry.status)}:</span> {entry.statusNote}
+            </p>
           )}
         </div>
         {canEdit && (

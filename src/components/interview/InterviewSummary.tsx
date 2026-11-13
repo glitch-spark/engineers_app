@@ -12,6 +12,7 @@ import {
   normalizeInterviewStatus,
   stageBadgeClass,
   stageLabel,
+  statusNoteLabel,
 } from '../../lib/stageBadge';
 import { STATUS_DOT } from '../../pages/interviews/RoundTrail';
 import ActionMenu from '../ActionMenu';
@@ -45,6 +46,16 @@ function shortUrl(url: string): string {
 
 function methodLabel(method?: string | null): string {
   return CALLER_METHOD_OPTIONS.find((m) => m.value === method)?.label ?? 'Method TBD';
+}
+
+/** The round's status reason / feedback ("Reason: role filled"). */
+function StatusNote({ status, note, className = '' }: { status?: string | null; note?: string; className?: string }) {
+  if (!note?.trim()) return null;
+  return (
+    <p className={`rounded-lg border-l-2 border-zinc-300 bg-zinc-50 px-2.5 py-1.5 text-xs text-body dark:border-zinc-600 dark:bg-zinc-900/60 whitespace-pre-wrap ${className}`}>
+      <span className="font-medium text-strong">{statusNoteLabel(status)}:</span> {note}
+    </p>
+  );
 }
 
 function QuickAdd({ label, onClick }: { label: string; onClick: () => void }) {
@@ -138,6 +149,7 @@ export default function InterviewSummary({
               <span className={`badge ${interviewStatusBadgeClass(spotRound.status)}`}>{interviewStatusLabel(spotRound.status)}</span>
             )}
           </div>
+          {spot.kind === 'last' && <StatusNote status={spotRound.status} note={spotRound.statusNote} className="mt-2" />}
           <div className="mt-1.5 text-sm">
             {spotRound.interviewerName
               ? <span className="text-body">with {spotRound.interviewerName}</span>
@@ -283,6 +295,7 @@ export default function InterviewSummary({
                     </span>
                   )}
                 </div>
+                <StatusNote status={e.status} note={e.statusNote} className="mt-1.5" />
                 {preview && (
                   <div className="mt-1.5 rounded-lg bg-zinc-50 px-2.5 py-1.5 text-xs text-body dark:bg-zinc-900/60">
                     <p className={open ? 'whitespace-pre-wrap' : 'line-clamp-2'}>

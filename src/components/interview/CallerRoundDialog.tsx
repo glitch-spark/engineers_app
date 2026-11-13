@@ -9,7 +9,7 @@ import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, isUnassigned } from '../../lib/callerColors';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
-import { interviewStatusLabel, stageLabel } from '../../lib/stageBadge';
+import { interviewStatusLabel, stageLabel, statusNoteLabel } from '../../lib/stageBadge';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
 
 /** A caller round from the Callers calendar: its details, and the caller (Admin / interview managers assign it). */
@@ -77,6 +77,12 @@ export default function CallerRoundDialog({
           <dd className="tabular-nums">{when}</dd>
           <dt className="text-muted">Status</dt>
           <dd>{interviewStatusLabel(entry?.status) || '—'}</dd>
+          {entry?.statusNote?.trim() && (
+            <>
+              <dt className="text-muted">{statusNoteLabel(entry.status)}</dt>
+              <dd className="whitespace-pre-wrap">{entry.statusNote}</dd>
+            </>
+          )}
           <dt className="text-muted">Owner</dt>
           <dd>{interview.ownerName || interview.ownerEmail || '—'}{account?.name ? ` · ${account.name}` : ''}</dd>
           <dt className="text-muted">Method</dt>

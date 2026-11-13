@@ -6,7 +6,10 @@ import NameWithAvatar from '../../components/NameWithAvatar';
 import type { Interview } from '../../components/interview/types';
 import { CALLER_METHOD_OPTIONS } from '../../components/interview/types';
 import { callerRoundsQuery, type InterviewFilters } from '../../lib/interviewFilters';
-import { interviewStatusBadgeClass, interviewStatusLabel, normalizeInterviewStatus, stageBadgeClass, stageLabel } from '../../lib/stageBadge';
+import { MessageSquareText } from 'lucide-react';
+import {
+  interviewStatusBadgeClass, interviewStatusLabel, normalizeInterviewStatus, stageBadgeClass, stageLabel, statusNoteLabel,
+} from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 import { useCallers } from '../../lib/useCallers';
@@ -77,7 +80,13 @@ export default function CallerRoundsList({
   const stageCell = (row: InterviewRoundRow) => <span className={`badge ${stageBadgeClass(row.stage)}`}>{stageLabel(row.stage)}</span>;
   const statusCell = (row: InterviewRoundRow) => {
     const s = normalizeInterviewStatus(row.status);
-    return <span className={`badge ${interviewStatusBadgeClass(s)}`}>{interviewStatusLabel(s)}</span>;
+    const note = row.statusNote?.trim();
+    return (
+      <span className={`badge ${interviewStatusBadgeClass(s)}`} title={note ? `${statusNoteLabel(s)}: ${note}` : undefined}>
+        {interviewStatusLabel(s)}
+        {note && <><MessageSquareText size={11} className="ml-1 inline" aria-hidden /><span className="sr-only">. {statusNoteLabel(s)}: {note}</span></>}
+      </span>
+    );
   };
   const sortWhen = () => update({ dir: filters.dir === 'desc' ? 'asc' : 'desc', page: 1 });
   // A period or filter not fetched yet: the previous rows stay, dimmed, under a loading note.

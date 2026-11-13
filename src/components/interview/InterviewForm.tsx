@@ -16,7 +16,9 @@ import {
   type InterviewFormMode,
   type RoundFormState,
 } from '../../lib/interviewForm';
-import { interviewStatusBadgeClass, interviewStatusLabel, normalizeInterviewStatus, stageBadgeClass, stageLabel } from '../../lib/stageBadge';
+import {
+  STATUS_NOTE_MAX, interviewStatusBadgeClass, interviewStatusLabel, normalizeInterviewStatus, stageBadgeClass, stageLabel,
+} from '../../lib/stageBadge';
 import ApplicationFields from './ApplicationFields';
 import RoundFields from './RoundFields';
 import type { Interview } from './types';
@@ -101,6 +103,7 @@ export default function InterviewForm({
     return next;
   });
   const [markPrevious, setMarkPrevious] = useState(true);
+  const [previousFeedback, setPreviousFeedback] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -134,6 +137,8 @@ export default function InterviewForm({
         saved = await api.addInterviewStage(interview._id, {
           ...roundPayload(round, tz),
           markPreviousPassed: previousOpen && markPrevious,
+          ...(previousOpen && markPrevious && previousFeedback.trim()
+            ? { previousStatusNote: previousFeedback.trim() } : {}),
         });
       } else if (mode === 'editRound' && interview && roundId) {
         if (JSON.stringify(app) !== JSON.stringify(savedApp)) await api.updateInterview(interview._id, appBody);
@@ -196,10 +201,22 @@ export default function InterviewForm({
           />
         )}
         {previousOpen && previous && (
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={markPrevious} onChange={(e) => setMarkPrevious(e.target.checked)} />
-            Mark {stageLabel(previous.stage)} as Passed
-          </label>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={markPrevious} onChange={(e) => setMarkPrevious(e.target.checked)} />
+              Mark {stageLabel(previous.stage)} as Passed
+            </label>
+            {markPrevious && (
+              <div>
+                <label htmlFor={`${idPrefix}-previous-feedback`} className="block text-sm font-medium mb-1">
+                  Caller&apos;s feedback on {stageLabel(previous.stage)}
+                </label>
+                <textarea id={`${idPrefix}-previous-feedback`} className="input min-h-[72px]" value={previousFeedback}
+                  maxLength={STATUS_NOTE_MAX} placeholder="How did it go? Feedback from the caller or the recruiter"
+                  onChange={(e) => setPreviousFeedback(e.target.value)} />
+              </div>
+            )}
+          </div>
         )}
       </div>
       <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
