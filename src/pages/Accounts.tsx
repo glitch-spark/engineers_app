@@ -108,7 +108,7 @@ export default function AccountsPage() {
     profileStatus === 'archived' || rangeError
       ? null
       : (['account-metrics', rangeDates?.from ?? 'all', rangeDates?.to ?? '', isAdmin ? userId : ''] as const),
-    () => api.getProfileMetrics({ ...(rangeDates ?? {}), ...(isAdmin && userId ? { userId } : {}) }),
+    () => api.getProfileMetrics({ ...(rangeDates ?? { weeks: 'all' as const }), ...(isAdmin && userId ? { userId } : {}) }),
     { revalidateOnFocus: false }
   );
   const metricsById = useMemo(
@@ -169,6 +169,11 @@ export default function AccountsPage() {
     if (a.archived) return dashes('No metrics for archived profiles');
     if (metricsError) return dashes("Couldn't load metrics");
     if (rangeError) return dashes(rangeError);
+    // An older server (frontend deployed first) ignores from / to and answers with the last 4 weeks: don't show those
+    // numbers under the new labels. Newer servers always send ratesSince (null or a day).
+    if (metricsData && !('ratesSince' in metricsData)) {
+      return dashes('These metrics need the latest server update. Reload once the backend is deployed.');
+    }
     if (metricsLoading) {
       return Array.from({ length: METRIC_COLS }, (_, i) => (
         <td key={i} className="px-4 py-2.5"><div className="skeleton h-4 w-12" aria-hidden /></td>
