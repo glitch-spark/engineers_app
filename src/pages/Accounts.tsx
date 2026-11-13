@@ -11,21 +11,36 @@ import PageHeader from '../components/PageHeader';
 import { countryFlag, countryName, PROFILE_REGIONS } from '../lib/countries';
 import { PROFILE_STATUS_OPTIONS, type ProfileStatus } from '../lib/profileArchive';
 import {
-  WEEK_OPTIONS, readListPeriod, writeListPeriod, fmtCount, fmtPerWeek, fmtRate, fmtScore, tailoredText,
-  type ListPeriod,
+  PROFILE_RANGES, profileRangeDates, profileRangeError, readProfileRange, writeProfileRange, fmtCount, fmtPerWeek,
+  fmtRate, fmtScore, tailoredText, type ProfileRange,
 } from '../lib/profileMetrics';
 
-type SortKey = 'bids' | 'interviews' | 'rate' | 'score';
+type SortKey = 'lastApply' | 'bids' | 'interviews' | 'selfRate' | 'bidderRate' | 'score';
 
 const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number | null => {
   if (!m || m.spanWeeks === 0) return null;
   switch (key) {
+    case 'lastApply': return m.lastApply ? Date.parse(m.lastApply) : null;
     case 'bids': return m.bids;
     case 'interviews': return m.interviews;
-    case 'rate': return m.interviewsPerBid;
+    case 'selfRate': return m.selfRate?.rate ?? null;
+    case 'bidderRate': return m.bidderRate?.rate ?? null;
     case 'score': return m.tailorScore?.avg ?? m.matchScore?.avg ?? null;
   }
 };
+
+/** "Nov 6, 2026" for an ISO day, read as UTC so it never shifts with the viewer's time zone. */
+const fmtDay = (iso: string | null | undefined) => (iso
+  ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+  : '—');
+
+/** "today", "yesterday" or "N days ago" for an ISO day, against the viewer's today. */
+function daysAgo(iso: string): string {
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const n = Math.round((today - Date.parse(`${iso.slice(0, 10)}T00:00:00Z`)) / 86_400_000);
+  return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`;
+}
 
 const scoreCell = (m: api.ProfileMetricsRow) => {
   const parts = [
@@ -62,8 +77,10 @@ export default function AccountsPage() {
   const [region, setRegion] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Acc | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [weeks, setWeeks] = useState<ListPeriod>(readListPeriod);
-  const allTime = weeks === 'all';
+  const [range, setRange] = useState<ProfileRange>(readProfileRange);
+  const allTime = range.preset === 'all';
+  const rangeError = profileRangeError(range);
+  const rangeDates = rangeError ? null : profileRangeDates(range);
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
@@ -88,8 +105,10 @@ export default function AccountsPage() {
 
   // Metrics load on their own key so the list never waits on them. Archived profiles have none: no request then.
   const { data: metricsData, error: metricsError, isLoading: metricsLoading } = useSWR(
-    profileStatus === 'archived' ? null : (['account-metrics', weeks, isAdmin ? userId : ''] as const),
-    () => api.getProfileMetrics({ weeks, ...(isAdmin && userId ? { userId } : {}) }),
+    profileStatus === 'archived' || rangeError
+      ? null
+      : (['account-metrics', rangeDates?.from ?? 'all', rangeDates?.to ?? '', isAdmin ? userId : ''] as const),
+    () => api.getProfileMetrics({ ...(rangeDates ?? {}), ...(isAdmin && userId ? { userId } : {}) }),
     { revalidateOnFocus: false }
   );
   const metricsById = useMemo(
@@ -141,15 +160,17 @@ export default function AccountsPage() {
     ];
   };
 
-  // Four <td>s: Bids/wk, Interviews/wk, Intv/bid, Score.
+  // Six <td>s: Applies, Bids, Interviews, Self intv/bid, Bidder intv/bid, Resume score.
+  const METRIC_COLS = 6;
   const metricCells = (a: Acc): ReactNode => {
-    const dashes = (title?: string) => [0, 1, 2, 3].map((i) => (
+    const dashes = (title?: string) => Array.from({ length: METRIC_COLS }, (_, i) => (
       <td key={i} className="px-4 py-2.5 text-muted" title={title}>—</td>
     ));
     if (a.archived) return dashes('No metrics for archived profiles');
     if (metricsError) return dashes("Couldn't load metrics");
+    if (rangeError) return dashes(rangeError);
     if (metricsLoading) {
-      return [0, 1, 2, 3].map((i) => (
+      return Array.from({ length: METRIC_COLS }, (_, i) => (
         <td key={i} className="px-4 py-2.5"><div className="skeleton h-4 w-12" aria-hidden /></td>
       ));
     }
@@ -157,10 +178,21 @@ export default function AccountsPage() {
     if (!m) return dashes('Not loaded yet');
     if (m.spanWeeks === 0) return dashes('Not enough history yet');
     const split = (text: string) => <div className="text-[11px] text-muted">{text}</div>;
-    // Totals over the selected period; the weekly average is in the tooltip.
+    // Totals over the selected range; the weekly average is in the tooltip.
     const perWeek = (n: number | null) => `${fmtPerWeek(n)} per week on average`;
     return (
       <>
+        <td
+          className="px-4 py-2.5 whitespace-nowrap"
+          title={m.firstApply ? `First apply ${fmtDay(m.firstApply)} · last apply ${fmtDay(m.lastApply)}` : 'No bids yet'}
+        >
+          {m.firstApply ? (
+            <>
+              <div>{fmtDay(m.firstApply)}</div>
+              {m.lastApply && split(`last: ${daysAgo(m.lastApply)}`)}
+            </>
+          ) : <span className="text-muted">—</span>}
+        </td>
         <td
           className="px-4 py-2.5 whitespace-nowrap"
           title={allTime ? `${perWeek(m.bidsPerWeek)}. ${selfSinceNote}` : perWeek(m.bidsPerWeek)}
@@ -168,43 +200,55 @@ export default function AccountsPage() {
           <div>{fmtCount(m.bids)}</div>
           {split(`${fmtCount(m.selfBids)} self · ${fmtCount(m.bidderBids)} bidder`)}
         </td>
-        <td className="px-4 py-2.5 whitespace-nowrap" title={perWeek(m.interviewsPerWeek)}>
+        <td
+          className="px-4 py-2.5 whitespace-nowrap"
+          title={`${fmtCount(m.selfInterviews)} self-taken · ${fmtCount(m.callerInterviews)} caller-taken. ${perWeek(m.interviewsPerWeek)}`}
+        >
           <div>{fmtCount(m.interviews)}</div>
-          {split(`${fmtCount(m.selfInterviews)} self · ${fmtCount(m.callerInterviews)} caller`)}
+          {split(`${fmtCount(m.selfAppliedInterviews ?? 0)} self · ${fmtCount(m.bidderAppliedInterviews ?? 0)} bidder · `
+            + `${fmtCount(m.unsetAppliedInterviews ?? 0)} not set`)}
         </td>
-        {rateAndScore(m)}
+        {rateCell(m.selfRate, 'self')}
+        {rateCell(m.bidderRate, 'bidder')}
+        {scoreTd(m)}
       </>
     );
   };
 
-  // Intv/bid and Score: the same in every period.
-  const rateAndScore = (m: api.ProfileMetricsRow): ReactNode => (
-    <>
+  const ratesSinceLabel = fmtDay(metricsData?.ratesSince);
+  // Self (or bidder) applied interviews ÷ self (or bidder) bids, counted from the day "Applied by" started.
+  const rateCell = (r: api.SourceRate | null | undefined, who: 'self' | 'bidder'): ReactNode => {
+    if (!r || r.rate == null) {
+      const why = metricsData?.ratesSince ? `No ${who} bids since ${ratesSinceLabel}` : '"Applied by" started Nov 6, 2026';
+      return <td className="px-4 py-2.5 text-muted" title={why}>—</td>;
+    }
+    return (
       <td
-        className={`px-4 py-2.5 whitespace-nowrap ${m.lowVolume ? 'text-muted' : ''}`}
-        title={
-          m.interviewsPerBid == null
-            ? 'No bids in this period'
-            : m.lowVolume ? 'Fewer than 30 bids — too few to rank' : undefined
-        }
+        className={`px-4 py-2.5 whitespace-nowrap ${r.lowVolume ? 'text-muted' : ''}`}
+        title={`Since ${ratesSinceLabel}: ${fmtCount(r.interviews)} ${who}-applied interviews ÷ ${fmtCount(r.bids)} ${who} bids`
+          + (r.lowVolume ? ' · fewer than 30 bids, too few to rank' : '')}
       >
-        {fmtRate(m.interviewsPerBid)}
+        {fmtRate(r.rate)}
       </td>
-      <td
-        className="px-4 py-2.5 whitespace-nowrap"
-        title={
-          scoreCell(m) === '—'
-            ? 'No scored resumes yet'
-            : `Tailor: average of ${m.tailorScore?.n ?? 0} scored tailored resumes · `
-              + `Match: average of ${m.matchScore?.n ?? 0} applies with an uploaded resume`
-        }
-      >
-        <div>{scoreCell(m)}</div>
-        {tailoredText(m.tailoredResumes) && (
-          <div className="text-[11px] text-muted">{tailoredText(m.tailoredResumes)}</div>
-        )}
-      </td>
-    </>
+    );
+  };
+
+  // Resume score: the same in every range.
+  const scoreTd = (m: api.ProfileMetricsRow): ReactNode => (
+    <td
+      className="px-4 py-2.5 whitespace-nowrap"
+      title={
+        scoreCell(m) === '—'
+          ? 'No scored resumes yet'
+          : `Tailor: average of ${m.tailorScore?.n ?? 0} scored tailored resumes · `
+            + `Match: average of ${m.matchScore?.n ?? 0} applies with an uploaded resume`
+      }
+    >
+      <div>{scoreCell(m)}</div>
+      {tailoredText(m.tailoredResumes) && (
+        <div className="text-[11px] text-muted">{tailoredText(m.tailoredResumes)}</div>
+      )}
+    </td>
   );
 
   const handlePageSizeChange = (size: number) => {
@@ -228,9 +272,10 @@ export default function AccountsPage() {
     }
   };
 
-  const changePeriod = (p: ListPeriod) => {
-    setWeeks(p);
-    writeListPeriod(p);
+  const changeRange = (patch: Partial<ProfileRange>) => {
+    const next = { ...range, ...patch };
+    setRange(next);
+    writeProfileRange(next);
   };
   const selfSince = metricsData?.selfBidsSince;
   const selfSinceNote = `Self bids are counted from ${
@@ -338,18 +383,32 @@ export default function AccountsPage() {
           </select>
         </div>
 
-        <div className="w-36">
-          <label className="block text-xs text-muted mb-1" htmlFor="accounts-period">Period</label>
+        <div className="w-40">
+          <label className="block text-xs text-muted mb-1" htmlFor="accounts-range">Date range</label>
           <select
-            id="accounts-period"
+            id="accounts-range"
             className="select focus-ring w-full text-sm"
-            value={weeks}
-            onChange={(e) => changePeriod(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            value={range.preset}
+            onChange={(e) => changeRange({ preset: e.target.value as ProfileRange['preset'] })}
           >
-            {WEEK_OPTIONS.map((w) => <option key={w} value={w}>Last {w} weeks</option>)}
-            <option value="all">All time</option>
+            {PROFILE_RANGES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
+        {range.preset === 'custom' && (
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-xs text-muted mb-1" htmlFor="accounts-from">From</label>
+              <input id="accounts-from" type="date" className="input !w-auto !py-1.5 text-sm" value={range.from}
+                onChange={(e) => changeRange({ from: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1" htmlFor="accounts-to">To</label>
+              <input id="accounts-to" type="date" className="input !w-auto !py-1.5 text-sm" value={range.to}
+                onChange={(e) => changeRange({ to: e.target.value })} />
+            </div>
+            {rangeError && <span className="pb-2 text-xs text-red-700 dark:text-red-400" role="alert">{rangeError}</span>}
+          </div>
+        )}
 
         <div className="w-28">
           <label className="block text-xs text-muted mb-1" htmlFor="accounts-page-size">Show</label>
@@ -394,9 +453,11 @@ export default function AccountsPage() {
               <th className="px-4 py-2.5">Name</th>
               <th className="px-4 py-2.5">Region</th>
               {([
+                ['lastApply', 'Applies'],
                 ['bids', 'Bids'],
                 ['interviews', 'Interviews'],
-                ['rate', 'Intv/bid'],
+                ['selfRate', 'Self intv/bid'],
+                ['bidderRate', 'Bidder intv/bid'],
                 ['score', 'Resume score'],
               ] as const).map(([key, label]) => (
                 <th
@@ -421,7 +482,7 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted">
+                <td colSpan={11} className="px-4 py-8 text-center text-muted">
                   <div role="status" className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading profiles...
@@ -430,7 +491,7 @@ export default function AccountsPage() {
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-muted">
+                <td colSpan={11} className="px-3 py-6 text-center text-muted">
                   {debouncedSearch
                     ? `No profiles found matching "${debouncedSearch}"`
                     : profileStatus === 'archived' ? 'No archived profiles.' : 'No profiles found.'}

@@ -216,11 +216,26 @@ export type ProfileMetricsRow = {
   interviews: number;
   selfInterviews: number;
   callerInterviews: number;
+  /** The same interviews by who applied for the job ("Applied by"; unset = not recorded, e.g. before Nov 6). */
+  selfAppliedInterviews?: number;
+  bidderAppliedInterviews?: number;
+  unsetAppliedInterviews?: number;
+  /** Profiles list only: interviews per bid from `ratesSince` on, per source; null when the range ends before it. */
+  selfRate?: SourceRate | null;
+  bidderRate?: SourceRate | null;
+  /** Profiles list only: the first and last day the profile applied (bidder bids, self bids typed per profile). */
+  firstApply?: string | null;
+  lastApply?: string | null;
 };
 
-export const getProfileMetrics = (params: { weeks: number | 'all'; userId?: string }) =>
+/** Self- (or bidder-) applied interviews ÷ self (or bidder) bids; `lowVolume` under 30 bids. */
+export type SourceRate = { interviews: number; bids: number; rate: number | null; lowVolume: boolean };
+
+export const getProfileMetrics = (params: { from?: string; to?: string; userId?: string }) =>
   apiFetch<{
-    start: string; end: string; weeks: number | 'all'; rows: ProfileMetricsRow[];
+    start: string; end: string; weeks: number | 'all' | null; rows: ProfileMetricsRow[];
+    /** The first day the self / bidder rates count (Nov 6, when "Applied by" started); null before it. */
+    ratesSince: string | null;
     /** All time only: the day self bids started being typed per profile (null when every day counts). */
     selfBidsSince?: string | null;
   }>(

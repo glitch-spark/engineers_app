@@ -1,29 +1,58 @@
 import type { ScoreStat } from '../api/endpoints';
 
-export const WEEK_OPTIONS = [4, 8, 12] as const;
+import { listDateRange } from './interviewFilters';
 
-/** The Profiles list's period: completed weeks, or every day since each profile was created. */
-export type ListPeriod = number | 'all';
+/** The Profiles list's date range: the Interviews page's presets (no Next week), plus All time (the default). */
+export type ProfileRangePreset = 'all' | 'this_week' | 'prev_week' | 'this_month' | 'prev_month' | 'this_year' | 'custom';
+export type ProfileRange = { preset: ProfileRangePreset; from: string; to: string };
 
-// Kept apart from the profile page's weeks, so picking a period there doesn't change the list's.
-const LIST_PERIOD_KEY = 'profileListPeriod';
+export const PROFILE_RANGES: { value: ProfileRangePreset; label: string }[] = [
+  { value: 'all', label: 'All time' },
+  { value: 'this_week', label: 'This week' },
+  { value: 'prev_week', label: 'Previous week' },
+  { value: 'this_month', label: 'This month' },
+  { value: 'prev_month', label: 'Previous month' },
+  { value: 'this_year', label: 'This year' },
+  { value: 'custom', label: 'Custom' },
+];
 
-/** All time until a period is picked on the list. */
-export function readListPeriod(): ListPeriod {
+const ALL_TIME: ProfileRange = { preset: 'all', from: '', to: '' };
+// Kept apart from the profile page's period, so picking one there doesn't change the list's.
+const LIST_RANGE_KEY = 'profiles.range';
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** All time until a range is picked on the list. */
+export function readProfileRange(): ProfileRange {
   try {
-    const n = Number(localStorage.getItem(LIST_PERIOD_KEY));
-    return (WEEK_OPTIONS as readonly number[]).includes(n) ? n : 'all';
+    const r = JSON.parse(localStorage.getItem(LIST_RANGE_KEY) || 'null') as ProfileRange | null;
+    if (r && PROFILE_RANGES.some((o) => o.value === r.preset)) {
+      return { preset: r.preset, from: DATE_RE.test(r.from) ? r.from : '', to: DATE_RE.test(r.to) ? r.to : '' };
+    }
   } catch {
-    return 'all';
+    // Private windows can throw; fall back to All time.
+  }
+  return ALL_TIME;
+}
+
+export function writeProfileRange(r: ProfileRange) {
+  try {
+    localStorage.setItem(LIST_RANGE_KEY, JSON.stringify(r));
+  } catch {
+    // Private windows can throw; the range just isn't remembered.
   }
 }
 
-export function writeListPeriod(p: ListPeriod) {
-  try {
-    localStorage.setItem(LIST_PERIOD_KEY, String(p));
-  } catch {
-    // Private windows can throw; the period just isn't remembered.
-  }
+/** Why a custom range can't be requested yet, or null. */
+export function profileRangeError(r: ProfileRange): string | null {
+  if (r.preset !== 'custom') return null;
+  if (!r.from || !r.to) return 'Pick both dates';
+  return r.from > r.to ? 'From must be on or before To' : null;
+}
+
+/** The days to ask for (weeks Monday–Sunday, as the Interviews list), or null for All time. */
+export function profileRangeDates(r: ProfileRange, now = new Date()): { from: string; to: string } | null {
+  if (r.preset === 'all') return null;
+  return listDateRange({ range: r.preset, from: r.from, to: r.to }, now);
 }
 
 /** The profile Metrics tab's charts and table: one point per day or per week. */

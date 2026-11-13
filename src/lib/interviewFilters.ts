@@ -93,7 +93,7 @@ export function serializeInterviewFilters(f: InterviewFilters, d: FilterDefaults
 }
 
 /** Monday → Sunday for week presets (the shared presets stop on Saturday). */
-export function listDateRange(f: InterviewFilters, now = new Date()): { from: string; to: string } {
+export function listDateRange(f: Pick<InterviewFilters, 'range' | 'from' | 'to'>, now = new Date()): { from: string; to: string } {
   if (f.range === 'custom') return { from: f.from, to: f.to };
   const weekOffset = f.range === 'prev_week' ? -7 : f.range === 'next_week' ? 7 : f.range === 'this_week' ? 0 : null;
   if (weekOffset !== null) {
