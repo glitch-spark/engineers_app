@@ -14,7 +14,7 @@ import {
   PROFILE_RANGES, profileRangeDates, profileRangeError, readProfileRange, writeProfileRange, fmtCount, fmtPerWeek,
   fmtRate, fmtScore, tailoredText, type ProfileRange,
 } from '../lib/profileMetrics';
-import { interviewsAppliedBy, rowArrow, setupText, windowsMatch } from '../lib/profileList';
+import { interviewsAppliedBy, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
 import ProfilesBand, { Arrow } from '../components/profiles/ProfilesBand';
 
 type SortKey = 'lastApply' | 'bids' | 'interviews' | 'rate' | 'pass' | 'score';
@@ -241,10 +241,19 @@ export default function AccountsPage() {
     );
   };
 
-  // ▲ / ▼ against all profiles over the compared window, only when the benchmark measured the same days.
+  // ▲ / ▼ against all profiles over the compared window, only when the benchmark measured the same days. When the
+  // window starts after the range (All time, or a range from before the launch day), the cell's number covers other
+  // days than the arrow: the arrow then goes on its own line with the value it judged ("▼ 0.31% since Nov 5").
+  const arrowSince = sinceDay(rangeDates?.from ?? null, metricsData?.comparedFrom);
   const arrow = (kind: 'rate' | 'pass' | 'tailor', m: api.ProfileMetricsRow): ReactNode => {
     const a = compared ? rowArrow(kind, m.compare, compared, comparedFrom) : null;
-    return a ? <Arrow dir={a.dir} title={a.title} /> : null;
+    if (!a) return null;
+    if (!arrowSince) return <Arrow dir={a.dir} title={a.title} />;
+    return (
+      <div className="text-[11px] text-muted whitespace-nowrap">
+        <Arrow dir={a.dir} title={a.title} /> {a.value} since {shortDay(arrowSince)}
+      </div>
+    );
   };
 
   // Rounds passed ÷ rounds decided in the range (home assessments left out, as on the Metrics tab).
@@ -370,7 +379,7 @@ export default function AccountsPage() {
       const rangeLabel = range.preset === 'custom'
         ? `${fmtDay(range.from)} – ${fmtDay(range.to)}`
         : PROFILE_RANGES.find((o) => o.value === range.preset)?.label ?? '';
-      const since = !rangeDates || metricsData.comparedFrom > rangeDates.from ? metricsData.comparedFrom : null;
+      const since = arrowSince;
       band = (
         <ProfilesBand
           whose={whose}

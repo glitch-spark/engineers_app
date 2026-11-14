@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  bandCells, fmtListRate, interviewsAppliedBy, rowArrow, setupText, strongestWeakest, windowsMatch,
+  bandCells, fmtListRate, interviewsAppliedBy, rowArrow, setupText, sinceDay, strongestWeakest, windowsMatch,
 } from '../src/lib/profileList.ts';
 
 test('interviews line leaves out "not set" when there are none', () => {
@@ -52,15 +52,28 @@ test('strongest and weakest need two profiles with 30+ bids', () => {
 
 test('row arrows follow the Metrics tab thresholds and need a compare', () => {
   assert.deepEqual(rowArrow('rate', stats(), all, '2026-11-05'),
-    { dir: 'up', title: 'Since Nov 5: 0.62% vs 0.41% across all profiles' });
+    { dir: 'up', value: '0.62%', title: 'Since Nov 5: 0.62% vs 0.41% across all profiles' });
   assert.equal(rowArrow('rate', stats({ bids: 29 }), all, '2026-11-05'), null);
   assert.deepEqual(rowArrow('pass', stats({ passRate: 0.2, decided: 5 }), all, '2026-11-05'),
-    { dir: 'down', title: 'Since Nov 5: 20% vs 35% across all profiles' });
+    { dir: 'down', value: '20%', title: 'Since Nov 5: 20% vs 35% across all profiles' });
   assert.equal(rowArrow('tailor', stats({ tailorScore: { avg: 77, n: 5 } }), all, '2026-11-05'), null); // 77 vs 73 (4 pts)
   assert.deepEqual(rowArrow('tailor', stats({ tailorScore: { avg: 66, n: 5 } }), all, '2026-11-05'),
-    { dir: 'down', title: 'Since Nov 5: tailor score 66 vs 73 across all profiles' });
+    { dir: 'down', value: '66', title: 'Since Nov 5: tailor score 66 vs 73 across all profiles' });
   assert.equal(rowArrow('rate', null, all, '2026-11-05'), null);
   assert.equal(rowArrow('rate', stats(), null, '2026-11-05'), null);
+});
+
+test('an arrow carries the value it judged, which can differ from the range total', () => {
+  assert.equal(rowArrow('rate', stats(), all, '2026-11-05').value, '0.62%');
+  assert.equal(rowArrow('pass', stats({ passRate: 0.2, decided: 5 }), all, '2026-11-05').value, '20%');
+  assert.equal(rowArrow('tailor', stats({ tailorScore: { avg: 66, n: 5 } }), all, '2026-11-05').value, '66');
+});
+
+test('the compared days need their own label only when they start after the range', () => {
+  assert.equal(sinceDay('2026-11-01', '2026-11-05'), '2026-11-05');   // This month, launch on Nov 5
+  assert.equal(sinceDay('2026-11-09', '2026-11-09'), null);           // This week: same days
+  assert.equal(sinceDay(null, '2026-11-05'), '2026-11-05');           // All time
+  assert.equal(sinceDay('2026-11-01', null), null);                   // nothing compared
 });
 
 test('windows match only on the same compared window', () => {

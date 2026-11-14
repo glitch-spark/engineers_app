@@ -91,21 +91,32 @@ export const shortDay = (iso: string) =>
  *  not clearly different or nothing to compare. */
 export function rowArrow(
   kind: 'rate' | 'pass' | 'tailor', compare: CompareStats | null | undefined, all: CompareStats | null, comparedFrom: string,
-): { dir: 'up' | 'down'; title: string } | null {
+): { dir: 'up' | 'down'; title: string; value: string } | null {
   if (!compare || !all) return null;
   let dir: Verdict = null;
+  let value = '';
   let text = '';
   if (kind === 'rate' && all.interviewsPerBid != null && compare.interviewsPerBid != null) {
     dir = conversionVerdict(compare, all.interviewsPerBid);
-    text = `${fmtListRate(compare.interviewsPerBid)} vs ${fmtListRate(all.interviewsPerBid)}`;
+    value = fmtListRate(compare.interviewsPerBid);
+    text = `${value} vs ${fmtListRate(all.interviewsPerBid)}`;
   } else if (kind === 'pass' && all.passRate != null && compare.passRate != null) {
     dir = passVerdict(compare, all.passRate);
-    text = `${pct(compare.passRate)} vs ${pct(all.passRate)}`;
+    value = pct(compare.passRate);
+    text = `${value} vs ${pct(all.passRate)}`;
   } else if (kind === 'tailor' && all.tailorScore.avg != null && compare.tailorScore.avg != null) {
     dir = tailorVerdict(compare, all.tailorScore.avg);
-    text = `tailor score ${score(compare.tailorScore.avg)} vs ${score(all.tailorScore.avg)}`;
+    value = score(compare.tailorScore.avg);
+    text = `tailor score ${value} vs ${score(all.tailorScore.avg)}`;
   }
-  return dir ? { dir, title: `Since ${shortDay(comparedFrom)}: ${text} across all profiles` } : null;
+  return dir ? { dir, value, title: `Since ${shortDay(comparedFrom)}: ${text} across all profiles` } : null;
+}
+
+/** The compared window's first day when it starts after the range's (All time: always), so the page labels the
+ *  compared numbers apart from the range's; null when both cover the same days or nothing was compared. */
+export function sinceDay(rangeFrom: string | null, comparedFrom: string | null | undefined): string | null {
+  if (!comparedFrom) return null;
+  return !rangeFrom || comparedFrom > rangeFrom ? comparedFrom : null;
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
