@@ -68,26 +68,66 @@ const rate = (x: number | null) => (x == null ? DASH : fmtListRate(x));
 
 export type BandCell = {
   key: 'bids' | 'rate' | 'pass' | 'tailor'; label: string; mine: string; all: string; note: string | null; dir: Verdict;
+  /** good / bad: the verdict's colour; thin: too few to judge (grey); null: neutral. */
+  tone: 'good' | 'bad' | 'thin' | null;
+  /** Mine minus the platform, spelled out: `+51%` (relative), `−11 pts`, `+4`; null when either side is missing. */
+  gap: string | null;
+  /** Both values scaled to the larger one (0–1) for the two bars; null when either is missing. */
+  bar: { mine: number; all: number } | null;
 };
 
-/** The band's four cells, mine vs all profiles. No verdict on bids / week: owners run different numbers of bidders. */
+const MIN_RATE_BIDS = 30;
+const MIN_DECIDED = 5;
+const MIN_SCORED = 5;
+const signed = (n: number, unit = '') => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n)}${unit}`;
+const bars = (m: number | null, a: number | null) => {
+  if (m == null || a == null) return null;
+  const max = Math.max(m, a);
+  return max > 0 ? { mine: m / max, all: a / max } : null;
+};
+const toneOf = (thin: boolean, dir: Verdict): BandCell['tone'] => (thin ? 'thin' : dir === 'up' ? 'good' : dir === 'down' ? 'bad' : null);
+const thinNote = (note: string | null, thin: boolean, empty: boolean) =>
+  thin && !empty ? (note ? `${note} · too few to judge` : 'too few to judge') : note;
+
+/** The band's four cells, mine vs the platform. No verdict on bids / week: owners run different numbers of bidders.
+ *  The gap and the colour say how far off and whether it counts; under the Metrics tab's minimum sample (30 bids,
+ *  5 rounds with a result, 5 scored resumes) a cell is "too few to judge" (grey). */
 export function bandCells(mine: CompareStats, all: CompareStats): BandCell[] {
   const passed = mine.passRate == null ? 0 : Math.round(mine.passRate * mine.decided);
+  const rateDir = all.interviewsPerBid == null ? null : conversionVerdict(mine, all.interviewsPerBid);
+  const rateThin = mine.bids < MIN_RATE_BIDS;
+  const passDir = all.passRate == null ? null : passVerdict(mine, all.passRate);
+  const passThin = mine.decided < MIN_DECIDED;
+  const tailorDir = all.tailorScore.avg == null ? null : tailorVerdict(mine, all.tailorScore.avg);
+  const tailorThin = mine.tailorScore.n < MIN_SCORED;
+  const ipb = mine.interviewsPerBid;
+  const allIpb = all.interviewsPerBid;
   return [
-    { key: 'bids', label: 'Bids per profile, per week', mine: perWeek(mine.bidsPerWeek), all: perWeek(all.bidsPerWeek), note: null, dir: null },
     {
-      key: 'rate', label: 'Bids that led to an interview', mine: rate(mine.interviewsPerBid), all: rate(all.interviewsPerBid), note: null,
-      dir: all.interviewsPerBid == null ? null : conversionVerdict(mine, all.interviewsPerBid),
+      key: 'bids', label: 'Bids per profile, per week', mine: perWeek(mine.bidsPerWeek), all: perWeek(all.bidsPerWeek),
+      note: null, dir: null, tone: null, gap: null, bar: bars(mine.bidsPerWeek, all.bidsPerWeek),
+    },
+    {
+      key: 'rate', label: 'Bids that led to an interview', mine: rate(ipb), all: rate(allIpb),
+      note: rateThin ? 'too few bids to judge' : null, dir: rateDir, tone: toneOf(rateThin, rateDir),
+      gap: ipb != null && allIpb ? signed(Math.round((ipb / allIpb - 1) * 100), '%') : null, bar: bars(ipb, allIpb),
     },
     {
       key: 'pass', label: 'Interview rounds passed', mine: pct(mine.passRate), all: pct(all.passRate),
-      note: mine.decided ? `${count(passed)} of ${count(mine.decided)} rounds` : 'no results yet',
-      dir: all.passRate == null ? null : passVerdict(mine, all.passRate),
+      note: thinNote(mine.decided ? `${count(passed)} of ${count(mine.decided)} rounds` : 'no results yet', passThin, !mine.decided),
+      dir: passDir, tone: toneOf(passThin, passDir),
+      gap: mine.passRate != null && all.passRate != null
+        ? signed(Math.round(mine.passRate * 100) - Math.round(all.passRate * 100), ' pts') : null,
+      bar: bars(mine.passRate, all.passRate),
     },
     {
       key: 'tailor', label: 'Avg tailored resume score', mine: score(mine.tailorScore.avg), all: score(all.tailorScore.avg),
-      note: mine.tailorScore.n ? `from ${count(mine.tailorScore.n)} resumes` : 'no scored resumes',
-      dir: all.tailorScore.avg == null ? null : tailorVerdict(mine, all.tailorScore.avg),
+      note: thinNote(mine.tailorScore.n ? `from ${count(mine.tailorScore.n)} resumes` : 'no scored resumes', tailorThin,
+        !mine.tailorScore.n),
+      dir: tailorDir, tone: toneOf(tailorThin, tailorDir),
+      gap: mine.tailorScore.avg != null && all.tailorScore.avg != null
+        ? signed(Math.round(mine.tailorScore.avg) - Math.round(all.tailorScore.avg)) : null,
+      bar: bars(mine.tailorScore.avg, all.tailorScore.avg),
     },
   ];
 }
@@ -147,23 +187,32 @@ export function flagNumbers(a: ProfileAlert, allTailorScore: number | null): str
 
 const REGION_ORDER: [TopRegion, string][] = [['US', 'US'], ['EU', 'EU'], ['Latam', 'LATAM']];
 
+export type TopChip = { kind: 'lead' | 'near' | 'far'; text: string };
+/** Mine against the region's best on the platform: a chip for my standing (none when I have no qualifying profile)
+ *  and the leader to look up (`Gabriel Kerr (Yuari) 4`; null when I lead). */
+export type PlatformTop = { chip: TopChip | null; leader: string | null };
+
 export type RegionTopLine = {
   region: TopRegion; label: string;
-  most: { accountId: string; name: string; text: string } | null; mostAll: string;
-  best: { accountId: string; name: string; text: string } | null; bestAll: string;
+  most: { accountId: string; name: string; text: string } | null; mostTop: PlatformTop | null;
+  best: { accountId: string; name: string; text: string } | null; bestTop: PlatformTop | null;
 };
 
-/** `Best on the platform: Eric (User A) – 9`; `yours` when the owner's number is at least the top (the top is cached
- *  for minutes, the owner's numbers are live); '' when unknown. */
-const vsAll = (mine: number | null | undefined, top: { name: string; ownerName: string } | null | undefined,
-  value: number | undefined, fmt: (n: number) => string) => {
-  if (!top || value == null) return '';
-  if (mine != null && mine >= value) return 'Best on the platform: yours';
-  return `Best on the platform: ${top.name || 'Unnamed'}${top.ownerName ? ` (${top.ownerName})` : ''} – ${fmt(value)}`;
-};
+/** I lead when my number is at least the top (the top is cached for minutes, mine are live); near = within 25%. */
+function platformTop(
+  mine: number | null | undefined, top: { name: string; ownerName: string } | null | undefined, value: number | undefined,
+  fmt: (n: number) => string, behind: (gap: number) => string,
+): PlatformTop | null {
+  if (!top || value == null) return null;
+  const leads = mine != null && mine >= value;
+  const chip: TopChip | null = mine == null ? null
+    : leads ? { kind: 'lead', text: 'Best on the platform' }
+      : { kind: mine >= 0.75 * value ? 'near' : 'far', text: behind(value - mine) };
+  return { chip, leader: leads ? null : `${top.name || 'Unnamed'}${top.ownerName ? ` (${top.ownerName})` : ''} ${fmt(value)}` };
+}
 
-/** The card's top profiles: one line per region the owner has profiles in (US, EU, LATAM), each side next to the top
- *  single profile in the platform there (any user). */
+/** The card's top profiles: one line per region the owner has profiles in (US, EU, LATAM), each side next to the best
+ *  single profile on the platform there (any user). */
 export function regionTopLines(mine: RegionTops, all: BenchRegionTops | undefined): RegionTopLine[] {
   return REGION_ORDER.filter(([r]) => mine[r]).map(([r, label]) => {
     const m = mine[r]!;
@@ -172,9 +221,11 @@ export function regionTopLines(mine: RegionTops, all: BenchRegionTops | undefine
       region: r, label,
       most: m.mostInterviews && { accountId: m.mostInterviews.accountId, name: m.mostInterviews.name,
         text: count(m.mostInterviews.interviews) },
-      mostAll: vsAll(m.mostInterviews?.interviews, a?.mostInterviews, a?.mostInterviews?.interviews, count),
+      mostTop: platformTop(m.mostInterviews?.interviews, a?.mostInterviews, a?.mostInterviews?.interviews, count,
+        (g) => `${count(g)} behind`),
       best: m.bestRate && { accountId: m.bestRate.accountId, name: m.bestRate.name, text: fmtListRate(m.bestRate.interviewsPerBid) },
-      bestAll: vsAll(m.bestRate?.interviewsPerBid, a?.bestRate, a?.bestRate?.interviewsPerBid, fmtListRate),
+      bestTop: platformTop(m.bestRate?.interviewsPerBid, a?.bestRate, a?.bestRate?.interviewsPerBid, fmtListRate,
+        (g) => `−${(g * 100).toFixed(1)} pts`),
     };
   });
 }

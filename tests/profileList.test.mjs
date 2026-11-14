@@ -45,6 +45,25 @@ test('band cells', () => {
   assert.deepEqual([none[2].mine, none[2].note, none[3].mine, none[3].note], ['—', 'no results yet', '—', 'no scored resumes']);
 });
 
+test('band cells: color by verdict, the gap spelled out, bars to scale', () => {
+  const c = bandCells(stats(), all);
+  assert.deepEqual(c.map((x) => [x.key, x.tone, x.gap]), [
+    ['bids', null, null],                 // never judged: owners run different numbers of bidders
+    ['rate', 'good', '+51%'],             // 0.62% vs 0.41%
+    ['pass', null, '+5 pts'],             // 40% vs 35%: not 15 points apart
+    ['tailor', null, '+1'],               // 74 vs 73 as shown
+  ]);
+  assert.deepEqual(c[0].bar, { mine: 38 / 45, all: 1 });
+  assert.deepEqual(c[1].bar, { mine: 1, all: 0.0041 / 0.0062 });
+  const low = bandCells(stats({ interviewsPerBid: 0.002, passRate: 0.1, tailorScore: { avg: 60, n: 50 } }), all);
+  assert.deepEqual(low.slice(1).map((x) => [x.tone, x.gap]), [['bad', '−51%'], ['bad', '−25 pts'], ['bad', '−13']]);
+  const thin = bandCells(stats({ bids: 20, decided: 2, passRate: 0.5, tailorScore: { avg: 90, n: 3 } }), all);
+  assert.deepEqual(thin.slice(1).map((x) => [x.tone, x.note]), [
+    ['thin', 'too few bids to judge'], ['thin', '1 of 2 rounds · too few to judge'], ['thin', 'from 3 resumes · too few to judge']]);
+  const empty = bandCells(stats({ passRate: null, decided: 0, tailorScore: { avg: null, n: 0 } }), all);
+  assert.deepEqual([empty[2].gap, empty[2].bar, empty[3].tone], [null, null, 'thin']);
+});
+
 test('band heading counts every listed profile and says which ones the averages use', () => {
   const h = { whose: 'Your', total: 9, withBids: 7, allWithBids: 49, rangeLabel: 'This month', from: '2026-11-01', to: '2026-11-14' };
   assert.deepEqual(bandHeading(h), {
@@ -158,29 +177,34 @@ test('flag numbers line', () => {
   assert.equal(flagNumbers(al({ tailored: 3, tailorScore: { avg: null, n: 0 } }), 71), '379 bids');
 });
 
-test('region lines: mine vs the best on the platform', () => {
+test('region lines: a chip for my standing and the leader to look up', () => {
   const mine = {
-    US: { mostInterviews: { accountId: 'e', name: 'Erric', interviews: 3 },
-          bestRate: { accountId: 'd', name: 'Daniel Kifle', interviewsPerBid: 0.004, bids: 363 } },
+    US: { mostInterviews: { accountId: 'e', name: 'Erric Blair', interviews: 3 },
+          bestRate: { accountId: 'e', name: 'Erric Blair', interviewsPerBid: 0.023, bids: 130 } },
+    EU: { mostInterviews: { accountId: 'v', name: 'Vivek Dhiman', interviews: 5 },
+          bestRate: { accountId: 'v', name: 'Vivek Dhiman', interviewsPerBid: 0.027, bids: 185 } },
     Latam: { mostInterviews: null, bestRate: null },
   };
-  const top = (o) => ({ name: 'Eric', ownerName: 'User A', ...o });
+  const top = (name, owner, o) => ({ name, ownerName: owner, ...o });
   const lines = regionTopLines(mine, {
-    US: { mostInterviews: top({ interviews: 9 }), bestRate: top({ interviewsPerBid: 0.012, bids: 400 }) },
-    Latam: { mostInterviews: top({ interviews: 2, name: 'Lucas', ownerName: '' }), bestRate: null },
+    US: { mostInterviews: top('Gabriel Kerr', 'Yuari', { interviews: 4 }), bestRate: top('X', 'Y', { interviewsPerBid: 0.02, bids: 99 }) },
+    EU: { mostInterviews: top('Ross Chuan', 'Michael', { interviews: 9 }), bestRate: top('Ross Chuan', 'Michael', { interviewsPerBid: 0.044, bids: 90 }) },
+    Latam: { mostInterviews: top('Lucas', '', { interviews: 2 }), bestRate: null },
   });
-  assert.deepEqual(lines.map((l) => [l.label, l.most?.text ?? null, l.mostAll, l.best?.text ?? null, l.bestAll]), [
-    ['US', '3', 'Best on the platform: Eric (User A) – 9', '0.40%', 'Best on the platform: Eric (User A) – 1.2%'],
-    ['LATAM', null, 'Best on the platform: Lucas – 2', null, ''],
+  const view = (t) => t && [t.chip?.kind ?? null, t.chip?.text ?? null, t.leader];
+  assert.deepEqual(lines.map((l) => [l.label, l.most?.text ?? null, view(l.mostTop), l.best?.text ?? null, view(l.bestTop)]), [
+    ['US', '3', ['near', '1 behind', 'Gabriel Kerr (Yuari) 4'], '2.3%', ['lead', 'Best on the platform', null]],
+    ['EU', '5', ['far', '4 behind', 'Ross Chuan (Michael) 9'], '2.7%', ['far', '−1.7 pts', 'Ross Chuan (Michael) 4.4%']],
+    ['LATAM', null, [null, null, 'Lucas 2'], null, null],
   ]);
   assert.equal(lines[0].most.accountId, 'e');
-  // mine at or above the (cached) top: mine is the top
-  const same = regionTopLines({ US: mine.US }, {
-    US: { mostInterviews: top({ interviews: 2 }), bestRate: top({ interviewsPerBid: 0.004, bids: 900 }) } })[0];
-  assert.deepEqual([same.mostAll, same.bestAll], ['Best on the platform: yours', 'Best on the platform: yours']);
-  assert.equal(regionTopLines({ EU: mine.Latam }, undefined)[0].mostAll, '');            // no benchmark numbers
+  assert.equal(regionTopLines({ EU: mine.Latam }, undefined)[0].mostTop, null);     // no platform numbers
   assert.deepEqual(regionTopLines({ Latam: mine.Latam, EU: mine.Latam, US: mine.US }, undefined).map((l) => l.label),
     ['US', 'EU', 'LATAM']);
+  // near = within 25% of the leader
+  const near = regionTopLines({ US: { mostInterviews: null, bestRate: { accountId: 'a', name: 'A', interviewsPerBid: 0.03, bids: 40 } } },
+    { US: { mostInterviews: null, bestRate: top('B', 'C', { interviewsPerBid: 0.04, bids: 40 }) } })[0];
+  assert.deepEqual(view(near.bestTop), ['near', '−1.0 pts', 'B (C) 4.0%']);
 });
 
 test('banners stay while the next date range loads, for the same owner only', () => {
