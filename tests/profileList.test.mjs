@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  bandCells, bandHeading, bidsBreakdown, fmtListRate, interviewsBreakdown, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
+  bandCells, bandHeading, bidsBreakdown, flagNumbers, flagSuggestion, fmtListRate, interviewsBreakdown, regionTopLines, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
   strongestWeakest, windowsMatch,
 } from '../src/lib/profileList.ts';
 
@@ -145,4 +145,45 @@ test('interviews line: self-taken and each caller by name, zeros left out', () =
   assert.equal(interviewsBreakdown({ selfInterviews: 2, callerInterviews: 0, callerInterviewsBy: [] }), 'Self: 2');
   assert.equal(interviewsBreakdown({ selfInterviews: 0, callerInterviews: 0, callerInterviewsBy: [] }), null);
   assert.equal(interviewsBreakdown({ selfInterviews: 1, callerInterviews: 2 }), 'Self: 1, Callers: 2'); // older server
+});
+
+const al = (o = {}) => ({ accountId: 'v', name: 'Vyas', bids: 379, tailored: 120, tailorScore: { avg: 64, n: 118 }, ...o });
+const RULE5 = "Bids aren't turning into interviews: update the resume and check the target roles.";
+
+test('flag suggestion: the first rule that matches', () => {
+  assert.equal(flagSuggestion(al({ bids: 12 }), 71, ['x']), 'Too few bids to get interviews: add bids or a bidder.');
+  assert.equal(flagSuggestion(al(), 71, ['"QA" unit has no tailor draft']), 'Fix the setup: "QA" unit has no tailor draft.');
+  assert.equal(flagSuggestion(al({ tailored: 0, tailorScore: { avg: null, n: 0 } }), 71, []),
+    'Set up tailoring so resumes match each job.');
+  assert.equal(flagSuggestion(al({ tailorScore: { avg: 66, n: 9 } }), 71.2, []),
+    "Resume score 66 is below all users' average 71: update the tailoring prompt or template.");
+  assert.equal(flagSuggestion(al({ tailorScore: { avg: 67, n: 9 } }), 71.2, []), RULE5);   // 4.2 points: not rule 4
+  assert.equal(flagSuggestion(al({ tailorScore: { avg: 50, n: 9 } }), null, []), RULE5);   // no average yet
+  assert.equal(flagSuggestion(al({ bids: 30 }), 71, []), "Resume score 64 is below all users' average 71: update the tailoring prompt or template.");
+});
+
+test('flag numbers line', () => {
+  assert.equal(flagNumbers(al(), 71.2), "379 bids · resume score 64 (all users' avg 71)");
+  assert.equal(flagNumbers(al({ tailored: 0, tailorScore: { avg: null, n: 0 } }), 71), '379 bids · no tailored resumes');
+  assert.equal(flagNumbers(al({ bids: 1 }), null), '1 bid · resume score 64');
+  assert.equal(flagNumbers(al({ tailored: 3, tailorScore: { avg: null, n: 0 } }), 71), '379 bids');
+});
+
+test('region lines: mine vs the best across all users', () => {
+  const mine = {
+    US: { mostInterviews: { accountId: 'e', name: 'Erric', interviews: 3 },
+          bestRate: { accountId: 'd', name: 'Daniel Kifle', interviewsPerBid: 0.004, bids: 363 } },
+    Latam: { mostInterviews: null, bestRate: null },
+  };
+  const lines = regionTopLines(mine, { US: { mostInterviews: 9, bestRate: 0.012 }, Latam: { mostInterviews: 2, bestRate: null } });
+  assert.deepEqual(lines.map((l) => [l.label, l.most?.text ?? null, l.mostAll, l.best?.text ?? null, l.bestAll]), [
+    ['US', '3', 'best across all users: 9', '0.40%', 'best across all users: 1.2%'],
+    ['LATAM', null, 'best across all users: 2', null, ''],
+  ]);
+  assert.equal(lines[0].most.accountId, 'e');
+  const same = regionTopLines({ US: mine.US }, { US: { mostInterviews: 3, bestRate: 0.004 } })[0];
+  assert.deepEqual([same.mostAll, same.bestAll], ['best across all users', 'best across all users']);
+  assert.equal(regionTopLines({ EU: mine.Latam }, undefined)[0].mostAll, '');            // no benchmark numbers
+  assert.deepEqual(regionTopLines({ Latam: mine.Latam, EU: mine.Latam, US: mine.US }, undefined).map((l) => l.label),
+    ['US', 'EU', 'LATAM']);
 });

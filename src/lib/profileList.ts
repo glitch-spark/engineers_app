@@ -1,7 +1,9 @@
 // Profiles list helpers: who applied, the "your profiles vs all profiles" band, the ▲/▼ on rows and the Setup column
 // (spec 2026-11-14-profiles-list-compare-design.md). Value imports carry `.ts`, so Node's test runner loads this
 // file as is (tests/profileList.test.mjs).
-import type { CompareStats, ProfileMetricsRow, ResumePrompt, SetupUnit } from '../api/endpoints';
+import type {
+  BenchRegionTops, CompareStats, ProfileAlert, ProfileMetricsRow, RegionTops, ResumePrompt, SetupUnit, TopRegion,
+} from '../api/endpoints';
 import { conversionVerdict, passVerdict, tailorVerdict, type Verdict } from './profileAttention.ts';
 import { setupStrip, tailoringSetUp } from './profileSetup.ts';
 
@@ -132,6 +134,60 @@ export function passDetail(
   if (!rounds) return null;
   if (rounds.decided) return `${count(rounds.passed)} of ${count(rounds.decided)} passed`;
   return interviews > 0 ? 'no results yet' : null;
+}
+
+const MIN_FLAG_BIDS = 30;
+
+/** The red banner's suggestion for a profile with no interview in 2 weeks: the first rule that matches (spec
+ *  2026-11-14-profiles-flags-and-top-design.md). `setupWarnings`: the Setup column's, [] when the account isn't loaded;
+ *  `allTailorScore`: all users' 2-week tailor average, null while the server warms it up. */
+export function flagSuggestion(a: ProfileAlert, allTailorScore: number | null, setupWarnings: string[]): string {
+  if (a.bids < MIN_FLAG_BIDS) return 'Too few bids to get interviews: add bids or a bidder.';
+  if (setupWarnings.length) return `Fix the setup: ${setupWarnings[0]}.`;
+  if (a.tailored === 0) return 'Set up tailoring so resumes match each job.';
+  const mine = a.tailorScore.avg;
+  if (mine != null && allTailorScore != null && Math.round(mine * 10) <= Math.round((allTailorScore - 5) * 10)) {
+    return `Resume score ${score(mine)} is below all users' average ${score(allTailorScore)}: update the tailoring prompt or template.`;
+  }
+  return "Bids aren't turning into interviews: update the resume and check the target roles.";
+}
+
+/** The red banner's numbers for a flagged profile: `379 bids · resume score 64 (all users' avg 71)`. */
+export function flagNumbers(a: ProfileAlert, allTailorScore: number | null): string {
+  const parts = [`${count(a.bids)} ${a.bids === 1 ? 'bid' : 'bids'}`];
+  if (a.tailored === 0) parts.push('no tailored resumes');
+  else if (a.tailorScore.avg != null) {
+    parts.push(`resume score ${score(a.tailorScore.avg)}${allTailorScore != null ? ` (all users' avg ${score(allTailorScore)})` : ''}`);
+  }
+  return parts.join(' · ');
+}
+
+const REGION_ORDER: [TopRegion, string][] = [['US', 'US'], ['EU', 'EU'], ['Latam', 'LATAM']];
+
+export type RegionTopLine = {
+  region: TopRegion; label: string;
+  most: { accountId: string; name: string; text: string } | null; mostAll: string;
+  best: { accountId: string; name: string; text: string } | null; bestAll: string;
+};
+
+const vsAll = (mine: number | null | undefined, all: number | null | undefined, fmt: (n: number) => string) =>
+  all == null ? '' : mine != null && mine === all ? 'best across all users' : `best across all users: ${fmt(all)}`;
+
+/** The card's top profiles: one line per region the owner has profiles in (US, EU, LATAM), each side next to the best
+ *  number any single profile of any user reached there. */
+export function regionTopLines(mine: RegionTops, all: BenchRegionTops | undefined): RegionTopLine[] {
+  return REGION_ORDER.filter(([r]) => mine[r]).map(([r, label]) => {
+    const m = mine[r]!;
+    const a = all?.[r];
+    return {
+      region: r, label,
+      most: m.mostInterviews && { accountId: m.mostInterviews.accountId, name: m.mostInterviews.name,
+        text: count(m.mostInterviews.interviews) },
+      mostAll: vsAll(m.mostInterviews?.interviews, a?.mostInterviews, count),
+      best: m.bestRate && { accountId: m.bestRate.accountId, name: m.bestRate.name, text: fmtListRate(m.bestRate.interviewsPerBid) },
+      bestAll: vsAll(m.bestRate?.interviewsPerBid, a?.bestRate, fmtListRate),
+    };
+  });
 }
 
 /** The list and the benchmark measured the same days: only then do the row arrows and the band compare them. */

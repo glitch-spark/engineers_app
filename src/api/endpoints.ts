@@ -237,6 +237,26 @@ export type ProfileMetricsRow = {
 /** A tailoring unit on the Profiles list: as the Profile tab reads it, without its draft and prompt text. */
 export type SetupUnit = { id: string; name: string; roles: PromptRole[]; hasTemplate: boolean; hasPrompt: boolean };
 
+/** Profiles list regions with top profiles (Account.region values); "Latam" is shown "LATAM". */
+export type TopRegion = 'US' | 'EU' | 'Latam';
+/** The owner's top profiles in one region over the compared window (Profiles list card). */
+export type RegionTop = {
+  mostInterviews: { accountId: string; name: string; interviews: number } | null;
+  bestRate: { accountId: string; name: string; interviewsPerBid: number; bids: number } | null;
+};
+export type RegionTops = Partial<Record<TopRegion, RegionTop>>;
+/** All users' best single-profile numbers per region (benchmark): numbers only. */
+export type BenchRegionTops = Partial<Record<TopRegion, { mostInterviews: number | null; bestRate: number | null }>>;
+/** A profile with no interview in the last 2 weeks, with its 2-week numbers. */
+export type ProfileAlert = {
+  accountId: string; name: string; bids: number; tailored: number; tailorScore: { avg: number | null; n: number };
+};
+/** The Profiles list banners (one owner's list): red = no interviews in 14 days, grey = no applies in 21 days. */
+export type ProfileAlerts = {
+  asOf: string; noInterviews: ProfileAlert[]; allTailorScore: number | null;
+  noApplies: { accountId: string; name: string }[];
+};
+
 /** A from / to range, or `weeks: 'all'` for All time (said explicitly, so older servers don't fall back to 4 weeks). */
 export const getProfileMetrics = (params: { from?: string; to?: string; weeks?: 'all'; userId?: string }) =>
   apiFetch<{
@@ -248,6 +268,10 @@ export const getProfileMetrics = (params: { from?: string; to?: string; weeks?: 
     comparedFrom?: string | null;
     comparedTo?: string | null;
     mine?: CompareStats | null;
+    /** One owner's list: the top profile per region over the compared window (null without one). */
+    regionTops?: RegionTops | null;
+    /** One owner's list: the banners, whatever the date filter (null for an admin viewing every owner). */
+    alerts?: ProfileAlerts | null;
   }>(
     `/accounts/metrics${qs(params)}`
   );
@@ -321,7 +345,9 @@ export type ProfileMetricDetail = ProfileMetricsRow & {
 };
 
 /** Every owner's active profiles over the period's compared window ("All profiles"); no names. */
-export type MetricsBenchmark = { start: string; end: string; label: string; comparedFrom: string | null } & CompareStats;
+export type MetricsBenchmark = {
+  start: string; end: string; label: string; comparedFrom: string | null; regionTops?: BenchRegionTops;
+} & CompareStats;
 
 export const getMetricsBenchmark = (params: { period: ProfileMetricPeriod; date?: string; to?: string }) =>
   apiFetch<MetricsBenchmark>(`/accounts/metrics/benchmark${qs(params)}`);
