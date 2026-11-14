@@ -14,9 +14,12 @@ type Props = {
   /** Active bidders listed for this owner (with bids or not). */
   total: number;
   onOpenBidder: (id: string) => void;
+  /** Collapsed: only the heading and a Show button (remembered by the page). */
+  open: boolean;
+  onToggle: () => void;
 };
 
-export default function BiddersBand({ insights, whose, total, onOpenBidder }: Props) {
+export default function BiddersBand({ insights, whose, total, onOpenBidder, open, onToggle }: Props) {
   const { mine, platform, tops } = insights;
   if (!mine || !platform) return null;
   const cells = bidderCells(mine, platform);
@@ -31,8 +34,14 @@ export default function BiddersBand({ insights, whose, total, onOpenBidder }: Pr
             {platform.bidders} on the platform ({whose === 'Your' ? 'yours' : 'these'} included).
           </p>
         </div>
-        <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs text-muted dark:bg-white/10">{insights.label}</span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs text-muted dark:bg-white/10">{insights.label}</span>
+          <button type="button" className="btn-outline btn-sm" onClick={onToggle} aria-expanded={open}>
+            {open ? 'Hide' : 'Show'}
+          </button>
+        </div>
       </div>
+      {open && (<>
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {cells.map((c) => <CompareCell key={c.key} c={c} />)}
       </dl>
@@ -63,6 +72,7 @@ export default function BiddersBand({ insights, whose, total, onOpenBidder }: Pr
           </div>
         </div>
       )}
+      </>)}
     </section>
   );
 }

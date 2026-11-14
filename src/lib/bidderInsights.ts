@@ -149,7 +149,7 @@ export function canManageBidders(v: { isAdmin: boolean; ownerId: string; userId:
 
 /** The SWR keys a review decision changes: the open day's and week's bid lists, and the banners (the backlog). */
 export function isReviewedDataKey(key: unknown): boolean {
-  return Array.isArray(key) && ['bids-day', 'bids-week', 'bid-alerts'].includes(key[0] as string);
+  return Array.isArray(key) && ['bids-day', 'bids-week', 'bid-alerts', 'bid-performance'].includes(key[0] as string);
 }
 
 /** ▲ / ▼ on a row's interviews per 100 bids against the platform (100+ bids; ×1.25 / ×0.75). */
