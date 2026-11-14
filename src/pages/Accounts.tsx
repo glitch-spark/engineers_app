@@ -15,7 +15,7 @@ import {
   fmtRate, fmtScore, tailoredText, type ProfileRange,
 } from '../lib/profileMetrics';
 
-type SortKey = 'lastApply' | 'bids' | 'interviews' | 'selfRate' | 'bidderRate' | 'score';
+type SortKey = 'lastApply' | 'bids' | 'interviews' | 'rate' | 'score';
 
 const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number | null => {
   if (!m || m.spanWeeks === 0) return null;
@@ -23,8 +23,7 @@ const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number |
     case 'lastApply': return m.lastApply ? Date.parse(m.lastApply) : null;
     case 'bids': return m.bids;
     case 'interviews': return m.interviews;
-    case 'selfRate': return m.selfRate?.rate ?? null;
-    case 'bidderRate': return m.bidderRate?.rate ?? null;
+    case 'rate': return m.interviewsPerBid;
     case 'score': return m.tailorScore?.avg ?? m.matchScore?.avg ?? null;
   }
 };
@@ -160,8 +159,8 @@ export default function AccountsPage() {
     ];
   };
 
-  // Six <td>s: Applies, Bids, Interviews, Self intv/bid, Bidder intv/bid, Resume score.
-  const METRIC_COLS = 6;
+  // Five <td>s: Applies, Bids, Interviews, Intv/bid, Resume score.
+  const METRIC_COLS = 5;
   const metricCells = (a: Acc): ReactNode => {
     const dashes = (title?: string) => Array.from({ length: METRIC_COLS }, (_, i) => (
       <td key={i} className="px-4 py-2.5 text-muted" title={title}>—</td>
@@ -170,8 +169,8 @@ export default function AccountsPage() {
     if (metricsError) return dashes("Couldn't load metrics");
     if (rangeError) return dashes(rangeError);
     // An older server (frontend deployed first) ignores from / to and answers with the last 4 weeks: don't show those
-    // numbers under the new labels. Newer servers always send ratesSince (null or a day).
-    if (metricsData && !('ratesSince' in metricsData)) {
+    // numbers under the new labels. Newer servers send lastApply on every row (null or a day).
+    if (metricsData && metricsData.rows.length > 0 && !('lastApply' in metricsData.rows[0])) {
       return dashes('These metrics need the latest server update. Reload once the backend is deployed.');
     }
     if (metricsLoading) {
@@ -213,27 +212,24 @@ export default function AccountsPage() {
           {split(`${fmtCount(m.selfAppliedInterviews ?? 0)} self · ${fmtCount(m.bidderAppliedInterviews ?? 0)} bidder · `
             + `${fmtCount(m.unsetAppliedInterviews ?? 0)} not set`)}
         </td>
-        {rateCell(m.selfRate, 'self')}
-        {rateCell(m.bidderRate, 'bidder')}
+        {rateTd(m)}
         {scoreTd(m)}
       </>
     );
   };
 
-  const ratesSinceLabel = fmtDay(metricsData?.ratesSince);
-  // Self (or bidder) applied interviews ÷ self (or bidder) bids, counted from the day "Applied by" started.
-  const rateCell = (r: api.SourceRate | null | undefined, who: 'self' | 'bidder'): ReactNode => {
-    if (!r || r.rate == null) {
-      const why = metricsData?.ratesSince ? `No ${who} bids since ${ratesSinceLabel}` : '"Applied by" started Nov 6, 2026';
-      return <td className="px-4 py-2.5 text-muted" title={why}>—</td>;
+  // Every interview ÷ every bid in the range (self and bidder together).
+  const rateTd = (m: api.ProfileMetricsRow): ReactNode => {
+    if (m.interviewsPerBid == null) {
+      return <td className="px-4 py-2.5 text-muted" title="No bids in this range">—</td>;
     }
     return (
       <td
-        className={`px-4 py-2.5 whitespace-nowrap ${r.lowVolume ? 'text-muted' : ''}`}
-        title={`Since ${ratesSinceLabel}: ${fmtCount(r.interviews)} ${who}-applied interviews ÷ ${fmtCount(r.bids)} ${who} bids`
-          + (r.lowVolume ? ' · fewer than 30 bids, too few to rank' : '')}
+        className={`px-4 py-2.5 whitespace-nowrap ${m.lowVolume ? 'text-muted' : ''}`}
+        title={`${fmtCount(m.interviews)} interviews ÷ ${fmtCount(m.bids)} bids`
+          + (m.lowVolume ? ' · fewer than 30 bids, too few to rank' : '')}
       >
-        {fmtRate(r.rate)}
+        {fmtRate(m.interviewsPerBid)}
       </td>
     );
   };
@@ -461,8 +457,7 @@ export default function AccountsPage() {
                 ['lastApply', 'Applies'],
                 ['bids', 'Bids'],
                 ['interviews', 'Interviews'],
-                ['selfRate', 'Self intv/bid'],
-                ['bidderRate', 'Bidder intv/bid'],
+                ['rate', 'Intv/bid'],
                 ['score', 'Resume score'],
               ] as const).map(([key, label]) => (
                 <th
@@ -487,7 +482,7 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-muted">
+                <td colSpan={10} className="px-4 py-8 text-center text-muted">
                   <div role="status" className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading profiles...
@@ -496,7 +491,7 @@ export default function AccountsPage() {
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-6 text-center text-muted">
+                <td colSpan={10} className="px-3 py-6 text-center text-muted">
                   {debouncedSearch
                     ? `No profiles found matching "${debouncedSearch}"`
                     : profileStatus === 'archived' ? 'No archived profiles.' : 'No profiles found.'}

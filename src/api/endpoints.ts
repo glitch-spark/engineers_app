@@ -220,23 +220,15 @@ export type ProfileMetricsRow = {
   selfAppliedInterviews?: number;
   bidderAppliedInterviews?: number;
   unsetAppliedInterviews?: number;
-  /** Profiles list only: interviews per bid from `ratesSince` on, per source; null when the range ends before it. */
-  selfRate?: SourceRate | null;
-  bidderRate?: SourceRate | null;
   /** Profiles list only: the first and last day the profile applied (bidder bids, self bids typed per profile). */
   firstApply?: string | null;
   lastApply?: string | null;
 };
 
-/** Self- (or bidder-) applied interviews ÷ self (or bidder) bids; `lowVolume` under 30 bids. */
-export type SourceRate = { interviews: number; bids: number; rate: number | null; lowVolume: boolean };
-
 /** A from / to range, or `weeks: 'all'` for All time (said explicitly, so older servers don't fall back to 4 weeks). */
 export const getProfileMetrics = (params: { from?: string; to?: string; weeks?: 'all'; userId?: string }) =>
   apiFetch<{
     start: string; end: string; weeks: number | 'all' | null; rows: ProfileMetricsRow[];
-    /** The first day the self / bidder rates count (Nov 6, when "Applied by" started); null before it. */
-    ratesSince: string | null;
     /** All time only: the day self bids started being typed per profile (null when every day counts). */
     selfBidsSince?: string | null;
   }>(
