@@ -202,7 +202,13 @@ export default function AccountsPage() {
           title={allTime ? `${perWeek(m.bidsPerWeek)}. ${selfSinceNote}` : perWeek(m.bidsPerWeek)}
         >
           <div>{fmtCount(m.bids)}</div>
-          {split(`${fmtCount(m.selfBids)} self · ${fmtCount(m.bidderBids)} bidder`)}
+          {m.bidderBidsBy === undefined
+            ? split(`${fmtCount(m.selfBids)} self · ${fmtCount(m.bidderBids)} bidder`)
+            : (
+              <div className="max-w-[16rem] whitespace-normal text-[11px] text-muted">
+                {[`${fmtCount(m.selfBids)} self`, ...m.bidderBidsBy.map((b) => `${b.name} ${fmtCount(b.bids)}`)].join(' · ')}
+              </div>
+            )}
         </td>
         <td
           className="px-4 py-2.5 whitespace-nowrap"

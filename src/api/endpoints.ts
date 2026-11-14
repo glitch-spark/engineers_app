@@ -223,6 +223,8 @@ export type ProfileMetricsRow = {
   /** Profiles list only: the first and last day the profile applied (bidder bids, self bids typed per profile). */
   firstApply?: string | null;
   lastApply?: string | null;
+  /** Profiles list only: the bidder bids per bidder (archived bidders too), most first; adds up to `bidderBids`. */
+  bidderBidsBy?: { bidderId: string; name: string; bids: number }[];
 };
 
 /** A from / to range, or `weeks: 'all'` for All time (said explicitly, so older servers don't fall back to 4 weeks). */
