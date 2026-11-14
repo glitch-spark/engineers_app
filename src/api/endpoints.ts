@@ -238,7 +238,11 @@ export const getProfileMetrics = (params: { from?: string; to?: string; weeks?: 
   );
 
 /** One profile's metrics: its weekly series (every week of the span, oldest first) and its owner's other active profiles averaged. */
-export type MetricCounts = { selfBids: number; bidderBids: number; selfInterviews: number; callerInterviews: number };
+export type MetricCounts = {
+  selfBids: number; bidderBids: number; selfInterviews: number; callerInterviews: number;
+  /** The same rounds by type; they add up to selfInterviews + callerInterviews (absent from an older server). */
+  intro?: number; tech?: number; hiring?: number; panel?: number; final?: number;
+};
 
 /** The profile Metrics tab's periods: the Statistics ones, plus everything since the profile was created. */
 export type ProfileMetricPeriod = 'week' | 'month' | 'custom' | 'all';
@@ -247,7 +251,28 @@ export type ProfileMetricPeriod = 'week' | 'month' | 'custom' | 'all';
 export const ROUND_TYPES = ['intro', 'tech', 'hiring', 'panel', 'final', 'home_assessment'] as const;
 export type RoundType = (typeof ROUND_TYPES)[number];
 /** done = passed + rejected + held with no result yet; passRate = passed / (passed + rejected), null with none decided. */
-export type RoundTypeStats = { done: number; passed: number; rejected: number; passRate: number | null };
+export type RoundTypeStats = {
+  done: number; passed: number; rejected: number; passRate: number | null;
+  /** Done rounds by who took them (home assessments 0 / 0; absent from an older server). */
+  self?: number; caller?: number;
+};
+
+/** One side of a Metrics tab comparison, measured over the compared window: per-week values are means over the
+ * profiles averaged (only those with bids), rates and scores pooled. */
+export type CompareStats = {
+  profiles: number;
+  bids: number;
+  /** Passed + rejected rounds, home assessments left out. */
+  decided: number;
+  bidsPerWeek: number | null;
+  interviewsPerWeek: number | null;
+  tailoredResumesPerWeek: number | null;
+  interviewsPerBid: number | null;
+  passRate: number | null;
+  tailorScore: ScoreStat;
+  matchScore: ScoreStat;
+};
+export type ProfileCompare = { this: CompareStats | null; peers: CompareStats | null };
 export type RoundsSummary = {
   byType: Record<RoundType, RoundTypeStats>;
   /** Held with no result yet, and still marked scheduled; every type. */
@@ -272,7 +297,17 @@ export type ProfileMetricDetail = ProfileMetricsRow & {
   /** The owner's other active profiles, averaged (totals and rates; pass rate pooled over their rounds); no profile,
    * span or low-volume flag. */
   peers: (Omit<ProfileMetricsRow, 'accountId' | 'spanWeeks' | 'lowVolume'> & { passRate?: number | null }) | null;
+  /** The compared window's first day (from the launch day on); null when the range ends before it. */
+  comparedFrom?: string | null;
+  /** This profile and the owner's other profiles over the compared window (absent from an older server). */
+  compare?: ProfileCompare;
 };
+
+/** Every owner's active profiles over the period's compared window ("All profiles"); no names. */
+export type MetricsBenchmark = { start: string; end: string; label: string; comparedFrom: string | null } & CompareStats;
+
+export const getMetricsBenchmark = (params: { period: ProfileMetricPeriod; date?: string; to?: string }) =>
+  apiFetch<MetricsBenchmark>(`/accounts/metrics/benchmark${qs(params)}`);
 
 export const getProfileMetric = (
   id: string,
