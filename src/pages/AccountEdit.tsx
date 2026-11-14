@@ -172,12 +172,7 @@ function EditProfile({ id }: { id: string }) {
           <div className="space-y-6">
             <Details id={id} account={account} onSaved={onSaved} />
 
-            <Section
-              title="Resumes"
-              desc="Upload this profile's resumes as PDFs. Their text is what Job Applies scores against each job; keep one resume per stack."
-            >
-              <ResumesSection accountId={id} />
-            </Section>
+            <ResumesSection accountId={id} initial={account.resumes} onSaved={onSaved} />
 
             <PromptsBlock accountId={id} />
             <PromptEvalBlock accountId={id} />
