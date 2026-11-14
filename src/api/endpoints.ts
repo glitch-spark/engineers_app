@@ -225,7 +225,15 @@ export type ProfileMetricsRow = {
   lastApply?: string | null;
   /** Profiles list only: the bidder bids per bidder (archived bidders too), most first; adds up to `bidderBids`. */
   bidderBidsBy?: { bidderId: string; name: string; bids: number }[];
+  /** Profiles list only (absent from an older server): the profile's name, its rounds decided over the period, and
+   * its numbers over the compared window (null without one, or for an admin viewing every owner). */
+  name?: string;
+  rounds?: { decided: number; passed: number; passRate: number | null };
+  compare?: CompareStats | null;
 };
+
+/** A tailoring unit on the Profiles list: as the Profile tab reads it, without its draft and prompt text. */
+export type SetupUnit = { id: string; name: string; roles: PromptRole[]; hasTemplate: boolean; hasPrompt: boolean };
 
 /** A from / to range, or `weeks: 'all'` for All time (said explicitly, so older servers don't fall back to 4 weeks). */
 export const getProfileMetrics = (params: { from?: string; to?: string; weeks?: 'all'; userId?: string }) =>
@@ -233,6 +241,11 @@ export const getProfileMetrics = (params: { from?: string; to?: string; weeks?: 
     start: string; end: string; weeks: number | 'all' | null; rows: ProfileMetricsRow[];
     /** All time only: the day self bids started being typed per profile (null when every day counts). */
     selfBidsSince?: string | null;
+    /** The compared window (null when the range ends before the launch day) and the listed profiles together over it
+     * (null without a window or for an admin viewing every owner). Absent from an older server. */
+    comparedFrom?: string | null;
+    comparedTo?: string | null;
+    mine?: CompareStats | null;
   }>(
     `/accounts/metrics${qs(params)}`
   );

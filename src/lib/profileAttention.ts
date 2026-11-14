@@ -47,6 +47,33 @@ function weakestRound(rounds: RoundsSummary): string | null {
   return `${weakest.name} rounds pass ${pct(weakest.rate)}${best ? ` (${best.name} ${pct(best.rate)})` : ''}`;
 }
 
+/** Better ('up'), worse ('down') or not clearly different (null) from a comparison value. */
+export type Verdict = 'up' | 'down' | null;
+
+/** Interviews per bid, 25% off either way, once the profile has 30+ bids. */
+export function conversionVerdict(me: CompareStats, other: number): Verdict {
+  if (me.bids < MIN_BIDS || me.interviewsPerBid == null || !(other > 0)) return null;
+  const ratio = me.interviewsPerBid / other;
+  if (ratio <= 0.75 + EPS) return 'down';
+  return ratio >= 1.25 - EPS ? 'up' : null;
+}
+
+/** Pass rate 15+ whole points apart, once 5+ rounds are decided. */
+export function passVerdict(me: CompareStats, other: number): Verdict {
+  if (me.decided < MIN_DECIDED || me.passRate == null) return null;
+  const gap = points(me.passRate) - points(other);
+  if (Math.abs(gap) < 15) return null;
+  return gap > 0 ? 'up' : 'down';
+}
+
+/** Tailor score 5+ whole points apart, once 5+ resumes are scored. */
+export function tailorVerdict(me: CompareStats, other: number): Verdict {
+  if (me.tailorScore.n < MIN_SCORED || me.tailorScore.avg == null) return null;
+  const gap = Math.round(me.tailorScore.avg) - Math.round(other);
+  if (Math.abs(gap) < 5) return null;
+  return gap > 0 ? 'up' : 'down';
+}
+
 export function attentionLines(
   rounds: RoundsSummary | undefined,
   compare: ProfileCompare | undefined,
@@ -64,34 +91,23 @@ export function attentionLines(
   const me = compare?.this ?? null;
   const peers = compare?.peers ?? null;
   if (me) {
-    // Conversion: interviews per bid, 25% off either way.
-    if (me.bids >= MIN_BIDS && me.interviewsPerBid != null) {
-      const t = target((s) => s.interviewsPerBid, all, peers);
-      if (t && t.value > 0) {
-        const ratio = me.interviewsPerBid / t.value;
-        const text = `${rate1(me.interviewsPerBid)} interviews per bid vs ${rate1(t.value)} ${t.suffix}`;
-        if (ratio <= 0.75 + EPS) push(false, text);
-        else if (ratio >= 1.25 - EPS) push(true, text);
-      }
+    const conversion = target((s) => s.interviewsPerBid, all, peers);
+    const conversionDir = conversion ? conversionVerdict(me, conversion.value) : null;
+    if (conversion && conversionDir && me.interviewsPerBid != null) {
+      push(conversionDir === 'up',
+        `${rate1(me.interviewsPerBid)} interviews per bid vs ${rate1(conversion.value)} ${conversion.suffix}`);
     }
-    // Pass rate: 15 points apart.
-    if (me.decided >= MIN_DECIDED && me.passRate != null) {
-      const t = target((s) => s.passRate, all, peers);
-      if (t) {
-        const gap = points(me.passRate) - points(t.value);
-        if (Math.abs(gap) >= 15) push(gap > 0, `${pct(me.passRate)} of rounds passed vs ${pct(t.value)} ${t.suffix}`);
-      }
+    const pass = target((s) => s.passRate, all, peers);
+    const passDir = pass ? passVerdict(me, pass.value) : null;
+    if (pass && passDir && me.passRate != null) {
+      push(passDir === 'up', `${pct(me.passRate)} of rounds passed vs ${pct(pass.value)} ${pass.suffix}`);
     }
-    // Tailor score: 5 points apart.
-    if (me.tailorScore.n >= MIN_SCORED && me.tailorScore.avg != null) {
-      const t = target((s) => s.tailorScore.avg, all, peers);
-      if (t) {
-        const mine = Math.round(me.tailorScore.avg);
-        const theirs = Math.round(t.value);
-        if (Math.abs(mine - theirs) >= 5) {
-          push(mine > theirs, `Tailor score ${mine}, ${mine > theirs ? 'above' : 'below'} ${t.who} (${theirs})`);
-        }
-      }
+    const tailor = target((s) => s.tailorScore.avg, all, peers);
+    const tailorDir = tailor ? tailorVerdict(me, tailor.value) : null;
+    if (tailor && tailorDir && me.tailorScore.avg != null) {
+      const mine = Math.round(me.tailorScore.avg);
+      const theirs = Math.round(tailor.value);
+      push(tailorDir === 'up', `Tailor score ${mine}, ${tailorDir === 'up' ? 'above' : 'below'} ${tailor.who} (${theirs})`);
     }
     // Bid volume: half the owner's other profiles or less (owners run different numbers of bidders, so never "all").
     if (me.days >= MIN_DAYS && peers?.bidsPerWeek && me.bidsPerWeek != null && me.bidsPerWeek <= 0.5 * peers.bidsPerWeek + EPS) {
