@@ -88,13 +88,15 @@ const TOPS: { key: BidTopMeasure; label: string; fmt: (v: number) => string; low
   { key: 'bids', label: 'Most bids', fmt: count, behind: (g) => `${count(g)} behind` },
   { key: 'per100', label: 'Best conversion', fmt: (v) => `${v.toFixed(2)} / 100`, behind: (g) => `−${g.toFixed(2)} per 100` },
   { key: 'costPerInterview', label: 'Lowest cost per interview', fmt: (v) => usd(v), lower: true, behind: (g) => `+${usd(g)}` },
+  { key: 'streak', label: 'Longest streak', fmt: (v) => plural(v, 'day', 'days'), behind: (g) => `${plural(g, 'day', 'days')} behind` },
+  { key: 'interviews', label: 'Most interviews', fmt: count, behind: (g) => `${count(g)} behind` },
 ];
 
 /** The card's top bidders: per measure, the owner's best next to the best on the platform (a chip for the standing:
  *  lead, near = within 25% of the leader, far; the leader to look up when the owner doesn't lead). */
 export function bidderTopLines(tops: BidTops): BidderTopLine[] {
-  return TOPS.map(({ key, label, fmt, lower, behind }) => {
-    const { mine, platform } = tops[key];
+  return TOPS.filter(({ key }) => tops[key]).map(({ key, label, fmt, lower, behind }) => {
+    const { mine, platform } = tops[key]!;  // an older server sends fewer measures
     let top: PlatformTop | null = null;
     if (platform) {
       const v = platform.value;

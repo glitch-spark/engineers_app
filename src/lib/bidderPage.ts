@@ -1,0 +1,75 @@
+// The single Bidders page (spec 2026-11-14-bidders-single-page-design.md): the totals strip, each row's money and
+// review counts (the pay-week board in week mode), the time columns and the card's open state. Value imports carry
+// `.ts` so Node's test runner loads this file as is (tests/bidderPage.test.mjs).
+import { usd } from './money.ts';
+import { shortDay } from './profileList.ts';
+
+const count = (n: number | null | undefined) => (n ?? 0).toLocaleString('en-US');
+
+export type StripItem = { key: 'approved' | 'review' | 'rejected' | 'today'; text: string; tone: 'good' | 'warn' | 'bad' | null };
+
+/** The one-line strip: approved and pay, to review, rejected, and today (only for the current pay week). */
+export function stripItems(t: {
+  approved?: number | null; pay?: number | null; toReview?: number | null; rejected?: number | null;
+  today?: { approved: number; pending: number } | null;
+}): StripItem[] {
+  const items: StripItem[] = [
+    { key: 'approved', text: `${count(t.approved)} approved${t.pay == null ? '' : ` · ${usd(t.pay)} pay`}`, tone: 'good' },
+    { key: 'review', text: `${count(t.toReview)} to review`, tone: t.toReview ? 'warn' : null },
+    { key: 'rejected', text: `${count(t.rejected)} rejected`, tone: t.rejected ? 'bad' : null },
+  ];
+  if (t.today) {
+    items.push({
+      key: 'today', tone: null,
+      text: `Today ${count(t.today.approved)}${t.today.pending ? ` (${count(t.today.pending)} pending)` : ''}`,
+    });
+  }
+  return items;
+}
+
+type WeekBlock = { approved: number | null; pending: number | null; pay: number | null; toReview: number | null; source?: string };
+
+/** A row's money and review numbers: the pay-week board's block in week mode (the pay-week window, folder counts
+ *  before records start), else the period's report-day sums. */
+export function rowMoney(r: {
+  total: number; approved: number; pending: number; pay?: number; toReview?: number; week?: WeekBlock | null;
+}): { approved: number | null; bids: number; pay: number | null; toReview: number | null; folder: boolean } {
+  if (r.week) {
+    return {
+      approved: r.week.approved, bids: (r.week.approved ?? 0) + (r.week.pending ?? 0), pay: r.week.pay,
+      toReview: r.week.toReview, folder: r.week.source === 'folders',
+    };
+  }
+  return { approved: r.approved, bids: r.total, pay: r.pay ?? null, toReview: r.toReview ?? r.pending, folder: false };
+}
+
+export type TimeColumn = { key: string; label: string; sub: string; title: string; day?: string; isToday?: boolean; isFuture?: boolean };
+
+const weekday = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+
+function rangeLabel(start: string, end: string): string {
+  if (start === end) return shortDay(start);
+  const [s, e] = [shortDay(start), shortDay(end)];
+  return s.split(' ')[0] === e.split(' ')[0] ? `${s}–${e.split(' ')[1]}` : `${s} – ${e}`;
+}
+
+/** The table's time columns: a pay week's report days (week mode) or the pay weeks of a month / range. */
+export function timeColumns(resp: {
+  payWeek?: { days: { day: string; isToday: boolean; isFuture: boolean }[] } | null;
+  weeks: { start: string; end: string; partial: boolean }[];
+}): TimeColumn[] {
+  if (resp.payWeek) {
+    return resp.payWeek.days.map((d) => ({
+      key: d.day, label: weekday(d.day), sub: shortDay(d.day), title: `Bids on ${weekday(d.day)} ${shortDay(d.day)}`,
+      day: d.day, isToday: d.isToday, isFuture: d.isFuture,
+    }));
+  }
+  return resp.weeks.map((w, i) => ({
+    key: `w${i}`, label: rangeLabel(w.start, w.end), sub: w.partial ? 'part' : '',
+    title: `Bids ${shortDay(w.start)} – ${shortDay(w.end)}${w.partial ? ' (part of the pay week)' : ''}`,
+  }));
+}
+
+/** The comparison card stays open unless the viewer closed it (remembered in this browser). */
+export const cardOpen = (stored: string | null) => stored !== 'closed';

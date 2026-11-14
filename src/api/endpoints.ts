@@ -3054,6 +3054,14 @@ export interface BidPerformanceRow {
   rate?: number;
   pay?: number;
   reviewed?: number;
+  /** active / invited / archived (as the Pay week board), the country, and pending bids (newer servers). */
+  bidderStatus?: 'active' | 'invited' | 'archived';
+  country?: string | null;
+  toReview?: number;
+  /** Week mode: the pay week board's day cells and pay-week block (money and review counts as /bids/week). */
+  dayCells?: (BidCounts & { day: string; source?: string; error?: string | null })[] | null;
+  week?: { approved: number | null; pending: number | null; rejected: number | null; pay: number | null;
+    toReview: number | null; source: string; error: string | null } | null;
   approvalRate?: number | null;
   costPerInterview?: number | null;
 }
@@ -3072,12 +3080,20 @@ export interface BidPerformance {
     hitRate: number | null;
     avgPerWeekday: number | null;
     per100: number | null;
-    pay?: number;
-    approved?: number;
-    rejected?: number;
+    pay?: number | null;
+    approved?: number | null;
+    pending?: number | null;
+    rejected?: number | null;
+    toReview?: number | null;
     approvalRate?: number | null;
     costPerInterview?: number | null;
+    /** Week mode: the board's per-day totals and today's (current pay week only). */
+    days?: (BidCounts & { day: string })[] | null;
+    today?: { day: string; approved: number; pending: number } | null;
   };
+  /** Week mode: the pay week (its report days, which is today, which are still to come). */
+  payWeek?: { start: string; end: string; label: string; timezone: string;
+    days: { day: string; isToday: boolean; isFuture: boolean }[] } | null;
   /** Bidder ids, best first. */
   top: { bids: string[]; streak: string[]; interviews: string[]; conversion: string[] };
 }
@@ -3096,12 +3112,12 @@ export type BidderStats = {
   avgPerWeekday: number | null; approved: number; rejected: number; reviewed: number; approvalRate: number | null;
   interviews: number; per100: number | null; pay: number; costPerInterview: number | null;
 };
-export type BidTopMeasure = 'bids' | 'per100' | 'costPerInterview';
+export type BidTopMeasure = 'bids' | 'per100' | 'costPerInterview' | 'streak' | 'interviews';
 /** Per measure: the owner's best bidder and the best on the platform (names only, never another owner's ids). */
-export type BidTops = Record<BidTopMeasure, {
+export type BidTops = Partial<Record<BidTopMeasure, {
   mine: { id: string; name: string; value: number } | null;
   platform: { name: string; ownerName: string; value: number } | null;
-}>;
+}>>;
 export type BidInsights = {
   start: string; end: string; label: string; mine: BidderStats | null; platform: BidderStats | null; tops: BidTops | null;
 };
