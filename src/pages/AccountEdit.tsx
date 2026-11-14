@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
-import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
+import { AlertTriangle, Loader2, Plus, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
@@ -15,7 +15,7 @@ import PageHeader from '../components/PageHeader';
 import ProfileMetricsPanel from '../components/profiles/ProfileMetricsPanel';
 import Tabs from '../components/Tabs';
 import { PROFILE_REGION_OPTIONS } from '../lib/countries';
-import { promptsOf, setupStrip, type ProfileDoc } from '../lib/profileSetup';
+import { promptsDirty, promptsOf, setupStrip, tailoringSetUp, type ProfileDoc, type PromptsState } from '../lib/profileSetup';
 
 const PROFILE_TABS = [
   { key: 'profile', label: 'Profile' },
@@ -23,9 +23,6 @@ const PROFILE_TABS = [
 ];
 
 type AccShape = ProfileDoc;
-
-const promptKey = (p: api.ResumePrompt) =>
-  JSON.stringify([p.name, unitRoles(p), p.body, p.templateHtml ?? '', p.templateName ?? '']);
 
 export default function AccountEditPage() {
   const { id } = useParams<{ id?: string }>();
@@ -174,7 +171,7 @@ function EditProfile({ id }: { id: string }) {
 
             <ResumesSection accountId={id} initial={account.resumes} onSaved={onSaved} />
 
-            <PromptsBlock accountId={id} />
+            <PromptsArea key={id} id={id} account={account} onSaved={onSaved} />
             <PromptEvalBlock accountId={id} />
           </div>
         )}
@@ -284,73 +281,37 @@ function Details({ id, account, onSaved }: { id: string; account: ProfileDoc; on
   );
 }
 
-const PROMPTS_OPEN_KEY = 'profileEdit.promptsOpen';
-
-function readPromptsOpen(): boolean {
-  try {
-    return window.localStorage.getItem(PROMPTS_OPEN_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function PromptsBlock({ accountId }: { accountId: string }) {
-  // Collapsed by default; remembered per browser. Collapsing only hides the fields, so unsaved edits stay.
-  const [open, setOpen] = useState(readPromptsOpen);
-  const [prompts, setPrompts] = useState<api.ResumePrompt[]>([]);
-  const [defaultId, setDefaultId] = useState('');
-  // What was last loaded / saved, to mark unsaved prompts (•).
-  const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
-  const [savedDefault, setSavedDefault] = useState('');
-  const [screeningPrompt, setScreeningPrompt] = useState('');
-  const [coverLetterPrompt, setCoverLetterPrompt] = useState('');
-  const [loading, setLoading] = useState(true);
+/** Everything prompt-related for one profile, edited together and saved by one Save: the tailoring units (Tailoring)
+ * and the screening / cover-letter prompts. Unsaved edits are marked and guarded against reloading or closing the
+ * tab (the app's router can't block in-app navigation). */
+function PromptsArea({ id, account, onSaved }: { id: string; account: ProfileDoc; onSaved: (doc: ProfileDoc) => void }) {
+  const saved = useMemo(() => promptsOf(account), [account]);
+  const [draft, setDraft] = useState<PromptsState>(saved);
   const [saving, setSaving] = useState(false);
+  // Tailoring shows as one line until it's set up, or until the user asks to set it up in this visit.
+  const [tailoringOpen, setTailoringOpen] = useState(() => tailoringSetUp(saved.prompts));
+  const errors = useMemo(() => promptErrors(draft.prompts), [draft.prompts]);
+  const dirty = useMemo(() => promptsDirty(saved, draft), [saved, draft]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const acc = (await api.getAccount(accountId)) as AccShape;
-        if (cancelled) return;
-        loadPrompts(acc);
-        setScreeningPrompt(acc.screeningPrompt || '');
-        setCoverLetterPrompt(acc.coverLetterPrompt || '');
-      } catch (err) {
-        notify.error(err, 'Could not load prompts');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [accountId]);
-
-  function loadPrompts(acc: AccShape) {
-    const view = promptsOf(acc);
-    setPrompts(view.prompts);
-    setDefaultId(view.defaultId);
-    setSavedKeys(Object.fromEntries(view.prompts.map((p) => [p.id, promptKey(p)])));
-    setSavedDefault(view.defaultId);
-  }
-
-  const errors = useMemo(() => promptErrors(prompts), [prompts]);
-  const dirtyIds = useMemo(
-    () => new Set(prompts.filter((p) => savedKeys[p.id] !== promptKey(p)).map((p) => p.id)),
-    [prompts, savedKeys],
-  );
-  // Anything to save in the units: an edited or new unit, a deleted one, or another default.
-  const unitsChanged =
-    dirtyIds.size > 0 || defaultId !== savedDefault || Object.keys(savedKeys).some((id) => !prompts.some((p) => p.id === id));
+    if (!dirty.changed) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty.changed]);
 
   async function save() {
     if (Object.keys(errors).length) {
-      notify.info('Fix the prompt names first');
+      notify.info('Fix the unit names first');
       return;
     }
     setSaving(true);
     try {
-      const saved = (await api.updateAccount(accountId, {
-        resumePrompts: prompts.map((p) => ({
+      const doc = (await api.updateAccount(id, {
+        resumePrompts: draft.prompts.map((p) => ({
           id: p.id,
           name: p.name.trim(),
           roles: unitRoles(p),
@@ -359,11 +320,13 @@ function PromptsBlock({ accountId }: { accountId: string }) {
           templateName: p.templateName ?? '',
           ...(p.pageFormat ? { pageFormat: p.pageFormat } : {}),
         })),
-        defaultPromptId: defaultId,
-        screeningPrompt: screeningPrompt,
-        coverLetterPrompt: coverLetterPrompt,
-      })) as AccShape;
-      if (saved?.resumePrompts?.length) loadPrompts(saved);
+        defaultPromptId: draft.defaultId,
+        screeningPrompt: draft.screeningPrompt,
+        coverLetterPrompt: draft.coverLetterPrompt,
+      })) as ProfileDoc;
+      onSaved(doc);
+      // Saved units get their real ids from the server; start again from what was stored.
+      if (doc?.resumePrompts?.length) setDraft(promptsOf(doc));
       notify.success('Prompts saved');
     } catch (err) {
       notify.error(err, 'Failed to save prompts');
@@ -372,114 +335,69 @@ function PromptsBlock({ accountId }: { accountId: string }) {
     }
   }
 
-  function toggle() {
-    const next = !open;
-    setOpen(next);
-    try {
-      window.localStorage.setItem(PROMPTS_OPEN_KEY, next ? '1' : '0');
-    } catch {
-      /* storage unavailable: just don't remember */
-    }
-  }
-
-  const customized = [screeningPrompt.trim() && 'Screening Q&A', coverLetterPrompt.trim() && 'Cover letter'].filter(Boolean);
-  const defaultName = prompts.find((p) => p.id === defaultId)?.name || 'Default';
-  const summary = loading
-    ? 'Loading…'
-    : [
-        `${prompts.length} resume unit${prompts.length === 1 ? "" : "s"} · default: ${defaultName}`,
-        customized.length ? `customized: ${customized.join(', ')}` : '',
-      ]
-        .filter(Boolean)
-        .join(' · ');
+  const status = dirty.changed
+    ? `Unsaved${dirty.dirtyUnitIds.length ? ` · ${dirty.dirtyUnitIds.length} unit${dirty.dirtyUnitIds.length === 1 ? '' : 's'}` : ''}`
+    : 'Saved';
+  const saveButton = (
+    <div className="flex shrink-0 items-center gap-2">
+      <span className="text-xs text-muted" aria-live="polite">{status}</span>
+      <button type="button" onClick={() => void save()} disabled={saving || !dirty.changed} className="btn btn-sm disabled:opacity-50">
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Save className="h-3.5 w-3.5" aria-hidden />}
+        Save
+      </button>
+    </div>
+  );
 
   return (
     <>
-      <section className="panel">
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={open}
-          aria-controls="profile-prompts"
-          className="flex w-full items-center gap-3 rounded-[inherit] p-6 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
-        >
-          {open ? (
-            <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
-          ) : (
-            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
-          )}
-          <span className="card-title">Prompts</span>
-          <span className="text-xs text-muted">{summary}</span>
-        </button>
-      </section>
-
-      <div id="profile-prompts" hidden={!open} className="space-y-6">
-        {loading ? (
-          <div role="status" className="flex items-center gap-2 text-sm text-muted">
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Loading prompts...
-          </div>
-        ) : (
-          <>
-            <Section
-              title="Resume units"
-              desc="One HTML template + its prompt per unit, marked with the job roles it's for. Job Applies suggests the unit whose roles fit each job; the resume LLM rewrites the template's text in place."
-            >
-              <ResumeUnitsEditor
-                prompts={prompts}
-                defaultId={defaultId}
-                onChange={(next, nextDefault) => {
-                  setPrompts(next);
-                  setDefaultId(nextDefault);
-                }}
-                dirtyIds={dirtyIds}
-                errors={errors}
-                onSave={() => void save()}
-                saving={saving}
-                changed={unitsChanged}
-              />
-            </Section>
-
-            <Section
-              title="Screening Q&A answering prompt"
-              desc="How screening-question answers are written for this profile. Overrides your global screening prompt. Empty = inherit global → built-in default."
-            >
-              <ResumePromptField
-                kind="screening"
-                value={screeningPrompt}
-                onChange={setScreeningPrompt}
-                label="Profile screening prompt"
-                hint="Empty = inherit global → built-in default."
-                defaultSource="global"
-              />
-            </Section>
-
-            <Section
-              title="Cover letter prompt"
-              desc="How the cover letter is written when opted-in at submit time. Plain text output. Overrides your global cover-letter prompt. Empty = inherit global."
-            >
-              <ResumePromptField
-                kind="coverLetter"
-                value={coverLetterPrompt}
-                onChange={setCoverLetterPrompt}
-                label="Profile cover letter prompt"
-                hint="Empty = inherit global. If global is also empty, generic letter is produced."
-                defaultSource="global"
-              />
-            </Section>
-
-            <div className="flex justify-end">
-              <button
-                onClick={save}
-                disabled={saving}
-                className="btn disabled:opacity-50"
-              >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
-                Save all prompts
-              </button>
+      {tailoringOpen ? (
+        <section className="panel space-y-4 p-6" aria-labelledby="tailoring-title">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="tailoring-title" className="card-title">Tailoring</h2>
+              <p className="text-xs text-muted">The unit whose roles fit the job: its draft rewritten by its prompt.</p>
             </div>
-          </>
-        )}
-      </div>
+            {saveButton}
+          </div>
+          <ResumeUnitsEditor
+            prompts={draft.prompts}
+            defaultId={draft.defaultId}
+            onChange={(prompts, defaultId) => setDraft((d) => ({ ...d, prompts, defaultId }))}
+            dirtyIds={new Set(dirty.dirtyUnitIds)}
+            errors={errors}
+          />
+        </section>
+      ) : (
+        <section className="panel flex flex-wrap items-center gap-3 px-6 py-4" aria-labelledby="tailoring-title">
+          <h2 id="tailoring-title" className="card-title">Tailoring</h2>
+          <span className="text-sm text-muted">No tailoring set up.</span>
+          <button type="button" className="btn btn-sm" onClick={() => setTailoringOpen(true)}>
+            <Plus className="h-3.5 w-3.5" aria-hidden /> Set up tailoring
+          </button>
+        </section>
+      )}
+
+      <Section
+        title="Other prompts"
+        desc="Screening answers and cover letters for this profile; saved with the Tailoring Save."
+      >
+        <ResumePromptField
+          kind="screening"
+          value={draft.screeningPrompt}
+          onChange={(screeningPrompt) => setDraft((d) => ({ ...d, screeningPrompt }))}
+          label="Screening Q&A answering prompt"
+          hint="Overrides your global screening prompt. Empty = inherit global → built-in default."
+          defaultSource="global"
+        />
+        <ResumePromptField
+          kind="coverLetter"
+          value={draft.coverLetterPrompt}
+          onChange={(coverLetterPrompt) => setDraft((d) => ({ ...d, coverLetterPrompt }))}
+          label="Cover letter prompt"
+          hint="Plain text, used when opted in at submit time. Overrides your global cover-letter prompt. Empty = inherit global."
+          defaultSource="global"
+        />
+      </Section>
     </>
   );
 }
