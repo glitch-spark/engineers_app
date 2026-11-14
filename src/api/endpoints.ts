@@ -249,6 +249,20 @@ export type MetricCounts = { selfBids: number; bidderBids: number; selfInterview
 /** The profile Metrics tab's periods: the Statistics ones, plus everything since the profile was created. */
 export type ProfileMetricPeriod = 'week' | 'month' | 'custom' | 'all';
 
+/** Round types on the Metrics tab's Rounds card, in display order. */
+export const ROUND_TYPES = ['intro', 'tech', 'hiring', 'panel', 'final', 'home_assessment'] as const;
+export type RoundType = (typeof ROUND_TYPES)[number];
+/** done = passed + rejected + held with no result yet; passRate = passed / (passed + rejected), null with none decided. */
+export type RoundTypeStats = { done: number; passed: number; rejected: number; passRate: number | null };
+export type RoundsSummary = {
+  byType: Record<RoundType, RoundTypeStats>;
+  /** Held with no result yet, and still marked scheduled; every type. */
+  awaiting: number;
+  scheduled: number;
+  /** Every type except home assessments. */
+  passRate: number | null;
+};
+
 export type ProfileMetricDetail = ProfileMetricsRow & {
   period: ProfileMetricPeriod;
   /** The range measured (the current week or month runs to today) and its label ("Oct 2026", "All time"). */
@@ -258,8 +272,12 @@ export type ProfileMetricDetail = ProfileMetricsRow & {
   /** Every day of the range, oldest first, zeros included; `weekly` sums the same days. */
   daily: ({ day: string } & MetricCounts)[];
   weekly: ({ week: string } & MetricCounts)[];
-  /** The owner's other active profiles, averaged (totals and rates); no profile, span or low-volume flag. */
-  peers: Omit<ProfileMetricsRow, 'accountId' | 'spanWeeks' | 'lowVolume'> | null;
+  /** Rounds by type in the range (absent from an older server). */
+  rounds?: RoundsSummary;
+  passRate?: number | null;
+  /** The owner's other active profiles, averaged (totals and rates; pass rate pooled over their rounds); no profile,
+   * span or low-volume flag. */
+  peers: (Omit<ProfileMetricsRow, 'accountId' | 'spanWeeks' | 'lowVolume'> & { passRate?: number | null }) | null;
 };
 
 export const getProfileMetric = (
