@@ -103,3 +103,29 @@ export function promptsDirty(saved: PromptsState, current: PromptsState): { chan
   const changed = dirtyUnitIds.length > 0 || deleted || saved.defaultId !== current.defaultId || moreChanged;
   return { changed, dirtyUnitIds, moreChanged };
 }
+
+// Each section's save returns the whole profile, in shapes that differ (the resume upload's units aren't upgraded)
+// and possibly out of order; a section merges back only the fields it owns.
+export const RESUME_FIELDS = ['resumes'] as const;
+export const DETAIL_FIELDS = ['name', 'country', 'region'] as const;
+export const PROMPT_FIELDS = [
+  'resumePrompts', 'defaultPromptId', 'screeningPrompt', 'coverLetterPrompt', 'resumePromptBody', 'styleTemplate',
+  'styleTemplateName', 'pageFormat',
+] as const;
+
+/** The cached profile with only `fields` taken from a save's response; nothing cached yet stays nothing. */
+export function mergeOwned(prev: ProfileDoc | undefined, doc: ProfileDoc, fields: readonly (keyof ProfileDoc)[]): ProfileDoc | undefined {
+  if (!prev) return prev;
+  const next: ProfileDoc = { ...prev };
+  for (const f of fields) (next as Record<string, unknown>)[f] = doc[f];
+  return next;
+}
+
+/** The profile loads once per visit: no refetch on window focus or reconnect (each one downloads every resume and
+ *  template, and a failed one must not throw away edits). */
+export const PROFILE_SWR_OPTIONS = { revalidateOnFocus: false, revalidateOnReconnect: false } as const;
+
+/** Leave for the Profiles list only when the profile never loaded; a failed refresh keeps the page and its edits. */
+export function leaveOnLoadError(error: unknown, account: ProfileDoc | undefined): boolean {
+  return !!error && !account;
+}

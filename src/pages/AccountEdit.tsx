@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Plus, Save } from 'lucide-react';
@@ -15,7 +15,10 @@ import PageHeader from '../components/PageHeader';
 import ProfileMetricsPanel from '../components/profiles/ProfileMetricsPanel';
 import Tabs from '../components/Tabs';
 import { PROFILE_REGION_OPTIONS } from '../lib/countries';
-import { promptsDirty, promptsOf, setupStrip, tailoringSetUp, type ProfileDoc, type PromptsState } from '../lib/profileSetup';
+import {
+  DETAIL_FIELDS, PROFILE_SWR_OPTIONS, PROMPT_FIELDS, RESUME_FIELDS, leaveOnLoadError, mergeOwned, promptsDirty, promptsOf,
+  setupStrip, tailoringSetUp, type ProfileDoc, type PromptsState,
+} from '../lib/profileSetup';
 
 const PROFILE_TABS = [
   { key: 'profile', label: 'Profile' },
@@ -141,13 +144,17 @@ function EditProfile({ id }: { id: string }) {
       return next;
     }, { replace: true });
 
-  const { data: account, error, mutate } = useSWR(['account', id] as const, () => api.getAccount(id) as Promise<ProfileDoc>);
+  const { data: account, error, mutate } = useSWR(
+    ['account', id] as const, () => api.getAccount(id) as Promise<ProfileDoc>, PROFILE_SWR_OPTIONS,
+  );
   useEffect(() => {
-    if (!error) return;
+    if (!leaveOnLoadError(error, account)) return;
     notify.error(error, 'Could not load profile');
     navigate('/accounts');
-  }, [error, navigate]);
-  const onSaved = (doc: ProfileDoc) => void mutate(doc, { revalidate: false });
+  }, [error, account, navigate]);
+  // Each section's save merges back only the fields it owns (responses differ in shape and can arrive out of order).
+  const savedInto = (fields: readonly (keyof ProfileDoc)[]) => (doc: ProfileDoc) =>
+    void mutate((prev) => mergeOwned(prev, doc, fields), { revalidate: false });
 
   if (!account) {
     return (
@@ -165,15 +172,15 @@ function EditProfile({ id }: { id: string }) {
       </div>
 
       <Tabs tabs={PROFILE_TABS} value={tab} onChange={setTab} ariaLabel="Profile sections">
-        {tab === 'metrics' ? <ProfileMetricsPanel accountId={id} /> : (
-          <div className="space-y-6">
-            <Details id={id} account={account} onSaved={onSaved} />
+        {tab === 'metrics' && <ProfileMetricsPanel accountId={id} />}
+        {/* Kept mounted (hidden) on the Metrics tab, so unsaved prompt edits survive switching tabs. */}
+        <div className="space-y-6" hidden={tab === 'metrics'}>
+          <Details id={id} account={account} onSaved={savedInto(DETAIL_FIELDS)} />
 
-            <ResumesSection accountId={id} initial={account.resumes} onSaved={onSaved} />
+          <ResumesSection accountId={id} initial={account.resumes} onSaved={savedInto(RESUME_FIELDS)} />
 
-            <PromptsArea key={id} id={id} account={account} onSaved={onSaved} />
-          </div>
-        )}
+          <PromptsArea key={id} id={id} account={account} onSaved={savedInto(PROMPT_FIELDS)} />
+        </div>
       </Tabs>
     </div>
   );
@@ -292,6 +299,13 @@ function PromptsArea({ id, account, onSaved }: { id: string; account: ProfileDoc
   const [tailoringOpen, setTailoringOpen] = useState(() => tailoringSetUp(saved.prompts));
   const errors = useMemo(() => promptErrors(draft.prompts), [draft.prompts]);
   const dirty = useMemo(() => promptsDirty(saved, draft), [saved, draft]);
+  // When the stored prompts change under an untouched draft (a fresh load replacing a cached copy), follow them.
+  const lastSaved = useRef(saved);
+  useEffect(() => {
+    const before = lastSaved.current;
+    lastSaved.current = saved;
+    if (before !== saved && !promptsDirty(before, draft).changed) setDraft(saved);
+  }, [saved, draft]);
 
   useEffect(() => {
     if (!dirty.changed) return;

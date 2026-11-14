@@ -1,7 +1,7 @@
 // Profile page → Profile tab helpers (spec 2026-11-14-profile-tab-ux-design.md). Run: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { promptsDirty, promptsOf, setupStrip, tailoringSetUp } from '../src/lib/profileSetup.ts';
+import { DETAIL_FIELDS, PROFILE_SWR_OPTIONS, RESUME_FIELDS, leaveOnLoadError, mergeOwned, promptsDirty, promptsOf, setupStrip, tailoringSetUp } from '../src/lib/profileSetup.ts';
 
 const unit = (over = {}) => ({ id: 'u1', name: 'Backend', roles: ['backend'], body: 'Rewrite it', templateHtml: '<p>x</p>', templateName: 't.html', ...over });
 const doc = (over = {}) => ({
@@ -78,4 +78,32 @@ test('archived flag passes through', () => {
   const d = doc({ archived: true });
   assert.equal(setupStrip(d, promptsOf(d)).archived, true);
   assert.equal(setupStrip(doc(), promptsOf(doc())).archived, false);
+});
+
+test('a resume upload only replaces resumes in the cached profile', () => {
+  const cached = doc();
+  const uploadResponse = { ...doc({ resumes: [{ id: 'r1' }, { id: 'r2' }, { id: 'r3' }] }),
+    resumePrompts: cached.resumePrompts.map((p) => ({ ...p, templateHtml: null, templateName: null })), defaultPromptId: null };
+  const merged = mergeOwned(cached, uploadResponse, RESUME_FIELDS);
+  assert.equal(merged.resumes.length, 3);
+  assert.deepEqual(merged.resumePrompts, cached.resumePrompts);
+  assert.equal(merged.defaultPromptId, 'b');
+  assert.deepEqual(promptsDirty(promptsOf(cached), promptsOf(merged)).changed, false);
+});
+
+test('a late rename response does not roll prompts back', () => {
+  const afterPromptsSave = doc({ screeningPrompt: 'new' });
+  const renameResponse = doc({ name: 'Renamed', screeningPrompt: '' });
+  const merged = mergeOwned(afterPromptsSave, renameResponse, DETAIL_FIELDS);
+  assert.equal(merged.name, 'Renamed');
+  assert.equal(merged.screeningPrompt, 'new');
+  assert.equal(mergeOwned(undefined, renameResponse, DETAIL_FIELDS), undefined);
+});
+
+test('the profile is not refetched on focus, and a failed refetch keeps the page', () => {
+  assert.equal(PROFILE_SWR_OPTIONS.revalidateOnFocus, false);
+  assert.equal(PROFILE_SWR_OPTIONS.revalidateOnReconnect, false);
+  assert.equal(leaveOnLoadError(new Error('x'), undefined), true);
+  assert.equal(leaveOnLoadError(new Error('x'), doc()), false);
+  assert.equal(leaveOnLoadError(undefined, undefined), false);
 });
