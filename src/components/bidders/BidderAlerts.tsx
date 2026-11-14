@@ -16,9 +16,11 @@ type Props = {
   onOpenBidder: (id: string, day?: string) => void;
   onOpenProfile: (id: string) => void;
   onArchive: (id: string, name: string) => void;
+  /** False for an admin viewing another owner's bidders: the server refuses the archive, so no button. */
+  canArchive: boolean;
 };
 
-export default function BidderAlerts({ alerts, onOpenBidder, onOpenProfile, onArchive }: Props) {
+export default function BidderAlerts({ alerts, onOpenBidder, onOpenProfile, onArchive, canArchive }: Props) {
   const [showAll, setShowAll] = useState(false);
   const red = alerts.flags ?? [];
   const grey = alerts.archive ?? [];
@@ -65,14 +67,16 @@ export default function BidderAlerts({ alerts, onOpenBidder, onOpenProfile, onAr
         <section className="panel p-4" aria-label="Bidders you could archive">
           <p className="text-sm">
             {plural(grey.length, 'bidder looks', 'bidders look')} unused.{' '}
-            <span className="text-muted">Archive them to keep the list focused.</span>
+            {canArchive && <span className="text-muted">Archive them to keep the list focused.</span>}
           </p>
           <ul className="mt-2 flex flex-wrap gap-2">
             {grey.map((a) => (
               <li key={a.bidderId} className="inline-flex items-center gap-2 rounded border border-black/10 px-2 py-1 text-sm dark:border-white/15">
                 <button type="button" className="hover:underline" onClick={() => onOpenBidder(a.bidderId)}>{a.name || 'Unnamed'}</button>
                 <span className="text-xs text-muted">{archiveText(a)}</span>
-                <button type="button" className="btn-outline btn-sm" onClick={() => onArchive(a.bidderId, a.name)}>Archive</button>
+                {canArchive && (
+                  <button type="button" className="btn-outline btn-sm" onClick={() => onArchive(a.bidderId, a.name)}>Archive</button>
+                )}
               </li>
             ))}
           </ul>

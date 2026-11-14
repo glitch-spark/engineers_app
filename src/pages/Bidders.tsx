@@ -16,6 +16,7 @@ import SummaryTiles, { type Tile } from '../components/bidders/SummaryTiles';
 import TeamWeekTable from '../components/bidders/TeamWeekTable';
 import PerformanceTab from '../components/bidders/PerformanceTab';
 import BidderAlerts from '../components/bidders/BidderAlerts';
+import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { notify } from '../lib/notify';
 import Tabs from '../components/Tabs';
@@ -104,7 +105,7 @@ export default function BiddersPage() {
   // The open day's list and the bidder's week list too (decisions made in the overlay).
   const refreshAll = () => {
     refresh();
-    void mutateKeys((key) => Array.isArray(key) && (key[0] === 'bids-day' || key[0] === 'bids-week'));
+    void mutateKeys(isReviewedDataKey);
   };
 
   // The banners: one owner's bidders (staff: their own; an admin: the picked owner), whatever the week or period.
@@ -312,6 +313,7 @@ export default function BiddersPage() {
           onOpenBidder={(id, day) => setParam({ bidder: id, week: day ?? weekKey, day: day ?? null, view: null, tab: null })}
           onOpenProfile={(id) => navigate(`/accounts/${id}`)}
           onArchive={(id, name) => setPendingArchive({ id, name })}
+          canArchive={canManageBidders({ isAdmin, ownerId, userId: user?.id })}
         />
       )}
 

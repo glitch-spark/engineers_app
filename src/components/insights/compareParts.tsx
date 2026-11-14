@@ -2,12 +2,15 @@
 // better, red worse, grey too few to judge — the gap spelled out, two bars, and standing chips against the best on
 // the platform. Numbers and verdicts come from lib/profileList and lib/bidderInsights.
 import type { BandCell, PlatformTop } from '../../lib/profileList';
+import { arrowGood } from '../../lib/bidderInsights';
 
-/** ▲ / ▼ in the Metrics tab's up / down colours; the title says what was compared. */
-export function Arrow({ dir, title }: { dir: 'up' | 'down'; title: string }) {
+/** ▲ / ▼; green when good, red when bad. `good` defaults to the direction (up = good); pass it when lower is better
+ *  (cost per interview). The title says what was compared. */
+export function Arrow({ dir, title, good }: { dir: 'up' | 'down'; title: string; good?: boolean | null }) {
+  const isGood = good ?? dir === 'up';
   return (
     <span
-      className={`ml-1 text-[11px] ${dir === 'up' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
+      className={`ml-1 text-[11px] ${isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
       title={title}
       aria-label={`${dir === 'up' ? 'Above' : 'Below'} the platform average. ${title}`}
       role="img"
@@ -62,7 +65,7 @@ export function CompareCell({ c }: { c: Omit<BandCell, 'key'> }) {
       <dd className="mt-1 text-sm">
         <div className="flex flex-wrap items-baseline gap-x-1.5">
           <span className={`text-lg font-semibold tabular-nums ${t.num}`}>{c.mine}</span>
-          {c.dir && <Arrow dir={c.dir} title={`Yours ${c.mine} · platform average ${c.all}`} />}
+          {c.dir && <Arrow dir={c.dir} good={arrowGood(c)} title={`Yours ${c.mine} · platform average ${c.all}`} />}
           {c.gap && <span className={`text-xs font-medium tabular-nums ${c.tone === 'thin' || !c.tone ? 'text-muted' : t.num}`}>{c.gap}</span>}
         </div>
         <div className="text-xs text-muted">platform average: {c.all}</div>

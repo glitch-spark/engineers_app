@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  archiveText, bidderCells, bidderTopLines, flagText, rowPer100Verdict,
+  archiveText, arrowGood, bidderCells, bidderTopLines, canManageBidders, flagText, isReviewedDataKey, rowPer100Verdict,
 } from '../src/lib/bidderInsights.ts';
 
 const stats = (o = {}) => ({
@@ -76,6 +76,28 @@ test('archive sentences', () => {
   assert.equal(archiveText({ bidderId: 'a', name: 'Ana', reason: 'idle', since: '2026-10-30' }), 'No bids in 2 weeks (last Oct 30)');
   assert.equal(archiveText({ bidderId: 'a', name: 'Ana', reason: 'idle', since: null }), 'No bids in 2 weeks');
   assert.equal(archiveText({ bidderId: 'a', name: 'Ana', reason: 'invite_expired', since: '2026-11-03' }), 'Invite expired Nov 3, never used');
+});
+
+test('the arrow colour follows the verdict, not the direction (a higher cost is bad)', () => {
+  const [, , , per100, cost] = bidderCells(stats({ costPerInterview: 90, per100: 1.0 }), platform);
+  assert.deepEqual([cost.dir, cost.tone, arrowGood(cost)], ['up', 'bad', false]);
+  assert.deepEqual([per100.dir, per100.tone, arrowGood(per100)], ['up', 'good', true]);
+  const cheap = bidderCells(stats({ costPerInterview: 30 }), platform)[4];
+  assert.deepEqual([cheap.dir, cheap.tone, arrowGood(cheap)], ['down', 'good', true]);
+});
+
+test('archive is offered only for bidders the viewer manages', () => {
+  assert.equal(canManageBidders({ isAdmin: false, ownerId: '', userId: 'u1' }), true);
+  assert.equal(canManageBidders({ isAdmin: true, ownerId: 'u1', userId: 'u1' }), true);
+  assert.equal(canManageBidders({ isAdmin: true, ownerId: 'u2', userId: 'u1' }), false);
+});
+
+test('reviewing refreshes the banners too', () => {
+  assert.equal(isReviewedDataKey(['bid-alerts', '']), true);
+  assert.equal(isReviewedDataKey(['bids-day', 'b', '2026-11-12']), true);
+  assert.equal(isReviewedDataKey(['bids-week', 'b']), true);
+  assert.equal(isReviewedDataKey(['bid-insights', 'month']), false);
+  assert.equal(isReviewedDataKey('bids-day'), false);
 });
 
 test('row per-100 verdict against the platform', () => {

@@ -133,6 +133,23 @@ export function archiveText(a: BidArchiveSuggestion): string {
   return a.since ? `No bids in 2 weeks (last ${shortDay(a.since)})` : 'No bids in 2 weeks';
 }
 
+/** The arrow's colour: green when the cell's verdict is good, red when bad, whatever way the number went (a higher
+ *  cost per interview points ▲ but is bad); null without a verdict. */
+export function arrowGood(c: { tone: BandCell['tone'] }): boolean | null {
+  return c.tone === 'good' ? true : c.tone === 'bad' ? false : null;
+}
+
+/** The viewer manages these bidders (archive, invite, edit): staff always (their own list); an admin only their own
+ *  bidders (the server refuses changes to another owner's). */
+export function canManageBidders(v: { isAdmin: boolean; ownerId: string; userId: string | undefined }): boolean {
+  return !v.isAdmin || (!!v.userId && v.ownerId === v.userId);
+}
+
+/** The SWR keys a review decision changes: the open day's and week's bid lists, and the banners (the backlog). */
+export function isReviewedDataKey(key: unknown): boolean {
+  return Array.isArray(key) && ['bids-day', 'bids-week', 'bid-alerts'].includes(key[0] as string);
+}
+
 /** ▲ / ▼ on a row's interviews per 100 bids against the platform (100+ bids; ×1.25 / ×0.75). */
 export function rowPer100Verdict(row: { total: number; per100: number | null }, platformPer100: number | null | undefined): Dir {
   if (row.total < MIN_BIDS || row.per100 == null || !platformPer100) return null;
