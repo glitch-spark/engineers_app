@@ -14,9 +14,10 @@ import {
   PROFILE_RANGES, profileRangeDates, profileRangeError, readProfileRange, writeProfileRange, fmtCount, fmtPerWeek,
   fmtRate, fmtScore, tailoredText, type ProfileRange,
 } from '../lib/profileMetrics';
-import { interviewsAppliedBy } from '../lib/profileList';
+import { interviewsAppliedBy, rowArrow, setupText, windowsMatch } from '../lib/profileList';
+import ProfilesBand, { Arrow } from '../components/profiles/ProfilesBand';
 
-type SortKey = 'lastApply' | 'bids' | 'interviews' | 'rate' | 'score';
+type SortKey = 'lastApply' | 'bids' | 'interviews' | 'rate' | 'pass' | 'score';
 
 const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number | null => {
   if (!m || m.spanWeeks === 0) return null;
@@ -25,6 +26,7 @@ const sortValue = (m: api.ProfileMetricsRow | undefined, key: SortKey): number |
     case 'bids': return m.bids;
     case 'interviews': return m.interviews;
     case 'rate': return m.interviewsPerBid;
+    case 'pass': return m.rounds?.passRate ?? null;
     case 'score': return m.tailorScore?.avg ?? m.matchScore?.avg ?? null;
   }
 };
@@ -62,6 +64,11 @@ type Acc = {
   archived?: boolean;
   /** Populated owner, or the raw id when the user no longer exists. */
   createdBy?: string | { _id: string };
+  /** Setup column: fixed resumes, and tailoring units as the Profile tab reads them (absent from an older server). */
+  resumes?: unknown[] | null;
+  resumePrompts?: unknown[] | null;
+  setupUnits?: api.SetupUnit[];
+  setupDefaultId?: string | null;
 };
 
 export default function AccountsPage() {
@@ -116,6 +123,15 @@ export default function AccountsPage() {
     [metricsData]
   );
 
+  // "All profiles" over the same days (cached on the server for 15 minutes); a failure only hides the comparison.
+  const { data: bench } = useSWR(
+    profileStatus === 'archived' || rangeError ? null : (['metrics-benchmark', rangeDates?.from ?? 'all', rangeDates?.to ?? ''] as const),
+    () => api.getMetricsBenchmark(rangeDates ? { period: 'custom', date: rangeDates.from, to: rangeDates.to } : { period: 'all' }),
+    { revalidateOnFocus: false }
+  );
+  const compared = !!metricsData && windowsMatch(metricsData, bench) ? bench ?? null : null;
+  const comparedFrom = metricsData?.comparedFrom ?? '';
+
   // The lookup lists every user; /users is paginated (10 by default), which cut the filter short.
   const { data: usersData } = useSWR(isAdmin ? ['users-lookup'] : null, () => api.lookupUsers());
   const users = usersData?.users ?? [];
@@ -160,8 +176,8 @@ export default function AccountsPage() {
     ];
   };
 
-  // Five <td>s: Applies, Bids, Interviews, Intv/bid, Resume score.
-  const METRIC_COLS = 5;
+  // Six <td>s: Applies, Bids, Interviews, Intv/bid, Pass rate, Resume score.
+  const METRIC_COLS = 6;
   const metricCells = (a: Acc): ReactNode => {
     const dashes = (title?: string) => Array.from({ length: METRIC_COLS }, (_, i) => (
       <td key={i} className="px-4 py-2.5 text-muted" title={title}>—</td>
@@ -219,8 +235,41 @@ export default function AccountsPage() {
           {split(interviewsAppliedBy(m))}
         </td>
         {rateTd(m)}
+        {passTd(m)}
         {scoreTd(m)}
       </>
+    );
+  };
+
+  // ▲ / ▼ against all profiles over the compared window, only when the benchmark measured the same days.
+  const arrow = (kind: 'rate' | 'pass' | 'tailor', m: api.ProfileMetricsRow): ReactNode => {
+    const a = compared ? rowArrow(kind, m.compare, compared, comparedFrom) : null;
+    return a ? <Arrow dir={a.dir} title={a.title} /> : null;
+  };
+
+  // Rounds passed ÷ rounds decided in the range (home assessments left out, as on the Metrics tab).
+  const passTd = (m: api.ProfileMetricsRow): ReactNode => {
+    const r = m.rounds;
+    if (!r || r.passRate == null) {
+      return <td className="px-4 py-2.5 text-muted" title={r ? 'No rounds decided in this range' : undefined}>—</td>;
+    }
+    return (
+      <td className="px-4 py-2.5 whitespace-nowrap" title={`${fmtCount(r.passed)} passed of ${fmtCount(r.decided)} decided rounds`}>
+        <div>{Math.round(r.passRate * 100)}%{arrow('pass', m)}</div>
+        <div className="text-[11px] text-muted">{fmtCount(r.passed)} of {fmtCount(r.decided)} decided</div>
+      </td>
+    );
+  };
+
+  const setupTd = (a: Acc): ReactNode => {
+    const s = setupText(a);
+    return (
+      <td className="px-4 py-2.5 whitespace-nowrap" title={s.warnings.length ? s.warnings.join('\n') : undefined}>
+        <span className={s.text === '—' ? 'text-muted' : ''}>{s.text}</span>
+        {s.warnings.length > 0 && (
+          <span className="ml-1 text-amber-600 dark:text-amber-400" role="img" aria-label={`Setup warnings: ${s.warnings.join('; ')}`}>⚠</span>
+        )}
+      </td>
     );
   };
 
@@ -235,7 +284,7 @@ export default function AccountsPage() {
         title={`${fmtCount(m.interviews)} interviews ÷ ${fmtCount(m.bids)} bids`
           + (m.lowVolume ? ' · fewer than 30 bids, too few to rank' : '')}
       >
-        {fmtRate(m.interviewsPerBid)}
+        {fmtRate(m.interviewsPerBid)}{arrow('rate', m)}
       </td>
     );
   };
@@ -251,7 +300,7 @@ export default function AccountsPage() {
             + `Match: average of ${m.matchScore?.n ?? 0} applies with an uploaded resume`
       }
     >
-      <div>{scoreCell(m)}</div>
+      <div>{scoreCell(m)}{arrow('tailor', m)}</div>
       {tailoredText(m.tailoredResumes) && (
         <div className="text-[11px] text-muted">{tailoredText(m.tailoredResumes)}</div>
       )}
@@ -307,6 +356,33 @@ export default function AccountsPage() {
     });
   }, [rawAccounts, sort, metricsById]);
   const pagination = data?.pagination;
+
+  // The band: one owner's profiles (every non-admin; an admin with a user picked) vs all profiles. An older server
+  // sends no `mine`: no band.
+  let band: ReactNode = null;
+  if ((!isAdmin || userId) && profileStatus !== 'archived' && !rangeError && metricsData && 'mine' in metricsData) {
+    const whose = isAdmin && userId !== user?.id ? 'These' : 'Your';
+    if (!metricsData.comparedFrom) {
+      band = <p role="status" className="text-xs text-muted">Nothing to compare with all profiles in this range.</p>;
+    } else if (!metricsData.mine) {
+      band = <p role="status" className="text-xs text-muted">{whose} profiles have no bids in this range yet.</p>;
+    } else if (compared) {
+      const rangeLabel = range.preset === 'custom'
+        ? `${fmtDay(range.from)} – ${fmtDay(range.to)}`
+        : PROFILE_RANGES.find((o) => o.value === range.preset)?.label ?? '';
+      const since = !rangeDates || metricsData.comparedFrom > rangeDates.from ? metricsData.comparedFrom : null;
+      band = (
+        <ProfilesBand
+          whose={whose}
+          mine={metricsData.mine}
+          all={compared}
+          rangeLabel={rangeLabel}
+          since={since}
+          rows={metricsData.rows}
+        />
+      );
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -453,6 +529,8 @@ export default function AccountsPage() {
 
       {metricsError && <p role="status" className="text-xs text-muted">Couldn't load metrics</p>}
 
+      {band}
+
       <div className="table-wrap">
         <table className="min-w-full text-sm">
           <thead className="table-head">
@@ -464,6 +542,7 @@ export default function AccountsPage() {
                 ['bids', 'Bids'],
                 ['interviews', 'Interviews'],
                 ['rate', 'Intv/bid'],
+                ['pass', 'Pass rate'],
                 ['score', 'Resume score'],
               ] as const).map(([key, label]) => (
                 <th
@@ -478,6 +557,7 @@ export default function AccountsPage() {
                   </button>
                 </th>
               ))}
+              <th className="px-4 py-2.5" title="Fixed resumes and tailoring units; ⚠ when a unit can't be used well">Setup</th>
               <th className="px-4 py-2.5">Owner</th>
               <th className="px-4 py-2.5 w-24 text-center" title="Include in Resume Generator profile picker">
                 Generate
@@ -488,7 +568,7 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-muted">
+                <td colSpan={12} className="px-4 py-8 text-center text-muted">
                   <div role="status" className="flex items-center justify-center">
                     <div className="spinner spinner-md mr-3" aria-hidden></div>
                     Loading profiles...
@@ -497,7 +577,7 @@ export default function AccountsPage() {
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-muted">
+                <td colSpan={12} className="px-3 py-6 text-center text-muted">
                   {debouncedSearch
                     ? `No profiles found matching "${debouncedSearch}"`
                     : profileStatus === 'archived' ? 'No archived profiles.' : 'No profiles found.'}
@@ -532,6 +612,7 @@ export default function AccountsPage() {
                   )}
                 </td>
                 {metricCells(a)}
+                {setupTd(a)}
                 <td className="px-4 py-2.5"><NameWithAvatar name={a.ownerName} imageUrl={a.ownerImage} /></td>
                 <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-center">
