@@ -3049,6 +3049,13 @@ export interface BidPerformanceRow {
   days: { day: string; bids: number; state: 'hit' | 'miss' | 'open' | 'none' }[];
   per100: number | null;
   lastBidAt: string | null;
+  /** USD per approved bid, the period's pay (approved x rate), approved + rejected, approved / reviewed and pay per
+   *  interview (newer servers). */
+  rate?: number;
+  pay?: number;
+  reviewed?: number;
+  approvalRate?: number | null;
+  costPerInterview?: number | null;
 }
 
 export interface BidPerformance {
@@ -3065,6 +3072,11 @@ export interface BidPerformance {
     hitRate: number | null;
     avgPerWeekday: number | null;
     per100: number | null;
+    pay?: number;
+    approved?: number;
+    rejected?: number;
+    approvalRate?: number | null;
+    costPerInterview?: number | null;
   };
   /** Bidder ids, best first. */
   top: { bids: string[]; streak: string[]; interviews: string[]; conversion: string[] };
@@ -3077,6 +3089,38 @@ export const getBidPerformance = (params: {
   includeArchived?: boolean;
   ownerId?: string;
 }) => apiFetch<BidPerformance>(`/bids/performance${qs(params)}`);
+
+/** A group of bidders pooled over a period (Bidders page card): yours or the platform's. */
+export type BidderStats = {
+  bidders: number; bids: number; weekdays: number; hitDays: number; hitRate: number | null;
+  avgPerWeekday: number | null; approved: number; rejected: number; reviewed: number; approvalRate: number | null;
+  interviews: number; per100: number | null; pay: number; costPerInterview: number | null;
+};
+export type BidTopMeasure = 'bids' | 'per100' | 'costPerInterview';
+/** Per measure: the owner's best bidder and the best on the platform (names only, never another owner's ids). */
+export type BidTops = Record<BidTopMeasure, {
+  mine: { id: string; name: string; value: number } | null;
+  platform: { name: string; ownerName: string; value: number } | null;
+}>;
+export type BidInsights = {
+  start: string; end: string; label: string; mine: BidderStats | null; platform: BidderStats | null; tops: BidTops | null;
+};
+export const getBidInsights = (params: { period: 'week' | 'month' | 'custom'; date?: string; to?: string; ownerId?: string }) =>
+  apiFetch<BidInsights>(`/bids/insights${qs(params)}`);
+
+export type BidAlertKind = 'inactive' | 'rejects' | 'no_interviews' | 'review_backlog';
+/** A bidder that needs action (Bidders page red banner); `detail` carries the numbers for its sentence. */
+export type BidAlert = {
+  bidderId: string; name: string; kind: BidAlertKind;
+  detail: {
+    lastBidDay?: string | null; rejected?: number; reviewed?: number; topReason?: string | null; bids?: number;
+    profileId?: string; profileName?: string; pending?: number; oldestDay?: string;
+  };
+};
+export type BidArchiveSuggestion = { bidderId: string; name: string; reason: 'idle' | 'invite_expired'; since: string | null };
+/** One owner's banners (null lists: an admin viewing every owner). */
+export type BidAlerts = { asOf: string; flags: BidAlert[] | null; archive: BidArchiveSuggestion[] | null };
+export const getBidAlerts = (params: { ownerId?: string }) => apiFetch<BidAlerts>(`/bids/alerts${qs(params)}`);
 
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
 

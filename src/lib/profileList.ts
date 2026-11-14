@@ -79,8 +79,8 @@ export type BandCell = {
 const MIN_RATE_BIDS = 30;
 const MIN_DECIDED = 5;
 const MIN_SCORED = 5;
-const signed = (n: number, unit = '') => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n)}${unit}`;
-const bars = (m: number | null, a: number | null) => {
+export const signed = (n: number, unit = '') => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n)}${unit}`;
+export const bars = (m: number | null, a: number | null) => {
   if (m == null || a == null) return null;
   const max = Math.max(m, a);
   return max > 0 ? { mine: m / max, all: a / max } : null;
