@@ -14,6 +14,7 @@ import {
   PROFILE_RANGES, profileRangeDates, profileRangeError, readProfileRange, writeProfileRange, fmtCount, fmtPerWeek,
   fmtRate, fmtScore, tailoredText, type ProfileRange,
 } from '../lib/profileMetrics';
+import { interviewsAppliedBy } from '../lib/profileList';
 
 type SortKey = 'lastApply' | 'bids' | 'interviews' | 'rate' | 'score';
 
@@ -215,8 +216,7 @@ export default function AccountsPage() {
           title={`${fmtCount(m.selfInterviews)} self-taken · ${fmtCount(m.callerInterviews)} caller-taken. ${perWeek(m.interviewsPerWeek)}`}
         >
           <div>{fmtCount(m.interviews)}</div>
-          {split(`${fmtCount(m.selfAppliedInterviews ?? 0)} self · ${fmtCount(m.bidderAppliedInterviews ?? 0)} bidder · `
-            + `${fmtCount(m.unsetAppliedInterviews ?? 0)} not set`)}
+          {split(interviewsAppliedBy(m))}
         </td>
         {rateTd(m)}
         {scoreTd(m)}
