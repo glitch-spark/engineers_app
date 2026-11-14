@@ -4,7 +4,8 @@
 import { usd } from './money.ts';
 import { shortDay } from './profileList.ts';
 
-const count = (n: number | null | undefined) => (n ?? 0).toLocaleString('en-US');
+// A count the server doesn't know (folder weeks: no review, no rejects) shows a dash, never a made-up 0.
+const count = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
 
 export type StripItem = { key: 'approved' | 'review' | 'rejected' | 'today'; text: string; tone: 'good' | 'warn' | 'bad' | null };
 
@@ -69,6 +70,26 @@ export function timeColumns(resp: {
     key: `w${i}`, label: rangeLabel(w.start, w.end), sub: w.partial ? 'part' : '',
     title: `Bids ${shortDay(w.start)} – ${shortDay(w.end)}${w.partial ? ' (part of the pay week)' : ''}`,
   }));
+}
+
+export type PagePeriod = { period: 'week' | 'month' | 'custom'; day: string; from: string; to: string };
+
+/** The page's period from the URL: `week` (a day of the pay week; none = the current one) unless `period` says month
+ *  or custom (`date`, and `to` for custom), so returning from a bidder keeps it. `today` seeds the custom defaults. */
+export function periodFromParams(
+  p: { week?: string | null; period?: string | null; date?: string | null; to?: string | null }, today: string,
+): PagePeriod {
+  const monthStart = `${today.slice(0, 8)}01`;
+  if (p.period === 'month') return { period: 'month', day: p.date || today, from: monthStart, to: today };
+  if (p.period === 'custom') return { period: 'custom', day: '', from: p.date || monthStart, to: p.to || today };
+  return { period: 'week', day: p.week || '', from: monthStart, to: today };
+}
+
+/** The URL params for a period (null = removed): the inverse of `periodFromParams`. */
+export function periodToParams(f: PagePeriod): Record<'week' | 'period' | 'date' | 'to', string | null> {
+  if (f.period === 'week') return { week: f.day || null, period: null, date: null, to: null };
+  if (f.period === 'month') return { week: null, period: 'month', date: f.day || null, to: null };
+  return { week: null, period: 'custom', date: f.from || null, to: f.to || null };
 }
 
 /** The comparison card stays open unless the viewer closed it (remembered in this browser). */

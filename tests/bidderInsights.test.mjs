@@ -97,7 +97,7 @@ test('reviewing refreshes the banners too', () => {
   assert.equal(isReviewedDataKey(['bids-day', 'b', '2026-11-12']), true);
   assert.equal(isReviewedDataKey(['bids-week', 'b']), true);
   assert.equal(isReviewedDataKey(['bid-performance', 'week']), true);   // the single page's table and strip
-  assert.equal(isReviewedDataKey(['bid-insights', 'month']), false);
+  assert.equal(isReviewedDataKey(['bid-insights', 'month']), true);    // the card's approval and cost
   assert.equal(isReviewedDataKey('bids-day'), false);
 });
 

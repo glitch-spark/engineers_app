@@ -14,13 +14,16 @@ import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDial
 import BiddersOverview from '../components/bidders/BiddersOverview';
 import BidderAlerts from '../components/bidders/BidderAlerts';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
+import { periodFromParams, periodToParams } from '../lib/bidderPage';
+import { isoDay } from '../components/statistics/controls';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { notify } from '../lib/notify';
 import WeekNav from '../components/bidders/WeekNav';
 import { dateInZone } from '../components/bidders/weekDates';
 
-/** URL state: week, bidder, day, tab (history), mode (focus), bid, owner (admin filter); `view` is from the old tabs. */
-type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view';
+/** URL state: week, bidder, day, tab (history), mode (focus), bid, owner (admin filter), period / date / to (the list's
+ * month or custom range); `view` is from the old tabs. */
+type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view' | 'period' | 'date' | 'to';
 
 function statusText(b: api.Bidder | undefined, status: string | undefined) {
   if (status === 'archived') return 'Archived';
@@ -88,10 +91,12 @@ export default function BiddersPage() {
   }, [active.data, archived.data]);
 
   const { mutate: mutateKeys } = useSWRConfig();
+  // A change to bidders (added, edited, archived, restored) shows in the list, the card and the banners too.
   const refresh = () => {
     board.mutate();
     active.mutate();
     archived.mutate();
+    void mutateKeys((key) => Array.isArray(key) && ['bid-performance', 'bid-insights', 'bid-alerts'].includes(key[0] as string));
   };
   // The open day's list and the bidder's week list too (decisions made in the overlay).
   const refreshAll = () => {
@@ -189,14 +194,16 @@ export default function BiddersPage() {
           onOpenBidder={(id, wk, day) => setParam({ bidder: id, week: wk, day: day ?? null, view: null, tab: null })}
           onReview={(wk, id) => setParam({ mode: 'focus', bidder: id ?? null, bid: null, week: wk, view: null })}
           renderStatus={(row) => statusText(byId[row.id], row.bidderStatus ?? row.status)}
+          filters={periodFromParams({
+            week, period: params.get('period'), date: params.get('date'), to: params.get('to'),
+          }, isoDay(new Date()))}
+          onFilters={(f) => setParam(periodToParams(f))}
+          // /bidders lists only the viewer's own bidders, so other owners' rows get no menu.
           renderActions={(row) =>
-            byId[row.id] && canManageBidders({ isAdmin, ownerId, userId: user?.id }) ? (
+            byId[row.id] ? (
               <BidderActions
                 bidder={byId[row.id]}
-                onChanged={() => {
-                  refresh();
-                  void mutateKeys((key) => Array.isArray(key) && ['bid-performance', 'bid-insights', 'bid-alerts'].includes(key[0] as string));
-                }}
+                onChanged={refresh}
                 onHistory={() => setParam({ bidder: row.id, tab: 'history', day: null })}
               />
             ) : null

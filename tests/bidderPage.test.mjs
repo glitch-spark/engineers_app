@@ -1,7 +1,7 @@
 // The single Bidders page helpers (spec 2026-11-14-bidders-single-page-design.md). Run: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardOpen, rowMoney, stripItems, timeColumns } from '../src/lib/bidderPage.ts';
+import { cardOpen, periodFromParams, periodToParams, rowMoney, stripItems, timeColumns } from '../src/lib/bidderPage.ts';
 import { bidderTopLines } from '../src/lib/bidderInsights.ts';
 
 test('strip: one line of totals, today only for the current pay week', () => {
@@ -61,4 +61,23 @@ test('top bidders add longest streak and most interviews; an older server withou
     ['Most interviews', '2', 'Best on the platform', null],
   ]);
   assert.equal(bidderTopLines({ bids: none, per100: none, costPerInterview: none }).length, 3);
+});
+
+test('the period lives in the URL: week for a pay week, period / date / to otherwise', () => {
+  assert.deepEqual(periodFromParams({}, '2026-11-14'), { period: 'week', day: '', from: '2026-11-01', to: '2026-11-14' });
+  assert.deepEqual(periodFromParams({ week: '2026-11-08' }, '2026-11-14'), { period: 'week', day: '2026-11-08', from: '2026-11-01', to: '2026-11-14' });
+  assert.deepEqual(periodFromParams({ period: 'month', date: '2026-10-15' }, '2026-11-14'),
+    { period: 'month', day: '2026-10-15', from: '2026-11-01', to: '2026-11-14' });
+  assert.deepEqual(periodFromParams({ period: 'custom', date: '2026-10-01', to: '2026-10-20' }, '2026-11-14'),
+    { period: 'custom', day: '', from: '2026-10-01', to: '2026-10-20' });
+  assert.deepEqual(periodToParams({ period: 'week', day: '', from: 'x', to: 'y' }), { week: null, period: null, date: null, to: null });
+  assert.deepEqual(periodToParams({ period: 'week', day: '2026-11-08', from: 'x', to: 'y' }), { week: '2026-11-08', period: null, date: null, to: null });
+  assert.deepEqual(periodToParams({ period: 'month', day: '2026-10-15', from: 'x', to: 'y' }), { week: null, period: 'month', date: '2026-10-15', to: null });
+  assert.deepEqual(periodToParams({ period: 'custom', day: '', from: '2026-10-01', to: '2026-10-20' }),
+    { week: null, period: 'custom', date: '2026-10-01', to: '2026-10-20' });
+});
+
+test('the strip shows a dash for counts it does not know (folder weeks)', () => {
+  assert.deepEqual(stripItems({ approved: 30, pay: 15, toReview: null, rejected: null }).map((i) => i.text),
+    ['30 approved · $15.00 pay', '— to review', '— rejected']);
 });

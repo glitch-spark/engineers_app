@@ -7,11 +7,11 @@ import * as api from '../../api/endpoints';
 import type { BidPerformanceRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { PeriodNav, Segmented, filtersError, isoDay } from '../statistics/controls';
-import { cardOpen, stripItems, type StripItem } from '../../lib/bidderPage';
+import { cardOpen, stripItems, type PagePeriod, type StripItem } from '../../lib/bidderPage';
 import BiddersBand from './BiddersBand';
 import BiddersTable from './BiddersTable';
 
-type Filters = { period: api.StatsPeriod; day: string; from: string; to: string };
+type Filters = PagePeriod;
 
 const PERIOD_OPTIONS = [
   { value: 'week', label: 'Pay week' },
@@ -20,16 +20,6 @@ const PERIOD_OPTIONS = [
 ] as { value: api.StatsPeriod; label: string }[];
 
 const CARD_KEY = 'bidders.card.open';
-
-function initialFilters(): Filters {
-  const today = new Date();
-  return {
-    period: 'week',
-    day: '',  // empty: the pay week holding now (the server decides, past the Saturday cutoff too)
-    from: isoDay(new Date(today.getFullYear(), today.getMonth(), 1)),
-    to: isoDay(today),
-  };
-}
 
 const TONE: Record<NonNullable<StripItem['tone']> | 'none', string> = {
   good: 'text-emerald-700 dark:text-emerald-300',
@@ -48,12 +38,17 @@ type Props = {
   renderStatus: (row: BidPerformanceRow) => ReactNode;
   renderActions: (row: BidPerformanceRow) => ReactNode;
   empty: ReactNode;
+  /** The period, kept in the URL by the page (so returning from a bidder keeps it). An empty pay-week day means the
+   *  pay week holding now (the server decides, past the Saturday cutoff too). */
+  filters: Filters;
+  onFilters: (f: Filters) => void;
 };
 
-export default function BiddersOverview({ ownerId, includeArchived, onOpenBidder, onReview, renderStatus, renderActions, empty }: Props) {
+export default function BiddersOverview({
+  ownerId, includeArchived, onOpenBidder, onReview, renderStatus, renderActions, empty, filters: f, onFilters: setFilters,
+}: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [f, setFilters] = useState<Filters>(initialFilters);
   const [open, setOpen] = useState(() => {
     try {
       return cardOpen(localStorage.getItem(CARD_KEY));
@@ -93,7 +88,7 @@ export default function BiddersOverview({ ownerId, includeArchived, onOpenBidder
     <section className="space-y-4" aria-label="Bidders">
       <div className="flex flex-wrap items-center gap-3">
         <Segmented label="Period" options={PERIOD_OPTIONS} value={f.period}
-          onChange={(period) => setFilters({ ...f, period, day: period === 'week' ? '' : f.day || today })} />
+          onChange={(period) => setFilters({ ...f, period: period as Filters['period'], day: period === 'week' ? '' : f.day || today })} />
         {f.period === 'custom' ? (
           <div className="flex flex-wrap items-center gap-2">
             <input type="date" className="input !w-auto !py-1.5" aria-label="From" value={f.from} max={today}
