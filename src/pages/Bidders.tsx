@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
@@ -15,6 +15,9 @@ import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDial
 import SummaryTiles, { type Tile } from '../components/bidders/SummaryTiles';
 import TeamWeekTable from '../components/bidders/TeamWeekTable';
 import PerformanceTab from '../components/bidders/PerformanceTab';
+import BidderAlerts from '../components/bidders/BidderAlerts';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { notify } from '../lib/notify';
 import Tabs from '../components/Tabs';
 import WeekNav from '../components/bidders/WeekNav';
 import { dateInZone } from '../components/bidders/weekDates';
@@ -46,6 +49,9 @@ export default function BiddersPage() {
   const ownerId = isAdmin ? params.get('owner') ?? '' : '';
   const performance = !bidderId && params.get('view') === 'performance';
   const [showArchived, setShowArchived] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
   const [inviteShown, setInviteShown] = useState<{ name: string; invite: api.BidderInvite } | null>(null);
 
@@ -99,6 +105,30 @@ export default function BiddersPage() {
   const refreshAll = () => {
     refresh();
     void mutateKeys((key) => Array.isArray(key) && (key[0] === 'bids-day' || key[0] === 'bids-week'));
+  };
+
+  // The banners: one owner's bidders (staff: their own; an admin: the picked owner), whatever the week or period.
+  const alerts = useSWR(
+    !bidderId && (!isAdmin || ownerId) ? (['bid-alerts', ownerId] as const) : null,
+    () => api.getBidAlerts({ ownerId: ownerId || undefined }),
+    { revalidateOnFocus: false },
+  );
+  const archiveSuggested = async () => {
+    const p = pendingArchive;
+    if (!p) return;
+    setArchiving(true);
+    try {
+      await api.archiveBidder(p.id);
+      notify.success(`${p.name} archived`);
+      setPendingArchive(null);
+      refresh();
+      void alerts.mutate();
+      void mutateKeys((key) => Array.isArray(key) && (key[0] === 'bid-performance' || key[0] === 'bid-insights'));
+    } catch (err) {
+      notify.error(err, 'Failed to archive bidder');
+    } finally {
+      setArchiving(false);
+    }
   };
 
   const data = board.data;
@@ -276,6 +306,15 @@ export default function BiddersPage() {
         action={!bidderId && <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>}
       />
 
+      {!bidderId && alerts.data && (
+        <BidderAlerts
+          alerts={alerts.data}
+          onOpenBidder={(id, day) => setParam({ bidder: id, week: day ?? weekKey, day: day ?? null, view: null, tab: null })}
+          onOpenProfile={(id) => navigate(`/accounts/${id}`)}
+          onArchive={(id, name) => setPendingArchive({ id, name })}
+        />
+      )}
+
       {bidderId ? (
         main
       ) : (
@@ -288,6 +327,17 @@ export default function BiddersPage() {
           {main}
         </Tabs>
       )}
+
+      <ConfirmDialog
+        open={!!pendingArchive}
+        title="Archive bidder?"
+        body={<p>Archive {pendingArchive?.name}? They're signed out of the extension; you can restore them any time.</p>}
+        confirmLabel="Archive"
+        tone="default"
+        busy={archiving}
+        onConfirm={archiveSuggested}
+        onCancel={() => setPendingArchive(null)}
+      />
 
       <BidderFormModal
         open={formOpen}

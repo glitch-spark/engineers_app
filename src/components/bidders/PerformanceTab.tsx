@@ -6,6 +6,10 @@ import type { BidPerformanceRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { PERIODS, PeriodNav, Segmented, filtersError, isoDay } from '../statistics/controls';
 import { fmtCount } from '../../lib/profileMetrics';
+import { usd } from '../../lib/money';
+import { rowPer100Verdict } from '../../lib/bidderInsights';
+import { Arrow } from '../insights/compareParts';
+import BiddersBand from './BiddersBand';
 
 type Filters = { period: api.StatsPeriod; day: string; from: string; to: string };
 
@@ -124,7 +128,8 @@ function sharedNote(r: BidPerformanceRow): { text: string; title: string } | nul
 
 const HELP_KEY = 'bidders.performance.help';
 
-type SortKey = 'total' | 'longestStreak' | 'hitRate' | 'avgPerWeekday' | 'interviews' | 'per100' | 'lastBidAt' | `w${number}`;
+type SortKey = 'total' | 'longestStreak' | 'hitRate' | 'avgPerWeekday' | 'interviews' | 'per100' | 'approvalRate'
+  | 'costPerInterview' | 'lastBidAt' | `w${number}`;
 type Sort = { key: SortKey; dir: 'desc' | 'asc' } | null;
 
 function sortValue(r: BidPerformanceRow, key: SortKey): number | null {
@@ -133,7 +138,7 @@ function sortValue(r: BidPerformanceRow, key: SortKey): number | null {
     return v ?? null;
   }
   if (key === 'lastBidAt') return r.lastBidAt ? new Date(r.lastBidAt).getTime() : null;
-  return r[key as 'total'] as number | null;
+  return (r[key as 'total'] ?? null) as number | null;
 }
 
 function Change({ value }: { value: number | null }) {
@@ -176,6 +181,13 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
     rangeError ? null : (['bid-performance', params.period, params.date, params.to ?? '', includeArchived, ownerId] as const),
     () => api.getBidPerformance({ ...params, includeArchived, ownerId: ownerId || undefined }),
   );
+  // The card: this owner's bidders vs the platform over the same period (its own request: the table never waits on it).
+  const insights = useSWR(
+    rangeError || (isAdmin && !ownerId) ? null : (['bid-insights', params.period, params.date, params.to ?? '', ownerId] as const),
+    () => api.getBidInsights({ ...params, ownerId: ownerId || undefined }),
+    { revalidateOnFocus: false },
+  );
+  const platformPer100 = insights.data?.platform?.per100;
   const today = isoDay(new Date());
 
   const rows = useMemo(() => {
@@ -192,8 +204,10 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
     });
   }, [data, sort]);
 
+  // Cost per interview: cheapest first on the first click.
   const toggleSort = (key: SortKey) =>
-    setSort((s) => (s && s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }));
+    setSort((s) => (s && s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' }
+      : { key, dir: key === 'costPerInterview' ? 'asc' : 'desc' }));
 
   const now = Date.now();
   const stale = staleBefore(new Date(now));
@@ -264,6 +278,14 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
         </div>
       ) : (
         <>
+          {insights.data?.mine && insights.data.platform && (
+            <BiddersBand
+              insights={insights.data}
+              whose={isAdmin && ownerId && ownerId !== user?.id ? 'These' : 'Your'}
+              total={data.bidders.filter((b) => b.status === 'active').length}
+              onOpenBidder={open}
+            />
+          )}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {cards.map((c) => (
               <div key={c.label} className="stat-card flex flex-col p-4">
@@ -347,6 +369,8 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
                     {sortHead('avgPerWeekday', 'Avg / weekday', undefined, HELP.avg)}
                     {sortHead('interviews', 'Interviews', undefined, HELP.interviews)}
                     {sortHead('per100', 'Per 100 bids', undefined, HELP.per100)}
+                    {sortHead('approvalRate', 'Approval', undefined, 'Approved out of reviewed (approved + rejected) bids.')}
+                    {sortHead('costPerInterview', 'Cost / interview', undefined, 'Pay for approved bids divided by interviews.')}
                     {sortHead("lastBidAt", "Last bid")}
                   </tr>
                 </thead>
@@ -403,7 +427,40 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
                         <td className="px-4 py-2 text-right">
                           {r.per100 == null ? (
                             <span className="text-muted" title="Fewer than 100 bids">—</span>
-                          ) : r.per100.toFixed(2)}
+                          ) : (
+                            <>
+                              <div className="whitespace-nowrap">
+                                {r.per100.toFixed(2)}
+                                {(() => {
+                                  const dir = rowPer100Verdict(r, platformPer100);
+                                  return dir && platformPer100 != null && (
+                                    <Arrow dir={dir} title={`${r.per100.toFixed(2)} · platform average ${platformPer100.toFixed(2)}`} />
+                                  );
+                                })()}
+                              </div>
+                              <div className="whitespace-nowrap text-[11px] text-muted">
+                                {fmtCount(r.interviews ?? 0)} of {fmtCount(r.total)} bids
+                              </div>
+                            </>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {r.approvalRate == null ? <span className="text-muted">—</span> : (
+                            <>
+                              <div>{pct(r.approvalRate)}</div>
+                              <div className="whitespace-nowrap text-[11px] text-muted">
+                                {fmtCount(r.approved)} of {fmtCount(r.reviewed ?? 0)} reviewed
+                              </div>
+                            </>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {r.costPerInterview == null ? <span className="text-muted">—</span> : (
+                            <>
+                              <div>{usd(r.costPerInterview)}</div>
+                              <div className="whitespace-nowrap text-[11px] text-muted">{usd(r.pay ?? 0)} paid</div>
+                            </>
+                          )}
                         </td>
                         <td className={`px-4 py-2 text-right whitespace-nowrap ${isStale ? 'text-amber-700 dark:text-amber-300' : ''}`}
                           title={r.lastBidAt ? new Date(r.lastBidAt).toLocaleString() : undefined}>
@@ -425,6 +482,8 @@ export default function PerformanceTab({ ownerId, includeArchived, onOpenBidder 
                     <td className="px-4 py-2 text-right">{fixed(data.totals.avgPerWeekday, 1)}</td>
                     <td className="px-4 py-2 text-right">{fmtCount(data.totals.interviews)}</td>
                     <td className="px-4 py-2 text-right">{fixed(data.totals.per100, 2)}</td>
+                    <td className="px-4 py-2 text-right">{data.totals.approvalRate == null ? '—' : pct(data.totals.approvalRate)}</td>
+                    <td className="px-4 py-2 text-right">{data.totals.costPerInterview == null ? '—' : usd(data.totals.costPerInterview)}</td>
                     <td className="px-4 py-2" />
                   </tr>
                 </tbody>
