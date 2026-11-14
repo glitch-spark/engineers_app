@@ -16,6 +16,7 @@ import {
 } from '../lib/profileMetrics';
 import { bidsBreakdown, interviewsAppliedBy, interviewsBreakdown, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
 import ProfilesBand, { Arrow } from '../components/profiles/ProfilesBand';
+import ProfileAlerts from '../components/profiles/ProfileAlerts';
 
 type SortKey = 'lastApply' | 'bids' | 'interviews' | 'rate' | 'pass' | 'score';
 
@@ -84,6 +85,8 @@ export default function AccountsPage() {
   const [region, setRegion] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Acc | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null);
+  const [archiving, setArchiving] = useState(false);
   const [range, setRange] = useState<ProfileRange>(readProfileRange);
   const allTime = range.preset === 'all';
   const rangeError = profileRangeError(range);
@@ -111,7 +114,7 @@ export default function AccountsPage() {
   );
 
   // Metrics load on their own key so the list never waits on them. Archived profiles have none: no request then.
-  const { data: metricsData, error: metricsError, isLoading: metricsLoading } = useSWR(
+  const { data: metricsData, error: metricsError, isLoading: metricsLoading, mutate: mutateMetrics } = useSWR(
     profileStatus === 'archived' || rangeError
       ? null
       : (['account-metrics', rangeDates?.from ?? 'all', rangeDates?.to ?? '', isAdmin ? userId : ''] as const),
@@ -122,6 +125,9 @@ export default function AccountsPage() {
     () => new Map((metricsData?.rows ?? []).map((r) => [r.accountId, r])),
     [metricsData]
   );
+  // The banners (one owner's list, whatever the date filter): not on the Archived filter or when metrics failed.
+  const alerts = profileStatus !== 'archived' && !metricsError && !rangeError ? metricsData?.alerts ?? null : null;
+  const noInterviewIds = useMemo(() => new Set((alerts?.noInterviews ?? []).map((a) => a.accountId)), [alerts]);
 
   // "All profiles" over the same days (cached on the server for 15 minutes); a failure only hides the comparison.
   const { data: bench } = useSWR(
@@ -149,6 +155,24 @@ export default function AccountsPage() {
       notify.error(err, 'Failed to delete profile');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // The grey banner's Archive (the profile may not be on this page of the table).
+  const archiveSuggested = async () => {
+    const p = pendingArchive;
+    if (!p) return;
+    setArchiving(true);
+    try {
+      await api.updateAccount(p.id, { archived: true });
+      notify.success(`"${p.name}" archived`);
+      setPendingArchive(null);
+      mutate();
+      mutateMetrics();
+    } catch (err) {
+      notify.error(err, 'Failed to archive profile');
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -228,7 +252,14 @@ export default function AccountsPage() {
           title={`Who took the interviews: self or each caller. ${
             interviewsAppliedBy(m) ? `Who applied for the jobs: ${interviewsAppliedBy(m)}. ` : ''}${perWeek(m.interviewsPerWeek)}`}
         >
-          <div>{fmtCount(m.interviews)}</div>
+          <div>
+            {fmtCount(m.interviews)}
+            {noInterviewIds.has(a._id) && (
+              <span className="ml-1 rounded bg-red-100 px-1 text-[10px] text-red-700 dark:bg-red-900/50 dark:text-red-200">
+                No interviews in 14 days
+              </span>
+            )}
+          </div>
           {interviewsBreakdown(m) && (
             <div className="max-w-[16rem] whitespace-normal text-[11px] text-muted">{interviewsBreakdown(m)}</div>
           )}
@@ -394,7 +425,8 @@ export default function AccountsPage() {
           total={metricsData.rows.length}
           from={metricsData.comparedFrom}
           to={metricsData.comparedTo ?? metricsData.comparedFrom}
-          rows={metricsData.rows}
+          regionTops={metricsData.regionTops}
+          benchTops={compared.regionTops}
         />
       );
     }
@@ -406,6 +438,17 @@ export default function AccountsPage() {
         title="Profiles"
         action={<button type="button" className="btn" onClick={() => navigate('/accounts/new')}>Add</button>}
       />
+
+      {alerts && (
+        <ProfileAlerts
+          alerts={alerts}
+          warningsFor={(id) => {
+            const acc = rawAccounts.find((x) => x._id === id);
+            return acc ? setupText(acc).warnings : [];
+          }}
+          onArchive={(id, name) => setPendingArchive({ id, name })}
+        />
+      )}
 
       <div className="flex items-end gap-3 flex-wrap toolbar">
         <div className="w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-64 sm:max-w-md">
@@ -602,7 +645,8 @@ export default function AccountsPage() {
             ) : accounts.map((a) => (
               <tr
                 key={a._id}
-                className={`table-row cursor-pointer transition-colors ${a.archived ? 'text-muted' : ''}`}
+                className={`table-row cursor-pointer transition-colors ${a.archived ? 'text-muted' : ''} ${
+                  noInterviewIds.has(a._id) ? 'bg-red-50 dark:bg-red-950/30' : ''}`}
                 onClick={() => navigate(`/accounts/${a._id}`)}
               >
                 <td className="px-4 py-2.5">
@@ -708,6 +752,17 @@ export default function AccountsPage() {
           </nav>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingArchive}
+        title="Archive profile?"
+        body={<p>Archive "{pendingArchive?.name}"? It leaves the active list and Generate; you can unarchive it any time.</p>}
+        confirmLabel="Archive"
+        tone="default"
+        busy={archiving}
+        onConfirm={archiveSuggested}
+        onCancel={() => setPendingArchive(null)}
+      />
 
       <ConfirmDialog
         open={!!pendingDelete}

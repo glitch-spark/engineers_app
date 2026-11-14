@@ -2,7 +2,7 @@
 // (spec 2026-11-14-profiles-list-compare-design.md). Value imports carry `.ts`, so Node's test runner loads this
 // file as is (tests/profileList.test.mjs).
 import type {
-  BenchRegionTops, CompareStats, ProfileAlert, ProfileMetricsRow, RegionTops, ResumePrompt, SetupUnit, TopRegion,
+  BenchRegionTops, CompareStats, ProfileAlert, RegionTops, ResumePrompt, SetupUnit, TopRegion,
 } from '../api/endpoints';
 import { conversionVerdict, passVerdict, tailorVerdict, type Verdict } from './profileAttention.ts';
 import { setupStrip, tailoringSetUp } from './profileSetup.ts';
@@ -90,23 +90,6 @@ export function bandCells(mine: CompareStats, all: CompareStats): BandCell[] {
       dir: all.tailorScore.avg == null ? null : tailorVerdict(mine, all.tailorScore.avg),
     },
   ];
-}
-
-const MIN_BIDS = 30;
-type Ranked = { accountId: string; name: string; interviewsPerBid: number };
-
-/** The owner's best and worst interviews per bid over the compared window, among profiles with 30+ bids; null with
- *  fewer than two such profiles or when they all convert alike. */
-export function strongestWeakest(
-  rows: Pick<ProfileMetricsRow, 'accountId' | 'name' | 'compare'>[],
-): { strongest: Ranked; weakest: Ranked } | null {
-  const ranked: Ranked[] = rows
-    .filter((r) => r.compare && r.compare.bids >= MIN_BIDS && r.compare.interviewsPerBid != null)
-    .map((r) => ({ accountId: r.accountId, name: r.name ?? '', interviewsPerBid: r.compare!.interviewsPerBid as number }));
-  if (ranked.length < 2) return null;
-  const strongest = ranked.reduce((b, r) => (r.interviewsPerBid > b.interviewsPerBid ? r : b));
-  const weakest = ranked.reduce((w, r) => (r.interviewsPerBid < w.interviewsPerBid ? r : w));
-  return strongest.interviewsPerBid === weakest.interviewsPerBid ? null : { strongest, weakest };
 }
 
 /** The band's heading: every listed profile of the owner, the days compared, and which profiles the averages use

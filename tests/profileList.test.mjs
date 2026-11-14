@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bandCells, bandHeading, bidsBreakdown, flagNumbers, flagSuggestion, fmtListRate, interviewsBreakdown, regionTopLines, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
-  strongestWeakest, windowsMatch,
+  windowsMatch,
 } from '../src/lib/profileList.ts';
 
 test('interviews line leaves out "not set" when there are none', () => {
@@ -66,17 +66,6 @@ test('second lines under Interview rate and Rounds passed', () => {
   assert.equal(passDetail({ decided: 0, passed: 0, passRate: null }, 2), 'no results yet');
   assert.equal(passDetail({ decided: 0, passed: 0, passRate: null }, 0), null);
   assert.equal(passDetail(undefined, 2), null);
-});
-
-test('strongest and weakest need two profiles with 30+ bids', () => {
-  const r = (id, bids, ipb) => ({ accountId: id, name: id.toUpperCase(), compare: stats({ bids, interviewsPerBid: ipb }) });
-  assert.deepEqual(strongestWeakest([r('a', 40, 0.011), r('b', 50, 0.001), r('c', 10, 0.5)]), {
-    strongest: { accountId: 'a', name: 'A', interviewsPerBid: 0.011 },
-    weakest: { accountId: 'b', name: 'B', interviewsPerBid: 0.001 },
-  });
-  assert.equal(strongestWeakest([r('a', 40, 0.01), r('c', 10, 0.5)]), null);
-  assert.equal(strongestWeakest([r('a', 40, 0.01), r('b', 40, 0.01)]), null);
-  assert.equal(strongestWeakest([r('a', 40, 0.01), { accountId: 'z', name: 'Z', compare: null }]), null);
 });
 
 test('row arrows follow the Metrics tab thresholds and need a compare', () => {
