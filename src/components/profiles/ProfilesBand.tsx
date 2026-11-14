@@ -10,7 +10,7 @@ export function Arrow({ dir, title }: { dir: 'up' | 'down'; title: string }) {
     <span
       className={`ml-1 text-[11px] ${dir === 'up' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
       title={title}
-      aria-label={`${dir === 'up' ? 'Above' : 'Below'} all users' average. ${title}`}
+      aria-label={`${dir === 'up' ? 'Above' : 'Below'} the platform average. ${title}`}
       role="img"
     >
       {dir === 'up' ? '▲' : '▼'}
@@ -37,7 +37,7 @@ type Props = {
   /** The compared days, first and last (ISO). */
   from: string;
   to: string;
-  /** The owner's top profile per region, and all users' best numbers there (no names). */
+  /** The owner's top profile per region, and the top profile in the platform there. */
   regionTops: RegionTops | null | undefined;
   benchTops: BenchRegionTops | undefined;
 };
@@ -47,7 +47,7 @@ export default function ProfilesBand({ whose, mine, all, rangeLabel, total, from
   const head = bandHeading({ whose, total, withBids: mine.profiles, allWithBids: all.profiles, rangeLabel, from, to });
   const tops = regionTops ? regionTopLines(regionTops, benchTops) : [];
   return (
-    <section className="panel p-4 space-y-3" aria-label="Your profiles compared with the average of all users' profiles">
+    <section className="panel p-4 space-y-3" aria-label="Your profiles compared with the platform average">
       <div>
         <h2 className="text-sm font-medium">
           {head.title}
@@ -61,8 +61,8 @@ export default function ProfilesBand({ whose, mine, all, rangeLabel, total, from
             <dt className="text-xs text-muted">{c.label}</dt>
             <dd className="text-sm">
               <span className="text-base font-semibold tabular-nums">{c.mine}</span>
-              {c.dir && <Arrow dir={c.dir} title={`Yours ${c.mine} · all users' average ${c.all}`} />}
-              <span className="text-muted"> · all users' avg: {c.all}</span>
+              {c.dir && <Arrow dir={c.dir} title={`Yours ${c.mine} · platform average ${c.all}`} />}
+              <span className="text-muted"> · platform average: {c.all}</span>
               {c.note && <div className="text-[11px] text-muted">{c.note}</div>}
             </dd>
           </div>

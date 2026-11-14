@@ -245,8 +245,11 @@ export type RegionTop = {
   bestRate: { accountId: string; name: string; interviewsPerBid: number; bids: number } | null;
 };
 export type RegionTops = Partial<Record<TopRegion, RegionTop>>;
-/** All users' best single-profile numbers per region (benchmark): numbers only. */
-export type BenchRegionTops = Partial<Record<TopRegion, { mostInterviews: number | null; bestRate: number | null }>>;
+/** The top single profile per region in the platform (benchmark): its number, profile name and user name; no ids. */
+export type BenchRegionTops = Partial<Record<TopRegion, {
+  mostInterviews: { interviews: number; name: string; ownerName: string } | null;
+  bestRate: { interviewsPerBid: number; bids: number; name: string; ownerName: string } | null;
+}>>;
 /** A profile with no interview in the last 2 weeks, with its 2-week numbers. */
 export type ProfileAlert = {
   accountId: string; name: string; bids: number; tailored: number; tailorScore: { avg: number | null; n: number };

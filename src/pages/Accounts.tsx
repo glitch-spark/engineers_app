@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
@@ -14,7 +14,7 @@ import {
   PROFILE_RANGES, profileRangeDates, profileRangeError, readProfileRange, writeProfileRange, fmtCount, fmtPerWeek,
   fmtRate, fmtScore, tailoredText, type ProfileRange,
 } from '../lib/profileMetrics';
-import { bidsBreakdown, interviewsAppliedBy, interviewsBreakdown, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
+import { bidsBreakdown, interviewsAppliedBy, interviewsBreakdown, keptAlerts, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
 import ProfilesBand, { Arrow } from '../components/profiles/ProfilesBand';
 import ProfileAlerts from '../components/profiles/ProfileAlerts';
 
@@ -126,7 +126,11 @@ export default function AccountsPage() {
     [metricsData]
   );
   // The banners (one owner's list, whatever the date filter): not on the Archived filter or when metrics failed.
-  const alerts = profileStatus !== 'archived' && !metricsError && !rangeError ? metricsData?.alerts ?? null : null;
+  // Kept while the same owner's next date range loads, so the banners don't vanish and the toolbar doesn't jump.
+  const lastAlerts = useRef<ReturnType<typeof keptAlerts>>(null);
+  lastAlerts.current = keptAlerts(lastAlerts.current, isAdmin ? userId : '',
+    metricsData ? metricsData.alerts ?? null : undefined);
+  const alerts = profileStatus !== 'archived' && !metricsError && !rangeError ? lastAlerts.current?.alerts ?? null : null;
   const noInterviewIds = useMemo(() => new Set((alerts?.noInterviews ?? []).map((a) => a.accountId)), [alerts]);
 
   // "All profiles" over the same days (cached on the server for 15 minutes); a failure only hides the comparison.

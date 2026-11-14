@@ -161,3 +161,10 @@ rate. Numbers only. Same cache key; the Metrics tab ignores the new field.
 
 Exact Tailwind classes and spacing; banner copy beyond what's above; sorting inside the archive banner; how the
 list request reuses reads it already makes.
+
+## Changes the user asked for after the build (2026-11-14)
+
+- The best profile per region on the platform now shows its profile name and its user's name (no ids, no links), so
+  owners can look it up: "Best on the platform: Eric (User A) – 9" / "– 5.3%"; "Best on the platform: yours" when the
+  owner's number is at least the top. This replaces "numbers only" for the region tops.
+- "All users' average" reads "platform average" everywhere (card, arrows, banner numbers and suggestions).

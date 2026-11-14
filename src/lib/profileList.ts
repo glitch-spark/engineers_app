@@ -2,7 +2,7 @@
 // (spec 2026-11-14-profiles-list-compare-design.md). Value imports carry `.ts`, so Node's test runner loads this
 // file as is (tests/profileList.test.mjs).
 import type {
-  BenchRegionTops, CompareStats, ProfileAlert, RegionTops, ResumePrompt, SetupUnit, TopRegion,
+  BenchRegionTops, CompareStats, ProfileAlert, ProfileAlerts, RegionTops, ResumePrompt, SetupUnit, TopRegion,
 } from '../api/endpoints';
 import { conversionVerdict, passVerdict, tailorVerdict, type Verdict } from './profileAttention.ts';
 import { setupStrip, tailoringSetUp } from './profileSetup.ts';
@@ -99,10 +99,10 @@ export function bandHeading(o: {
 }): { title: string; dates: string; note: string } {
   const days = o.from === o.to ? shortDay(o.from) : `${shortDay(o.from)} – ${shortDay(o.to)}`;
   return {
-    title: `${o.whose} ${plural(o.total, 'profile', 'profiles')} vs the average of all users' profiles`,
+    title: `${o.whose} ${plural(o.total, 'profile', 'profiles')} vs the platform average`,
     dates: o.rangeLabel ? `${o.rangeLabel} · ${days}` : days,
     note: `Averages count only profiles with bids: ${count(o.withBids)} of ${o.whose === 'Your' ? 'yours' : 'these'}, `
-      + `${count(o.allWithBids)} across all users (${o.whose === 'Your' ? 'yours' : 'these'} included).`,
+      + `${count(o.allWithBids)} on the platform (${o.whose === 'Your' ? 'yours' : 'these'} included).`,
   };
 }
 
@@ -123,24 +123,24 @@ const MIN_FLAG_BIDS = 30;
 
 /** The red banner's suggestion for a profile with no interview in 2 weeks: the first rule that matches (spec
  *  2026-11-14-profiles-flags-and-top-design.md). `setupWarnings`: the Setup column's, [] when the account isn't loaded;
- *  `allTailorScore`: all users' 2-week tailor average, null while the server warms it up. */
+ *  `allTailorScore`: the platform's 2-week tailor average, null while the server warms it up. */
 export function flagSuggestion(a: ProfileAlert, allTailorScore: number | null, setupWarnings: string[]): string {
   if (a.bids < MIN_FLAG_BIDS) return 'Too few bids to get interviews: add bids or a bidder.';
   if (setupWarnings.length) return `Fix the setup: ${setupWarnings[0]}.`;
   if (a.tailored === 0) return 'Set up tailoring so resumes match each job.';
   const mine = a.tailorScore.avg;
   if (mine != null && allTailorScore != null && Math.round(mine * 10) <= Math.round((allTailorScore - 5) * 10)) {
-    return `Resume score ${score(mine)} is below all users' average ${score(allTailorScore)}: update the tailoring prompt or template.`;
+    return `Resume score ${score(mine)} is below the platform average ${score(allTailorScore)}: update the tailoring prompt or template.`;
   }
   return "Bids aren't turning into interviews: update the resume and check the target roles.";
 }
 
-/** The red banner's numbers for a flagged profile: `379 bids · resume score 64 (all users' avg 71)`. */
+/** The red banner's numbers for a flagged profile: `379 bids · resume score 64 (platform average 71)`. */
 export function flagNumbers(a: ProfileAlert, allTailorScore: number | null): string {
   const parts = [`${count(a.bids)} ${a.bids === 1 ? 'bid' : 'bids'}`];
   if (a.tailored === 0) parts.push('no tailored resumes');
   else if (a.tailorScore.avg != null) {
-    parts.push(`resume score ${score(a.tailorScore.avg)}${allTailorScore != null ? ` (all users' avg ${score(allTailorScore)})` : ''}`);
+    parts.push(`resume score ${score(a.tailorScore.avg)}${allTailorScore != null ? ` (platform average ${score(allTailorScore)})` : ''}`);
   }
   return parts.join(' · ');
 }
@@ -153,11 +153,17 @@ export type RegionTopLine = {
   best: { accountId: string; name: string; text: string } | null; bestAll: string;
 };
 
-const vsAll = (mine: number | null | undefined, all: number | null | undefined, fmt: (n: number) => string) =>
-  all == null ? '' : mine != null && mine === all ? 'best across all users' : `best across all users: ${fmt(all)}`;
+/** `Best on the platform: Eric (User A) – 9`; `yours` when the owner's number is at least the top (the top is cached
+ *  for minutes, the owner's numbers are live); '' when unknown. */
+const vsAll = (mine: number | null | undefined, top: { name: string; ownerName: string } | null | undefined,
+  value: number | undefined, fmt: (n: number) => string) => {
+  if (!top || value == null) return '';
+  if (mine != null && mine >= value) return 'Best on the platform: yours';
+  return `Best on the platform: ${top.name || 'Unnamed'}${top.ownerName ? ` (${top.ownerName})` : ''} – ${fmt(value)}`;
+};
 
-/** The card's top profiles: one line per region the owner has profiles in (US, EU, LATAM), each side next to the best
- *  number any single profile of any user reached there. */
+/** The card's top profiles: one line per region the owner has profiles in (US, EU, LATAM), each side next to the top
+ *  single profile in the platform there (any user). */
 export function regionTopLines(mine: RegionTops, all: BenchRegionTops | undefined): RegionTopLine[] {
   return REGION_ORDER.filter(([r]) => mine[r]).map(([r, label]) => {
     const m = mine[r]!;
@@ -166,11 +172,20 @@ export function regionTopLines(mine: RegionTops, all: BenchRegionTops | undefine
       region: r, label,
       most: m.mostInterviews && { accountId: m.mostInterviews.accountId, name: m.mostInterviews.name,
         text: count(m.mostInterviews.interviews) },
-      mostAll: vsAll(m.mostInterviews?.interviews, a?.mostInterviews, count),
+      mostAll: vsAll(m.mostInterviews?.interviews, a?.mostInterviews, a?.mostInterviews?.interviews, count),
       best: m.bestRate && { accountId: m.bestRate.accountId, name: m.bestRate.name, text: fmtListRate(m.bestRate.interviewsPerBid) },
-      bestAll: vsAll(m.bestRate?.interviewsPerBid, a?.bestRate, fmtListRate),
+      bestAll: vsAll(m.bestRate?.interviewsPerBid, a?.bestRate, a?.bestRate?.interviewsPerBid, fmtListRate),
     };
   });
+}
+
+type Kept = { owner: string; alerts: ProfileAlerts | null };
+
+/** The banners to show: the fresh ones once the metrics loaded (`fresh` null = none for this list), else the last ones
+ *  while the same owner's next date range loads (the banners ignore the date filter), never another owner's. */
+export function keptAlerts(prev: Kept | null, owner: string, fresh: ProfileAlerts | null | undefined): Kept | null {
+  if (fresh !== undefined) return { owner, alerts: fresh };
+  return prev && prev.owner === owner ? prev : null;
 }
 
 /** The list and the benchmark measured the same days: only then do the row arrows and the band compare them. */
@@ -198,15 +213,15 @@ export function rowArrow(
   if (kind === 'rate' && all.interviewsPerBid != null && compare.interviewsPerBid != null) {
     dir = conversionVerdict(compare, all.interviewsPerBid);
     value = fmtListRate(compare.interviewsPerBid);
-    text = `${value} · all users' average ${fmtListRate(all.interviewsPerBid)}`;
+    text = `${value} · platform average ${fmtListRate(all.interviewsPerBid)}`;
   } else if (kind === 'pass' && all.passRate != null && compare.passRate != null) {
     dir = passVerdict(compare, all.passRate);
     value = pct(compare.passRate);
-    text = `${value} · all users' average ${pct(all.passRate)}`;
+    text = `${value} · platform average ${pct(all.passRate)}`;
   } else if (kind === 'tailor' && all.tailorScore.avg != null && compare.tailorScore.avg != null) {
     dir = tailorVerdict(compare, all.tailorScore.avg);
     value = score(compare.tailorScore.avg);
-    text = `tailor score ${value} · all users' average ${score(all.tailorScore.avg)}`;
+    text = `tailor score ${value} · platform average ${score(all.tailorScore.avg)}`;
   }
   return dir ? { dir, value, title: `Since ${shortDay(comparedFrom)}: ${text}` } : null;
 }

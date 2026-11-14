@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  bandCells, bandHeading, bidsBreakdown, flagNumbers, flagSuggestion, fmtListRate, interviewsBreakdown, regionTopLines, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
+  bandCells, bandHeading, bidsBreakdown, flagNumbers, flagSuggestion, fmtListRate, interviewsBreakdown, keptAlerts, regionTopLines, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
   windowsMatch,
 } from '../src/lib/profileList.ts';
 
@@ -48,14 +48,14 @@ test('band cells', () => {
 test('band heading counts every listed profile and says which ones the averages use', () => {
   const h = { whose: 'Your', total: 9, withBids: 7, allWithBids: 49, rangeLabel: 'This month', from: '2026-11-01', to: '2026-11-14' };
   assert.deepEqual(bandHeading(h), {
-    title: "Your 9 profiles vs the average of all users' profiles",
+    title: "Your 9 profiles vs the platform average",
     dates: 'This month · Nov 1 – Nov 14',
-    note: 'Averages count only profiles with bids: 7 of yours, 49 across all users (yours included).',
+    note: 'Averages count only profiles with bids: 7 of yours, 49 on the platform (yours included).',
   });
   assert.deepEqual(bandHeading({ ...h, whose: 'These', total: 1, withBids: 1, from: '2026-11-14' }), {
-    title: "These 1 profile vs the average of all users' profiles",
+    title: "These 1 profile vs the platform average",
     dates: 'This month · Nov 14',
-    note: 'Averages count only profiles with bids: 1 of these, 49 across all users (these included).',
+    note: 'Averages count only profiles with bids: 1 of these, 49 on the platform (these included).',
   });
 });
 
@@ -70,13 +70,13 @@ test('second lines under Interview rate and Rounds passed', () => {
 
 test('row arrows follow the Metrics tab thresholds and need a compare', () => {
   assert.deepEqual(rowArrow('rate', stats(), all, '2026-11-05'),
-    { dir: 'up', value: '0.62%', title: "Since Nov 5: 0.62% · all users' average 0.41%" });
+    { dir: 'up', value: '0.62%', title: "Since Nov 5: 0.62% · platform average 0.41%" });
   assert.equal(rowArrow('rate', stats({ bids: 29 }), all, '2026-11-05'), null);
   assert.deepEqual(rowArrow('pass', stats({ passRate: 0.2, decided: 5 }), all, '2026-11-05'),
-    { dir: 'down', value: '20%', title: "Since Nov 5: 20% · all users' average 35%" });
+    { dir: 'down', value: '20%', title: "Since Nov 5: 20% · platform average 35%" });
   assert.equal(rowArrow('tailor', stats({ tailorScore: { avg: 77, n: 5 } }), all, '2026-11-05'), null); // 77 vs 73 (4 pts)
   assert.deepEqual(rowArrow('tailor', stats({ tailorScore: { avg: 66, n: 5 } }), all, '2026-11-05'),
-    { dir: 'down', value: '66', title: "Since Nov 5: tailor score 66 · all users' average 73" });
+    { dir: 'down', value: '66', title: "Since Nov 5: tailor score 66 · platform average 73" });
   assert.equal(rowArrow('rate', null, all, '2026-11-05'), null);
   assert.equal(rowArrow('rate', stats(), null, '2026-11-05'), null);
 });
@@ -145,34 +145,52 @@ test('flag suggestion: the first rule that matches', () => {
   assert.equal(flagSuggestion(al({ tailored: 0, tailorScore: { avg: null, n: 0 } }), 71, []),
     'Set up tailoring so resumes match each job.');
   assert.equal(flagSuggestion(al({ tailorScore: { avg: 66, n: 9 } }), 71.2, []),
-    "Resume score 66 is below all users' average 71: update the tailoring prompt or template.");
+    "Resume score 66 is below the platform average 71: update the tailoring prompt or template.");
   assert.equal(flagSuggestion(al({ tailorScore: { avg: 67, n: 9 } }), 71.2, []), RULE5);   // 4.2 points: not rule 4
   assert.equal(flagSuggestion(al({ tailorScore: { avg: 50, n: 9 } }), null, []), RULE5);   // no average yet
-  assert.equal(flagSuggestion(al({ bids: 30 }), 71, []), "Resume score 64 is below all users' average 71: update the tailoring prompt or template.");
+  assert.equal(flagSuggestion(al({ bids: 30 }), 71, []), "Resume score 64 is below the platform average 71: update the tailoring prompt or template.");
 });
 
 test('flag numbers line', () => {
-  assert.equal(flagNumbers(al(), 71.2), "379 bids · resume score 64 (all users' avg 71)");
+  assert.equal(flagNumbers(al(), 71.2), "379 bids · resume score 64 (platform average 71)");
   assert.equal(flagNumbers(al({ tailored: 0, tailorScore: { avg: null, n: 0 } }), 71), '379 bids · no tailored resumes');
   assert.equal(flagNumbers(al({ bids: 1 }), null), '1 bid · resume score 64');
   assert.equal(flagNumbers(al({ tailored: 3, tailorScore: { avg: null, n: 0 } }), 71), '379 bids');
 });
 
-test('region lines: mine vs the best across all users', () => {
+test('region lines: mine vs the best on the platform', () => {
   const mine = {
     US: { mostInterviews: { accountId: 'e', name: 'Erric', interviews: 3 },
           bestRate: { accountId: 'd', name: 'Daniel Kifle', interviewsPerBid: 0.004, bids: 363 } },
     Latam: { mostInterviews: null, bestRate: null },
   };
-  const lines = regionTopLines(mine, { US: { mostInterviews: 9, bestRate: 0.012 }, Latam: { mostInterviews: 2, bestRate: null } });
+  const top = (o) => ({ name: 'Eric', ownerName: 'User A', ...o });
+  const lines = regionTopLines(mine, {
+    US: { mostInterviews: top({ interviews: 9 }), bestRate: top({ interviewsPerBid: 0.012, bids: 400 }) },
+    Latam: { mostInterviews: top({ interviews: 2, name: 'Lucas', ownerName: '' }), bestRate: null },
+  });
   assert.deepEqual(lines.map((l) => [l.label, l.most?.text ?? null, l.mostAll, l.best?.text ?? null, l.bestAll]), [
-    ['US', '3', 'best across all users: 9', '0.40%', 'best across all users: 1.2%'],
-    ['LATAM', null, 'best across all users: 2', null, ''],
+    ['US', '3', 'Best on the platform: Eric (User A) – 9', '0.40%', 'Best on the platform: Eric (User A) – 1.2%'],
+    ['LATAM', null, 'Best on the platform: Lucas – 2', null, ''],
   ]);
   assert.equal(lines[0].most.accountId, 'e');
-  const same = regionTopLines({ US: mine.US }, { US: { mostInterviews: 3, bestRate: 0.004 } })[0];
-  assert.deepEqual([same.mostAll, same.bestAll], ['best across all users', 'best across all users']);
+  // mine at or above the (cached) top: mine is the top
+  const same = regionTopLines({ US: mine.US }, {
+    US: { mostInterviews: top({ interviews: 2 }), bestRate: top({ interviewsPerBid: 0.004, bids: 900 }) } })[0];
+  assert.deepEqual([same.mostAll, same.bestAll], ['Best on the platform: yours', 'Best on the platform: yours']);
   assert.equal(regionTopLines({ EU: mine.Latam }, undefined)[0].mostAll, '');            // no benchmark numbers
   assert.deepEqual(regionTopLines({ Latam: mine.Latam, EU: mine.Latam, US: mine.US }, undefined).map((l) => l.label),
     ['US', 'EU', 'LATAM']);
+});
+
+test('banners stay while the next date range loads, for the same owner only', () => {
+  const a1 = { asOf: '2026-11-14', noInterviews: [{ accountId: 'v' }], allTailorScore: null, noApplies: [] };
+  const a2 = { ...a1, noInterviews: [] };
+  let kept = keptAlerts(null, '', a1);
+  assert.deepEqual(kept, { owner: '', alerts: a1 });
+  kept = keptAlerts(kept, '', undefined);                 // new range loading: keep the last banners
+  assert.equal(kept.alerts, a1);
+  assert.equal(keptAlerts(kept, '', a2).alerts, a2);       // loaded: the fresh ones
+  assert.equal(keptAlerts(kept, '', null).alerts, null);   // loaded, none (admin viewing everyone / older server)
+  assert.equal(keptAlerts(kept, 'other-user', undefined), null); // admin switched user: never the previous owner's
 });
