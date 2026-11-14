@@ -11,8 +11,9 @@ extension, as bidders already do, so self bids become real per-job records and e
 
 ## Goals
 
-1. An **owner signs into the extension with their platform login** and records applies as they browse, choosing the
-   **profile** for each application (remembered between applies).
+1. An **owner signs into the extension with their platform login and picks one of their profiles at sign-in**; that
+   Chrome (Chrome profile) then records every apply for that profile. To track another profile, the owner signs in on
+   another Chrome profile with the same account and picks that profile (each extension install holds one sign-in).
 2. The server stores each as a **self bid**: same capture data as a bidder bid (job URL / title, screenshots, attached
    files, time), owned by the owner, tied to the chosen profile, **no pay, no review** (auto-approved).
 3. **Pilot (phase 1, 1–2 weeks):** typed Daily Plan self bids keep counting everywhere; tracked self bids are shown
@@ -34,7 +35,8 @@ extension, as bidders already do, so self bids become real per-job records and e
 
 ## Decided with the user
 
-- Owners use their own platform login, picking the profile per application (approach A for sign-in).
+- Owners use their own platform login; **the profile is chosen once at sign-in and fixed for that Chrome profile**
+  (one profile per extension install; several Chrome profiles for several profiles).
 - Phase 1 side by side (shown, not added), phase 2 per-owner automatic switch after 1–2 weeks.
 - Storage approach A (below), with B written down as the backup and why. Build the extension side first.
 - Self bids: no pay, no review; a Self row on the Bidders page; interview matching by job URL.
@@ -54,19 +56,22 @@ extension, as bidders already do, so self bids become real per-job records and e
 
 ## Extension (bid-track) — built first
 
-- Sign-in screen gains "I'm the owner" (platform username/email + password) beside the bidder invite / login. Owner
-  mode stores an owner token separately from a bidder token; a signed-in owner sees their name and a **profile picker**
-  (their active profiles from the server, last choice remembered, must be chosen before the first capture of a job).
-- Capture is unchanged; uploads go to the owner endpoints with the chosen `profileId`.
+- Sign-in screen gains "I'm the owner" (platform username/email + password) beside the bidder invite / login, then a
+  **profile choice** (the owner's active profiles from the server). The owner token is issued **for that profile**
+  (the token carries `profileId`); the popup shows "Name · Profile" and Sign out. Changing profile = sign out and in
+  again; each Chrome profile has its own sign-in, so an owner runs several profiles in several Chrome profiles.
+- Capture is unchanged; uploads go to the owner endpoints, and the server takes the profile from the token.
 - Version 3.5.0; the README says how owners sign in.
 
 ## Server (engineers_backend)
 
-- **Auth:** `POST /ext/owner/login` (platform credentials, same rate limiting as bidder login) → an extension owner
-  token (own claim, e.g. `typ="ext-owner"`, renewable like bidder tokens; app-session tokens are not accepted by the
-  extension routes and vice versa). `GET /ext/owner/me` → name and active profiles `[{id, name}]`.
-- **Uploads:** `POST /ext/owner/upload-url` and `POST /ext/owner/uploads/confirm`, same bodies as the bidder routes plus
-  `profileId` (must be the owner's active profile). Storage key prefix `self/<ownerId>/<date>/<profile>/<job>`.
+- **Auth:** `POST /ext/owner/login` (platform credentials + `profileId`, which must be the owner's active profile;
+  same rate limiting as bidder login) → an extension owner token bound to that profile (claims `typ="ext-owner"`,
+  `sub` = owner, `pid` = profile; renewable like bidder tokens; app-session tokens are not accepted by the extension
+  routes and vice versa). `POST /ext/owner/profiles` (credentials) → the owner's active profiles `[{id, name}]` for the
+  sign-in choice; `GET /ext/owner/me` → owner name and the token's profile. A profile archived later ends its tokens.
+- **Uploads:** `POST /ext/owner/upload-url` and `POST /ext/owner/uploads/confirm`, same bodies as the bidder routes; the
+  profile comes from the token (no `profileId` in the body). Storage key prefix `self/<ownerId>/<date>/<profile>/<job>`.
   `record_screenshot` gains a self variant upserting on `(ownerId, kind="self", jobKey)`.
 - **Model:** `Bid.kind: Literal["bidder", "self"] = "bidder"`, `bidderId: Optional`, `accountId: Optional` (self only).
   Indexes: existing `(bidderId, jobKey)` uniqueness made partial on `kind="bidder"`; new unique `(ownerId, jobKey)`
@@ -95,8 +100,8 @@ extension, as bidders already do, so self bids become real per-job records and e
 
 ## Testing
 
-- Extension: owner login flow, profile picker required and remembered, uploads carry `profileId` (unit tests where the
-  repo has them; a manual checklist otherwise).
+- Extension: owner sign-in with the profile choice, the popup showing name · profile, sign out to switch profile,
+  two Chrome profiles recording two profiles (unit tests where the repo has them; a manual checklist otherwise).
 - Server: owner login / me / upload / confirm (auth separation both ways, foreign profile refused); self bids absent
   from pay, review queue, board, performance rows, insights and alerts; phase 1 vs phase 2 counts per owner (before /
   after first tracked day, owners without tracked bids); Daily Plan lock; self row; interview link.
