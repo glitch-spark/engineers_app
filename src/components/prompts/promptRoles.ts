@@ -1,5 +1,9 @@
 import type { PromptRole, ResumePrompt } from '../../api/endpoints';
 
+// Moved to lib/profileSetup (the Profile tab's helpers, tested with Node); re-exported for the editors.
+import { MAX_PROMPT_NAME } from '../../lib/profileSetup';
+export { MAX_PROMPT_NAME, legacyPromptName, unitRoles } from '../../lib/profileSetup';
+
 /** Job roles a resume prompt can be written for, in display order. */
 export const PROMPT_ROLES: PromptRole[] = ['fullstack', 'frontend', 'backend', 'devops', 'data', 'ml', 'mobile', 'qa'];
 
@@ -18,23 +22,6 @@ export const PROMPT_ROLE_LABEL: Record<PromptRole, string> = {
 export const NO_ROLE_LABEL = 'All roles (general)';
 
 export const MAX_PROMPTS = 10;
-export const MAX_PROMPT_NAME = 60;
-
-/** A name for an older profile's single prompt: its first line when that's a markdown heading (without a trailing
- *  "(…)"), else "Default". Matches the server's naming. */
-export function legacyPromptName(body: string): string {
-  const first = body.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? '';
-  if (!first.startsWith('#')) return 'Default';
-  let name = first.replace(/^#+/, '').trim().replace(/\s*\([^)]*\)\s*$/, '').split('**').join('').trim();
-  if (name.length > MAX_PROMPT_NAME) name = name.slice(0, MAX_PROMPT_NAME).replace(/\s+\S*$/, '');
-  return name.replace(/[\s\-—:·]+$/, '') || 'Default';
-}
-
-/** A unit's roles; one saved before units had several roles carries a single `role`. */
-export function unitRoles(p: { roles?: PromptRole[] | null; role?: PromptRole | null }): PromptRole[] {
-  if (p.roles?.length) return p.roles;
-  return p.role ? [p.role] : [];
-}
 
 /** "Full stack + DevOps", or "All roles (general)" with none. */
 export function rolesLabel(roles: PromptRole[]): string {

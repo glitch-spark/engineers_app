@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { Download, Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import * as api from '../api/endpoints';
 import ConfirmDialog from './ConfirmDialog';
@@ -44,42 +44,31 @@ function formatUploaded(iso?: string): string {
 }
 
 /**
- * The profile's resumes (text extracted in the browser from PDF/TXT/MD). These are what Job Applies scores.
- * Uploads go one file at a time (text on the profile, original file in S3 when configured); deletes save the
- * remaining list, and the server removes the deleted resume's S3 file.
+ * The profile's fixed resumes (text extracted in the browser from PDF/TXT/MD): Job Applies scores each job against
+ * them and sends the best one as is when it scores above the run's minimum. Uploads go one file at a time (text on
+ * the profile, original file in S3 when configured); deletes save the remaining list, and the server removes the
+ * deleted resume's S3 file. The page loads the profile; every save hands the server's copy back through `onSaved`.
  */
-export default function ResumesSection({ accountId }: { accountId: string }) {
+export default function ResumesSection({ accountId, initial, onSaved }: {
+  accountId: string;
+  initial: unknown[] | null | undefined;
+  onSaved: (doc: Record<string, unknown>) => void;
+}) {
   const inputId = useId();
-  const [resumes, setResumes] = useState<StoredResume[] | null>(null);
+  const resumes = toResumes(initial);
   const [busy, setBusy] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState<StoredResume | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .getAccount(accountId)
-      .then((acc) => !cancelled && setResumes(toResumes(acc.resumes)))
-      .catch((err) => {
-        if (!cancelled) {
-          setResumes([]);
-          notify.error(err, 'Could not load resumes');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [accountId]);
 
   async function save(next: StoredResume[]) {
     const saved = await api.updateAccount(accountId, {
       resumes: next.map((r) => ({ ...(r.id ? { id: r.id } : {}), filename: r.filename, markdown: r.markdown })),
     });
-    setResumes(toResumes(saved.resumes));
+    onSaved(saved);
   }
 
   async function onFiles(files: FileList | null) {
-    if (!files?.length || !resumes) return;
+    if (!files?.length) return;
     setBusy(true);
     const errors: string[] = [];
     let current = resumes;
@@ -103,7 +92,7 @@ export default function ResumesSection({ accountId }: { accountId: string }) {
         }
         const saved = await api.uploadAccountResume(accountId, file, parsed.markdown);
         current = toResumes(saved.resumes);
-        setResumes(current);
+        onSaved(saved);
         if (replacing) replaced++;
         else added++;
       } catch (err) {
@@ -131,7 +120,7 @@ export default function ResumesSection({ accountId }: { accountId: string }) {
   }
 
   async function confirmDelete() {
-    if (!pendingDelete || !resumes) return;
+    if (!pendingDelete) return;
     setBusy(true);
     try {
       await save(resumes.filter((r) => r.id !== pendingDelete.id));
@@ -144,96 +133,109 @@ export default function ResumesSection({ accountId }: { accountId: string }) {
     }
   }
 
-  if (resumes === null) {
+  const full = resumes.length >= MAX_RESUMES;
+  const upload = (
+    <>
+      <label
+        htmlFor={inputId}
+        className={`btn btn-sm shrink-0 ${busy || full ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}
+        aria-disabled={busy || full}
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}
+        Upload PDFs
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept={ACCEPT}
+        multiple
+        disabled={busy || full}
+        className="sr-only"
+        onChange={(e) => {
+          void onFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+    </>
+  );
+  const problemList = problems.length > 0 && (
+    <ul role="alert" className="space-y-1 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+      {problems.map((p) => (
+        <li key={p}>{p}</li>
+      ))}
+    </ul>
+  );
+
+  // None: the whole section is one line (most profiles use fixed resumes or tailoring, not both).
+  if (resumes.length === 0) {
     return (
-      <p role="status" className="flex items-center gap-2 text-sm text-muted">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading resumes…
-      </p>
+      <section className="panel space-y-3 px-6 py-4" aria-labelledby={`${inputId}-title`}>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 id={`${inputId}-title`} className="card-title">Fixed resumes</h2>
+          <span className="text-sm text-muted">No fixed resumes.</span>
+          {upload}
+        </div>
+        {problemList}
+      </section>
     );
   }
 
-  const full = resumes.length >= MAX_RESUMES;
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <label
-          htmlFor={inputId}
-          className={`btn btn-sm ${busy || full ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}
-          aria-disabled={busy || full}
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}
-          Upload resumes
-        </label>
-        <input
-          id={inputId}
-          type="file"
-          accept={ACCEPT}
-          multiple
-          disabled={busy || full}
-          className="sr-only"
-          onChange={(e) => {
-            void onFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-        <p className="hint">
-          PDF (text, not scanned), TXT or MD · up to {MAX_RESUMES} per profile, {Math.round(MAX_RESUME_BYTES / 1000)} KB of text each.
-          Uploading a file with an existing name replaces it.
-        </p>
+    <section className="panel space-y-3 p-6" aria-labelledby={`${inputId}-title`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id={`${inputId}-title`} className="card-title">Fixed resumes</h2>
+          <p className="text-xs text-muted">Sent as is when one scores above the Job Applies run's minimum.</p>
+        </div>
+        {upload}
       </div>
+      <p className="hint">
+        PDF (text, not scanned), TXT or MD · up to {MAX_RESUMES} per profile, {Math.round(MAX_RESUME_BYTES / 1000)} KB of text each.
+        Uploading a file with an existing name replaces it.
+      </p>
 
-      {problems.length > 0 && (
-        <ul role="alert" className="space-y-1 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-          {problems.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
-      )}
+      {problemList}
 
-      {resumes.length === 0 ? (
-        <p className="hint">No resumes yet. Upload one or more PDFs; Job Applies scores each job against them.</p>
-      ) : (
-        <ul className="row-divider rounded-xl border border-zinc-200/80 dark:border-zinc-700/30">
-          {resumes.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
-              <FileText className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{r.filename}</span>
-              <span className="hint tabular-nums">{wordCount(r.markdown).toLocaleString()} words</span>
-              {r.uploadedAt && <span className="hint">{formatUploaded(r.uploadedAt)}</span>}
+      <ul className="row-divider rounded-xl border border-zinc-200/80 dark:border-zinc-700/30">
+        {resumes.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+            <FileText className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{r.filename}</span>
+            <span className="hint tabular-nums">{wordCount(r.markdown).toLocaleString()} words</span>
+            {r.uploadedAt && <span className="hint">{formatUploaded(r.uploadedAt)}</span>}
+            <button
+              type="button"
+              className="btn-icon"
+              onClick={() => openResumeInNewTab(r.filename, r.markdown)}
+              aria-label={`View text of ${r.filename}`}
+              title="View extracted text"
+            >
+              <Eye className="h-4 w-4" aria-hidden />
+            </button>
+            {r.s3Key && (
               <button
                 type="button"
                 className="btn-icon"
-                onClick={() => openResumeInNewTab(r.filename, r.markdown)}
-                aria-label={`View text of ${r.filename}`}
-                title="View extracted text"
+                onClick={() => void download(r)}
+                aria-label={`Download original ${r.filename}`}
+                title="Download the original file"
               >
-                <Eye className="h-4 w-4" aria-hidden />
+                <Download className="h-4 w-4" aria-hidden />
               </button>
-              {r.s3Key && (
-                <button
-                  type="button"
-                  className="btn-icon"
-                  onClick={() => void download(r)}
-                  aria-label={`Download original ${r.filename}`}
-                  title="Download the original file"
-                >
-                  <Download className="h-4 w-4" aria-hidden />
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn-icon"
-                onClick={() => setPendingDelete(r)}
-                disabled={busy}
-                aria-label={`Delete ${r.filename}`}
-                title="Delete resume"
-              >
-                <Trash2 className="h-4 w-4" aria-hidden />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+            )}
+            <button
+              type="button"
+              className="btn-icon"
+              onClick={() => setPendingDelete(r)}
+              disabled={busy}
+              aria-label={`Delete ${r.filename}`}
+              title="Delete resume"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </button>
+          </li>
+        ))}
+      </ul>
 
       <ConfirmDialog
         open={!!pendingDelete}
@@ -245,6 +247,6 @@ export default function ResumesSection({ accountId }: { accountId: string }) {
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
-    </div>
+    </section>
   );
 }

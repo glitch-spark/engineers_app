@@ -1,13 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Loader2, Play, Plus, Radar, Save, Star, Trash2, X } from 'lucide-react';
+import { Plus, Star, Trash2, X } from 'lucide-react';
 import type { PromptRole, ResumePrompt } from '../../api/endpoints';
+import ConfirmDialog from '../ConfirmDialog';
 import ResumePromptField from '../ResumePromptField';
 import TemplatePane from './TemplatePane';
 import { MAX_PROMPTS, MAX_PROMPT_NAME, NO_ROLE_LABEL, PROMPT_ROLES, PROMPT_ROLE_LABEL, newPromptId, unitRoles } from './promptRoles';
 
 /**
- * A profile's resume units: a tab per unit (★ default, • unsaved); the selected unit's name, role marks, default and
- * delete controls; then its HTML template (40%), its prompt (40%) and the Eval panel (20%; the eval comes later).
+ * A profile's tailoring units: a tab per unit (★ default, • unsaved); the selected unit's name, role marks, default
+ * and delete controls; then its tailor draft (HTML template) and its tailoring prompt side by side. Saving is the
+ * page's (one Save for every prompt).
  */
 export default function ResumeUnitsEditor({
   prompts,
@@ -15,9 +17,6 @@ export default function ResumeUnitsEditor({
   onChange,
   dirtyIds,
   errors,
-  onSave,
-  saving,
-  changed,
 }: {
   prompts: ResumePrompt[];
   defaultId: string;
@@ -26,16 +25,12 @@ export default function ResumeUnitsEditor({
   dirtyIds: Set<string>;
   /** What's wrong with each unit's name (id → message). */
   errors: Record<string, string>;
-  /** Save every unit (and the profile's other prompts). */
-  onSave: () => void;
-  saving: boolean;
-  /** Something to save: a unit edited, added or deleted, or another default. */
-  changed: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(prompts[0]?.id ?? '');
   const [lastIndex, setLastIndex] = useState(0);
   const nameRef = useRef<HTMLInputElement>(null);
   const [focusName, setFocusName] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const ids = useId();
 
   // A saved unit gets its real id from the server: keep the same tab selected by position.
@@ -67,7 +62,8 @@ export default function ResumeUnitsEditor({
     setFocusName(true);
   };
   const remove = () => {
-    if (isDefault || !window.confirm(`Delete the “${current.name}” unit?`)) return;
+    setConfirmDelete(false);
+    if (isDefault) return;
     const i = prompts.findIndex((p) => p.id === current.id);
     const rest = prompts.filter((p) => p.id !== current.id);
     onChange(rest, defaultId);
@@ -176,21 +172,12 @@ export default function ResumeUnitsEditor({
         <button
           type="button"
           className="btn-outline btn-sm disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={remove}
+          onClick={() => setConfirmDelete(true)}
           disabled={isDefault}
           title={isDefault ? 'Make another unit the default first' : 'Delete this unit'}
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete
         </button>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted" aria-live="polite">
-            {changed ? `Unsaved${dirtyIds.size ? ` · ${dirtyIds.size} unit${dirtyIds.size === 1 ? '' : 's'}` : ''}` : 'Saved'}
-          </span>
-          <button type="button" onClick={onSave} disabled={saving || !changed} className="btn btn-sm disabled:opacity-50">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Save className="h-3.5 w-3.5" aria-hidden />}
-            Save
-          </button>
-        </div>
       </div>
       {error && (
         <p id="prompt-name-error" className="text-xs text-red-700 dark:text-red-400">
@@ -198,8 +185,8 @@ export default function ResumeUnitsEditor({
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[4fr_4fr_2fr]">
-        <section aria-label="HTML template" className="flex min-w-0 flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section aria-label="Tailor draft (HTML template)" className="flex min-w-0 flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40">
           <TemplatePane
             html={current.templateHtml ?? ''}
             name={current.templateName ?? ''}
@@ -211,7 +198,7 @@ export default function ResumeUnitsEditor({
             inCard
             value={current.body}
             onChange={(body) => update({ body })}
-            label="Prompt"
+            label="Tailoring prompt"
             hint={
               isDefault
                 ? 'Empty = inherit global.'
@@ -220,24 +207,17 @@ export default function ResumeUnitsEditor({
             defaultSource="global"
           />
         </section>
-        <aside aria-label="Eval" className="flex min-w-0 flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Eval</h3>
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
-            <Radar className="h-8 w-8 text-zinc-300 dark:text-zinc-600" aria-hidden />
-            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">No eval yet</p>
-            <p className="hint">This unit’s eval diagram will show here.</p>
-          </div>
-          <button
-            type="button"
-            className="btn-outline btn-sm justify-center disabled:cursor-not-allowed disabled:opacity-50"
-            disabled
-            title="Coming soon"
-          >
-            <Play className="h-3.5 w-3.5" aria-hidden /> Run eval
-          </button>
-          <p className="hint mt-1 text-center">Coming soon</p>
-        </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete the "${current.name.trim() || 'Untitled'}" unit?`}
+        body={<p>Its tailor draft and prompt are removed when you save. Until then you can still leave without saving.</p>}
+        confirmLabel="Delete"
+        tone="danger"
+        onConfirm={remove}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
