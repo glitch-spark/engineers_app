@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { attentionLines } from '../src/lib/profileAttention.ts';
 
 const stats = (over = {}) => ({
-  profiles: 1, bids: 100, decided: 10, bidsPerWeek: 30, interviewsPerWeek: 1, tailoredResumesPerWeek: 10,
+  profiles: 1, days: 14, bids: 100, decided: 10, bidsPerWeek: 30, interviewsPerWeek: 1, tailoredResumesPerWeek: 10,
   interviewsPerBid: 0.03, passRate: 0.5, tailorScore: { avg: 75, n: 20 }, matchScore: { avg: 60, n: 5 }, ...over,
 });
 const type = (passed, rejected) => ({
@@ -81,8 +81,19 @@ test('at most three lines, downs first', () => {
   assert.match(lines[0].text, /^Tech rounds pass/);
 });
 
-test('no comparison data: only the round rule can speak', () => {
+test('no compared window (range before the launch day): no lines at all', () => {
   const r = rounds({ intro: type(5, 2), tech: type(1, 4) }, 0.5);
-  assert.equal(attentionLines(r, { this: null, peers: null }, stats()).length, 1);
+  assert.deepEqual(attentionLines(r, { this: null, peers: null }, stats()), []);
+});
+
+test('older server without compare: only the round rule can speak', () => {
+  const r = rounds({ intro: type(5, 2), tech: type(1, 4) }, 0.5);
+  assert.equal(attentionLines(r, undefined, stats()).length, 1);
   assert.deepEqual(attentionLines(undefined, undefined, null), []);
+});
+
+test('a profile under a week old in the window gets no bid-volume line', () => {
+  const me = stats({ bidsPerWeek: 5, days: 6 });
+  assert.deepEqual(attentionLines(undefined, { this: me, peers: stats() }, null), []);
+  assert.equal(attentionLines(undefined, { this: stats({ bidsPerWeek: 5, days: 7 }), peers: stats() }, null).length, 1);
 });

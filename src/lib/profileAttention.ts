@@ -11,6 +11,8 @@ const MIN_DECIDED_PER_TYPE = 3;
 const MIN_BIDS = 30;
 const MIN_DECIDED = 5;
 const MIN_SCORED = 5;
+/** Days in the window before a profile's bid volume is judged (a few days' pace is noise). */
+const MIN_DAYS = 7;
 const EPS = 1e-9;
 
 /** Whole points (0.714 → 71), so thresholds match what the page shows. */
@@ -50,6 +52,8 @@ export function attentionLines(
   compare: ProfileCompare | undefined,
   all: CompareStats | null,
 ): AttentionLine[] {
+  // A range that ends before the launch day has no compared window: nothing in it is comparable, so no verdict.
+  if (compare && !compare.this) return [];
   const downs: string[] = [];
   const ups: string[] = [];
   const push = (up: boolean, text: string) => (up ? ups : downs).push(text);
@@ -90,7 +94,7 @@ export function attentionLines(
       }
     }
     // Bid volume: half the owner's other profiles or less (owners run different numbers of bidders, so never "all").
-    if (peers?.bidsPerWeek && me.bidsPerWeek != null && me.bidsPerWeek <= 0.5 * peers.bidsPerWeek + EPS) {
+    if (me.days >= MIN_DAYS && peers?.bidsPerWeek && me.bidsPerWeek != null && me.bidsPerWeek <= 0.5 * peers.bidsPerWeek + EPS) {
       downs.push(`${perWeek(me.bidsPerWeek)} bids / week vs ${perWeek(peers.bidsPerWeek)} on your other profiles`);
     }
   }

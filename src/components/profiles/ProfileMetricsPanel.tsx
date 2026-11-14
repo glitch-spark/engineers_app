@@ -93,7 +93,7 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
   const me = compare?.this ?? null;
   const yours = compare?.peers ?? null;
   const benchData = benchmark.data && benchmark.data.profiles > 0 ? benchmark.data : null;
-  const bench: Bench = { loading: !benchmark.data && !benchmark.error && !!compare, data: benchData };
+  const bench: Bench = { loading: !benchmark.data && !benchmark.error && !!me, data: benchData };
   const all = bench.data;
   const lines = m ? attentionLines(m.rounds, compare, all) : [];
 
@@ -120,11 +120,16 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
   const comparedNote = m?.comparedFrom && m.comparedFrom > m.start
     ? `Compared from ${dayLabel(m.comparedFrom)}, when self bids started being recorded per profile`
     : null;
-  // Cards' rates come from the compared window so a card and its comparison measure the same days.
-  const passRate = me ? me.passRate : m?.passRate;
-  const perBid = me ? me.interviewsPerBid : m?.interviewsPerBid ?? null;
-  const fewBids = me ? me.bids < MIN_BIDS : !!m?.lowVolume;
-  const tailor = me ? me.tailorScore : m?.tailorScore ?? null;
+  // Cards' rates come from the compared window so a card and its comparison measure the same days. The row's own
+  // (unclamped) rates are only a fallback for an older server without `compare`; with `compare` but no window (a
+  // range before the launch day) there are no comparable rates.
+  const older = compare === undefined;
+  const passRate = older ? m?.passRate : me ? me.passRate : undefined; // undefined hides the line
+  const perBid = older ? m?.interviewsPerBid ?? null : me?.interviewsPerBid ?? null;
+  const fewBids = older ? !!m?.lowVolume : (me?.bids ?? 0) < MIN_BIDS;
+  const tailor = older ? m?.tailorScore ?? null : me?.tailorScore ?? null;
+  // A profile younger than a week in the window: its pace is shown but not judged against others.
+  const judgeVolume = !!me && me.days >= 7;
 
   return (
     <section className="panel space-y-4 p-6" aria-labelledby="profile-metrics-title">
@@ -173,7 +178,7 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
               {big(fmtCount(m.bids))}
               {sub(`${fmtCount(m.selfBids)} self · ${fmtCount(m.bidderBids)} bidder`)}
               {me && sub(`${fmtPerWeek(me.bidsPerWeek)} / week`)}
-              <CompareLine mine={me?.bidsPerWeek} yours={yours?.bidsPerWeek} all={all?.bidsPerWeek} bench={bench}
+              <CompareLine mine={judgeVolume ? me?.bidsPerWeek : null} yours={yours?.bidsPerWeek} all={all?.bidsPerWeek} bench={bench}
                 fmt={(n) => `${fmtPerWeek(n)} /wk`} cueAgainst="yours" />
             </Card>
 
@@ -185,7 +190,7 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
             </Card>
 
             <Card title="Interviews / bid">
-              {perBid == null ? <div className="text-lg text-muted" title="No bids in this period">—</div> : (
+              {perBid == null ? <div className="text-lg text-muted" title={me || older ? 'No bids in this period' : 'Nothing to compare before Nov 5, when self bids started being recorded per profile'}>—</div> : (
                 <>
                   {big(fmtRate(perBid), fewBids)}
                   {fewBids && sub('Fewer than 30 bids — too few to rank')}

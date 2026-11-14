@@ -261,6 +261,8 @@ export type RoundTypeStats = {
  * profiles averaged (only those with bids), rates and scores pooled. */
 export type CompareStats = {
   profiles: number;
+  /** Mean days the profiles existed in the window (one profile: its own). */
+  days: number;
   bids: number;
   /** Passed + rejected rounds, home assessments left out. */
   decided: number;
