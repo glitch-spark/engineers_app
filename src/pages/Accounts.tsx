@@ -14,7 +14,7 @@ import {
   PROFILE_RANGES, profileRangeDates, profileRangeError, readProfileRange, writeProfileRange, fmtCount, fmtPerWeek,
   fmtRate, fmtScore, tailoredText, type ProfileRange,
 } from '../lib/profileMetrics';
-import { interviewsAppliedBy, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
+import { interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
 import ProfilesBand, { Arrow } from '../components/profiles/ProfilesBand';
 
 type SortKey = 'lastApply' | 'bids' | 'interviews' | 'rate' | 'pass' | 'score';
@@ -176,7 +176,7 @@ export default function AccountsPage() {
     ];
   };
 
-  // Six <td>s: Applies, Bids, Interviews, Intv/bid, Pass rate, Resume score.
+  // Six <td>s: Applies, Bids, Interviews, Interview rate, Rounds passed, Resume score.
   const METRIC_COLS = 6;
   const metricCells = (a: Acc): ReactNode => {
     const dashes = (title?: string) => Array.from({ length: METRIC_COLS }, (_, i) => (
@@ -232,7 +232,7 @@ export default function AccountsPage() {
           title={`${fmtCount(m.selfInterviews)} self-taken · ${fmtCount(m.callerInterviews)} caller-taken. ${perWeek(m.interviewsPerWeek)}`}
         >
           <div>{fmtCount(m.interviews)}</div>
-          {split(interviewsAppliedBy(m))}
+          {interviewsAppliedBy(m) && split(interviewsAppliedBy(m) as string)}
         </td>
         {rateTd(m)}
         {passTd(m)}
@@ -259,13 +259,19 @@ export default function AccountsPage() {
   // Rounds passed ÷ rounds decided in the range (home assessments left out, as on the Metrics tab).
   const passTd = (m: api.ProfileMetricsRow): ReactNode => {
     const r = m.rounds;
+    const detail = passDetail(r, m.interviews);
     if (!r || r.passRate == null) {
-      return <td className="px-4 py-2.5 text-muted" title={r ? 'No rounds decided in this range' : undefined}>—</td>;
+      return (
+        <td className="px-4 py-2.5 whitespace-nowrap text-muted" title={detail ? 'No interview round has a result yet in this range' : undefined}>
+          <div>—</div>
+          {detail && <div className="text-[11px]">{detail}</div>}
+        </td>
+      );
     }
     return (
-      <td className="px-4 py-2.5 whitespace-nowrap" title={`${fmtCount(r.passed)} passed of ${fmtCount(r.decided)} decided rounds`}>
+      <td className="px-4 py-2.5 whitespace-nowrap" title={`${fmtCount(r.passed)} of ${fmtCount(r.decided)} interview rounds with a result were passed`}>
         <div>{Math.round(r.passRate * 100)}%{arrow('pass', m)}</div>
-        <div className="text-[11px] text-muted">{fmtCount(r.passed)} of {fmtCount(r.decided)} decided</div>
+        <div className="text-[11px] text-muted">{detail}</div>
       </td>
     );
   };
@@ -293,7 +299,8 @@ export default function AccountsPage() {
         title={`${fmtCount(m.interviews)} interviews ÷ ${fmtCount(m.bids)} bids`
           + (m.lowVolume ? ' · fewer than 30 bids, too few to rank' : '')}
       >
-        {fmtRate(m.interviewsPerBid)}{arrow('rate', m)}
+        <div>{fmtRate(m.interviewsPerBid)}{arrow('rate', m)}</div>
+        <div className="text-[11px] text-muted">{rateDetail(m.interviews, m.bids)}</div>
       </td>
     );
   };
@@ -379,14 +386,15 @@ export default function AccountsPage() {
       const rangeLabel = range.preset === 'custom'
         ? `${fmtDay(range.from)} – ${fmtDay(range.to)}`
         : PROFILE_RANGES.find((o) => o.value === range.preset)?.label ?? '';
-      const since = arrowSince;
       band = (
         <ProfilesBand
           whose={whose}
           mine={metricsData.mine}
           all={compared}
           rangeLabel={rangeLabel}
-          since={since}
+          total={metricsData.rows.length}
+          from={metricsData.comparedFrom}
+          to={metricsData.comparedTo ?? metricsData.comparedFrom}
           rows={metricsData.rows}
         />
       );
@@ -550,8 +558,8 @@ export default function AccountsPage() {
                 ['lastApply', 'Applies'],
                 ['bids', 'Bids'],
                 ['interviews', 'Interviews'],
-                ['rate', 'Intv/bid'],
-                ['pass', 'Pass rate'],
+                ['rate', 'Interview rate'],
+                ['pass', 'Rounds passed'],
                 ['score', 'Resume score'],
               ] as const).map(([key, label]) => (
                 <th

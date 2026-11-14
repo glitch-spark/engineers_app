@@ -2,7 +2,7 @@
 // 2026-11-14-profiles-list-compare-design.md). Numbers and verdicts come from lib/profileList.
 import { Link } from 'react-router-dom';
 import type { CompareStats, ProfileMetricsRow } from '../../api/endpoints';
-import { bandCells, fmtListRate, shortDay, strongestWeakest } from '../../lib/profileList';
+import { bandCells, bandHeading, fmtListRate, strongestWeakest } from '../../lib/profileList';
 
 /** ▲ / ▼ in the Metrics tab's up / down colours; the title says what was compared. */
 export function Arrow({ dir, title }: { dir: 'up' | 'down'; title: string }) {
@@ -24,20 +24,27 @@ type Props = {
   mine: CompareStats;
   all: CompareStats;
   rangeLabel: string;
-  /** Shown as "since <day>" when the compared window starts after the range's first day. */
-  since: string | null;
+  /** Every listed (active) profile of the owner, with bids or not. */
+  total: number;
+  /** The compared days, first and last (ISO). */
+  from: string;
+  to: string;
   rows: Pick<ProfileMetricsRow, 'accountId' | 'name' | 'compare'>[];
 };
 
-export default function ProfilesBand({ whose, mine, all, rangeLabel, since, rows }: Props) {
+export default function ProfilesBand({ whose, mine, all, rangeLabel, total, from, to, rows }: Props) {
   const cells = bandCells(mine, all);
+  const head = bandHeading({ whose, total, withBids: mine.profiles, allWithBids: all.profiles, rangeLabel, from, to });
   const ends = strongestWeakest(rows);
   return (
     <section className="panel p-4 space-y-3" aria-label="Your profiles compared with all profiles">
-      <h2 className="text-sm font-medium">
-        {whose} {mine.profiles} {mine.profiles === 1 ? 'profile' : 'profiles'} with bids vs {all.profiles} across all owners
-        <span className="text-muted font-normal"> · {rangeLabel}{since ? ` (since ${shortDay(since)})` : ''}</span>
-      </h2>
+      <div>
+        <h2 className="text-sm font-medium">
+          {head.title}
+          <span className="text-muted font-normal"> · {head.dates}</span>
+        </h2>
+        <p className="text-xs text-muted">{head.note}</p>
+      </div>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {cells.map((c) => (
           <div key={c.key}>
@@ -45,7 +52,7 @@ export default function ProfilesBand({ whose, mine, all, rangeLabel, since, rows
             <dd className="text-sm">
               <span className="text-base font-semibold tabular-nums">{c.mine}</span>
               {c.dir && <Arrow dir={c.dir} title={`${c.mine} vs ${c.all} across all profiles`} />}
-              <span className="text-muted"> vs {c.all}</span>
+              <span className="text-muted"> · all profiles: {c.all}</span>
               {c.note && <div className="text-[11px] text-muted">{c.note}</div>}
             </dd>
           </div>
@@ -53,15 +60,15 @@ export default function ProfilesBand({ whose, mine, all, rangeLabel, since, rows
       </dl>
       {ends && (
         <p className="text-xs text-muted">
-          Strongest:{' '}
+          Best interview rate:{' '}
           <Link to={`/accounts/${ends.strongest.accountId}`} className="hover:underline text-strong">
             {ends.strongest.name || 'Unnamed'}
           </Link>{' '}
-          {fmtListRate(ends.strongest.interviewsPerBid)} interviews per bid · Weakest:{' '}
+          {fmtListRate(ends.strongest.interviewsPerBid)} · Lowest:{' '}
           <Link to={`/accounts/${ends.weakest.accountId}`} className="hover:underline text-strong">
             {ends.weakest.name || 'Unnamed'}
           </Link>{' '}
-          {fmtListRate(ends.weakest.interviewsPerBid)}
+          {fmtListRate(ends.weakest.interviewsPerBid)} <span>(profiles with 30+ bids)</span>
         </p>
       )}
     </section>

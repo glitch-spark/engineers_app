@@ -14,8 +14,9 @@ type AppliedByCounts = {
 const count = (n: number | null | undefined) => (n ?? 0).toLocaleString('en-US');
 
 /** The Interviews column's second line: who applied for the job (`2 self · 1 bidder`), plus `· N not set` only when
- *  some interviews have no "Applied by". */
-export function interviewsAppliedBy(m: AppliedByCounts): string {
+ *  some interviews have no "Applied by"; null with no interviews (nothing to split). */
+export function interviewsAppliedBy(m: AppliedByCounts): string | null {
+  if (!(m.selfAppliedInterviews ?? 0) && !(m.bidderAppliedInterviews ?? 0) && !(m.unsetAppliedInterviews ?? 0)) return null;
   const parts = [`${count(m.selfAppliedInterviews)} self`, `${count(m.bidderAppliedInterviews)} bidder`];
   if ((m.unsetAppliedInterviews ?? 0) > 0) parts.push(`${count(m.unsetAppliedInterviews)} not set`);
   return parts.join(' · ');
@@ -28,6 +29,7 @@ export function fmtListRate(x: number): string {
 }
 
 const DASH = '—';
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const perWeek = (x: number | null) => (x == null ? DASH : x < 10 ? x.toFixed(1).replace(/\.0$/, '') : String(Math.round(x)));
 const pct = (x: number | null) => (x == null ? DASH : `${Math.round(x * 100)}%`);
 const score = (x: number | null) => (x == null ? DASH : String(Math.round(x)));
@@ -39,19 +41,21 @@ export type BandCell = {
 
 /** The band's four cells, mine vs all profiles. No verdict on bids / week: owners run different numbers of bidders. */
 export function bandCells(mine: CompareStats, all: CompareStats): BandCell[] {
+  const passed = mine.passRate == null ? 0 : Math.round(mine.passRate * mine.decided);
   return [
-    { key: 'bids', label: 'Bids / week per profile', mine: perWeek(mine.bidsPerWeek), all: perWeek(all.bidsPerWeek), note: null, dir: null },
+    { key: 'bids', label: 'Bids per profile, per week', mine: perWeek(mine.bidsPerWeek), all: perWeek(all.bidsPerWeek), note: null, dir: null },
     {
-      key: 'rate', label: 'Interviews per bid', mine: rate(mine.interviewsPerBid), all: rate(all.interviewsPerBid), note: null,
+      key: 'rate', label: 'Bids that led to an interview', mine: rate(mine.interviewsPerBid), all: rate(all.interviewsPerBid), note: null,
       dir: all.interviewsPerBid == null ? null : conversionVerdict(mine, all.interviewsPerBid),
     },
     {
-      key: 'pass', label: 'Pass rate', mine: pct(mine.passRate), all: pct(all.passRate), note: `${count(mine.decided)} decided`,
+      key: 'pass', label: 'Interview rounds passed', mine: pct(mine.passRate), all: pct(all.passRate),
+      note: mine.decided ? `${count(passed)} of ${count(mine.decided)} rounds` : 'no results yet',
       dir: all.passRate == null ? null : passVerdict(mine, all.passRate),
     },
     {
-      key: 'tailor', label: 'Tailor score', mine: score(mine.tailorScore.avg), all: score(all.tailorScore.avg),
-      note: `${count(mine.tailorScore.n)} scored`,
+      key: 'tailor', label: 'Avg tailored resume score', mine: score(mine.tailorScore.avg), all: score(all.tailorScore.avg),
+      note: mine.tailorScore.n ? `from ${count(mine.tailorScore.n)} resumes` : 'no scored resumes',
       dir: all.tailorScore.avg == null ? null : tailorVerdict(mine, all.tailorScore.avg),
     },
   ];
@@ -72,6 +76,33 @@ export function strongestWeakest(
   const strongest = ranked.reduce((b, r) => (r.interviewsPerBid > b.interviewsPerBid ? r : b));
   const weakest = ranked.reduce((w, r) => (r.interviewsPerBid < w.interviewsPerBid ? r : w));
   return strongest.interviewsPerBid === weakest.interviewsPerBid ? null : { strongest, weakest };
+}
+
+/** The band's heading: every listed profile of the owner, the days compared, and which profiles the averages use
+ *  (only those with bids, on both sides). */
+export function bandHeading(o: {
+  whose: 'Your' | 'These'; total: number; withBids: number; allWithBids: number; rangeLabel: string; from: string; to: string;
+}): { title: string; dates: string; note: string } {
+  const days = o.from === o.to ? shortDay(o.from) : `${shortDay(o.from)} – ${shortDay(o.to)}`;
+  return {
+    title: `${o.whose} ${plural(o.total, 'profile', 'profiles')} vs all owners' profiles`,
+    dates: o.rangeLabel ? `${o.rangeLabel} · ${days}` : days,
+    note: `Averages count only profiles with bids: ${count(o.withBids)} of ${o.whose === 'Your' ? 'yours' : 'these'}, `
+      + `${count(o.allWithBids)} overall.`,
+  };
+}
+
+/** Interview rate's second line: `3 of 182 bids`. */
+export const rateDetail = (interviews: number, bids: number) => `${count(interviews)} of ${count(bids)} bids`;
+
+/** Rounds passed's second line: `0 of 1 passed`; `no results yet` when the profile has interviews but no round has a
+ *  result; null otherwise. */
+export function passDetail(
+  rounds: { decided: number; passed: number } | null | undefined, interviews: number,
+): string | null {
+  if (!rounds) return null;
+  if (rounds.decided) return `${count(rounds.passed)} of ${count(rounds.decided)} passed`;
+  return interviews > 0 ? 'no results yet' : null;
 }
 
 /** The list and the benchmark measured the same days: only then do the row arrows and the band compare them. */
@@ -118,8 +149,6 @@ export function sinceDay(rangeFrom: string | null, comparedFrom: string | null |
   if (!comparedFrom) return null;
   return !rangeFrom || comparedFrom > rangeFrom ? comparedFrom : null;
 }
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** The Setup column: fixed resumes and tailoring units (only when tailoring is set up), with the Profile tab's
  *  warnings. An older server sends no `setupUnits`: units are counted, nothing is judged. */

@@ -2,13 +2,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  bandCells, fmtListRate, interviewsAppliedBy, rowArrow, setupText, sinceDay, strongestWeakest, windowsMatch,
+  bandCells, bandHeading, fmtListRate, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
+  strongestWeakest, windowsMatch,
 } from '../src/lib/profileList.ts';
 
 test('interviews line leaves out "not set" when there are none', () => {
   assert.equal(interviewsAppliedBy({ selfAppliedInterviews: 1, bidderAppliedInterviews: 0, unsetAppliedInterviews: 0 }),
     '1 self · 0 bidder');
-  assert.equal(interviewsAppliedBy({}), '0 self · 0 bidder');
+});
+
+test('interviews line is left out when there are no interviews', () => {
+  assert.equal(interviewsAppliedBy({}), null);
+  assert.equal(interviewsAppliedBy({ selfAppliedInterviews: 0, bidderAppliedInterviews: 0, unsetAppliedInterviews: 0 }), null);
 });
 
 test('interviews line shows "not set" when some are', () => {
@@ -31,12 +36,36 @@ test('band cells', () => {
   assert.deepEqual(bandCells(stats(), all).map((c) => [c.key, c.mine, c.all, c.note, c.dir]), [
     ['bids', '38', '45', null, null],
     ['rate', '0.62%', '0.41%', null, 'up'],
-    ['pass', '40%', '35%', '10 decided', null],
-    ['tailor', '74', '73', '120 scored', null],
+    ['pass', '40%', '35%', '4 of 10 rounds', null],
+    ['tailor', '74', '73', 'from 120 resumes', null],
   ]);
   assert.deepEqual(bandCells(stats(), all).map((c) => c.label),
-    ['Bids / week per profile', 'Interviews per bid', 'Pass rate', 'Tailor score']);
-  assert.equal(bandCells(stats({ passRate: null, decided: 0 }), all)[2].mine, '—');
+    ['Bids per profile, per week', 'Bids that led to an interview', 'Interview rounds passed', 'Avg tailored resume score']);
+  const none = bandCells(stats({ passRate: null, decided: 0, tailorScore: { avg: null, n: 0 } }), all);
+  assert.deepEqual([none[2].mine, none[2].note, none[3].mine, none[3].note], ['—', 'no results yet', '—', 'no scored resumes']);
+});
+
+test('band heading counts every listed profile and says which ones the averages use', () => {
+  const h = { whose: 'Your', total: 9, withBids: 7, allWithBids: 49, rangeLabel: 'This month', from: '2026-11-01', to: '2026-11-14' };
+  assert.deepEqual(bandHeading(h), {
+    title: "Your 9 profiles vs all owners' profiles",
+    dates: 'This month · Nov 1 – Nov 14',
+    note: 'Averages count only profiles with bids: 7 of yours, 49 overall.',
+  });
+  assert.deepEqual(bandHeading({ ...h, whose: 'These', total: 1, withBids: 1, from: '2026-11-14' }), {
+    title: "These 1 profile vs all owners' profiles",
+    dates: 'This month · Nov 14',
+    note: 'Averages count only profiles with bids: 1 of these, 49 overall.',
+  });
+});
+
+test('second lines under Interview rate and Rounds passed', () => {
+  assert.equal(rateDetail(3, 182), '3 of 182 bids');
+  assert.equal(rateDetail(0, 1200), '0 of 1,200 bids');
+  assert.equal(passDetail({ decided: 1, passed: 0, passRate: 0 }, 3), '0 of 1 passed');
+  assert.equal(passDetail({ decided: 0, passed: 0, passRate: null }, 2), 'no results yet');
+  assert.equal(passDetail({ decided: 0, passed: 0, passRate: null }, 0), null);
+  assert.equal(passDetail(undefined, 2), null);
 });
 
 test('strongest and weakest need two profiles with 30+ bids', () => {
