@@ -19,8 +19,9 @@ function readOpen(): boolean {
   }
 }
 
-/** Profile page block: start an eval for this profile and see how its last runs scored. */
-export default function PromptEvalBlock({ accountId }: { accountId: string }) {
+/** Profile page block: start an eval for this profile and see how its last runs scored. `embedded`: shown inside
+ * another fold (the Profile tab's More), so it has no fold of its own, just a heading. */
+export default function PromptEvalBlock({ accountId, embedded = false }: { accountId: string; embedded?: boolean }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(readOpen);
   const [showNew, setShowNew] = useState(false);
@@ -51,21 +52,28 @@ export default function PromptEvalBlock({ accountId }: { accountId: string }) {
 
   return (
     <>
-      <section className="panel">
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={open}
-          aria-controls="profile-prompt-eval"
-          className="flex w-full items-center gap-3 rounded-[inherit] p-6 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
-        >
-          {open ? <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden /> : <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />}
-          <span className="card-title">Prompt eval</span>
-          <span className="text-xs text-muted">{summary}</span>
-        </button>
-      </section>
+      {embedded ? (
+        <h3 className="card-title flex flex-wrap items-baseline gap-x-3">
+          Prompt eval <span className="text-xs font-normal text-muted">{summary}</span>
+        </h3>
+      ) : (
+        <section className="panel">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-controls="profile-prompt-eval"
+            className="flex w-full items-center gap-3 rounded-[inherit] p-6 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+          >
+            {open ? <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden /> : <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />}
+            <span className="card-title">Prompt eval</span>
+            <span className="text-xs text-muted">{summary}</span>
+          </button>
+        </section>
+  
+      )}
 
-      <div id="profile-prompt-eval" hidden={!open} className="space-y-4">
+      <div id="profile-prompt-eval" hidden={!embedded && !open} className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted">
             Scores this profile's resume prompt against sample job descriptions: one tailored resume per JD, judged for match and believability.

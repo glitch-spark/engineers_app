@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
-import { AlertTriangle, Loader2, Plus, Save } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Plus, Save } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
 import ResumePromptField from '../components/ResumePromptField';
@@ -172,7 +172,6 @@ function EditProfile({ id }: { id: string }) {
             <ResumesSection accountId={id} initial={account.resumes} onSaved={onSaved} />
 
             <PromptsArea key={id} id={id} account={account} onSaved={onSaved} />
-            <PromptEvalBlock accountId={id} />
           </div>
         )}
       </Tabs>
@@ -288,6 +287,7 @@ function PromptsArea({ id, account, onSaved }: { id: string; account: ProfileDoc
   const saved = useMemo(() => promptsOf(account), [account]);
   const [draft, setDraft] = useState<PromptsState>(saved);
   const [saving, setSaving] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(readMoreOpen);
   // Tailoring shows as one line until it's set up, or until the user asks to set it up in this visit.
   const [tailoringOpen, setTailoringOpen] = useState(() => tailoringSetUp(saved.prompts));
   const errors = useMemo(() => promptErrors(draft.prompts), [draft.prompts]);
@@ -377,45 +377,59 @@ function PromptsArea({ id, account, onSaved }: { id: string; account: ProfileDoc
         </section>
       )}
 
-      <Section
-        title="Other prompts"
-        desc="Screening answers and cover letters for this profile; saved with the Tailoring Save."
-      >
-        <ResumePromptField
-          kind="screening"
-          value={draft.screeningPrompt}
-          onChange={(screeningPrompt) => setDraft((d) => ({ ...d, screeningPrompt }))}
-          label="Screening Q&A answering prompt"
-          hint="Overrides your global screening prompt. Empty = inherit global → built-in default."
-          defaultSource="global"
-        />
-        <ResumePromptField
-          kind="coverLetter"
-          value={draft.coverLetterPrompt}
-          onChange={(coverLetterPrompt) => setDraft((d) => ({ ...d, coverLetterPrompt }))}
-          label="Cover letter prompt"
-          hint="Plain text, used when opted in at submit time. Overrides your global cover-letter prompt. Empty = inherit global."
-          defaultSource="global"
-        />
-      </Section>
+      <section className="panel">
+        <button
+          type="button"
+          onClick={() => setMoreOpen(writeMoreOpen(!moreOpen))}
+          aria-expanded={moreOpen}
+          aria-controls="profile-more"
+          className="flex w-full items-center gap-3 rounded-[inherit] px-6 py-4 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+        >
+          {moreOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden /> : <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />}
+          <span className="card-title">More: screening answers, cover letter, prompt eval</span>
+          {dirty.moreChanged && <span className="text-xs text-sky-700 dark:text-sky-300">Unsaved</span>}
+        </button>
+        <div id="profile-more" hidden={!moreOpen} className="space-y-6 border-t border-zinc-200 p-6 dark:border-zinc-800">
+          <ResumePromptField
+            kind="screening"
+            value={draft.screeningPrompt}
+            onChange={(screeningPrompt) => setDraft((d) => ({ ...d, screeningPrompt }))}
+            label="Screening Q&A answering prompt"
+            hint="Overrides your global screening prompt. Empty = inherit global → built-in default."
+            defaultSource="global"
+          />
+          <ResumePromptField
+            kind="coverLetter"
+            value={draft.coverLetterPrompt}
+            onChange={(coverLetterPrompt) => setDraft((d) => ({ ...d, coverLetterPrompt }))}
+            label="Cover letter prompt"
+            hint="Plain text, used when opted in at submit time. Overrides your global cover-letter prompt. Empty = inherit global."
+            defaultSource="global"
+          />
+          <div className="flex justify-end">{saveButton}</div>
+          <PromptEvalBlock accountId={id} embedded />
+        </div>
+      </section>
     </>
   );
 }
 
-function Section({
-  title, desc, children,
-}: {
-  title: string;
-  desc: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="panel p-6 space-y-3">
-      <div>
-        <h2 className="card-title">{title}</h2>
-        {desc && <p className="text-xs text-muted">{desc}</p>}
-      </div>
-      {children}
-    </section>
-  );
+const MORE_OPEN_KEY = 'profileEdit.moreOpen';
+
+/** The More fold is closed by default and remembered per browser. */
+function readMoreOpen(): boolean {
+  try {
+    return window.localStorage.getItem(MORE_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeMoreOpen(open: boolean): boolean {
+  try {
+    window.localStorage.setItem(MORE_OPEN_KEY, open ? '1' : '0');
+  } catch {
+    /* storage unavailable: just don't remember */
+  }
+  return open;
 }
