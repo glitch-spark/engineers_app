@@ -225,6 +225,8 @@ export type ProfileMetricsRow = {
   lastApply?: string | null;
   /** Profiles list only: the bidder bids per bidder (archived bidders too), most first; adds up to `bidderBids`. */
   bidderBidsBy?: { bidderId: string; name: string; bids: number }[];
+  /** Caller-taken rounds per caller, most first (newer servers); they add up to callerInterviews. */
+  callerInterviewsBy?: { name: string; interviews: number }[];
   /** Profiles list only (absent from an older server): the profile's name, its rounds decided over the period, and
    * its numbers over the compared window (null without one, or for an admin viewing every owner). */
   name?: string;

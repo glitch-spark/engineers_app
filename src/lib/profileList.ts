@@ -22,6 +22,35 @@ export function interviewsAppliedBy(m: AppliedByCounts): string | null {
   return parts.join(' · ');
 }
 
+const joinParts = (parts: [string, number | null | undefined][]) => {
+  const kept = parts.filter(([, n]) => (n ?? 0) > 0).map(([name, n]) => `${name}: ${count(n)}`);
+  return kept.length ? kept.join(', ') : null;
+};
+
+/** The Bids column's second line: `Self: 10, Bo: 1, Kim: 3` (each bidder by name), zeros left out; null with no bids.
+ *  An older server sends no names: `Self: 5, Bidders: 7`. */
+export function bidsBreakdown(m: {
+  selfBids: number; bidderBids: number; bidderBidsBy?: { name: string; bids: number }[];
+}): string | null {
+  return joinParts([
+    ['Self', m.selfBids],
+    ...(m.bidderBidsBy ? m.bidderBidsBy.map((b): [string, number] => [b.name, b.bids]) : [['Bidders', m.bidderBids] as [string, number]]),
+  ]);
+}
+
+/** The Interviews column's second line: who took the rounds, `Self: 5, Kim: 4, Bo: 5` (each caller by name), zeros
+ *  left out; null with no interviews. An older server sends no names: `Self: 1, Callers: 2`. */
+export function interviewsBreakdown(m: {
+  selfInterviews: number; callerInterviews: number; callerInterviewsBy?: { name: string; interviews: number }[];
+}): string | null {
+  return joinParts([
+    ['Self', m.selfInterviews],
+    ...(m.callerInterviewsBy
+      ? m.callerInterviewsBy.map((c): [string, number] => [c.name, c.interviews])
+      : [['Callers', m.callerInterviews] as [string, number]]),
+  ]);
+}
+
 /** Interviews per bid on the list: two decimals under 1% (`0.62%`; most profiles sit there), else one (`1.1%`). */
 export function fmtListRate(x: number): string {
   const pct = x * 100;
@@ -85,10 +114,10 @@ export function bandHeading(o: {
 }): { title: string; dates: string; note: string } {
   const days = o.from === o.to ? shortDay(o.from) : `${shortDay(o.from)} – ${shortDay(o.to)}`;
   return {
-    title: `${o.whose} ${plural(o.total, 'profile', 'profiles')} vs all owners' profiles`,
+    title: `${o.whose} ${plural(o.total, 'profile', 'profiles')} vs the average of all users' profiles`,
     dates: o.rangeLabel ? `${o.rangeLabel} · ${days}` : days,
     note: `Averages count only profiles with bids: ${count(o.withBids)} of ${o.whose === 'Your' ? 'yours' : 'these'}, `
-      + `${count(o.allWithBids)} overall.`,
+      + `${count(o.allWithBids)} across all users (${o.whose === 'Your' ? 'yours' : 'these'} included).`,
   };
 }
 
@@ -130,17 +159,17 @@ export function rowArrow(
   if (kind === 'rate' && all.interviewsPerBid != null && compare.interviewsPerBid != null) {
     dir = conversionVerdict(compare, all.interviewsPerBid);
     value = fmtListRate(compare.interviewsPerBid);
-    text = `${value} vs ${fmtListRate(all.interviewsPerBid)}`;
+    text = `${value} · all users' average ${fmtListRate(all.interviewsPerBid)}`;
   } else if (kind === 'pass' && all.passRate != null && compare.passRate != null) {
     dir = passVerdict(compare, all.passRate);
     value = pct(compare.passRate);
-    text = `${value} vs ${pct(all.passRate)}`;
+    text = `${value} · all users' average ${pct(all.passRate)}`;
   } else if (kind === 'tailor' && all.tailorScore.avg != null && compare.tailorScore.avg != null) {
     dir = tailorVerdict(compare, all.tailorScore.avg);
     value = score(compare.tailorScore.avg);
-    text = `tailor score ${value} vs ${score(all.tailorScore.avg)}`;
+    text = `tailor score ${value} · all users' average ${score(all.tailorScore.avg)}`;
   }
-  return dir ? { dir, value, title: `Since ${shortDay(comparedFrom)}: ${text} across all profiles` } : null;
+  return dir ? { dir, value, title: `Since ${shortDay(comparedFrom)}: ${text}` } : null;
 }
 
 /** The compared window's first day when it starts after the range's (All time: always), so the page labels the

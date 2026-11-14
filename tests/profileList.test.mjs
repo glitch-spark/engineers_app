@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  bandCells, bandHeading, fmtListRate, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
+  bandCells, bandHeading, bidsBreakdown, fmtListRate, interviewsBreakdown, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
   strongestWeakest, windowsMatch,
 } from '../src/lib/profileList.ts';
 
@@ -48,14 +48,14 @@ test('band cells', () => {
 test('band heading counts every listed profile and says which ones the averages use', () => {
   const h = { whose: 'Your', total: 9, withBids: 7, allWithBids: 49, rangeLabel: 'This month', from: '2026-11-01', to: '2026-11-14' };
   assert.deepEqual(bandHeading(h), {
-    title: "Your 9 profiles vs all owners' profiles",
+    title: "Your 9 profiles vs the average of all users' profiles",
     dates: 'This month · Nov 1 – Nov 14',
-    note: 'Averages count only profiles with bids: 7 of yours, 49 overall.',
+    note: 'Averages count only profiles with bids: 7 of yours, 49 across all users (yours included).',
   });
   assert.deepEqual(bandHeading({ ...h, whose: 'These', total: 1, withBids: 1, from: '2026-11-14' }), {
-    title: "These 1 profile vs all owners' profiles",
+    title: "These 1 profile vs the average of all users' profiles",
     dates: 'This month · Nov 14',
-    note: 'Averages count only profiles with bids: 1 of these, 49 overall.',
+    note: 'Averages count only profiles with bids: 1 of these, 49 across all users (these included).',
   });
 });
 
@@ -81,13 +81,13 @@ test('strongest and weakest need two profiles with 30+ bids', () => {
 
 test('row arrows follow the Metrics tab thresholds and need a compare', () => {
   assert.deepEqual(rowArrow('rate', stats(), all, '2026-11-05'),
-    { dir: 'up', value: '0.62%', title: 'Since Nov 5: 0.62% vs 0.41% across all profiles' });
+    { dir: 'up', value: '0.62%', title: "Since Nov 5: 0.62% · all users' average 0.41%" });
   assert.equal(rowArrow('rate', stats({ bids: 29 }), all, '2026-11-05'), null);
   assert.deepEqual(rowArrow('pass', stats({ passRate: 0.2, decided: 5 }), all, '2026-11-05'),
-    { dir: 'down', value: '20%', title: 'Since Nov 5: 20% vs 35% across all profiles' });
+    { dir: 'down', value: '20%', title: "Since Nov 5: 20% · all users' average 35%" });
   assert.equal(rowArrow('tailor', stats({ tailorScore: { avg: 77, n: 5 } }), all, '2026-11-05'), null); // 77 vs 73 (4 pts)
   assert.deepEqual(rowArrow('tailor', stats({ tailorScore: { avg: 66, n: 5 } }), all, '2026-11-05'),
-    { dir: 'down', value: '66', title: 'Since Nov 5: tailor score 66 vs 73 across all profiles' });
+    { dir: 'down', value: '66', title: "Since Nov 5: tailor score 66 · all users' average 73" });
   assert.equal(rowArrow('rate', null, all, '2026-11-05'), null);
   assert.equal(rowArrow('rate', stats(), null, '2026-11-05'), null);
 });
@@ -125,4 +125,24 @@ test('setup text and warnings from setup units', () => {
   assert.deepEqual(setupText({ resumes: [] }), { text: '—', warnings: [] });
   assert.deepEqual(setupText({ setupUnits: [u()], setupDefaultId: 'b' }), { text: '1 unit', warnings: [] });
   assert.deepEqual(setupText({ resumePrompts: [{ id: 'b' }, { id: 'c' }] }), { text: '2 units', warnings: [] }); // older server
+});
+
+test('bids line: self and each bidder by name, zeros left out', () => {
+  const by = [{ bidderId: 'x', name: 'Eugine', bids: 570 }, { bidderId: 'y', name: 'jeremybabu', bids: 123 }];
+  assert.equal(bidsBreakdown({ selfBids: 0, bidderBids: 693, bidderBidsBy: by }), 'Eugine: 570, jeremybabu: 123');
+  assert.equal(bidsBreakdown({ selfBids: 1200, bidderBids: 3, bidderBidsBy: [{ bidderId: 'z', name: 'Bo', bids: 3 }] }),
+    'Self: 1,200, Bo: 3');
+  assert.equal(bidsBreakdown({ selfBids: 363, bidderBids: 0, bidderBidsBy: [] }), 'Self: 363');
+  assert.equal(bidsBreakdown({ selfBids: 0, bidderBids: 0, bidderBidsBy: [] }), null);
+  assert.equal(bidsBreakdown({ selfBids: 5, bidderBids: 7 }), 'Self: 5, Bidders: 7'); // older server: no names
+});
+
+test('interviews line: self-taken and each caller by name, zeros left out', () => {
+  const by = [{ name: 'Kim', interviews: 4 }, { name: 'Bo', interviews: 5 }];
+  assert.equal(interviewsBreakdown({ selfInterviews: 5, callerInterviews: 9, callerInterviewsBy: by }), 'Self: 5, Kim: 4, Bo: 5');
+  assert.equal(interviewsBreakdown({ selfInterviews: 0, callerInterviews: 3, callerInterviewsBy: [{ name: 'Kim', interviews: 3 }] }),
+    'Kim: 3');
+  assert.equal(interviewsBreakdown({ selfInterviews: 2, callerInterviews: 0, callerInterviewsBy: [] }), 'Self: 2');
+  assert.equal(interviewsBreakdown({ selfInterviews: 0, callerInterviews: 0, callerInterviewsBy: [] }), null);
+  assert.equal(interviewsBreakdown({ selfInterviews: 1, callerInterviews: 2 }), 'Self: 1, Callers: 2'); // older server
 });

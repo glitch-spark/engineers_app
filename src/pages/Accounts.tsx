@@ -14,7 +14,7 @@ import {
   PROFILE_RANGES, profileRangeDates, profileRangeError, readProfileRange, writeProfileRange, fmtCount, fmtPerWeek,
   fmtRate, fmtScore, tailoredText, type ProfileRange,
 } from '../lib/profileMetrics';
-import { interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
+import { bidsBreakdown, interviewsAppliedBy, interviewsBreakdown, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
 import ProfilesBand, { Arrow } from '../components/profiles/ProfilesBand';
 
 type SortKey = 'lastApply' | 'bids' | 'interviews' | 'rate' | 'pass' | 'score';
@@ -219,20 +219,19 @@ export default function AccountsPage() {
           title={allTime ? `${perWeek(m.bidsPerWeek)}. ${selfSinceNote}` : perWeek(m.bidsPerWeek)}
         >
           <div>{fmtCount(m.bids)}</div>
-          {m.bidderBidsBy === undefined
-            ? split(`${fmtCount(m.selfBids)} self · ${fmtCount(m.bidderBids)} bidder`)
-            : (
-              <div className="max-w-[16rem] whitespace-normal text-[11px] text-muted">
-                {[`${fmtCount(m.selfBids)} self`, ...m.bidderBidsBy.map((b) => `${b.name} ${fmtCount(b.bids)}`)].join(' · ')}
-              </div>
-            )}
+          {bidsBreakdown(m) && (
+            <div className="max-w-[16rem] whitespace-normal text-[11px] text-muted">{bidsBreakdown(m)}</div>
+          )}
         </td>
         <td
           className="px-4 py-2.5 whitespace-nowrap"
-          title={`${fmtCount(m.selfInterviews)} self-taken · ${fmtCount(m.callerInterviews)} caller-taken. ${perWeek(m.interviewsPerWeek)}`}
+          title={`Who took the interviews: self or each caller. ${
+            interviewsAppliedBy(m) ? `Who applied for the jobs: ${interviewsAppliedBy(m)}. ` : ''}${perWeek(m.interviewsPerWeek)}`}
         >
           <div>{fmtCount(m.interviews)}</div>
-          {interviewsAppliedBy(m) && split(interviewsAppliedBy(m) as string)}
+          {interviewsBreakdown(m) && (
+            <div className="max-w-[16rem] whitespace-normal text-[11px] text-muted">{interviewsBreakdown(m)}</div>
+          )}
         </td>
         {rateTd(m)}
         {passTd(m)}
@@ -379,7 +378,7 @@ export default function AccountsPage() {
   if ((!isAdmin || userId) && profileStatus !== 'archived' && !rangeError && metricsData && 'mine' in metricsData) {
     const whose = isAdmin && userId !== user?.id ? 'These' : 'Your';
     if (!metricsData.comparedFrom) {
-      band = <p role="status" className="text-xs text-muted">Nothing to compare with all profiles in this range.</p>;
+      band = <p role="status" className="text-xs text-muted">Nothing to compare with other users in this range.</p>;
     } else if (!metricsData.mine) {
       band = <p role="status" className="text-xs text-muted">{whose} profiles have no bids in this range yet.</p>;
     } else if (compared) {
