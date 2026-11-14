@@ -72,6 +72,61 @@ function Tile({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const split = (text: string) => <div className="text-[11px] text-muted">{text}</div>;
+
+const ROUND_LABELS: Record<api.RoundType, string> = {
+  intro: 'Intro', tech: 'Tech', hiring: 'Hiring', panel: 'Panel', final: 'Final', home_assessment: 'Home assessment',
+};
+
+/** Done / passed / rejected / pass rate per round type; home assessments below a divider. */
+function RoundsCard({ rounds, range, color }: { rounds: api.RoundsSummary; range: string; color: string }) {
+  const notes = [
+    rounds.awaiting > 0 && `${fmtCount(rounds.awaiting)} held with no result yet`,
+    rounds.scheduled > 0 && `${fmtCount(rounds.scheduled)} still scheduled`,
+  ].filter(Boolean);
+  return (
+    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <h3 className="form-label mb-2">Rounds <span className="font-normal text-muted">· {range}</span></h3>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-xs text-muted">
+              <th className="py-1.5 pr-4 text-left font-medium">Round</th>
+              <th className="px-4 py-1.5 text-right font-medium">Done</th>
+              <th className="px-4 py-1.5 text-right font-medium">Passed</th>
+              <th className="px-4 py-1.5 text-right font-medium">Rejected</th>
+              <th className="py-1.5 pl-4 text-left font-medium">Pass rate</th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
+            {api.ROUND_TYPES.map((t) => {
+              const s = rounds.byType[t];
+              const none = s.done === 0;
+              return (
+                <tr key={t} className={t === 'home_assessment' ? 'border-t border-zinc-200 dark:border-zinc-700' : ''}>
+                  <td className="py-1.5 pr-4 whitespace-nowrap">{ROUND_LABELS[t]}</td>
+                  <td className="px-4 py-1.5 text-right">{fmtCount(s.done)}</td>
+                  <td className="px-4 py-1.5 text-right">{none ? '–' : fmtCount(s.passed)}</td>
+                  <td className="px-4 py-1.5 text-right">{none ? '–' : fmtCount(s.rejected)}</td>
+                  <td className="py-1.5 pl-4">
+                    {s.passRate == null ? <span className="text-muted">—</span> : (
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700" aria-hidden>
+                          <div className="h-full rounded-full" style={{ width: `${s.passRate * 100}%`, background: color }} />
+                        </div>
+                        <span>{fmtRate(s.passRate)}</span>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {notes.length > 0 && <p className="mt-2 text-xs text-muted">{notes.join(' · ')}</p>}
+    </div>
+  );
+}
 const big = (text: string, muted = false) => (
   <div className={`text-lg font-semibold tabular-nums ${muted ? 'text-muted' : 'text-strong'}`}>{text}</div>
 );
@@ -170,9 +225,14 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
             </Tile>
 
             <Tile title="Interviews">
-              {big(fmtCount(m.interviews))}
-              {split(`${fmtCount(m.selfInterviews)} self · ${fmtCount(m.callerInterviews)} caller`)}
+              <div title={`${fmtCount(m.selfInterviews)} self · ${fmtCount(m.callerInterviews)} caller`}>
+                {big(fmtCount(m.interviews))}
+              </div>
+              {m.passRate === undefined
+                ? split(`${fmtCount(m.selfInterviews)} self · ${fmtCount(m.callerInterviews)} caller`)
+                : split(m.passRate == null ? 'No decided rounds' : `${fmtRate(m.passRate)} pass overall`)}
               <PeerLine mine={m.interviews} peer={peers?.interviews} fmt={fmtPerWeek} />
+              <PeerLine label="Pass rate" mine={m.passRate} peer={peers?.passRate} fmt={fmtRate} />
             </Tile>
 
             <Tile title="Interviews / bid">
@@ -207,6 +267,8 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
               )}
             </Tile>
           </div>
+
+          {m.rounds && <RoundsCard rounds={m.rounds} range={range} color={c.self} />}
 
           {points.length === 0 ? (
             <p className="text-sm text-muted">No days in this range yet</p>
