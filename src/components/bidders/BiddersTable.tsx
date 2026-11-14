@@ -265,6 +265,27 @@ export default function BiddersTable({ data, platformPer100, showOwner, onOpenBi
             <td className="px-3 py-2 text-right">{t.costPerInterview == null ? '—' : dollars(t.costPerInterview)}</td>
             <td colSpan={2} />
           </tr>
+          {(data.selfRows ?? []).map((s) => (
+            <tr key={`self-${s.ownerId}`} className="border-t border-zinc-100 font-normal text-body dark:border-zinc-800">
+              <th scope="row" className="px-4 py-2 text-left font-normal">
+                <span className="font-medium text-strong">Self</span>
+                {showOwner && s.ownerName && <span className="text-muted"> · {s.ownerName}</span>}
+                <div className="text-[11px] text-muted">Your own applies from the extension · not in the totals</div>
+              </th>
+              {cols.map((c, i) => (
+                <td key={c.key} className="px-1 py-2 text-center">{c.isFuture ? <span className="text-muted">–</span> : fmtCount(s.weekly[i] ?? 0)}</td>
+              ))}
+              <td className="px-3 py-2 text-right font-medium text-strong">{fmtCount(s.total)}</td>
+              <td className="px-3 py-2 text-right text-muted">—</td>
+              <td className="px-3 py-2 text-center text-muted">—</td>
+              <td className="px-3 py-2 text-right text-muted">—</td>
+              <td className="px-3 py-2 text-right">{fmtCount(s.interviews)}</td>
+              <td className="px-3 py-2 text-right text-muted">—</td>
+              <td className="px-3 py-2 text-right text-muted">—</td>
+              <td className="px-3 py-2 text-right whitespace-nowrap">{s.lastBidAt ? relativeTime(s.lastBidAt, now) : <span className="text-muted">—</span>}</td>
+              <td />
+            </tr>
+          ))}
         </tfoot>
       </table>
     </div>
