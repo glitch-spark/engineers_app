@@ -11,6 +11,8 @@ import { CALLER_DOT, UNASSIGNED_CHIP, isUnassigned } from '../../lib/callerColor
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { interviewStatusLabel, stageLabel, statusNoteLabel } from '../../lib/stageBadge';
+import ConfirmedBadge, { NoCallerBadge, needsConfirmBadge } from './ConfirmedBadge';
+import { canConfirm, isTbdRound } from '../../lib/canConfirm';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
 
 /** A caller round from the Callers calendar: its details, and the caller (Admin / interview managers assign it). */
@@ -36,6 +38,7 @@ export default function CallerRoundDialog({
   const typedName = caller?.callerName && caller.callerName !== 'TBD' ? caller.callerName : '';
   const [pick, setPick] = useState(savedId);
   const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const { start: startBrief, busy: briefing, dialog: briefDialog } = useBriefDownload(tz);
   useEffect(() => setPick(savedId), [savedId]);
 
@@ -64,6 +67,20 @@ export default function CallerRoundDialog({
       notify.error(err, 'Failed to assign the caller');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const confirmable = needsConfirmBadge(entry?.status, entry?.scheduledAt);
+  const setConfirmed = async (confirmed: boolean) => {
+    setConfirming(true);
+    try {
+      const saved = await api.confirmRound(interview._id, roundId, confirmed);
+      notify.success(confirmed ? 'Marked confirmed' : 'Confirmation removed');
+      onAssigned(saved as unknown as Interview);
+    } catch (err) {
+      notify.error(err, 'Failed to update confirmation');
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -102,6 +119,21 @@ export default function CallerRoundDialog({
             />
             {unassigned ? 'No caller yet' : caller?.callerName}
           </dd>
+          {confirmable && (
+            <>
+              <dt className="text-muted">Confirmed</dt>
+              <dd className="flex flex-wrap items-center gap-2">
+                {isTbdRound(entry) ? <NoCallerBadge /> : <ConfirmedBadge confirmed={entry?.confirmed} />}
+                {canConfirm(user, interview, entry) && !isTbdRound(entry) && (
+                  <button type="button" className="btn-outline btn-sm" disabled={confirming}
+                    onClick={() => void setConfirmed(!entry?.confirmed)}>
+                    {confirming && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+                    {entry?.confirmed ? 'Unconfirm' : 'Mark confirmed'}
+                  </button>
+                )}
+              </dd>
+            </>
+          )}
         </dl>
 
         {canManage ? (

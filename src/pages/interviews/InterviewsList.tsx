@@ -1,8 +1,9 @@
 import { useState, type KeyboardEvent } from 'react';
 import useSWR from 'swr';
 import { PhoneCall } from 'lucide-react';
-import ConfirmedBadge, { needsConfirmBadge } from '../../components/interview/ConfirmedBadge';
+import ConfirmedBadge, { NoCallerBadge, needsConfirmBadge } from '../../components/interview/ConfirmedBadge';
 import * as api from '../../api/endpoints';
+import { isTbdRound } from '../../lib/canConfirm';
 import { useAuth } from '../../auth/useAuth';
 import NameWithAvatar from '../../components/NameWithAvatar';
 import ActionMenu from '../../components/ActionMenu';
@@ -157,7 +158,9 @@ export default function InterviewsList({
           Caller
         </span>
         <span className={!name || name === 'TBD' ? 'text-muted' : ''}>{name && name !== 'TBD' ? name : 'TBD'}</span>
-        {needsConfirmBadge(iv.status, iv.scheduledAt) && <ConfirmedBadge confirmed={iv.confirmed} />}
+        {needsConfirmBadge(iv.status, iv.scheduledAt) && (
+          isTbdRound({ caller: iv.caller }) ? <NoCallerBadge /> : <ConfirmedBadge confirmed={iv.confirmed} />
+        )}
       </span>
     );
   };

@@ -110,7 +110,7 @@ export default function InterviewPanel({
   const setRoundConfirmed = async (id: string, confirmed: boolean) => {
     if (!iv) return;
     try {
-      const saved = await api.updateInterviewStage(iv._id, id, { confirmed });
+      const saved = await api.confirmRound(iv._id, id, confirmed);
       applySaved(saved as unknown as Interview);
       notify.success(confirmed ? 'Marked confirmed' : 'Confirmation removed');
     } catch (err) {
@@ -192,6 +192,7 @@ export default function InterviewPanel({
               iv={iv}
               tz={tz}
               canEdit={canEdit}
+              user={user}
               onStatus={setRoundStatus}
               onConfirm={setRoundConfirmed}
               onEditRound={(id) => openForm('editRound', id)}
