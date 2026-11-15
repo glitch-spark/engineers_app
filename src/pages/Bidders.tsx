@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../api/endpoints';
+import { BASE_URL } from '../api/client';
 import { useAuth } from '../auth/useAuth';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
@@ -273,7 +274,19 @@ export default function BiddersPage() {
       )}
       <PageHeader
         title="Bidders"
-        action={!bidderId && <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>}
+        action={!bidderId && (
+          <div className="flex items-center gap-2">
+            {/* The Bid Track package the server ships (always the latest); install steps on hover. */}
+            <a
+              className="btn-outline"
+              href={`${BASE_URL}/ext/download`}
+              title={'Unzip it, open chrome://extensions, turn on Developer mode and click "Load unpacked" on the folder. To update: unzip over the folder, then Reload.'}
+            >
+              Download Bid Track
+            </a>
+            <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>
+          </div>
+        )}
       />
 
       {!bidderId && alerts.data && (
