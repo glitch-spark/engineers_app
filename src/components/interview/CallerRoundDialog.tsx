@@ -3,9 +3,10 @@ import { Download, ExternalLink, Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import Modal from '../Modal';
 import Select from '../Select';
+import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
 import { useBriefDownload } from './useBriefDownload';
-import { useCallers } from '../../lib/useCallers';
+import { useCallers, callerPickerOptions } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, isUnassigned } from '../../lib/callerColors';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
@@ -27,7 +28,8 @@ export default function CallerRoundDialog({
   onOpenInterview: () => void;
 }) {
   const { tz } = useInterviewTimezone();
-  const { callers, byId, canManage } = useCallers();
+  const { people, external, byId, canManage } = useCallers();
+  const { user } = useAuth();
   const entry = interview.stageHistory?.find((e) => e.id === roundId);
   const caller = entry?.caller;
   const savedId = caller?.callerId || '';
@@ -44,12 +46,11 @@ export default function CallerRoundDialog({
     ? formatInZone(parseServerTime(entry.scheduledAt), tz, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
     : '—';
   const method = CALLER_METHOD_OPTIONS.find((o) => o.value === caller?.method)?.label ?? 'TBD';
-  // The current caller stays listed when it isn't on the list (typed before it, or removed since).
-  const options = [
-    { value: '', label: 'Not assigned yet' },
-    ...callers.map((c) => ({ value: c._id, label: c.name })),
-    ...(savedId && !known ? [{ value: savedId, label: `${typedName || 'Caller'} (not on the list)` }] : []),
-  ];
+  const ownerId = typeof interview.createdBy === 'object' ? interview.createdBy?._id : interview.createdBy;
+  // The current caller stays listed when it isn't on the list (typed before it, removed, or the owner).
+  const options = callerPickerOptions({
+    people, external, ownerId, currentUserId: user?.id, savedId, savedName: typedName,
+  });
 
   const brief = () => startBrief(interview, roundId);
 
