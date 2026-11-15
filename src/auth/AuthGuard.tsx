@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { user, ready } = useAuth();
+  const location = useLocation();
 
   if (!ready) {
     return (
@@ -14,6 +15,6 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
   return <>{children}</>;
 }

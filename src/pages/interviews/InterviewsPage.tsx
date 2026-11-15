@@ -54,6 +54,23 @@ export default function InterviewsPage({ view, callers = false, directory = fals
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelParam]);
 
+  // `?round=<interviewId>:<roundId>` (the Slack "Assign caller" button) opens that round's caller dialog.
+  const roundParam = params.get('round');
+  useEffect(() => {
+    if (!roundParam || !callers) return;
+    let cancelled = false;
+    const next = new URLSearchParams(params);
+    next.delete('round');
+    setParams(next, { replace: true });
+    const [ivId, roundId] = roundParam.split(':');
+    if (!ivId || !roundId) return;
+    api.getInterview(ivId)
+      .then((iv) => { if (!cancelled) setCallerRound({ interview: iv as unknown as Interview, roundId }); })
+      .catch(() => { /* not viewable: stay on the schedule */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roundParam, callers]);
+
   const remove = async () => {
     if (!deleteTarget) return;
     setDeleting(true);

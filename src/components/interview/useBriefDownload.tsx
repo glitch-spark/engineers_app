@@ -12,15 +12,17 @@ import { isMissingFile, useResumeRestore } from './useResumeRestore';
 const accountIdOf = (iv: Interview) => (typeof iv.accountId === 'object' ? iv.accountId._id : iv.accountId || '');
 const creatorIdOf = (iv: Interview) => (typeof iv.createdBy === 'object' ? iv.createdBy._id : iv.createdBy);
 
+const MISSING_FILE_FOR_CALLER = 'The resume file is missing — ask the owner to restore it.';
+
 /** The interview's linked resume, when it has a file: true once saved. */
-async function saveLinkedResume(link: InterviewResumeLink | null, accountId: string): Promise<boolean> {
+async function saveLinkedResume(link: InterviewResumeLink | null, accountId: string, interviewId: string): Promise<boolean> {
   if (!link) return false;
   if ((link.kind === 'tailored' || link.kind === 'fixed') && link.resumeJobId) {
-    await api.downloadTailoredResume(link.resumeJobId, link.filename || 'Resume.pdf');
+    await api.downloadTailoredResume(link.resumeJobId, link.filename || 'Resume.pdf', interviewId);
     return true;
   }
   if (link.kind === 'uploaded' && link.resumeId && accountId) {
-    await saveResumeFile(accountId, link.resumeId);
+    await saveResumeFile(accountId, link.resumeId, interviewId);
     return true;
   }
   return false;
@@ -34,7 +36,7 @@ async function saveLinkedResume(link: InterviewResumeLink | null, accountId: str
 export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: string) => Promise<void>; busy: boolean; dialog: ReactNode } {
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
-  const [pick, setPick] = useState<{ accountId: string; files: ResumeFile[]; chosen: string } | null>(null);
+  const [pick, setPick] = useState<{ accountId: string; interviewId: string; files: ResumeFile[]; chosen: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const restore = useResumeRestore();
   const deleted = useDeletedResume();
@@ -46,10 +48,19 @@ export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: 
     try {
       const link = await saveInterviewBrief(iv, roundId, tz);
       try {
-        if (await saveLinkedResume(link, accountId)) return;
+        if (await saveLinkedResume(link, accountId, iv._id)) return;
       } catch (err) {
         // Its file is missing (made before the Nov 5 storage move): offer to make it again.
-        if (isMissingFile(err) && link && restore.offer(link)) return;
+        if (isMissingFile(err)) {
+          // Only the owner, admins and interview managers may make it again; the assigned caller asks one of them.
+          const canRestore = user?.role === 'admin' || user?.role === 'interview_manager' || creatorIdOf(iv) === user?.id;
+          if (canRestore) {
+            if (link && restore.offer(link)) return;
+          } else {
+            notify.error(MISSING_FILE_FOR_CALLER);
+            return;
+          }
+        }
         if (isDeletedResume(err) && link?.resumeJobId && accountId) {
           const canRelink = user?.role === 'admin' || creatorIdOf(iv) === user?.id;
           // Those who may download any interview's resume got a 404 because its record is gone; for anyone else it
@@ -67,7 +78,7 @@ export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: 
       // No linked resume: offer the profile's stored ones.
       let files: ResumeFile[] = [];
       try {
-        files = accountId ? (await api.listAccountResumeFiles(accountId)).resumes : [];
+        files = accountId ? (await api.listAccountResumeFiles(accountId, iv._id)).resumes : [];
       } catch {
         notify.info("The brief is saved. No resume is linked to this interview, and you can't open this profile's resumes.");
         return;
@@ -76,7 +87,7 @@ export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: 
         notify.info('The brief is saved. No resume is linked to this interview, and the profile has no stored resume files.');
         return;
       }
-      setPick({ accountId, files, chosen: files[files.length - 1].id });
+      setPick({ accountId, interviewId: iv._id, files, chosen: files[files.length - 1].id });
     } catch (err) {
       notify.error(err, 'Could not create the brief');
     } finally {
@@ -88,7 +99,7 @@ export function useBriefDownload(tz: string): { start: (iv: Interview, roundId: 
     if (!pick) return;
     setSaving(true);
     try {
-      await saveResumeFile(pick.accountId, pick.chosen);
+      await saveResumeFile(pick.accountId, pick.chosen, pick.interviewId);
       setPick(null);
     } catch (err) {
       notify.error(err, 'Download failed');

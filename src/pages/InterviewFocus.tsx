@@ -35,6 +35,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { formatScheduledDate } from '../components/interview/format';
 import type { Interview } from '../components/interview/types';
 import { safeHref } from '../lib/safeHref';
+import { useBriefDownload } from '../components/interview/useBriefDownload';
 
 type StepTone = 'done' | 'failed' | 'muted' | 'pending';
 
@@ -89,6 +90,24 @@ export default function InterviewFocusPage() {
     },
     [searchParams, setSearchParams],
   );
+
+  // `?brief=<roundId>` (the Slack "Download brief" button): run the brief download for that round once, then drop it.
+  const { tz } = useInterviewTimezone();
+  const { start: startBrief, dialog: briefDialog } = useBriefDownload(tz);
+  const briefParam = searchParams.get('brief');
+  const briefRan = useRef('');
+  useEffect(() => {
+    if (!briefParam || !iv) return;
+    const key = `${iv._id}:${briefParam}`;
+    if (briefRan.current === key) return;
+    briefRan.current = key;
+    const next = new URLSearchParams(searchParams);
+    next.delete('brief');
+    setSearchParams(next, { replace: true });
+    if (history.some((e) => e.id === briefParam)) void startBrief(iv, briefParam);
+    else notify.error('That round is no longer on this interview.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [briefParam, iv]);
 
   useDocumentTitle(iv?.companyName ? `${iv.companyName} · Interview` : 'Interview');
 
@@ -249,6 +268,8 @@ export default function InterviewFocusPage() {
           </div>
         )}
       </main>
+
+      {briefDialog}
 
       <ConfirmDialog
         open={confirmDelete}
