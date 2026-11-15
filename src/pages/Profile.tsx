@@ -642,6 +642,7 @@ function SlackAlertsCard() {
               id="slackTimezone"
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
+              disabled={!data}
               className="input focus-ring"
             >
               {zoneOptions.map((z) => (
@@ -653,7 +654,7 @@ function SlackAlertsCard() {
           </div>
         </div>
 
-        {!connected && (
+        {data && !connected && (
           <p className="text-xs text-muted">Add your Slack member ID to be tagged in interview reminders.</p>
         )}
 
@@ -663,7 +664,7 @@ function SlackAlertsCard() {
         </p>
 
         <div className="flex flex-wrap gap-3">
-          <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
+          <button type="button" className="btn" disabled={saving || !data} onClick={handleSavePrefs}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
             Save timezone
           </button>
