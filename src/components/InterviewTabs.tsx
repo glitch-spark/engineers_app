@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ListChecks, PhoneCall } from 'lucide-react';
+import { CalendarClock, ListChecks, Users } from 'lucide-react';
 
 const TABS = [
   { to: '/interviews', label: 'Interviews', icon: ListChecks, match: (p: string) => p === '/interviews' || p === '/interviews/calendar' },
-  { to: '/interviews/callers', label: 'Callers', icon: PhoneCall, match: (p: string) => p.startsWith('/interviews/callers') },
+  { to: '/interviews/callers', label: 'Caller schedule', icon: CalendarClock, match: (p: string) => p === '/interviews/callers' || p === '/interviews/callers/calendar' },
+  { to: '/interviews/callers/list', label: 'Callers', icon: Users, match: (p: string) => p === '/interviews/callers/list' },
 ];
 
 export default function InterviewTabs() {

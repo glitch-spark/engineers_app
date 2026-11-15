@@ -91,6 +91,7 @@ export default function App() {
       <Route path="/interviews" element={<Protected><InterviewsPage view="list" /></Protected>} />
       <Route path="/interviews/calendar" element={<Protected><InterviewsPage view="calendar" /></Protected>} />
       <Route path="/interviews/callers" element={<Protected><InterviewsPage view="list" callers /></Protected>} />
+      <Route path="/interviews/callers/list" element={<Protected><InterviewsPage view="list" directory /></Protected>} />
       <Route path="/interviews/callers/calendar" element={<Protected><InterviewsPage view="calendar" callers /></Protected>} />
       <Route path="/interviews/live" element={<Navigate to="/interviews/calendar" replace />} />
       <Route path="/interviews/:id" element={<LegacyInterviewRedirect />} />

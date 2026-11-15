@@ -14,7 +14,7 @@ import { parseLocalDate, rangeLabel, toEvents } from './calendarShared';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { toWall, zonedDateKey } from '../../lib/interviewTimezone';
 import { useCallers } from '../../lib/useCallers';
-import { callerChipClass, callerLabel } from '../../lib/callerColors';
+import { callerChipClass, callerInitials, callerLabel, isUnassigned } from '../../lib/callerColors';
 
 /** Week (default) and Month calendar of rounds; click a round to edit it, a slot to create one.
  * `callers`: the Callers calendar — every user's caller rounds, coloured by caller. */
@@ -46,7 +46,7 @@ export default function InterviewsCalendar({
   });
   const events = useMemo(() => {
     const base = toEvents(data?.rounds ?? [], tz);
-    return callers ? base.map((e) => ({ ...e, cls: callerChipClass(e.row, byId), detail: callerLabel(e.row) })) : base;
+    return callers ? base.map((e) => ({ ...e, cls: callerChipClass(e.row, byId), detail: isUnassigned(e.row) ? callerLabel(e.row) : `${callerInitials(callerLabel(e.row))} ${callerLabel(e.row)}` })) : base;
   }, [data, tz, callers, byId]);
   // First load, or a period / filter not fetched yet (the previous one stays dimmed underneath).
   const loading = isLoading;

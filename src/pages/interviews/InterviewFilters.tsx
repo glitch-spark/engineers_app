@@ -22,11 +22,14 @@ export default function InterviewFilters({
   callers?: boolean;
 }) {
   const { user } = useAuth();
-  const { callers } = useCallers();
+  const { callers, byId } = useCallers();
+  // An archived caller opened from the Callers tab (`?caller=`) stays selectable.
+  const picked = filters.caller && filters.caller !== 'unassigned' ? byId.get(filters.caller) : undefined;
   const callerOptions = [
     { value: '', label: 'All callers' },
     { value: 'unassigned', label: 'No caller yet' },
     ...callers.map((c) => ({ value: c._id, label: c.name })),
+    ...(picked?.archived ? [{ value: picked._id, label: `${picked.name} (archived)` }] : []),
   ];
   const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
   const { data: accountsData } = useSWR(['accounts-lookup'], () => api.lookupAccounts());

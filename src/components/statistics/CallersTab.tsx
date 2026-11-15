@@ -58,14 +58,19 @@ function allRow(team: CallerStatsTotals): CallerStatsCaller {
  * Statistics → Callers: how many interviews each caller did and how often they pass. Compared across callers, by
  * round type (with self-taken rounds for reference), week by week, and the rounds held behind the numbers.
  */
-export default function CallersTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
+export default function CallersTab({ filters, onFilters, initialCaller }: {
+  filters: StatsFilters;
+  onFilters: (f: StatsFilters) => void;
+  /** Caller id to show first (falls back to All callers when they have no rounds in the period). */
+  initialCaller?: string;
+}) {
   const params = filterParams(filters);
   const { data, error, isLoading } = useSWR(
     filtersError(filters) ? null : ['caller-stats', params.region, params.period, params.date, params.to],
     () => api.getCallerStats(params),
     { keepPreviousData: true },
   );
-  const [picked, setPicked] = useState<string>(ALL);
+  const [picked, setPicked] = useState<string>(initialCaller || ALL);
 
   return (
     <div className="space-y-4">

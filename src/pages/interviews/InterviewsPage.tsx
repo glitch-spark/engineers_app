@@ -15,17 +15,18 @@ import InterviewsList from './InterviewsList';
 import { useInterviewFilters } from './useInterviewFilters';
 import ZoneSelect from '../../components/interview/ZoneSelect';
 import CallerRoundDialog from '../../components/interview/CallerRoundDialog';
-import CallersManager from '../../components/interview/CallersManager';
 import CallerRoundsList from './CallerRoundsList';
 import CallersLegend from '../../components/interview/CallersLegend';
+import CallersDirectory from './CallersDirectory';
 
 type PanelState = { interview: Interview | null; mode: PanelMode; roundId?: string; prefill?: RoundPrefill };
 
 type View = 'list' | 'calendar';
 
-/** Interviews and Callers tabs, each List (default) or Calendar, shared filters, one side panel.
- * `callers`: every user's caller rounds, coloured by caller; a click opens the caller dialog. */
-export default function InterviewsPage({ view, callers = false }: { view: View; callers?: boolean }) {
+/** Interviews and Caller schedule tabs, each List (default) or Calendar, shared filters, one side panel.
+ * `callers`: every user's caller rounds, coloured by caller; a click opens the caller dialog.
+ * `directory`: the Callers tab (who the callers are, their load and pass rate) instead of rounds. */
+export default function InterviewsPage({ view, callers = false, directory = false }: { view: View; callers?: boolean; directory?: boolean }) {
   const [filters, update, sharedQs] = useInterviewFilters();
   const [params, setParams] = useSearchParams();
   const { mutate } = useSWRConfig();
@@ -33,7 +34,6 @@ export default function InterviewsPage({ view, callers = false }: { view: View; 
   const [deleteTarget, setDeleteTarget] = useState<Interview | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [callerRound, setCallerRound] = useState<{ interview: Interview; roundId: string } | null>(null);
-  const [managingCallers, setManagingCallers] = useState(false);
 
   const refresh = () => mutate(
     (key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list'].includes(key[0]),
@@ -88,19 +88,23 @@ export default function InterviewsPage({ view, callers = false }: { view: View; 
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <InterviewTabs />
-        <div className="flex flex-wrap items-center gap-3">
-          <ZoneSelect />
-          <nav className="segmented" aria-label="Interview view">
-            {viewLink('list', 'List')}
-            {viewLink('calendar', 'Calendar')}
-          </nav>
-        </div>
+        {!directory && (
+          <div className="flex flex-wrap items-center gap-3">
+            <ZoneSelect />
+            <nav className="segmented" aria-label="Interview view">
+              {viewLink('list', 'List')}
+              {viewLink('calendar', 'Calendar')}
+            </nav>
+          </div>
+        )}
       </div>
 
-      <InterviewFilters filters={filters} update={update} callers={callers} />
-      {callers && <CallersLegend onManage={() => setManagingCallers(true)} />}
+      {!directory && <InterviewFilters filters={filters} update={update} callers={callers} />}
+      {callers && !directory && <CallersLegend />}
 
-      {callers && view === 'list' ? (
+      {directory ? (
+        <CallersDirectory />
+      ) : callers && view === 'list' ? (
         <CallerRoundsList
           filters={filters}
           update={update}
@@ -156,7 +160,6 @@ export default function InterviewsPage({ view, callers = false }: { view: View; 
           onOpenInterview={() => { setPanel({ interview: callerRound.interview, mode: 'view' }); setCallerRound(null); }}
         />
       )}
-      {managingCallers && <CallersManager onClose={() => setManagingCallers(false)} onChanged={() => { refresh(); }} />}
 
       <ConfirmDialog
         open={!!deleteTarget}
