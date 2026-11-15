@@ -40,3 +40,14 @@ export function callerChipClass(row: InterviewRoundRow, byId: Map<string, Caller
   const c = row.callerId ? byId.get(row.callerId) : undefined;
   return c ? CHIP[c.color] ?? OFF_LIST_CHIP : OFF_LIST_CHIP;
 }
+
+/** Up to two capital initials from a name's words ("Jamil's group" gives "JG", "Muhammad" gives "M"). */
+export function callerInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => Array.from(w)[0].toUpperCase())
+    .join('');
+}

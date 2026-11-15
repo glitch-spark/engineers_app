@@ -5,10 +5,15 @@ import type { Caller } from '../api/endpoints';
 
 export const CALLERS_KEY = ['callers'];
 
-/** The caller list (everyone), whether this user may manage it, and a lookup by id. */
+/**
+ * The active callers: `callers` is everyone (for pickers), `people` the platform users, `external` the rest.
+ * Also whether this user may manage the list, and a lookup by id.
+ */
 export function useCallers() {
   const { data, isLoading, mutate } = useSWR(CALLERS_KEY, () => api.listCallers());
-  const callers = useMemo(() => data?.callers ?? [], [data]);
-  const byId = useMemo(() => new Map<string, Caller>(callers.map((c) => [c._id, c])), [callers]);
-  return { callers, byId, canManage: !!data?.canManage, isLoading, mutate };
+  const callers = useMemo(() => (data?.callers ?? []).filter((c) => !c.archived), [data]);
+  const people = useMemo(() => callers.filter((c) => c.kind === 'user'), [callers]);
+  const external = useMemo(() => callers.filter((c) => c.kind === 'external'), [callers]);
+  const byId = useMemo(() => new Map<string, Caller>((data?.callers ?? []).map((c) => [c._id, c])), [data]);
+  return { callers, people, external, byId, canManage: !!data?.canManage, isLoading, mutate };
 }

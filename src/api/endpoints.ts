@@ -380,12 +380,14 @@ export const uploadAccountResume = (accountId: string, file: File, markdown: str
 };
 
 /** Short-lived download link for a resume's original file (404 when only the text is stored). */
-export const getAccountResumeFileUrl = (accountId: string, resumeId: string) =>
-  apiFetch<{ url: string }>(`/accounts/${accountId}/resumes/${resumeId}/file`);
+export const getAccountResumeFileUrl = (accountId: string, resumeId: string, interviewId?: string) =>
+  apiFetch<{ url: string }>(`/accounts/${accountId}/resumes/${resumeId}/file${interviewId ? `?interviewId=${encodeURIComponent(interviewId)}` : ''}`);
 
 /** The profile's resumes whose original file is stored (owner, admin or interview manager). */
-export const listAccountResumeFiles = (accountId: string) =>
-  apiFetch<{ resumes: { id: string; filename: string; uploadedAt: string | null }[] }>(`/accounts/${accountId}/resume-files`);
+export const listAccountResumeFiles = (accountId: string, interviewId?: string) =>
+  apiFetch<{ resumes: { id: string; filename: string; uploadedAt: string | null }[] }>(
+    `/accounts/${accountId}/resume-files${interviewId ? `?interviewId=${encodeURIComponent(interviewId)}` : ''}`,
+  );
 
 // ---------- transactions ----------
 
@@ -729,6 +731,8 @@ export interface InterviewCaller {
   callerName?: string;
   /** From the caller list; null = not assigned yet, or a name typed before the list existed. */
   callerId?: string | null;
+  /** Which list the caller is from: an external caller or a platform user. */
+  callerKind?: 'external' | 'user';
   /** Round start (UTC ISO). */
   startsAt?: string | null;
   method?: CallerMethod | null;
@@ -902,15 +906,29 @@ export type CallerColor = 'sky' | 'violet' | 'emerald' | 'amber' | 'rose' | 'tea
 
 export interface Caller {
   _id: string;
+  /** 'external' = a Caller doc; 'user' = a platform user who takes calls. */
+  kind: 'external' | 'user';
   name: string;
   color: CallerColor;
+  archived: boolean;
 }
 
 /** Everyone reads the list; `canManage` = Admin or interview manager (add, edit, delete). */
-export const listCallers = () => apiFetch<{ callers: Caller[]; canManage: boolean }>('/callers');
+export const listCallers = (archived?: boolean) =>
+  apiFetch<{ callers: Caller[]; canManage: boolean }>(`/callers${archived ? '?archived=1' : ''}`);
 export const createCaller = (body: { name: string; color?: CallerColor }) => postJSON<Caller>('/callers', body);
-export const updateCaller = (id: string, body: { name?: string; color?: CallerColor }) => putJSON<Caller>(`/callers/${id}`, body);
+/** Platform users (kind 'user') take a colour only. */
+export const updateCaller = (id: string, body: { name?: string; color?: CallerColor; archived?: boolean }) =>
+  putJSON<Caller>(`/callers/${id}`, body);
 export const deleteCaller = (id: string) => del<void>(`/callers/${id}`);
+
+/** Per caller (platform users and external): rounds coming up, this week, pass rate (null = none decided), all rounds. A missing id = zeros. */
+export type CallerOverview = Record<string, { upcoming: number; thisWeek: number; passRate: number | null; rounds: number }>;
+export const getCallerOverview = () => apiFetch<{ overview: CallerOverview }>('/callers/overview').then((r) => r.overview);
+
+/** Confirm or unconfirm a caller round (admin, interview manager, the owner, or the round's assigned user caller). */
+export const confirmRound = (id: string, stageId: string, confirmed: boolean) =>
+  postJSON<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}/confirm`, { confirmed });
 
 // ---------- leaderboard ----------
 
@@ -2602,10 +2620,10 @@ export const tailorAllJobApplies = (
   postJSON<{ queued: number; skippedCap: number; skipped: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
 
 /** Download a generated (tailored) resume PDF by its generation job id. */
-export async function downloadTailoredResume(jobId: string, filename: string): Promise<void> {
+export async function downloadTailoredResume(jobId: string, filename: string, interviewId?: string): Promise<void> {
   const token = getToken();
   // no-store: a remade PDF (restore-pdf) must not be shadowed by a cached "missing" answer.
-  const res = await fetch(`${BASE_URL}/resume/jobs/${jobId}/download?format=pdf`, {
+  const res = await fetch(`${BASE_URL}/resume/jobs/${jobId}/download?format=pdf${interviewId ? `&interviewId=${encodeURIComponent(interviewId)}` : ''}`, {
     cache: 'no-store',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
