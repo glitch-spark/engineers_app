@@ -106,8 +106,8 @@ export default function InterviewFocusPage() {
     next.delete('brief');
     setSearchParams(next, { replace: true });
     if (history.some((e) => e.id === briefParam)) {
-      void startBrief(iv, briefParam).finally(() => {
-        notify.info("If the resume didn't download, allow downloads for this site and click Download brief again.");
+      void startBrief(iv, briefParam).then((resumeSaved) => {
+        if (!resumeSaved) notify.info("If the resume didn't download, allow downloads for this site and click Download brief again.");
       });
     } else notify.error('That round is no longer on this interview.');
     // eslint-disable-next-line react-hooks/exhaustive-deps

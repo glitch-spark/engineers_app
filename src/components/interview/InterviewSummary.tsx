@@ -226,6 +226,8 @@ export default function InterviewSummary({
                 <LinkedResumeDownload
                   link={iv.resumeLink}
                   accountId={typeof iv.accountId === 'object' ? iv.accountId._id : iv.accountId}
+                  interviewId={iv._id}
+                  ownerId={typeof iv.createdBy === 'object' ? iv.createdBy._id : iv.createdBy}
                   compact
                 />
               </span>
