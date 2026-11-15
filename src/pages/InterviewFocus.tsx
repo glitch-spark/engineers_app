@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  Download,
   ExternalLink,
   Minus,
   Pencil,
@@ -93,7 +94,7 @@ export default function InterviewFocusPage() {
 
   // `?brief=<roundId>` (the Slack "Download brief" button): run the brief download for that round once, then drop it.
   const { tz } = useInterviewTimezone();
-  const { start: startBrief, dialog: briefDialog } = useBriefDownload(tz);
+  const { start: startBrief, busy: briefing, dialog: briefDialog } = useBriefDownload(tz);
   const briefParam = searchParams.get('brief');
   const briefRan = useRef('');
   useEffect(() => {
@@ -104,8 +105,11 @@ export default function InterviewFocusPage() {
     const next = new URLSearchParams(searchParams);
     next.delete('brief');
     setSearchParams(next, { replace: true });
-    if (history.some((e) => e.id === briefParam)) void startBrief(iv, briefParam);
-    else notify.error('That round is no longer on this interview.');
+    if (history.some((e) => e.id === briefParam)) {
+      void startBrief(iv, briefParam).finally(() => {
+        notify.info("If the resume didn't download, allow downloads for this site and click Download brief again.");
+      });
+    } else notify.error('That round is no longer on this interview.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [briefParam, iv]);
 
@@ -256,6 +260,8 @@ export default function InterviewFocusPage() {
             entry={selected}
             index={history.findIndex((e) => e.id === selected.id)}
             canEdit={canEdit}
+            briefing={briefing}
+            onBrief={() => void startBrief(iv, selected.id)}
             onEditDetails={() => setPanel({ mode: 'editRound', roundId: selected.id })}
             onSaved={applyUpdate}
           />
@@ -434,6 +440,8 @@ function StageWorkspace({
   entry,
   index,
   canEdit,
+  briefing,
+  onBrief,
   onEditDetails,
   onSaved,
 }: {
@@ -441,6 +449,8 @@ function StageWorkspace({
   entry: InterviewStageEntry;
   index: number;
   canEdit: boolean;
+  briefing: boolean;
+  onBrief: () => void;
   onEditDetails: () => void;
   onSaved: (next: Record<string, unknown>) => unknown;
 }) {
@@ -511,11 +521,17 @@ function StageWorkspace({
             </p>
           )}
         </div>
-        {canEdit && (
-          <button type="button" className="btn-outline btn-sm" onClick={onEditDetails}>
-            <Pencil size={13} aria-hidden /> Edit details
+        <div className="flex items-center gap-1.5">
+          <button type="button" className="btn-outline btn-sm" disabled={briefing} onClick={onBrief}
+            title="A PDF of this round, plus the resume, to share with whoever takes the interview">
+            <Download size={13} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
           </button>
-        )}
+          {canEdit && (
+            <button type="button" className="btn-outline btn-sm" onClick={onEditDetails}>
+              <Pencil size={13} aria-hidden /> Edit details
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-5">

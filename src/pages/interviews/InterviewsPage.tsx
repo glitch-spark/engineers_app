@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
@@ -39,18 +39,23 @@ export default function InterviewsPage({ view, callers = false, directory = fals
     (key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list'].includes(key[0]),
   );
 
+  // Dropping the deep-link param re-renders this page; only unmounting should discard a pending lookup.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
   // `?panel=:id` (e.g. "back" from the full-screen page) opens that interview.
   const panelParam = params.get('panel');
   useEffect(() => {
     if (!panelParam) return;
-    let cancelled = false;
     const next = new URLSearchParams(params);
     next.delete('panel');
     setParams(next, { replace: true });
     api.getInterview(panelParam)
-      .then((iv) => { if (!cancelled) setPanel({ interview: iv as unknown as Interview, mode: 'view' }); })
+      .then((iv) => { if (mounted.current) setPanel({ interview: iv as unknown as Interview, mode: 'view' }); })
       .catch(() => { /* not viewable: stay on the list */ });
-    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelParam]);
 
@@ -58,16 +63,14 @@ export default function InterviewsPage({ view, callers = false, directory = fals
   const roundParam = params.get('round');
   useEffect(() => {
     if (!roundParam || !callers) return;
-    let cancelled = false;
     const next = new URLSearchParams(params);
     next.delete('round');
     setParams(next, { replace: true });
     const [ivId, roundId] = roundParam.split(':');
     if (!ivId || !roundId) return;
     api.getInterview(ivId)
-      .then((iv) => { if (!cancelled) setCallerRound({ interview: iv as unknown as Interview, roundId }); })
+      .then((iv) => { if (mounted.current) setCallerRound({ interview: iv as unknown as Interview, roundId }); })
       .catch(() => { /* not viewable: stay on the schedule */ });
-    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundParam, callers]);
 
