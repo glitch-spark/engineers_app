@@ -632,45 +632,49 @@ function SlackAlertsCard() {
         </p>
       </form>
 
-      {connected && (
-        <div className="mt-6 space-y-5 border-t border-zinc-200/80 pt-5 dark:border-zinc-800">
-          <div className="sm:max-w-xs">
-            <div className="form-group mb-0">
-              <label className="form-label" htmlFor="slackTimezone">
-                Timezone
-              </label>
-              <select
-                id="slackTimezone"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="input focus-ring"
-              >
-                {zoneOptions.map((z) => (
-                  <option key={z.value} value={z.value}>
-                    {z.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <div className="mt-6 space-y-5 border-t border-zinc-200/80 pt-5 dark:border-zinc-800">
+        <div className="sm:max-w-xs">
+          <div className="form-group mb-0">
+            <label className="form-label" htmlFor="slackTimezone">
+              Timezone
+            </label>
+            <select
+              id="slackTimezone"
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="input focus-ring"
+            >
+              {zoneOptions.map((z) => (
+                <option key={z.value} value={z.value}>
+                  {z.label}
+                </option>
+              ))}
+            </select>
           </div>
+        </div>
 
-          <p className="text-xs text-muted">
-            Sets your local day for in-app alerts and daily limits. Offsets include daylight time for that city
-            (UTC−12 through UTC+14).
-          </p>
+        {!connected && (
+          <p className="text-xs text-muted">Add your Slack member ID to be tagged in interview reminders.</p>
+        )}
 
-          <div className="flex flex-wrap gap-3">
-            <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
-              Save timezone
-            </button>
+        <p className="text-xs text-muted">
+          Sets your local day for in-app alerts and daily limits. Offsets include daylight time for that city
+          (UTC−12 through UTC+14).
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+            Save timezone
+          </button>
+          {connected && (
             <button type="button" className="btn-accent" disabled={!botReady || testing} onClick={handleTestDm}>
               {testing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Zap className="h-4 w-4" aria-hidden />}
               Send test DM
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
