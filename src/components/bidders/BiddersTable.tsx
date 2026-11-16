@@ -8,7 +8,7 @@ import { countryFlag } from '../../lib/countries';
 import { usd } from '../../lib/money';
 import { fmtCount } from '../../lib/profileMetrics';
 import { rowPer100Verdict } from '../../lib/bidderInsights';
-import { rowMoney, timeColumns } from '../../lib/bidderPage';
+import { rowMoney, shownRows, timeColumns, type RowFilter } from '../../lib/bidderPage';
 import { Arrow } from '../insights/compareParts';
 import { DayCount } from './TeamWeekTable';
 
@@ -93,21 +93,29 @@ type Props = {
   onReview: (id: string) => void;
   renderStatus: (row: BidPerformanceRow) => ReactNode;
   renderActions: (row: BidPerformanceRow) => ReactNode;
+  /** All / Bidders / Self (the owner's own applies). */
+  show: RowFilter;
+  /** Open an owner's self bids: a day (a day cell) or the period's pay week. */
+  onOpenSelf: (ownerId: string, ownerName: string, day?: string) => void;
 };
 
-export default function BiddersTable({ data, platformPer100, showOwner, onOpenBidder, onReview, renderStatus, renderActions }: Props) {
+export default function BiddersTable({
+  data, platformPer100, showOwner, onOpenBidder, onReview, renderStatus, renderActions, show, onOpenSelf,
+}: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
   const weekMode = !!data.payWeek;
   const cols = timeColumns(data);
+  const visible = shownRows(data, show);
   const rows = useMemo(() => {
-    if (!sort) return data.bidders;
-    return [...data.bidders].sort((a, b) => {
+    const list = show === 'self' ? [] : data.bidders;
+    if (!sort) return list;
+    return [...list].sort((a, b) => {
       const x = sortValue(a, sort.key);
       const y = sortValue(b, sort.key);
       if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;
       return sort.dir === 'desc' ? y - x : x - y;
     });
-  }, [data, sort]);
+  }, [data, sort, show]);
   const toggle = (key: SortKey) =>
     setSort((s) => (s?.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: key === 'costPerInterview' ? 'asc' : 'desc' }));
   const now = Date.now();
@@ -248,7 +256,7 @@ export default function BiddersTable({ data, platformPer100, showOwner, onOpenBi
           })}
         </tbody>
         <tfoot className="tabular-nums">
-          <tr className="border-t border-zinc-200 bg-zinc-50/70 font-medium text-strong dark:border-zinc-700 dark:bg-zinc-900/40">
+          <tr className={`border-t border-zinc-200 bg-zinc-50/70 font-medium text-strong dark:border-zinc-700 dark:bg-zinc-900/40 ${visible.total ? '' : 'hidden'}`}>
             <th scope="row" className="px-4 py-2 text-left">Total</th>
             {cols.map((c, i) => (
               <td key={c.key} className="px-1 py-2 text-center">
@@ -265,6 +273,37 @@ export default function BiddersTable({ data, platformPer100, showOwner, onOpenBi
             <td className="px-3 py-2 text-right">{t.costPerInterview == null ? '—' : dollars(t.costPerInterview)}</td>
             <td colSpan={2} />
           </tr>
+          {(data.selfRows ?? []).filter((s) => visible.self.includes(s.ownerId)).map((s) => (
+            <tr key={`self-${s.ownerId}`} className="table-row cursor-pointer border-t border-zinc-100 font-normal text-body dark:border-zinc-800"
+              onClick={() => onOpenSelf(s.ownerId, s.ownerName)}>
+              <th scope="row" className="px-4 py-2 text-left font-normal">
+                <button type="button" className="font-medium text-strong hover:underline"
+                  onClick={(e) => { e.stopPropagation(); onOpenSelf(s.ownerId, s.ownerName); }}>Self</button>
+                {showOwner && s.ownerName && <span className="text-muted"> · {s.ownerName}</span>}
+                <div className="text-[11px] text-muted">Own applies from the extension · not in the totals</div>
+              </th>
+              {cols.map((c, i) => (
+                <td key={c.key} className="px-1 py-1.5 text-center">
+                  {c.isFuture ? <span className="text-muted">–</span> : c.day && (s.weekly[i] ?? 0) > 0 ? (
+                    <button type="button" className="w-full rounded-md px-1 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      aria-label={`Self, ${c.label} ${c.sub}: ${s.weekly[i]} applies`}
+                      onClick={(e) => { e.stopPropagation(); onOpenSelf(s.ownerId, s.ownerName, c.day); }}>
+                      {fmtCount(s.weekly[i] ?? 0)}
+                    </button>
+                  ) : fmtCount(s.weekly[i] ?? 0)}
+                </td>
+              ))}
+              <td className="px-3 py-2 text-right font-medium text-strong">{fmtCount(s.total)}</td>
+              <td className="px-3 py-2 text-right text-muted">—</td>
+              <td className="px-3 py-2 text-center text-muted">—</td>
+              <td className="px-3 py-2 text-right text-muted">—</td>
+              <td className="px-3 py-2 text-right">{fmtCount(s.interviews)}</td>
+              <td className="px-3 py-2 text-right text-muted">—</td>
+              <td className="px-3 py-2 text-right text-muted">—</td>
+              <td className="px-3 py-2 text-right whitespace-nowrap">{s.lastBidAt ? relativeTime(s.lastBidAt, now) : <span className="text-muted">—</span>}</td>
+              <td />
+            </tr>
+          ))}
         </tfoot>
       </table>
     </div>

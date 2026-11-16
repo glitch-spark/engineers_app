@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../api/endpoints';
+import { BASE_URL } from '../api/client';
 import { useAuth } from '../auth/useAuth';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
@@ -13,6 +14,7 @@ import BidderFormModal from '../components/bidders/BidderFormModal';
 import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDialog';
 import BiddersOverview from '../components/bidders/BiddersOverview';
 import BidderAlerts from '../components/bidders/BidderAlerts';
+import SelfBidsPanel, { type SelfScope } from '../components/bidders/SelfBidsPanel';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
 import { periodFromParams, periodToParams } from '../lib/bidderPage';
 import { isoDay } from '../components/statistics/controls';
@@ -44,6 +46,7 @@ export default function BiddersPage() {
   const ownerId = isAdmin ? params.get('owner') ?? '' : '';
   const [showArchived, setShowArchived] = useState(false);
   const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null);
+  const [selfScope, setSelfScope] = useState<SelfScope | null>(null);
   const [archiving, setArchiving] = useState(false);
   const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
@@ -198,6 +201,7 @@ export default function BiddersPage() {
             week, period: params.get('period'), date: params.get('date'), to: params.get('to'),
           }, isoDay(new Date()))}
           onFilters={(f) => setParam(periodToParams(f))}
+          onOpenSelf={(id, name, scope) => setSelfScope({ ownerId: id, ownerName: isAdmin ? name : undefined, ...scope })}
           // /bidders lists only the viewer's own bidders, so other owners' rows get no menu.
           renderActions={(row) =>
             byId[row.id] ? (
@@ -273,7 +277,19 @@ export default function BiddersPage() {
       )}
       <PageHeader
         title="Bidders"
-        action={!bidderId && <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>}
+        action={!bidderId && (
+          <div className="flex items-center gap-2">
+            {/* The Bid Track package the server ships (always the latest); install steps on hover. */}
+            <a
+              className="btn-outline"
+              href={`${BASE_URL}/ext/download`}
+              title={'Unzip it, open chrome://extensions, turn on Developer mode and click "Load unpacked" on the folder. To update: unzip over the folder, then Reload.'}
+            >
+              Download Bid Track
+            </a>
+            <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>
+          </div>
+        )}
       />
 
       {!bidderId && alerts.data && (
@@ -287,6 +303,8 @@ export default function BiddersPage() {
       )}
 
       {main}
+
+      <SelfBidsPanel scope={selfScope} onClose={() => setSelfScope(null)} />
 
       <ConfirmDialog
         open={!!pendingArchive}

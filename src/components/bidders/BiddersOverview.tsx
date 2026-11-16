@@ -7,7 +7,7 @@ import * as api from '../../api/endpoints';
 import type { BidPerformanceRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { PeriodNav, Segmented, filtersError, isoDay } from '../statistics/controls';
-import { cardOpen, stripItems, type PagePeriod, type StripItem } from '../../lib/bidderPage';
+import { cardOpen, stripItems, type PagePeriod, type RowFilter, type StripItem } from '../../lib/bidderPage';
 import BiddersBand from './BiddersBand';
 import BiddersTable from './BiddersTable';
 
@@ -42,11 +42,15 @@ type Props = {
    *  pay week holding now (the server decides, past the Saturday cutoff too). */
   filters: Filters;
   onFilters: (f: Filters) => void;
+  /** Open an owner's self bids for a day, or for the shown pay week. */
+  onOpenSelf: (ownerId: string, ownerName: string, scope: { day?: string; week?: string }) => void;
 };
 
 export default function BiddersOverview({
   ownerId, includeArchived, onOpenBidder, onReview, renderStatus, renderActions, empty, filters: f, onFilters: setFilters,
+  onOpenSelf,
 }: Props) {
+  const [show, setShow] = useState<RowFilter>('all');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [open, setOpen] = useState(() => {
@@ -89,6 +93,9 @@ export default function BiddersOverview({
       <div className="flex flex-wrap items-center gap-3">
         <Segmented label="Period" options={PERIOD_OPTIONS} value={f.period}
           onChange={(period) => setFilters({ ...f, period: period as Filters['period'], day: period === 'week' ? '' : f.day || today })} />
+        <Segmented label="Show" options={[
+          { value: 'all', label: 'All' }, { value: 'bidders', label: 'Bidders' }, { value: 'self', label: 'Self' },
+        ] as { value: RowFilter; label: string }[]} value={show} onChange={setShow} />
         {f.period === 'custom' ? (
           <div className="flex flex-wrap items-center gap-2">
             <input type="date" className="input !w-auto !py-1.5" aria-label="From" value={f.from} max={today}
@@ -115,7 +122,7 @@ export default function BiddersOverview({
           <div className="skeleton h-40 w-full" />
           <div className="skeleton h-64 w-full" />
         </div>
-      ) : data.bidders.length === 0 ? (
+      ) : data.bidders.length === 0 && !(data.selfRows ?? []).length ? (
         empty
       ) : (
         <>
@@ -156,6 +163,8 @@ export default function BiddersOverview({
             onReview={(id) => onReview(anchor, id)}
             renderStatus={renderStatus}
             renderActions={renderActions}
+            show={show}
+            onOpenSelf={(id, name, day) => onOpenSelf(id, name, day ? { day } : { week: anchor })}
           />
         </>
       )}

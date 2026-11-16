@@ -1,6 +1,7 @@
 import type { Counts, InterviewStages, PlanProfile } from '../../api/endpoints';
 import { preSplitSelf, REGION_FIELD, selfRegionsTotal, SELF_REGIONS, withProfileBids, withSelfRegion, type SelfRegionField } from '../../lib/reportWeek';
 import { stageBadgeClass } from '../../lib/stageBadge';
+import { profileSelfLine } from '../../lib/selfBids';
 
 const STAGE_LABELS: Record<string, string> = {
   intro: 'Intro', tech: 'Tech', hiring: 'Hiring', panel: 'Panel', final: 'Final',
@@ -81,6 +82,8 @@ export default function GoalDoneFields({
   showDone = true,
   showInterviewGoal = false,
   readOnly = false,
+  tracked = {},
+  trackedProfiles = [],
 }: {
   goal: Counts;
   onGoal?: (next: Counts) => void;
@@ -91,6 +94,9 @@ export default function GoalDoneFields({
   showDone?: boolean;
   showInterviewGoal?: boolean;
   readOnly?: boolean;
+  /** Self bids the extension recorded per profile, and the profiles already on tracked counts. */
+  tracked?: Record<string, number>;
+  trackedProfiles?: string[];
 }) {
   const row = showDone ? ROW_WITH_DONE : ROW_GOAL_ONLY;
 
@@ -162,9 +168,16 @@ export default function GoalDoneFields({
 
   const profileRow = (p: PlanProfile) => {
     const label = `Self · ${p.name} (${regionLabel(p)})`;
+    const line = profileSelfLine(p.id, tracked, trackedProfiles);
+    const onTracked = trackedProfiles.includes(p.id);
     return (
       <div key={p.id} className={`${row} py-1`}>
-        <span className="min-w-0 break-words pt-2 text-sm text-body">{label}</span>
+        <span className="min-w-0 break-words pt-2 text-sm text-body">
+          {label}
+          {line && (
+            <span className={`block text-[11px] ${onTracked ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted'}`}>{line}</span>
+          )}
+        </span>
         <span className="pt-2 text-right text-xs text-muted">—</span>
         {readOnly || !onDone ? (
           <ValueBox value={byProfile[p.id] ?? 0} />

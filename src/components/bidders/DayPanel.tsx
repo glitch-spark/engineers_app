@@ -56,6 +56,7 @@ export default function DayPanel({
   onDecide,
   onBulk,
   onApproveAllComplete,
+  readOnly = false,
 }: {
   open: boolean;
   title: string;
@@ -69,6 +70,9 @@ export default function DayPanel({
   onDecide: (bid: api.BidReviewItem, status: api.BidStatus) => void;
   onBulk: (ids: string[], status: api.BidStatus, reason?: api.RejectReason) => Promise<void>;
   onApproveAllComplete: (bids: api.BidReviewItem[]) => void;
+  /** Self bids (the owner's own applies): nothing to review — no status filter, ticks or decisions; a click opens the
+   *  screenshots. */
+  readOnly?: boolean;
 }) {
   const all = useMemo(() => bids ?? [], [bids]);
   const counts = useMemo(() => {
@@ -134,7 +138,7 @@ export default function DayPanel({
     <SidePanel open={open} wide title={title} subtitle={subtitle} onClose={onClose}>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div role="group" aria-label="Status" className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label="Status" className={`flex flex-wrap gap-1.5 ${readOnly ? 'invisible' : ''}`}>
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -171,6 +175,9 @@ export default function DayPanel({
           </div>
         </div>
 
+        {readOnly ? (
+          <p className="text-xs text-muted">{all.length} {all.length === 1 ? 'apply' : 'applies'} · click one to see its screenshots</p>
+        ) : (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {picked.length > 0 ? (
             <>
@@ -198,6 +205,7 @@ export default function DayPanel({
             </button>
           )}
         </div>
+        )}
 
         {error ? (
           <p role="alert" className="text-sm text-red-600">{messageOf(error, "Couldn't load bids")}</p>
@@ -214,7 +222,7 @@ export default function DayPanel({
             <table className="min-w-[720px] w-full text-sm">
               <thead className="table-head">
                 <tr>
-                  <th scope="col" className="w-8 px-3 py-2">
+                  <th scope="col" className={`w-8 px-3 py-2 ${readOnly ? 'hidden' : ''}`}>
                     <input
                       type="checkbox"
                       aria-label="Select all shown bids"
@@ -227,7 +235,7 @@ export default function DayPanel({
                   <th scope="col" className="px-2 py-2">Job</th>
                   <th scope="col" className="px-2 py-2">Checks</th>
                   <th scope="col" className="px-2 py-2">Status</th>
-                  <th scope="col" className="px-2 py-2"><span className="sr-only">Actions</span></th>
+                  {!readOnly && <th scope="col" className="px-2 py-2"><span className="sr-only">Actions</span></th>}
                 </tr>
               </thead>
               <tbody>
@@ -237,7 +245,7 @@ export default function DayPanel({
                     className={`table-row cursor-pointer ${selected.has(b.id) ? 'bg-sky-50/60 dark:bg-sky-950/30' : ''}`}
                     onClick={() => onReview(b.id, shownIds)}
                   >
-                    <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+                    <td className={`px-3 py-1.5 ${readOnly ? 'hidden' : ''}`} onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         aria-label={`Select ${b.jobTitle || 'bid'}`}
@@ -255,6 +263,7 @@ export default function DayPanel({
                       >
                         {b.jobTitle || 'Untitled job'}
                       </button>
+                      {readOnly && b.profileName && <span className="block text-xs text-muted">{b.profileName}</span>}
                       {safeHref(b.jobUrl) ? (
                         <a
                           href={safeHref(b.jobUrl)}
@@ -284,7 +293,7 @@ export default function DayPanel({
                         )}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-2 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    {!readOnly && <td className="whitespace-nowrap px-2 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         className="btn-icon text-emerald-700 dark:text-emerald-400"
@@ -305,7 +314,7 @@ export default function DayPanel({
                       >
                         <X size={16} aria-hidden />
                       </button>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>

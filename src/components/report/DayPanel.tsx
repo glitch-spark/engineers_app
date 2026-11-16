@@ -7,6 +7,7 @@ import { bidsOf, dateParam, dayLabel, isToday, parseDateParam, withListedProfile
 import SidePanel from '../SidePanel';
 import ChecklistEditor, { cleanItems } from './ChecklistEditor';
 import GoalDoneFields from './GoalDoneFields';
+import { formSelfBids } from '../../lib/selfBids';
 
 interface FollowUp {
   done: Counts;
@@ -51,7 +52,12 @@ export default function DayPanel({
   useEffect(() => {
     if (!data) return;
     // Only listed profiles: a deleted one's bids would make the save fail.
-    const next: FollowUp = { done: withListedProfiles(data.done, data.profiles), goalItems: data.goalItems, notes: data.notes };
+    const listed = withListedProfiles(data.done, data.profiles);
+    // Profiles on tracked self bids edit "other applies"; the saved day holds tracked + other for them.
+    const done = data.trackedProfiles?.length
+      ? { ...listed, bidsSelfByProfile: formSelfBids(listed.bidsSelfByProfile ?? {}, data.trackedProfiles, data.selfOtherByProfile ?? {}) }
+      : listed;
+    const next: FollowUp = { done, goalItems: data.goalItems, notes: data.notes };
     setForm(next);
     setInitial(JSON.stringify(next));
     setNotesOpen(!!data.notes);
@@ -156,6 +162,8 @@ export default function DayPanel({
             onDone={editable ? (done) => setForm({ ...form, done }) : undefined}
             stages={data.interviews.stages}
             profiles={data.profiles}
+            tracked={data.trackedSelfByProfile}
+            trackedProfiles={data.trackedProfiles}
             showDone={canFollowUp}
             readOnly={!editable}
           />

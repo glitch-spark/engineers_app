@@ -1,7 +1,7 @@
 // The single Bidders page helpers (spec 2026-11-14-bidders-single-page-design.md). Run: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardOpen, periodFromParams, periodToParams, rowMoney, stripItems, timeColumns } from '../src/lib/bidderPage.ts';
+import { cardOpen, periodFromParams, periodToParams, rowMoney, shownRows, stripItems, timeColumns } from '../src/lib/bidderPage.ts';
 import { bidderTopLines } from '../src/lib/bidderInsights.ts';
 
 test('strip: one line of totals, today only for the current pay week', () => {
@@ -80,4 +80,12 @@ test('the period lives in the URL: week for a pay week, period / date / to other
 test('the strip shows a dash for counts it does not know (folder weeks)', () => {
   assert.deepEqual(stripItems({ approved: 30, pay: 15, toReview: null, rejected: null }).map((i) => i.text),
     ['30 approved · $15.00 pay', '— to review', '— rejected']);
+});
+
+test('the All / Bidders / Self filter', () => {
+  const data = { bidders: [{ id: 'a' }, { id: 'b' }], selfRows: [{ ownerId: 'o' }] };
+  assert.deepEqual(shownRows(data, 'all'), { bidders: ['a', 'b'], self: ['o'], total: true });
+  assert.deepEqual(shownRows(data, 'bidders'), { bidders: ['a', 'b'], self: [], total: true });
+  assert.deepEqual(shownRows(data, 'self'), { bidders: [], self: ['o'], total: false });
+  assert.deepEqual(shownRows({ bidders: [{ id: 'a' }] }, 'self'), { bidders: [], self: [], total: false });
 });
