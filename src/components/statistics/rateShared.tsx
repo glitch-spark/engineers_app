@@ -5,17 +5,17 @@ import * as api from '../../api/endpoints';
 import type { InterviewRates, PerUserChart } from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
-import { FilterBar, filterParams, filtersError, type StatsFilters } from './controls';
+import { StatsFilterBar, useStatsFilters, type StatsFilterState } from './statsFilters';
 
 /** What the Bids and Interviews tabs share: the report (one SWR key, so switching tabs doesn't refetch), the filter
  * bar with its loading and error states, the per-user bar chart and its colors. */
 
-/** GET /metrics/interview-rates for the filters; null key while the filters are invalid. */
-export function useInterviewRates(filters: StatsFilters) {
-  const params = filterParams(filters);
+/** GET /metrics/interview-rates for the filters; null key while the range is invalid. */
+export function useInterviewRates(f: StatsFilterState) {
+  const params = f.params;
   return useSWR(
-    filtersError(filters) ? null : ['interview-rates', params.period, params.date, params.to, params.region],
-    () => api.getInterviewRates(params),
+    params ? ['interview-rates', params.period, params.date, params.to, params.region] : null,
+    () => api.getInterviewRates(params!),
     { keepPreviousData: true },
   );
 }
@@ -59,15 +59,14 @@ export function StatTiles({ tiles }: { tiles: { label: string; value: string }[]
 }
 
 /** The filter bar, then the tab's content once the report is loaded (loading and error states otherwise). */
-export function StatsBody({ filters, onFilters, children }: {
-  filters: StatsFilters; onFilters: (f: StatsFilters) => void; children: (data: InterviewRates) => ReactNode;
-}) {
-  const { data, error, isLoading } = useInterviewRates(filters);
+export function StatsBody({ children }: { children: (data: InterviewRates) => ReactNode }) {
+  const f = useStatsFilters();
+  const { data, error, isLoading } = useInterviewRates(f);
   return (
     <div className="space-y-4">
-      <FilterBar value={filters} onChange={onFilters}>
-        {isLoading && data && <span className="spinner spinner-sm" role="status" aria-label="Loading" />}
-      </FilterBar>
+      <StatsFilterBar f={f}>
+        {isLoading && data && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
+      </StatsFilterBar>
       {error ? (
         <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the statistics. Try again.</p>
       ) : !data ? (

@@ -9,8 +9,9 @@ import { notify } from '../../lib/notify';
 import { exportCallerStatsPdf } from '../../lib/callerStatsPdf';
 import { interviewStatusBadgeClass, stageLabel } from '../../lib/stageBadge';
 import { useChartTheme } from '../../theme/useChartTheme';
-import { FilterBar, REGIONS, Segmented, filterParams, filtersError, type StatsFilters } from './controls';
+import { Segmented } from './controls';
 import { ServerUpdateNote, StatTiles, pct } from './rateShared';
+import { StatsFilterBar, regionLabel, useStatsFilters } from './statsFilters';
 
 type Sort = 'date' | 'company';
 const SORTS: { value: Sort; label: string }[] = [
@@ -58,25 +59,24 @@ function allRow(team: CallerStatsTotals): CallerStatsCaller {
  * Statistics → Callers: how many interviews each caller did and how often they pass. Compared across callers, by
  * round type (with self-taken rounds for reference), week by week, and the rounds held behind the numbers.
  */
-export default function CallersTab({ filters, onFilters, initialCaller }: {
-  filters: StatsFilters;
-  onFilters: (f: StatsFilters) => void;
+export default function CallersTab({ initialCaller }: {
   /** Caller id to show first (falls back to All callers when they have no rounds in the period). */
   initialCaller?: string;
 }) {
-  const params = filterParams(filters);
+  const f = useStatsFilters();
+  const params = f.params;
   const { data, error, isLoading } = useSWR(
-    filtersError(filters) ? null : ['caller-stats', params.region, params.period, params.date, params.to],
-    () => api.getCallerStats(params),
+    params ? ['caller-stats', params.region, params.period, params.date, params.to] : null,
+    () => api.getCallerStats(params!),
     { keepPreviousData: true },
   );
   const [picked, setPicked] = useState<string>(initialCaller || ALL);
 
   return (
     <div className="space-y-4">
-      <FilterBar value={filters} onChange={onFilters}>
-        {isLoading && data && <span className="spinner spinner-sm" role="status" aria-label="Loading" />}
-      </FilterBar>
+      <StatsFilterBar f={f}>
+        {isLoading && data && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
+      </StatsFilterBar>
       <p className="text-xs text-muted">
         Interviews done = rounds held: passed, rejected or awaiting their result (canceled rounds aren’t counted). Pass
         rate = passed ÷ (passed + rejected); a caller is ranked from 5 decided rounds. A region shows its profiles’ interviews.
@@ -315,7 +315,7 @@ function RoundsHeld({ data, caller, isAll, callers }: {
     try {
       await exportCallerStatsPdf({
         name: caller.name, isAll, periodLabel: data.label,
-        regionLabel: REGIONS.find((r) => r.value === data.region)?.label ?? data.region,
+        regionLabel: regionLabel(data.region),
         callers: isAll ? callers : [caller], team: data.team, self: data.self, rows: rounds,
         callerName: (r) => callerOf.get(keyOf(r))?.name ?? 'Unassigned',
       });

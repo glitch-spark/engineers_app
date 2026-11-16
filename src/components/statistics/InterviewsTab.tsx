@@ -4,7 +4,7 @@ import { CartesianGrid, LabelList, ReferenceLine, ResponsiveContainer, Scatter, 
 import type { InterviewRateRow, InterviewRates } from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
-import { REGIONS, type StatsFilters } from './controls';
+import { regionLabel } from './statsFilters';
 import { PerUserBars, RecordsNote, StatTiles, StatsBody, initialsFor, niceCeil, pct, seriesColors } from './rateShared';
 
 /** Rate guide lines on the scatter (interviews ÷ bids); the ones that fit the plot are drawn. */
@@ -12,9 +12,9 @@ const GUIDE_RATES = [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5];
 
 /** Statistics → Interviews: rounds held per user, split by who took them (the user or a caller), how bids turn into
  * interviews, and the ranking by rate. */
-export default function InterviewsTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
+export default function InterviewsTab() {
   return (
-    <StatsBody filters={filters} onFilters={onFilters}>
+    <StatsBody>
       {(data) => (
         <>
           <p className="text-xs text-muted">
@@ -22,7 +22,7 @@ export default function InterviewsTab({ filters, onFilters }: { filters: StatsFi
             user took it, caller = a caller took it.{' '}
             {data.region !== 'all' && (
               <>
-                {REGIONS.find((r) => r.value === data.region)?.label} counts the interviews on its profiles.
+                {regionLabel(data.region)} counts the interviews on its profiles.
                 {data.unassignedProfiles > 0 && (
                   <>
                     {' '}{data.unassignedProfiles} profile{data.unassignedProfiles === 1 ? ' has' : 's have'} no region.{' '}
