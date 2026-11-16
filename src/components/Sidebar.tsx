@@ -155,6 +155,8 @@ export default function Sidebar({
             />
           </NavGroup>
 
+          <div aria-hidden="true" className="my-2 border-t border-zinc-200/80 dark:border-zinc-800" />
+
           <NavLink
             href="/bidders"
             label="Bidders"
