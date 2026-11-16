@@ -663,6 +663,8 @@ export interface InterviewListParams {
   /** Column to sort by; legacy 'asc' | 'desc' means latest round date. */
   sort?: 'latest' | 'company' | 'stage' | 'status' | 'asc' | 'desc';
   dir?: 'asc' | 'desc';
+  /** Company or position contains this (case-insensitive). */
+  q?: string;
 }
 
 export const listInterviews = (params?: InterviewListParams) =>
@@ -704,6 +706,8 @@ export const listInterviewRounds = (params: {
   callerId?: string;
   /** Who takes the round: the owner ('self') or a caller. */
   callType?: CallType;
+  /** Company or position contains this (case-insensitive). */
+  q?: string;
 }) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>> }>(
   `/interviews/rounds${qs(params)}`,
 );
@@ -720,6 +724,8 @@ export const listCallerRounds = (params: {
   page: number;
   limit: number;
   dir: 'asc' | 'desc';
+  /** Company or position contains this (case-insensitive). */
+  q?: string;
 }) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>>; pagination: Pagination }>(
   `/interviews/caller-rounds${qs(params)}`,
 );

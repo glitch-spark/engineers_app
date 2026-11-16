@@ -59,11 +59,14 @@ export default function InterviewsList({
   const [pageSize, setPageSize] = useState(20);
   const { tz } = useInterviewTimezone();
   const query = listQuery(filters, pageSize, new Date(), tz);
-  const { data, isLoading, mutate } = useSWR(['interviews-list', JSON.stringify(query)], () => api.listInterviews(query), {
+  // No query while the Custom range is invalid (the bar says why): nothing to load, so no endless spinner.
+  const { data, isLoading, mutate } = useSWR(query ? ['interviews-list', JSON.stringify(query)] : null, () => api.listInterviews(query!), {
     keepPreviousData: true,
   });
-  const rows = (data?.interviews as Interview[] | undefined) ?? [];
-  const pagination = data?.pagination;
+  // SWR keeps the last page of rows when the key goes null; an invalid range shows none.
+  const rows = (query ? (data?.interviews as Interview[] | undefined) : undefined) ?? [];
+  const pagination = query ? data?.pagination : undefined;
+  const emptyText = query ? 'No interviews match these filters.' : 'Pick a valid date range to see interviews.';
 
   const canEdit = (iv: Interview) => {
     const owner = typeof iv.createdBy === 'object' ? iv.createdBy._id : iv.createdBy;
@@ -196,7 +199,7 @@ export default function InterviewsList({
             {isLoading && !data ? (
               <tr><td colSpan={10} className="px-3 py-8 text-center text-muted">Loading interviews…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted">No interviews match these filters.</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted">{emptyText}</td></tr>
             ) : rows.map((iv) => (
               <tr
                 key={iv._id}
@@ -225,7 +228,7 @@ export default function InterviewsList({
       </div>
 
       <ul className="space-y-2 sm:hidden" aria-label="Interviews">
-        {rows.length === 0 && !isLoading && <li className="panel p-4 text-center text-sm text-muted">No interviews match these filters.</li>}
+        {rows.length === 0 && !isLoading && <li className="panel p-4 text-center text-sm text-muted">{emptyText}</li>}
         {rows.map((iv) => (
           <li key={iv._id}>
             <div role="button" tabIndex={0} onClick={() => onOpen(iv)} onKeyDown={openOnKey(iv)} className="panel block w-full space-y-2 p-3 text-left">

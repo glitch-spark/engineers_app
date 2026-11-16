@@ -34,11 +34,14 @@ export default function CallerRoundsList({
   const { tz } = useInterviewTimezone();
   const { byId } = useCallers();
   const query = callerRoundsQuery(filters, pageSize, new Date(), tz);
-  const { data, isLoading } = useSWR(['caller-rounds-list', JSON.stringify(query)], () => api.listCallerRounds(query), {
+  // No query while the Custom range is invalid (the bar says why): nothing to load, so no endless spinner.
+  const { data, isLoading } = useSWR(query ? ['caller-rounds-list', JSON.stringify(query)] : null, () => api.listCallerRounds(query!), {
     keepPreviousData: true,
   });
-  const rows = data?.rounds ?? [];
-  const pagination = data?.pagination;
+  // SWR keeps the last page of rows when the key goes null; an invalid range shows none.
+  const rows = (query ? data?.rounds : undefined) ?? [];
+  const pagination = query ? data?.pagination : undefined;
+  const emptyText = query ? 'No caller rounds match these filters.' : 'Pick a valid date range to see caller rounds.';
 
   const open = (row: InterviewRoundRow) => {
     const iv = data?.interviews?.[row.interviewId] as unknown as Interview | undefined;
@@ -130,7 +133,7 @@ export default function CallerRoundsList({
                   <span className="inline-flex items-center gap-2" role="status"><span className="spinner spinner-sm" aria-hidden /> Loading caller rounds…</span>
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">No caller rounds match these filters.</td></tr>
+                <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">{emptyText}</td></tr>
               ) : rows.map((row) => {
                 const method = methodOf(row);
                 return (
@@ -161,7 +164,7 @@ export default function CallerRoundsList({
 
         <ul className="space-y-2 sm:hidden" aria-label="Caller rounds">
           {isLoading && !data && <li className="panel p-4 text-center text-sm text-muted" role="status">Loading caller rounds…</li>}
-          {!isLoading && rows.length === 0 && <li className="panel p-4 text-center text-sm text-muted">No caller rounds match these filters.</li>}
+          {!isLoading && rows.length === 0 && <li className="panel p-4 text-center text-sm text-muted">{emptyText}</li>}
           {rows.map((row) => (
             <li key={`${row.interviewId}:${row.roundId}`}>
               <div role="button" tabIndex={0} onClick={() => open(row)} onKeyDown={openOnKey(row)} className="panel block w-full space-y-2 p-3 text-left">

@@ -27,7 +27,7 @@ type View = 'list' | 'calendar';
  * `callers`: every user's caller rounds, coloured by caller; a click opens the caller dialog.
  * `directory`: the Callers tab (who the callers are, their load and pass rate) instead of rounds. */
 export default function InterviewsPage({ view, callers = false, directory = false }: { view: View; callers?: boolean; directory?: boolean }) {
-  const [filters, update, sharedQs] = useInterviewFilters();
+  const { filters, update, sharedQs, canClear, clear } = useInterviewFilters(callers);
   const [params, setParams] = useSearchParams();
   const { mutate } = useSWRConfig();
   const [panel, setPanel] = useState<PanelState | null>(null);
@@ -119,7 +119,7 @@ export default function InterviewsPage({ view, callers = false, directory = fals
         )}
       </div>
 
-      {!directory && <InterviewFilters filters={filters} update={update} callers={callers} />}
+      {!directory && <InterviewFilters filters={filters} update={update} canClear={canClear} onClear={clear} callers={callers} />}
       {callers && !directory && <CallersLegend />}
 
       {directory ? (
