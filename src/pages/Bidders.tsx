@@ -4,8 +4,6 @@ import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../api/endpoints';
 import { useAuth } from '../auth/useAuth';
 import PageHeader from '../components/PageHeader';
-import Select from '../components/Select';
-import Switch from '../components/Switch';
 import BidderActions from '../components/bidders/BidderActions';
 import BidderView from '../components/bidders/BidderView';
 import FocusReview, { type FocusScope } from '../components/bids/FocusReview';
@@ -14,16 +12,16 @@ import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDial
 import BiddersOverview from '../components/bidders/BiddersOverview';
 import BidderAlerts from '../components/bidders/BidderAlerts';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
-import { periodFromParams, periodToParams } from '../lib/bidderPage';
-import { isoDay } from '../components/statistics/controls';
+import { BiddersFilterBar, useBidderFilters } from '../components/bidders/biddersFilters';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { notify } from '../lib/notify';
 import WeekNav from '../components/bidders/WeekNav';
 import { dateInZone } from '../components/bidders/weekDates';
 
-/** URL state: week, bidder, day, tab (history), mode (focus), bid, owner (admin filter), period / date / to (the list's
- * month or custom range); `view` is from the old tabs. */
-type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view' | 'period' | 'date' | 'to';
+/** URL state. The list's filters (range, date, from, to, q, archived, owner) are the bar's, see lib/bidderFilters.ts
+ * (the old `week` / `period` keys still open that period). The rest: week (a bidder's pay week), bidder, day, tab
+ * (history), mode (focus), bid, owner (the admin's empty-state link); `view` is from the old tabs. */
+type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view';
 
 function statusText(b: api.Bidder | undefined, status: string | undefined) {
   if (status === 'archived') return 'Archived';
@@ -41,8 +39,10 @@ export default function BiddersPage() {
   const bidderId = params.get('bidder');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const ownerId = isAdmin ? params.get('owner') ?? '' : '';
-  const [showArchived, setShowArchived] = useState(false);
+  const filterState = useBidderFilters(isAdmin);
+  const { filters, request } = filterState;
+  const ownerId = isAdmin ? filters.owner : '';
+  const showArchived = filters.archived;
   const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null);
   const [archiving, setArchiving] = useState(false);
   const navigate = useNavigate();
@@ -69,6 +69,13 @@ export default function BiddersPage() {
   // The pay-week board feeds the single-bidder view only; the list is one /bids/performance request.
   const board = useSWR(bidderId ? (['bids-week', week, includeArchived, boardOwner] as const) : null, () =>
     api.bidsWeek({ week: week ?? undefined, includeArchived: includeArchived || undefined, ownerId: boardOwner || undefined }),
+  );
+  // The list: one /bids/performance request for the bar's period (its label is the bar's too).
+  const perf = useSWR(
+    !bidderId && request
+      ? (['bid-performance', request.period, request.date ?? '', request.to ?? '', request.weeks ?? 1, showArchived, ownerId] as const)
+      : null,
+    () => api.getBidPerformance({ ...request!, includeArchived: showArchived, ownerId: ownerId || undefined }),
   );
   const users = useSWR(isAdmin ? (['users-lookup'] as const) : null, () => api.lookupUsers());
   const ownerOptions = useMemo(
@@ -167,37 +174,33 @@ export default function BiddersPage() {
 
   const main = (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {bidderId ? <WeekNav week={weekKey} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} /> : <div />}
-        {!bidderId && (
-          <div className="flex flex-wrap items-center gap-3">
-            {isAdmin && (
-              <div className="w-48">
-                <Select
-                  value={ownerId}
-                  onChange={(v) => setParam({ owner: v || null })}
-                  options={ownerOptions}
-                  ariaLabel="Filter bidders by owner"
-                  className="w-full text-sm"
-                />
-              </div>
-            )}
-            <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />
-          </div>
-        )}
-      </div>
+      {bidderId ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <WeekNav week={weekKey} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />
+        </div>
+      ) : (
+        <BiddersFilterBar
+          f={filterState}
+          isAdmin={isAdmin}
+          ownerOptions={ownerOptions}
+          ownerId={ownerId}
+          serverLabel={request ? perf.data?.label : undefined}
+          failed={!!perf.error}
+        />
+      )}
 
       {!bidderId ? (
         <BiddersOverview
           ownerId={ownerId}
-          includeArchived={showArchived}
           onOpenBidder={(id, wk, day) => setParam({ bidder: id, week: wk, day: day ?? null, view: null, tab: null })}
           onReview={(wk, id) => setParam({ mode: 'focus', bidder: id ?? null, bid: null, week: wk, view: null })}
           renderStatus={(row) => statusText(byId[row.id], row.bidderStatus ?? row.status)}
-          filters={periodFromParams({
-            week, period: params.get('period'), date: params.get('date'), to: params.get('to'),
-          }, isoDay(new Date()))}
-          onFilters={(f) => setParam(periodToParams(f))}
+          request={request}
+          data={request ? perf.data : undefined}
+          error={request ? perf.error : undefined}
+          onRetry={() => void perf.mutate()}
+          search={filters.q}
+          onClearSearch={() => filterState.patch({ q: '' })}
           // /bidders lists only the viewer's own bidders, so other owners' rows get no menu.
           renderActions={(row) =>
             byId[row.id] ? (

@@ -1,5 +1,9 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { StatsPeriod, StatsRegion } from '../../api/endpoints';
+import { isoDay } from '../../lib/dateRange';
+
+// `isoDay` lives in lib/dateRange now; re-exported until the Profile statistics stop importing this file.
+export { isoDay };
 
 /** The Month / Week / Custom switch and period stepper that Bidders and Profile statistics still use (they move to the
  * shared date filter in Tasks 9 and 10). The Statistics tabs use `statsFilters.tsx` instead. */
@@ -30,10 +34,6 @@ export function filtersError(f: StatsFilters): string | null {
   const days = Math.round((parseDay(f.to).getTime() - parseDay(f.from).getTime()) / 86_400_000) + 1;
   if (days > MAX_CUSTOM_DAYS) return 'Pick a range of a year or less.';
   return null;
-}
-
-export function isoDay(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export function parseDay(iso: string): Date {

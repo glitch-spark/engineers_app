@@ -250,6 +250,11 @@ export function rangeLabel(range: DateRange | null): string {
   return `${mon(a.m)} ${a.d}, ${a.y} – ${mon(b.m)} ${b.d}, ${b.y}`;
 }
 
+/** A `Date` as its local calendar date, `YYYY-MM-DD` (the browser's time zone). */
+export function isoDay(d: Date): string {
+  return `${String(d.getFullYear()).padStart(4, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Whether `s` is a real calendar date in `YYYY-MM-DD` form (so `2026-02-31` is not). */
 export function isValidDate(s: string): boolean {
   if (typeof s !== 'string') return false;

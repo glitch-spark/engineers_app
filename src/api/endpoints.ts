@@ -3130,6 +3130,8 @@ export const getBidPerformance = (params: {
   period: 'week' | 'month' | 'custom';
   date?: string;
   to?: string;
+  /** With `period=week`: 2 = the pay week and the one before (1 or 2). */
+  weeks?: number;
   includeArchived?: boolean;
   ownerId?: string;
 }) => apiFetch<BidPerformance>(`/bids/performance${qs(params)}`);
@@ -3149,7 +3151,7 @@ export type BidTops = Partial<Record<BidTopMeasure, {
 export type BidInsights = {
   start: string; end: string; label: string; mine: BidderStats | null; platform: BidderStats | null; tops: BidTops | null;
 };
-export const getBidInsights = (params: { period: 'week' | 'month' | 'custom'; date?: string; to?: string; ownerId?: string }) =>
+export const getBidInsights = (params: { period: 'week' | 'month' | 'custom'; date?: string; to?: string; weeks?: number; ownerId?: string }) =>
   apiFetch<BidInsights>(`/bids/insights${qs(params)}`);
 
 export type BidAlertKind = 'inactive' | 'rejects' | 'no_interviews' | 'review_backlog';

@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react';
 import type { StatsRegion } from '../../api/endpoints';
 import {
   customError,
+  isoDay,
   presetOptions,
   toStatsParams,
   type DatePreset,
@@ -13,7 +14,6 @@ import DateRangeFilter, { resolveRange, type DateRangeValue } from '../filters/D
 import FilterBar, { FilterField } from '../filters/FilterBar';
 import SearchFilter from '../filters/SearchFilter';
 import Select from '../Select';
-import { isoDay } from './controls';
 
 /**
  * The Statistics filters, kept in the URL so they follow you from tab to tab (and survive a reload or a shared link):

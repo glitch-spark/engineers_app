@@ -1,23 +1,16 @@
-// The single Bidders page body (spec 2026-11-14-bidders-single-page-design.md): the period control (pay week by
-// default, month, custom), the one-line totals strip, the comparison card (collapsible) and one table — replacing
-// the Pay week and Performance tabs.
+// The single Bidders page body (spec 2026-11-14-bidders-single-page-design.md): the one-line totals strip, the
+// comparison card (collapsible) and one table — replacing the Pay week and Performance tabs. The period and the search
+// are the page's filter bar; the performance request is the page's too (its label is the bar's), so this gets the
+// result.
 import { useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import type { BidPerformanceRow } from '../../api/endpoints';
+import type { BidPerformance, BidPerformanceRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
-import { PeriodNav, Segmented, filtersError, isoDay } from '../statistics/controls';
-import { cardOpen, stripItems, type PagePeriod, type StripItem } from '../../lib/bidderPage';
+import { matchesBidderSearch, type BidderPeriodRequest } from '../../lib/bidderFilters';
+import { cardOpen, stripItems, type StripItem } from '../../lib/bidderPage';
 import BiddersBand from './BiddersBand';
 import BiddersTable from './BiddersTable';
-
-type Filters = PagePeriod;
-
-const PERIOD_OPTIONS = [
-  { value: 'week', label: 'Pay week' },
-  { value: 'month', label: 'Month' },
-  { value: 'custom', label: 'Custom' },
-] as { value: api.StatsPeriod; label: string }[];
 
 const CARD_KEY = 'bidders.card.open';
 
@@ -30,7 +23,6 @@ const TONE: Record<NonNullable<StripItem['tone']> | 'none', string> = {
 
 type Props = {
   ownerId: string;
-  includeArchived: boolean;
   /** Open a bidder at a day of `week` (a report day inside the pay week or period end). */
   onOpenBidder: (id: string, week: string, day?: string) => void;
   /** The review overlay over a pay week's pending bids (one bidder's, or everyone's). */
@@ -38,14 +30,18 @@ type Props = {
   renderStatus: (row: BidPerformanceRow) => ReactNode;
   renderActions: (row: BidPerformanceRow) => ReactNode;
   empty: ReactNode;
-  /** The period, kept in the URL by the page (so returning from a bidder keeps it). An empty pay-week day means the
-   *  pay week holding now (the server decides, past the Saturday cutoff too). */
-  filters: Filters;
-  onFilters: (f: Filters) => void;
+  /** The period the bar asks for (null while a Custom range is incomplete or invalid), and its performance result. */
+  request: BidderPeriodRequest | null;
+  data: BidPerformance | undefined;
+  error: unknown;
+  onRetry: () => void;
+  /** The bar's search: narrows the table (not the totals) to bidders whose name or profile contains it. */
+  search: string;
+  onClearSearch: () => void;
 };
 
 export default function BiddersOverview({
-  ownerId, includeArchived, onOpenBidder, onReview, renderStatus, renderActions, empty, filters: f, onFilters: setFilters,
+  ownerId, onOpenBidder, onReview, renderStatus, renderActions, empty, request, data, error, onRetry, search, onClearSearch,
 }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -66,48 +62,27 @@ export default function BiddersOverview({
       return !v;
     });
   };
-  const rangeError = f.period === 'custom' ? filtersError({ ...f, region: 'all' }) : null;
-  const params = f.period === 'custom' ? { period: f.period, date: f.from, to: f.to } : { period: f.period, date: f.day || undefined };
-  const perf = useSWR(
-    rangeError ? null : (['bid-performance', params.period, params.date ?? '', params.to ?? '', includeArchived, ownerId] as const),
-    () => api.getBidPerformance({ ...params, includeArchived, ownerId: ownerId || undefined }),
-  );
   // The card: this owner's bidders vs the platform over the same period (its own request: the table never waits).
   const insights = useSWR(
-    rangeError || (isAdmin && !ownerId) ? null : (['bid-insights', params.period, params.date ?? '', params.to ?? '', ownerId] as const),
-    () => api.getBidInsights({ ...params, ownerId: ownerId || undefined }),
+    !request || (isAdmin && !ownerId)
+      ? null
+      : (['bid-insights', request.period, request.date ?? '', request.to ?? '', request.weeks ?? 1, ownerId] as const),
+    () => api.getBidInsights({ ...request!, ownerId: ownerId || undefined }),
     { revalidateOnFocus: false },
   );
-  const data = perf.data;
-  const today = isoDay(new Date());
   // A day inside the shown period: the pay week's first report day (week mode), else the period's end.
   const anchor = data ? (data.payWeek?.days[0]?.day ?? data.end) : '';
   const items = data ? stripItems(data.totals) : [];
+  const shown = data ? data.bidders.filter((b) => matchesBidderSearch(b, search)) : [];
 
   return (
     <section className="space-y-4" aria-label="Bidders">
-      <div className="flex flex-wrap items-center gap-3">
-        <Segmented label="Period" options={PERIOD_OPTIONS} value={f.period}
-          onChange={(period) => setFilters({ ...f, period: period as Filters['period'], day: period === 'week' ? '' : f.day || today })} />
-        {f.period === 'custom' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <input type="date" className="input !w-auto !py-1.5" aria-label="From" value={f.from} max={today}
-              onChange={(e) => setFilters({ ...f, from: e.target.value })} />
-            <span className="text-muted" aria-hidden>–</span>
-            <input type="date" className="input !w-auto !py-1.5" aria-label="To" value={f.to} max={today}
-              onChange={(e) => setFilters({ ...f, to: e.target.value })} />
-            {rangeError && <span className="text-xs text-red-700 dark:text-red-400" role="alert">{rangeError}</span>}
-          </div>
-        ) : (
-          <PeriodNav period={f.period} day={f.day || anchor || today} label={data?.label}
-            onDay={(day) => setFilters({ ...f, day })} />
-        )}
-      </div>
-
-      {rangeError ? null : perf.error ? (
+      {!request ? (
+        <div className="panel p-4 text-sm text-muted">Pick a valid date range to see bidders.</div>
+      ) : error ? (
         <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
           Couldn&apos;t load bidders.{' '}
-          <button type="button" className="underline" onClick={() => void perf.mutate()}>Retry</button>
+          <button type="button" className="underline" onClick={onRetry}>Retry</button>
         </div>
       ) : !data ? (
         <div className="space-y-3" aria-busy="true">
@@ -148,15 +123,22 @@ export default function BiddersOverview({
             </p>
           )}
 
-          <BiddersTable
-            data={data}
-            platformPer100={insights.data?.platform?.per100}
-            showOwner={isAdmin}
-            onOpenBidder={(id, day) => onOpenBidder(id, day ?? anchor, day)}
-            onReview={(id) => onReview(anchor, id)}
-            renderStatus={renderStatus}
-            renderActions={renderActions}
-          />
+          {shown.length === 0 ? (
+            <div className="empty-state">
+              <p className="font-medium text-strong">No bidders match &ldquo;{search.trim()}&rdquo;.</p>
+              <button type="button" className="btn mt-4" onClick={onClearSearch}>Clear search</button>
+            </div>
+          ) : (
+            <BiddersTable
+              data={{ ...data, bidders: shown }}
+              platformPer100={insights.data?.platform?.per100}
+              showOwner={isAdmin}
+              onOpenBidder={(id, day) => onOpenBidder(id, day ?? anchor, day)}
+              onReview={(id) => onReview(anchor, id)}
+              renderStatus={renderStatus}
+              renderActions={renderActions}
+            />
+          )}
         </>
       )}
     </section>
