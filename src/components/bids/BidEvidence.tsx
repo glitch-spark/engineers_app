@@ -89,19 +89,19 @@ export default function BidEvidence({ bid, shots }: { bid: BidReviewItem; shots?
 
       <dl className="space-y-1.5">
         <Row label="Job">{bid.jobTitle || <span className="text-muted">Untitled job</span>}</Row>
-        <Row label="Site">
+        <Row label="Job URL">
           {safeHref(bid.jobUrl) ? (
             <a
               href={safeHref(bid.jobUrl)}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex max-w-full items-center gap-1 text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
+              className="inline-flex max-w-full items-start gap-1 text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
             >
-              <span className="truncate">{bid.jobDomain || bid.jobUrl}</span>
-              <ExternalLink size={12} aria-hidden className="shrink-0" />
+              <span className="break-all">{bid.jobUrl}</span>
+              <ExternalLink size={12} aria-hidden className="mt-1 shrink-0" />
             </a>
           ) : bid.jobUrl ? (
-            <span className="break-all">{bid.jobDomain || bid.jobUrl}</span>
+            <span className="break-all">{bid.jobUrl}</span>
           ) : (
             <span className="text-muted">No job URL</span>
           )}

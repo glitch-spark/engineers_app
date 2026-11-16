@@ -270,13 +270,13 @@ export default function DayPanel({
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex max-w-full items-center gap-1 text-xs text-muted hover:underline"
+                          className="inline-flex max-w-full items-start gap-1 text-xs text-muted hover:underline"
                         >
-                          <span className="truncate">{b.jobDomain || b.jobUrl}</span>
-                          <ExternalLink size={10} aria-hidden className="shrink-0" />
+                          <span className="break-all">{b.jobUrl}</span>
+                          <ExternalLink size={10} aria-hidden className="mt-0.5 shrink-0" />
                         </a>
                       ) : (
-                        <span className="text-xs text-muted">{b.jobDomain || b.jobUrl}</span>
+                        <span className="break-all text-xs text-muted">{b.jobUrl}</span>
                       )}
                     </td>
                     <td className="px-2 py-1.5">

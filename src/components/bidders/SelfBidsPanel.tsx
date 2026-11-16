@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
+import { safeHref } from '../../lib/safeHref';
 import Modal from '../Modal';
 import StepViewer from '../bids/StepViewer';
 import DayPanel from './DayPanel';
@@ -50,13 +51,19 @@ export default function SelfBidsPanel({ scope, onClose }: { scope: SelfScope | n
           <div className="space-y-2">
             <p className="text-xs text-muted">
               {[open.profileName, new Date(open.firstAt).toLocaleString()].filter(Boolean).join(' · ')}
-              {open.jobUrl && (
-                <>
-                  {' · '}
-                  <a href={open.jobUrl} target="_blank" rel="noopener noreferrer" className="underline">{open.jobDomain || 'job page'}</a>
-                </>
-              )}
             </p>
+            {open.jobUrl && (
+              <p className="break-all text-xs">
+                {safeHref(open.jobUrl) ? (
+                  <a href={safeHref(open.jobUrl)} target="_blank" rel="noopener noreferrer"
+                    className="text-sky-700 underline underline-offset-2 dark:text-sky-400">
+                    {open.jobUrl}
+                  </a>
+                ) : (
+                  <span className="text-muted">{open.jobUrl}</span>
+                )}
+              </p>
+            )}
             <StepViewer
               bidId={open.id}
               shots={shots.data}
