@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { rangeLabel } from '../../lib/dateRange';
 import {
   BIDDER_CLEAR_KEYS,
+  BIDDER_SHOW_OPTIONS,
   BIDDER_URL_DEFAULTS,
   bidderCanClear,
   bidderCanStepForward,
@@ -17,12 +18,14 @@ import {
   type BidderKey,
   type BidderPeriodRequest,
   type BidderPreset,
+  type BidderRowFilter,
   type ReportClock,
 } from '../../lib/bidderFilters';
 import { useUrlFilters } from '../../lib/useUrlFilters';
 import DateRangeFilter from '../filters/DateRangeFilter';
 import FilterBar, { FilterField } from '../filters/FilterBar';
 import SearchFilter from '../filters/SearchFilter';
+import Segmented from '../Segmented';
 import Select from '../Select';
 import Switch from '../Switch';
 
@@ -55,7 +58,7 @@ export function useBidderFilters(isAdmin: boolean): BidderFilterState {
 }
 
 /**
- * The Bidders filter bar: Owner (admin), Show archived, search, the date range, Clear. The pay-week presets are
+ * The Bidders filter bar: Owner (admin), Show (All / Bidders / Self), Show archived, search, the date range, Clear. The pay-week presets are
  * stepped by the page's own logic and labelled with the server's pay-week label (`serverLabel`, undefined while it
  * loads; `failed` falls back to the dates).
  */
@@ -84,6 +87,14 @@ export function BiddersFilterBar({
           />
         </FilterField>
       )}
+      <div className="flex h-[38px] items-center">
+        <Segmented<BidderRowFilter>
+          label="Show"
+          options={BIDDER_SHOW_OPTIONS}
+          value={filters.show}
+          onChange={(show) => patch({ show: show === 'all' ? undefined : show })}
+        />
+      </div>
       <div className="flex h-[38px] items-center">
         <Switch checked={filters.archived} onChange={(on) => patch({ archived: on ? '1' : '' })} label="Show archived" />
       </div>

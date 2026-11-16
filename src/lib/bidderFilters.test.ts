@@ -29,7 +29,7 @@ const request = (over: Parameters<typeof parse>[0] = {}) => bidderPeriodRequest(
 function apply(f: BidderFilters, patch: BidderPatch, clock = CLOCK): BidderFilters {
   const values = {
     ...BIDDER_URL_DEFAULTS,
-    owner: f.owner, q: f.q, archived: f.archived ? '1' : '',
+    owner: f.owner, show: f.show === 'all' ? '' : f.show, q: f.q, archived: f.archived ? '1' : '',
     range: f.range === 'this_pay_week' ? '' : f.range, date: f.date, from: f.from, to: f.to,
     ...Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, v ?? ''])),
   };
@@ -47,7 +47,21 @@ describe('presets', () => {
     ]);
   });
   it('defaults to This pay week with nothing in the URL', () => {
-    expect(parse()).toEqual({ owner: '', archived: false, q: '', range: 'this_pay_week', date: '', from: '', to: '' });
+    expect(parse()).toEqual({
+      owner: '', show: 'all', archived: false, q: '', range: 'this_pay_week', date: '', from: '', to: '',
+    });
+  });
+});
+
+describe('Show (All / Bidders / Self)', () => {
+  it('reads show from the URL; anything else is All', () => {
+    expect(parse().show).toBe('all');
+    expect(parse({ show: 'bidders' }).show).toBe('bidders');
+    expect(parse({ show: 'self' }).show).toBe('self');
+    expect(parse({ show: 'everyone' }).show).toBe('all');
+  });
+  it('does not change the request', () => {
+    expect(request({ show: 'self' })).toEqual(request());
   });
 });
 
@@ -341,6 +355,7 @@ describe('Clear', () => {
     expect(bidderCanClear(parse({ date: '2026-11-01' }), false)).toBe(true);
     expect(bidderCanClear(parse({ owner: 'u1' }), true)).toBe(true);
     expect(bidderCanClear(parse({ owner: 'u1' }), false)).toBe(false);
+    expect(bidderCanClear(parse({ show: 'self' }), false)).toBe(true);
   });
 });
 

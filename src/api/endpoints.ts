@@ -532,6 +532,12 @@ export interface DayPlan {
   loggedAt: string | null;
   /** The plan owner's profiles (archived included), by name. */
   profiles?: PlanProfile[];
+  /** Self bids recorded by the Bid Track extension this day, per profile (shown next to typed in the pilot). */
+  trackedSelfByProfile?: Record<string, number>;
+  /** Profiles already on tracked self bids this day: their typed number is "other applies" (not captured). */
+  trackedProfiles?: string[];
+  /** Those profiles' "other applies" as saved. */
+  selfOtherByProfile?: Record<string, number>;
 }
 
 /** A day's follow-up: bids done, the daily goal lines with ticks, and notes (posts to Slack). */
@@ -2899,6 +2905,8 @@ export const REJECT_REASONS: { value: RejectReason; label: string; key: '1' | '2
 
 export interface BidReviewItem {
   id: string;
+  /** "self": the owner's own apply from the extension (read-only, never reviewed). */
+  kind?: 'bidder' | 'self';
   bidderId: string;
   bidderName: string;
   jobUrl: string | null;
@@ -2972,7 +2980,8 @@ export interface BidAttachment {
 }
 
 /** `day` and `week` are exclusive; neither means the open daily window. */
-export const listBids = (params: { day?: string; week?: string; bidderId?: string; status?: BidStatus }) =>
+/** `self`: the owner's own applies from the extension (staff: their own; an admin one owner's via ownerId). */
+export const listBids = (params: { day?: string; week?: string; bidderId?: string; status?: BidStatus; self?: boolean; ownerId?: string }) =>
   apiFetch<BidDay>(`/bids${qs(params)}`);
 
 // ---------- pay-week board ----------
@@ -3121,6 +3130,8 @@ export interface BidPerformance {
     days?: (BidCounts & { day: string })[] | null;
     today?: { day: string; approved: number; pending: number } | null;
   };
+  /** The owners' own applies recorded by the extension (self bids), one row per owner in view; not in totals. */
+  selfRows?: { ownerId: string; ownerName: string; total: number; weekly: number[]; interviews: number; lastBidAt: string | null }[];
   /** Week mode: the pay week (its report days, which is today, which are still to come). */
   payWeek?: { start: string; end: string; label: string; timezone: string;
     days: { day: string; isToday: boolean; isFuture: boolean }[] } | null;
