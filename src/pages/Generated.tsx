@@ -336,6 +336,7 @@ export default function GeneratedResumesPage() {
           value={filters.q}
           onChange={(q) => patchUrl({ q })}
           placeholder="Search job descriptions…"
+          description="Separate words with spaces; every word must match."
         />
       </FilterBar>
 

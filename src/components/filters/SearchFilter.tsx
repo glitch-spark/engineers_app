@@ -14,6 +14,7 @@ export default function SearchFilter({
   placeholder,
   label = 'Search',
   width = 'w-64',
+  description,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -21,6 +22,8 @@ export default function SearchFilter({
   label?: string;
   /** Tailwind width class for the field. */
   width?: string;
+  /** Screen-reader-only hint, linked to the box with `aria-describedby` (e.g. how multiple words are matched). */
+  description?: string;
 }) {
   const id = useId();
   const [text, setText] = useState(value);
@@ -82,6 +85,7 @@ export default function SearchFilter({
           autoComplete="off"
           className="input !pl-9 !pr-8"
           placeholder={placeholder}
+          aria-describedby={description ? `${id}-desc` : undefined}
           value={text}
           onChange={(e) => type(e.target.value)}
           onKeyDown={(e) => {
@@ -103,6 +107,11 @@ export default function SearchFilter({
           </button>
         )}
       </div>
+      {description && (
+        <span id={`${id}-desc`} className="sr-only">
+          {description}
+        </span>
+      )}
     </div>
   );
 }

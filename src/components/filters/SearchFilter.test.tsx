@@ -78,4 +78,16 @@ describe('SearchFilter', () => {
     wait(300);
     expect(box().value).toBe('abc');
   });
+
+  it('links an optional description to the box for screen readers', () => {
+    render(<SearchFilter value="" onChange={vi.fn()} placeholder="Search…" description="Every word must match." />);
+    expect(box().getAttribute('aria-describedby')).toBeTruthy();
+    expect(box().getAttribute('aria-describedby')).toBe(screen.getByText('Every word must match.').id);
+    expect(screen.getByText('Every word must match.').className).toContain('sr-only');
+  });
+
+  it('has no aria-describedby without a description', () => {
+    render(<SearchFilter value="" onChange={vi.fn()} placeholder="Search…" />);
+    expect(box().hasAttribute('aria-describedby')).toBe(false);
+  });
 });
