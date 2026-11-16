@@ -7,7 +7,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { formatUsd } from '../../lib/modelCost';
 import MultiSelect from '../MultiSelect';
 import Segmented from '../Segmented';
-import { aiUsageRange, bucketLabel, viewerTimeZone } from '../../lib/aiUsagePeriod';
+import { aiUsageDates, aiUsageRange, bucketLabel, viewerTimeZone } from '../../lib/aiUsagePeriod';
 import { FilterField } from '../filters/FilterBar';
 import { StatsFilterBar, statsList, useStatsFilters } from './statsFilters';
 
@@ -86,7 +86,7 @@ export default function AiUsageCard() {
 
   const tz = viewerTimeZone();
   const customError = f.rangeError;
-  const range = f.range ? aiUsageRange(f.range) : null;
+  const range = f.range ? aiUsageRange(aiUsageDates(f.value.preset, f.range, f.today)) : null;
   const filtered = users.length + features.length + models.length > 0;
 
   const { data, error, isLoading, mutate } = useSWR(

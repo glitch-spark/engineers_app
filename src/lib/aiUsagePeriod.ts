@@ -1,3 +1,5 @@
+import { rangeFor, type DatePreset, type DateRange } from './dateRange';
+
 /** Bounds for the AI usage card. A date range (the shared filter's) becomes local midnights in the viewer's time
  * zone, sent as UTC instants (`to` exclusive) together with the zone name, so the backend buckets hours/days the
  * same way. */
@@ -18,6 +20,18 @@ function fromInput(value: string): Date {
 /** [from, to) as ISO UTC for an inclusive `YYYY-MM-DD` range: local midnight of `from` to local midnight after `to`. */
 export function aiUsageRange(range: { from: string; to: string }): { from: string; to: string } {
   return { from: fromInput(range.from).toISOString(), to: addDays(fromInput(range.to), 1).toISOString() };
+}
+
+/**
+ * The dates the AI usage request covers. The filter shows This week / This month / This year clipped to today, but
+ * the request asks for the whole period (future days have no data), so the chart keeps daily bars and its empty
+ * future days, as before. Every other preset and Custom are requested as shown.
+ */
+export function aiUsageDates(preset: string, shown: DateRange, today: string): DateRange {
+  if (preset === 'this_week' || preset === 'this_month' || preset === 'this_year') {
+    return rangeFor(preset as DatePreset, today, { allowFuture: true }) ?? shown;
+  }
+  return shown;
 }
 
 /** Axis label for a backend bucket key: "13:00" for hours, "Oct 14" for days. */
