@@ -67,7 +67,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    label: 'Track',
+    // Standalone pages: no heading, a thin line keeps them apart from Apply.
     items: [
       { href: '/interviews', label: 'Interviews', icon: MessagesSquare },
       { href: '/statistics', label: 'Statistics', icon: ChartColumn },
@@ -100,13 +100,14 @@ function NavLink({ item, isCollapsed }: { item: Item; isCollapsed: boolean }) {
   );
 }
 
-// A labelled block of the menu. Collapsed, the heading gives way to a thin line between blocks.
+// A block of the menu: a heading when it has a label, else a thin line. Collapsed, every heading becomes a line.
 function NavSection({ section, isCollapsed, first }: { section: Section; isCollapsed: boolean; first: boolean }) {
   const labelled = !!section.label;
+  const line = !first && (isCollapsed || !labelled);
   return (
     <div role={labelled ? 'group' : undefined} aria-label={section.label} className={first ? '' : 'pt-4'}>
       {labelled && !isCollapsed && <p className="nav-heading">{section.label}</p>}
-      {!first && isCollapsed && <div aria-hidden="true" className="mx-3 mb-3 border-t border-zinc-200 dark:border-zinc-800" />}
+      {line && <div aria-hidden="true" className="mx-3 mb-3 border-t border-zinc-200 dark:border-zinc-800" />}
       <div className="space-y-0.5">
         {section.items.map((item) => (
           <NavLink key={item.href} item={item} isCollapsed={isCollapsed} />
@@ -134,7 +135,7 @@ export default function Sidebar({
     >
       <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 py-4">
         {sections.map((section, i) => (
-          <NavSection key={section.label ?? 'main'} section={section} isCollapsed={isCollapsed} first={i === 0} />
+          <NavSection key={section.label ?? `block-${i}`} section={section} isCollapsed={isCollapsed} first={i === 0} />
         ))}
       </nav>
 
