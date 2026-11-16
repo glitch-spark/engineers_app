@@ -56,6 +56,12 @@ Prompt Eval stays open to every user (people test their own prompts); Bidders an
 
 ## Target structure
 
+> **Naming update (user, 2026-11-16), built on feat/app-reorg:** menu labels and page titles are now Home (was
+> Dashboard), Daily plan (Plans), Tailor resume (Generate), Auto apply (Job Applies), Prompt tests (Prompt Eval);
+> Bidders and Interviews sit under a **Pipeline** heading; Transactions moves down beside Statistics. Routes are
+> unchanged. Where later sections or the steps 3–6 plan use the old names, read the new ones.
+
+
 ```
 Home               ← your day: what needs doing now          (/dashboard)
 Plans              ← week goals + daily follow-up             (/plans, was /report)
