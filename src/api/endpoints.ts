@@ -2877,6 +2877,8 @@ export const REJECT_REASONS: { value: RejectReason; label: string; key: '1' | '2
 
 export interface BidReviewItem {
   id: string;
+  /** "self": the owner's own apply from the extension (read-only, never reviewed). */
+  kind?: 'bidder' | 'self';
   bidderId: string;
   bidderName: string;
   jobUrl: string | null;
@@ -2950,7 +2952,8 @@ export interface BidAttachment {
 }
 
 /** `day` and `week` are exclusive; neither means the open daily window. */
-export const listBids = (params: { day?: string; week?: string; bidderId?: string; status?: BidStatus }) =>
+/** `self`: the owner's own applies from the extension (staff: their own; an admin one owner's via ownerId). */
+export const listBids = (params: { day?: string; week?: string; bidderId?: string; status?: BidStatus; self?: boolean; ownerId?: string }) =>
   apiFetch<BidDay>(`/bids${qs(params)}`);
 
 // ---------- pay-week board ----------

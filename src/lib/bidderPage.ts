@@ -94,3 +94,16 @@ export function periodToParams(f: PagePeriod): Record<'week' | 'period' | 'date'
 
 /** The comparison card stays open unless the viewer closed it (remembered in this browser). */
 export const cardOpen = (stored: string | null) => stored !== 'closed';
+
+export type RowFilter = 'all' | 'bidders' | 'self';
+
+/** What the table shows for the All / Bidders / Self filter: bidder rows (ids), Self rows (owner ids), the Total row. */
+export function shownRows(
+  data: { bidders: { id: string }[]; selfRows?: { ownerId: string }[] }, show: RowFilter,
+): { bidders: string[]; self: string[]; total: boolean } {
+  return {
+    bidders: show === 'self' ? [] : data.bidders.map((b) => b.id),
+    self: show === 'bidders' ? [] : (data.selfRows ?? []).map((s) => s.ownerId),
+    total: show !== 'self',
+  };
+}
