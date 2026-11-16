@@ -723,7 +723,7 @@ export default function JobApplyRun() {
   if (!run) {
     return (
       <div>
-        <PageHeader title="Job Applies" backTo="/job-applies" />
+        <PageHeader title="Auto apply" backTo="/job-applies" />
         <p role="status" className="flex items-center gap-2 text-sm text-muted">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading run…
         </p>

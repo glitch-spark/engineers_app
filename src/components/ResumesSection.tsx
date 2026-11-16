@@ -185,7 +185,7 @@ export default function ResumesSection({ accountId, initial, onSaved }: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id={`${inputId}-title`} className="card-title">Fixed resumes</h2>
-          <p className="text-xs text-muted">Sent as is when one scores above the Job Applies run's minimum.</p>
+          <p className="text-xs text-muted">Sent as is when one scores above the Auto apply run's minimum.</p>
         </div>
         {upload}
       </div>
@@ -240,7 +240,7 @@ export default function ResumesSection({ accountId, initial, onSaved }: {
       <ConfirmDialog
         open={!!pendingDelete}
         title="Delete resume?"
-        body={<p>"{pendingDelete?.filename}" will be removed from this profile. Past Job Applies runs keep their scores.</p>}
+        body={<p>"{pendingDelete?.filename}" will be removed from this profile. Past Auto apply runs keep their scores.</p>}
         confirmLabel="Delete"
         tone="danger"
         busy={busy}

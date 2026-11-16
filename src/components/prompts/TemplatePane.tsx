@@ -110,7 +110,7 @@ export default function TemplatePane({
         >
           {upload}
           <span className="text-sm font-medium text-amber-700 dark:text-amber-400">No HTML template</span>
-          <span className="text-xs text-muted">Job Applies can’t tailor with this unit.</span>
+          <span className="text-xs text-muted">Auto apply can’t tailor with this unit.</span>
           <span className="mt-2 text-xs text-muted">
             Drop an <code>.html</code> file here, or click to choose
           </span>

@@ -45,7 +45,7 @@ export default function JobApplies() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Job Applies"
+        title="Auto apply"
         action={
           !firstTime && (
             <button type="button" className={showNew ? 'btn-outline btn-sm' : 'btn btn-sm'} onClick={() => setShowNew((v) => !v)}>

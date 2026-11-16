@@ -136,7 +136,7 @@ export default function ResumePromptEvalPage() {
     content = <CompareView ids={compareIds} />;
   } else {
     content = (
-      <Tabs tabs={TABS} value={tab} onChange={(k) => setParam('tab', k === 'runs' ? '' : k)} ariaLabel="Prompt eval sections">
+      <Tabs tabs={TABS} value={tab} onChange={(k) => setParam('tab', k === 'runs' ? '' : k)} ariaLabel="Prompt tests sections">
         {tab === 'runs' ? (
           <div className="space-y-4">
             <FilterBar
@@ -181,7 +181,7 @@ export default function ResumePromptEvalPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Prompt Eval"
+        title="Prompt tests"
         backTo={runId || isCompare ? '/resume/eval' : undefined}
         action={
           <button type="button" className="btn btn-sm" onClick={() => openNew(undefined)}>

@@ -24,7 +24,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" />
+      <PageHeader title="Home" />
 
       {isAdmin && (
         <div className="w-64">

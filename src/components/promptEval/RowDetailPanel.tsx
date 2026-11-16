@@ -177,7 +177,7 @@ export default function RowDetailPanel({
                 <PartsTable title="Believability" total={v.believabilityScore} parts={v.believabilityParts} />
               </div>
               <p className="hint">
-                Match is the weighted average of its parts, the same score Job Applies gives. Believability starts at 100 and
+                Match is the weighted average of its parts, the same score Auto apply gives. Believability starts at 100 and
                 each check takes off up to its weight.
               </p>
             </section>
@@ -214,7 +214,7 @@ export default function RowDetailPanel({
             />
             {row.judgeModel === 'rules' ? (
               <p className="text-xs text-muted">
-                <span className="font-medium text-body">Judge:</span> <span className="font-mono">Job Applies rules</span>
+                <span className="font-medium text-body">Judge:</span> <span className="font-mono">Auto apply rules</span>
                 {row.judgeCached && (
                   <span className="badge-neutral ml-1" title="The JD reading from an earlier run was reused, no model call">
                     reading reused

@@ -382,7 +382,7 @@ export default function GeneratedResumesPage() {
                 <th className="px-3 py-2 font-medium">Profile</th>
                 <th className="px-3 py-2 font-medium">Company</th>
                 <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium" title="ATS match score vs the job (Job Applies job or pasted JD), scored as on Job Applies">Score</th>
+                <th className="px-3 py-2 font-medium" title="ATS match score vs the job (Auto apply job or pasted JD), scored as in Auto apply">Score</th>
                 <th className="px-3 py-2 font-medium">LLM</th>
                 <th className="px-3 py-2 font-medium">Time</th>
                 <th className="px-3 py-2 font-medium">Tokens</th>
@@ -554,7 +554,7 @@ function JobRow({
         <td className="px-3 py-2">
           {job.fixedFrom ? (
             // A Job Applies fixed-resume fork: no model ran, the uploaded resume was copied for the job.
-            <span className="badge badge-success" title="Fixed resume: the best uploaded resume, copied for this job by Job Applies">
+            <span className="badge badge-success" title="Fixed resume: the best uploaded resume, copied for this job by Auto apply">
               Fixed
             </span>
           ) : (
@@ -979,14 +979,14 @@ function ScreeningPanel({
                   <Link
                     to={`/job-applies/${job.jobApplyRunId}`}
                     className="badge-neutral shrink-0 max-w-[220px] gap-1 text-[10px] hover:underline"
-                    title={`Open the Job Applies run this resume was tailored in: ${job.jobApplyRunName}`}
+                    title={`Open the Auto apply run this resume was tailored in: ${job.jobApplyRunName}`}
                   >
                     <span className="truncate">From run: {job.jobApplyRunName}</span>
                     <span aria-hidden>↗</span>
                   </Link>
                 ) : (
-                  <span className="badge-neutral shrink-0 text-[10px]" title="Tailored from a Job Applies run">
-                    From a Job Applies run
+                  <span className="badge-neutral shrink-0 text-[10px]" title="Tailored from an Auto apply run">
+                    From an Auto apply run
                   </span>
                 ))}
             </div>

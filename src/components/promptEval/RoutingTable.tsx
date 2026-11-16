@@ -90,7 +90,7 @@ export default function RoutingTable({
         </div>
       )}
       <p className="hint mt-1">
-        Auto uses the Job Applies pick: role keywords in the title and skills, matched to each unit's roles, else the
+        Auto uses the Auto apply pick: role keywords in the title and skills, matched to each unit's roles, else the
         default unit. Free, no model call.
       </p>
     </div>
