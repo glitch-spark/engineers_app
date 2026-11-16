@@ -86,8 +86,12 @@ export default function BiddersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [inviteShown, setInviteShown] = useState<{ name: string; invite: api.BidderInvite } | null>(null);
 
+  // The review overlay was opened by a click on this page (a new history entry above its origin), not by a link or a
+  // reload: Close then steps back to that origin instead of pushing a copy of it (Back would reopen the review).
+  const openedInApp = useRef(false);
   const setParam = useCallback(
-    (patch: Partial<Record<Param, string | null>>, opts?: { replace?: boolean }) =>
+    (patch: Partial<Record<Param, string | null>>, opts?: { replace?: boolean }) => {
+      if (patch.mode === 'focus' && !opts?.replace) openedInApp.current = true;
       setParams((prev) => {
         const next = new URLSearchParams(prev);
         for (const [key, value] of Object.entries(patch)) {
@@ -95,7 +99,8 @@ export default function BiddersPage() {
           else next.delete(key);
         }
         return next;
-      }, opts),
+      }, opts);
+    },
     [setParams],
   );
 
@@ -138,16 +143,12 @@ export default function BiddersPage() {
   }, [active.data, archived.data]);
 
   const { mutate: mutateKeys } = useSWRConfig();
-  // A change to bidders (added, edited, archived, restored) shows in the list, the card and the banners too.
+  // A change to bidders (added, edited, archived, restored) or a review decision shows everywhere the counts do: the
+  // list, the card, the banners, To review, the open day's and week's lists (one key list, isReviewedDataKey).
   const refresh = () => {
     board.mutate();
     active.mutate();
     archived.mutate();
-    void mutateKeys((key) => Array.isArray(key) && ['bid-performance', 'bid-insights', 'bid-alerts', 'bid-backlog'].includes(key[0] as string));
-  };
-  // The open day's list and the bidder's week list too (decisions made in the overlay).
-  const refreshAll = () => {
-    refresh();
     void mutateKeys(isReviewedDataKey);
   };
 
@@ -212,7 +213,15 @@ export default function BiddersPage() {
         : queue
           ? { scope: { queue }, set: 'pending' }
           : null;
-  const exitFocus = () => setParam(REVIEW_EXIT);
+  // Close (and Esc): back to the origin entry when opened here; a deep link's review is replaced by its origin.
+  const exitFocus = () => {
+    if (openedInApp.current) {
+      openedInApp.current = false;
+      navigate(-1);
+    } else {
+      setParam(REVIEW_EXIT, { replace: true });
+    }
+  };
   const openReview = (scope: ReviewScope, id?: string | null) => setParam(reviewPatch(scope, id));
   const scopeSwitch = target && clock && focus && 'queue' in focus.scope
     ? {
@@ -228,8 +237,10 @@ export default function BiddersPage() {
   const wasFocus = useRef(false);
   const inFocus = !!focus;
   useEffect(() => {
-    if (wasFocus.current && !inFocus) refreshAll();
+    if (wasFocus.current && !inFocus) refresh();
     wasFocus.current = inFocus;
+    // Left by Back or a link: a later Close of a review reached with Forward must not step back past it.
+    if (params.get('mode') !== 'focus') openedInApp.current = false;
   });
 
 
@@ -264,9 +275,14 @@ export default function BiddersPage() {
   const list = (
     <div className="space-y-5">
       {/* To review: the one place the backlog shows (all pending, any age), above the bar and the banners. */}
-      {section === 'bidders' && ready && backlog.data && (
+      {section === 'bidders' && ready && (backlog.data ? (
         <ToReviewBlock backlog={backlog.data} allOwners={allOwners} onReview={openReview} />
-      )}
+      ) : backlog.error ? (
+        <p className="text-sm text-muted" role="status">
+          Couldn&apos;t load To review.{' '}
+          <button type="button" className="underline" onClick={() => void backlog.mutate()}>Retry</button>
+        </p>
+      ) : null)}
 
       {filterState && filters ? (
         <BiddersFilterBar

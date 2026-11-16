@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 
 const api = vi.hoisted(() => ({
@@ -64,16 +64,20 @@ function perf(selfOwner = { id: 'u1', name: 'Pat' }) {
   };
 }
 
-const seen = { search: '' };
+const seen = { search: '', pathname: '', navigate: null as NavigateFunction | null };
 function Probe() {
-  seen.search = useLocation().search;
+  const loc = useLocation();
+  seen.search = loc.search;
+  seen.pathname = loc.pathname;
+  seen.navigate = useNavigate();
   return null;
 }
 
-function renderPage(initial: string) {
+/** `before`: history entries below the page (another page of the app), so Back has somewhere to go. */
+function renderPage(initial: string, before: string[] = []) {
   render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <MemoryRouter initialEntries={[initial]}>
+      <MemoryRouter initialEntries={[...before, initial]} initialIndex={before.length}>
         <BiddersPage />
         <Probe />
       </MemoryRouter>
@@ -308,7 +312,8 @@ describe('To review', () => {
     // The bidder's own owner (Ruling 4): no ownerId from the bar.
     expect(await shownScope()).toEqual({ queue: { period: 'week', date: '2026-11-29', bidderId: 'b1' } });
     closeReview();
-    expect(seen.search).toBe('?bidder=b1&week=2026-11-29');
+    // Back to the exact origin entry (the tile's `week` was only on the review's entry).
+    await waitFor(() => expect(seen.search).toBe('?bidder=b1'));
     expect(screen.queryByTestId('focus')).toBeNull();
   });
 
@@ -317,6 +322,50 @@ describe('To review', () => {
     expect(await shownScope()).toEqual({ queue: { period: 'all', ownerId: 'u1' } });
     closeReview();
     expect(seen.search).toBe('?section=pay');
+  });
+
+  it('Close after an in-app open steps back to the origin; Back then leaves the page, never reopening the review', async () => {
+    renderPage('/bidders', ['/accounts']);
+    fireEvent.click(within(await toReview()).getByRole('button', { name: 'Review all' }));
+    await shownScope();
+    closeReview();
+    await waitFor(() => expect(seen.search).toBe(''));
+    expect(seen.pathname).toBe('/bidders');
+    expect(screen.queryByTestId('focus')).toBeNull();
+    act(() => seen.navigate!(-1));
+    await waitFor(() => expect(seen.pathname).toBe('/accounts'));
+    expect(screen.queryByTestId('focus')).toBeNull();
+  });
+
+  it('Close after an in-app open from the bidder page steps back to that page', async () => {
+    api.bidsWeek.mockResolvedValue(board());
+    renderPage('/bidders?bidder=b1', ['/accounts']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Review pending' }));
+    await shownScope();
+    closeReview();
+    await waitFor(() => expect(seen.search).toBe('?bidder=b1'));
+    act(() => seen.navigate!(-1));
+    await waitFor(() => expect(seen.pathname).toBe('/accounts'));
+  });
+
+  it("a deep link's Close replaces its entry with the origin", async () => {
+    renderPage('/bidders?mode=focus&review=all', ['/accounts']);
+    await shownScope();
+    closeReview();
+    expect(seen.search).toBe('');
+    expect(seen.pathname).toBe('/bidders');
+    act(() => seen.navigate!(-1));
+    await waitFor(() => expect(seen.pathname).toBe('/accounts'));
+    expect(screen.queryByTestId('focus')).toBeNull();
+  });
+
+  it("a failed backlog says so and retries, it doesn't vanish", async () => {
+    api.getBidBacklog.mockRejectedValueOnce(new Error('boom'));
+    renderPage('/bidders');
+    expect(await screen.findByText(/Couldn.t load To review/)).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await toReview()).toBeTruthy();
   });
 
   it('nothing pending hides the block', async () => {
