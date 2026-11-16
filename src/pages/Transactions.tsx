@@ -1,19 +1,32 @@
 import useSWR from 'swr';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Modal from '../components/Modal';
-import { Pencil, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
+import { Pencil, Trash2, CheckCircle, XCircle, Copy } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { messageOf, notify } from '../lib/notify';
-import { calendarPeriodRange, formatCalendarPeriod, type CalendarPeriod } from '../lib/dateRangePresets';
+import {
+  ALL_USERS,
+  TX_CLEAR_KEYS,
+  TX_PRESETS,
+  parseTxValues,
+  txCanClear,
+  txListParams,
+  txUrlDefaults,
+  type TxKey,
+} from '../lib/transactionFilters';
+import { useUrlFilters } from '../lib/useUrlFilters';
+import DateRangeFilter, { type DateRangeValue } from '../components/filters/DateRangeFilter';
+import FilterBar, { FilterField } from '../components/filters/FilterBar';
+import Pagination from '../components/Pagination';
+import Select from '../components/Select';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
 
 type PayMethod = 'coin' | 'card';
 type BillingCycle = 'one_time' | 'monthly';
-type Period = CalendarPeriod | 'custom';
 
 type Tx = {
   _id: string;
@@ -73,56 +86,27 @@ export default function TransactionsPage() {
   const isAdmin = user?.role === 'admin';
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [period, setPeriod] = useState<Period>('month');
-  const [periodOffset, setPeriodOffset] = useState(0);
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  // Opens on the logged-in user's own transactions; "All users" stays selectable.
-  const [userId, setUserId] = useState(user?.id ?? '');
-  const userFilterTouched = useRef(false);
-  useEffect(() => {
-    if (!userFilterTouched.current && user?.id) setUserId(user.id);
-  }, [user?.id]);
-  const [payerFilter, setPayerFilter] = useState('');
-  const [payMethodFilter, setPayMethodFilter] = useState<'' | PayMethod>('');
+  // Filters live in the URL (defaults left out); an unrelated key such as the `renew` prefill is never touched.
+  const userId = user?.id ?? '';
+  const [urlValues, patchUrl] = useUrlFilters(txUrlDefaults(userId));
+  const filters = parseTxValues(urlValues, userId);
+  // Local calendar day, as the page has always worked out its periods.
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const params = txListParams(filters, today);
+  const rangeValue: DateRangeValue = { preset: filters.range, from: filters.from, to: filters.to };
+  const canClear = txCanClear(filters, userId);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  const range = useMemo(
-    () => (period === 'custom' ? { from: customFrom, to: customTo } : calendarPeriodRange(period, periodOffset)),
-    [period, periodOffset, customFrom, customTo],
-  );
-
-  const { data, mutate, isLoading } = useSWR(
-    ['transactions', range.from, range.to, userId, payerFilter, payMethodFilter, currentPage, pageSize] as const,
-    () => api.listTransactions({
-      page: currentPage,
-      limit: pageSize,
-      ...(range.from ? { from: range.from } : {}),
-      ...(range.to ? { to: range.to } : {}),
-      ...(userId ? { userId } : {}),
-      ...(payerFilter ? { payerId: payerFilter } : {}),
-      ...(payMethodFilter ? { payMethod: payMethodFilter } : {}),
-    }),
+  const { data: listData, mutate, isLoading } = useSWR(
+    params ? (['transactions', JSON.stringify(params)] as const) : null,
+    () => api.listTransactions(params ?? undefined),
     { keepPreviousData: true },
   );
+  // A partial or invalid Custom range asks for nothing: show no rows rather than the last range's.
+  const data = params ? listData : undefined;
 
-  const changePeriod = (next: Period) => {
-    if (next === 'custom') {
-      // Start the custom range from whatever window was showing.
-      setCustomFrom(range.from);
-      setCustomTo(range.to);
-    }
-    setPeriod(next);
-    setPeriodOffset(0);
-    setCurrentPage(1);
-  };
-
-  const stepPeriod = (delta: number) => {
-    setPeriodOffset((o) => o + delta);
-    setCurrentPage(1);
-  };
+  const clearFilters = () =>
+    patchUrl(Object.fromEntries(TX_CLEAR_KEYS.map((k) => [k, undefined])) as Partial<Record<TxKey, string>>);
 
   const { data: lookupData } = useSWR(['users-lookup'], () => api.lookupUsers());
   const allUsers = lookupData?.users ?? [];
@@ -309,15 +293,9 @@ export default function TransactionsPage() {
     }
   };
 
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setCurrentPage(1);
-  };
-
   const transactions = (data?.transactions as Tx[]) || [];
   const pagination = data?.pagination;
   const totals = data?.totals;
-  const periodUnit = period === 'custom' ? '' : period;
 
   const formatMoney = (n: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -341,128 +319,56 @@ export default function TransactionsPage() {
         action={<button type="button" className="btn" onClick={openAdd}>Add</button>}
       />
 
-      <div className="flex items-end gap-3 flex-wrap toolbar">
-        <div className="w-52">
-          <label htmlFor={`${formId}-filter-user`} className="block text-xs text-muted mb-1">User</label>
-          <select
+      <FilterBar canClear={canClear} onClear={clearFilters}>
+        <FilterField label="User" htmlFor={`${formId}-filter-user`} width="w-52">
+          <Select
             id={`${formId}-filter-user`}
-            className="select focus-ring w-full text-sm"
-            value={userId}
-            onChange={(e) => { userFilterTouched.current = true; setUserId(e.target.value); setCurrentPage(1); }}
-          >
-            <option value="">All users</option>
-            {allUsers.map((u) => (
-              <option key={u._id} value={u._id}>
-                {u.name || u.email}{u._id === user?.id ? ' (you)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="w-44">
-          <label htmlFor={`${formId}-filter-method`} className="block text-xs text-muted mb-1">Pay method</label>
-          <select
+            className="w-full text-sm"
+            value={filters.user}
+            onChange={(v) => patchUrl({ user: v })}
+            options={[
+              { value: ALL_USERS, label: 'All users' },
+              ...allUsers.map((u) => ({ value: u._id, label: `${u.name || u.email}${u._id === user?.id ? ' (you)' : ''}` })),
+            ]}
+          />
+        </FilterField>
+        <FilterField label="Pay method" htmlFor={`${formId}-filter-method`}>
+          <Select
             id={`${formId}-filter-method`}
-            className="select focus-ring w-full text-sm"
-            value={payMethodFilter}
-            onChange={(e) => { setPayMethodFilter(e.target.value as '' | PayMethod); setCurrentPage(1); }}
-          >
-            <option value="">All methods</option>
-            <option value="coin">Coin</option>
-            <option value="card">Card</option>
-          </select>
-        </div>
-        <div className="w-52">
-          <label htmlFor={`${formId}-filter-payer`} className="block text-xs text-muted mb-1">Payer</label>
-          <select
+            className="w-full text-sm"
+            value={filters.method}
+            onChange={(v) => patchUrl({ method: v })}
+            options={[
+              { value: '', label: 'All methods' },
+              { value: 'coin', label: 'Coin' },
+              { value: 'card', label: 'Card' },
+            ]}
+          />
+        </FilterField>
+        <FilterField label="Payer" htmlFor={`${formId}-filter-payer`} width="w-52">
+          <Select
             id={`${formId}-filter-payer`}
-            className="select focus-ring w-full text-sm"
-            value={payerFilter}
-            onChange={(e) => { setPayerFilter(e.target.value); setCurrentPage(1); }}
-          >
-            <option value="">All payers</option>
-            {allUsers.map((u) => (
-              <option key={u._id} value={u._id}>
-                {u.name || u.email}{u._id === user?.id ? ' (you)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="w-36">
-          <label htmlFor={`${formId}-filter-period`} className="block text-xs text-muted mb-1">Period</label>
-          <select
-            id={`${formId}-filter-period`}
-            className="select focus-ring w-full text-sm"
-            value={period}
-            onChange={(e) => changePeriod(e.target.value as Period)}
-          >
-            <option value="week">Week</option>
-            <option value="month">Month</option>
-            <option value="year">Year</option>
-            <option value="custom">Custom</option>
-          </select>
-        </div>
-        {period === 'custom' ? (
-          <>
-            <div className="w-44">
-              <label htmlFor={`${formId}-filter-from`} className="block text-xs text-muted mb-1">From</label>
-              <input
-                id={`${formId}-filter-from`}
-                className="input w-full text-sm"
-                type="date"
-                value={customFrom}
-                max={customTo || undefined}
-                onChange={(e) => { setCustomFrom(e.target.value); setCurrentPage(1); }}
-              />
-            </div>
-            <div className="w-44">
-              <label htmlFor={`${formId}-filter-to`} className="block text-xs text-muted mb-1">To</label>
-              <input
-                id={`${formId}-filter-to`}
-                className="input w-full text-sm"
-                type="date"
-                value={customTo}
-                min={customFrom || undefined}
-                onChange={(e) => { setCustomTo(e.target.value); setCurrentPage(1); }}
-              />
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-1">
-            <button type="button" className="btn-icon" onClick={() => stepPeriod(-1)} aria-label={`Previous ${periodUnit}`} title={`Previous ${periodUnit}`}>
-              <ChevronLeft size={16} aria-hidden />
-            </button>
-            <span className="min-w-[11rem] text-center text-sm font-medium tabular-nums" aria-live="polite">
-              {formatCalendarPeriod(period, range.from, range.to)}
-            </span>
-            <button type="button" className="btn-icon" onClick={() => stepPeriod(1)} aria-label={`Next ${periodUnit}`} title={`Next ${periodUnit}`}>
-              <ChevronRight size={16} aria-hidden />
-            </button>
-          </div>
-        )}
-      </div>
+            className="w-full text-sm"
+            value={filters.payer}
+            onChange={(v) => patchUrl({ payer: v })}
+            options={[
+              { value: '', label: 'All payers' },
+              ...allUsers.map((u) => ({ value: u._id, label: `${u.name || u.email}${u._id === user?.id ? ' (you)' : ''}` })),
+            ]}
+          />
+        </FilterField>
+        <DateRangeFilter
+          value={rangeValue}
+          onChange={(v) => patchUrl({ range: v.preset, from: v.from, to: v.to })}
+          presets={TX_PRESETS}
+          allowFuture
+          today={today}
+        />
+      </FilterBar>
 
       {data && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-muted">
-            <span>
-              Showing {pagination?.total ?? 0} transaction{pagination?.total !== 1 ? 's' : ''} total
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label htmlFor={`${formId}-page-size`} className="text-sm font-medium">Show:</label>
-            <select
-              id={`${formId}-page-size`}
-              value={pageSize}
-              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="select focus-ring text-sm"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
+        <div className="text-sm text-muted">
+          Showing {pagination?.total ?? 0} transaction{pagination?.total !== 1 ? 's' : ''} total
         </div>
       )}
 
@@ -594,62 +500,13 @@ export default function TransactionsPage() {
         </table>
       </div>
 
-      {pagination && pagination.totalPages > 1 && (
-        <nav aria-label="Transactions pagination" className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-muted">
-            Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-            {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-            {pagination.total} results
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage(pagination.page - 1)}
-              disabled={!pagination.hasPrev}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              Previous
-            </button>
-
-            <div className="flex gap-1">
-              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                let pageNum;
-                if (pagination.totalPages <= 5) pageNum = i + 1;
-                else if (pagination.page <= 3) pageNum = i + 1;
-                else if (pagination.page >= pagination.totalPages - 2) pageNum = pagination.totalPages - 4 + i;
-                else pageNum = pagination.page - 2 + i;
-
-                return (
-                  <button
-                    key={pageNum}
-                    type="button"
-                    onClick={() => setCurrentPage(pageNum)}
-                    aria-label={`Page ${pageNum}`}
-                    aria-current={pageNum === pagination.page ? 'page' : undefined}
-                    className={`px-3 py-1 border rounded text-sm ${
-                      pageNum === pagination.page
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setCurrentPage(pagination.page + 1)}
-              disabled={!pagination.hasNext}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              Next
-            </button>
-          </div>
-        </nav>
-      )}
+      <Pagination
+        info={pagination}
+        onPage={(page) => patchUrl({ page: String(page) })}
+        pageSize={filters.size}
+        onPageSize={(size) => patchUrl({ size: String(size) })}
+        label="Transactions pagination"
+      />
 
       <Modal
         open={open}
