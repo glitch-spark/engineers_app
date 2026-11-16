@@ -1,30 +1,31 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { neighbourWeekKeys } from './weekDates';
+import { stepPayWeekDay, type ShownWeeks } from '../../lib/bidderFilters';
 
 /**
- * Pay-week navigator: prev / next, "This week" and the label. `days` are the shown week's report days (the server's
- * list, 7 or 8 long); null while loading. `isCurrent` disables next and hides "This week".
+ * Pay-week navigator: prev / next, "This week" and the label. `shown` is the shown week's first and last report day
+ * (the server's days: 7, or 8 across a schedule switch); null while loading. It steps like the Bidders list
+ * (`stepPayWeekDay`): back to the day before the first, forward to the last + 7. `isCurrent` disables next and hides
+ * "This week".
  */
 export default function WeekNav({
-  days,
+  shown,
   label,
   isCurrent,
   onChange,
 }: {
-  days: { day: string }[] | null;
+  shown: ShownWeeks | null;
   label: string | null;
   isCurrent: boolean;
   onChange: (week: string | null) => void;
 }) {
-  const near = days && neighbourWeekKeys(days);
   return (
     <div className="toolbar flex items-center gap-2">
       <button
         type="button"
         className="btn-icon"
         aria-label="Previous week"
-        disabled={!near}
-        onClick={() => near && onChange(near.prev)}
+        disabled={!shown}
+        onClick={() => shown && onChange(stepPayWeekDay(shown, -1))}
       >
         <ChevronLeft size={18} aria-hidden />
       </button>
@@ -36,12 +37,12 @@ export default function WeekNav({
         type="button"
         className="btn-icon"
         aria-label="Next week"
-        disabled={!near || isCurrent}
-        onClick={() => near && onChange(near.next)}
+        disabled={!shown || isCurrent}
+        onClick={() => shown && onChange(stepPayWeekDay(shown, 1))}
       >
         <ChevronRight size={18} aria-hidden />
       </button>
-      {near && !isCurrent && (
+      {shown && !isCurrent && (
         <button type="button" className="btn-outline text-xs" onClick={() => onChange(null)}>
           This week
         </button>

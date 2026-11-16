@@ -1,27 +1,38 @@
 // @vitest-environment jsdom
 import { createElement } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
+import { addDays, type BidderPeriodRequest, type ReportClock, type ShownWeeks } from '../../lib/bidderFilters';
 import { BiddersFilterBar, useBidderFilters } from './biddersFilters';
 
-// Wed Nov 18, 2026 09:00 Chicago (15:00Z): the pay week is Sun Nov 15 .. Sat Nov 21.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date('2026-11-18T15:00:00Z'));
-});
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-});
+// Wed Nov 18, 2026 09:00 Chicago, as the server's clock says: the long pay week Sun Nov 15 .. Sun Nov 22.
+const CLOCK: ReportClock = {
+  today: '2026-11-18', payWeekStart: '2026-11-15', payWeekEnd: '2026-11-22', previousPayWeekStart: '2026-11-08',
+  timezone: 'America/Chicago',
+};
+afterEach(cleanup);
+
+/** The days the server shows for a pay-week request (Sun..Sat weeks before the long week Nov 15..22). */
+function payWeekOf(day: string): ShownWeeks {
+  if (day >= '2026-11-15') return { first: '2026-11-15', last: '2026-11-22' };
+  const first = addDays(day, -new Date(`${day}T00:00:00Z`).getUTCDay());
+  return { first, last: addDays(first, 6) };
+}
+function served(req: BidderPeriodRequest | null): ShownWeeks | undefined {
+  if (!req || req.period !== 'week') return undefined;
+  const w = payWeekOf(req.date ?? CLOCK.payWeekStart);
+  return req.weeks === 2 ? { first: payWeekOf(addDays(w.first, -1)).first, last: w.last } : w;
+}
 
 const seen = { search: '', request: null as unknown };
 function Probe() {
   seen.search = useLocation().search;
   return null;
 }
-function Bar({ admin = false, label }: { admin?: boolean; label?: string }) {
-  const f = useBidderFilters(admin);
+type BarProps = { admin?: boolean; label?: string; loading?: boolean };
+function Bar({ admin = false, label, loading = false }: BarProps) {
+  const f = useBidderFilters(admin, CLOCK)!;
   seen.request = f.request;
   return createElement(BiddersFilterBar, {
     f,
@@ -29,9 +40,11 @@ function Bar({ admin = false, label }: { admin?: boolean; label?: string }) {
     ownerId: f.filters.owner,
     serverLabel: label,
     ownerOptions: [{ value: '', label: 'All users' }, { value: 'u1', label: 'Pedro' }],
+    // The period the server showed for the request (none while it loads).
+    shown: loading ? undefined : served(f.request),
   });
 }
-const renderBar = (initial: string, props: { admin?: boolean; label?: string } = {}) =>
+const renderBar = (initial: string, props: BarProps = {}) =>
   render(createElement(MemoryRouter, { initialEntries: [`/bidders${initial}`] }, createElement(Probe), createElement(Bar, props)));
 const prev = () => fireEvent.click(screen.getByRole('button', { name: 'Previous period' }));
 const next = () => fireEvent.click(screen.getByRole('button', { name: 'Next period' }));
@@ -61,8 +74,8 @@ describe('the bar', () => {
     renderBar('');
     expect(screen.getByText('…')).toBeTruthy();
     cleanup();
-    renderBar('', { label: 'Week ending Sat Nov 21' });
-    expect(screen.getByText('Week ending Sat Nov 21')).toBeTruthy();
+    renderBar('', { label: 'Week ending Sun Nov 22' });
+    expect(screen.getByText('Week ending Sun Nov 22')).toBeTruthy();
   });
 
   it('shows the dates for months', () => {
@@ -93,8 +106,8 @@ describe('stepping with the arrows', () => {
     expect(seen.search).toBe('?range=last_pay_week');
     expect(seen.request).toEqual({ period: 'week', date: '2026-11-14' });
     prev();
-    expect(seen.search).toBe('?range=pay_week&date=2026-11-01');
-    expect(seen.request).toEqual({ period: 'week', date: '2026-11-01' });
+    expect(seen.search).toBe('?range=pay_week&date=2026-11-07');
+    expect(seen.request).toEqual({ period: 'week', date: '2026-11-07' });
     // The stepped week has its own dropdown entry while it is active.
     expect(range().value).toBe('pay_week');
     expect([...range().options].map((o) => o.text)).toContain('Pay week');
@@ -109,12 +122,20 @@ describe('stepping with the arrows', () => {
   it('steps Last 2 pay weeks by two', () => {
     renderBar('?range=last_2_pay_weeks');
     prev();
-    expect(seen.search).toBe('?range=two_pay_weeks&date=2026-10-25');
-    expect(seen.request).toEqual({ period: 'week', date: '2026-10-25', weeks: 2 });
+    expect(seen.search).toBe('?range=two_pay_weeks&date=2026-10-31');
+    expect(seen.request).toEqual({ period: 'week', date: '2026-10-31', weeks: 2 });
     expect(range().value).toBe('two_pay_weeks');
     expect([...range().options].map((o) => o.text)).toContain('2 pay weeks');
     next();
     expect(seen.search).toBe('?range=last_2_pay_weeks');
+  });
+
+  it('previous period waits for the period to load', () => {
+    renderBar('', { loading: true });
+    expect((screen.getByRole('button', { name: 'Previous period' }) as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+    renderBar('?range=this_month', { loading: true });
+    expect((screen.getByRole('button', { name: 'Previous period' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('keeps the server label for a stepped pay week', () => {

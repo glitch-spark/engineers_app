@@ -158,6 +158,24 @@ describe('DateRangeFilter', () => {
     expect(onStep).toHaveBeenCalledWith(-1);
     expect(button('Next period').disabled).toBe(true);
   });
+
+  it('canStepBack={false} disables Previous period', () => {
+    const onStep = vi.fn();
+    render(
+      <DateRangeFilter
+        value={{ preset: 'this_week' }}
+        onChange={vi.fn()}
+        presets={PRESETS}
+        allowFuture={false}
+        today={TODAY}
+        onStep={onStep}
+        canStepBack={false}
+      />,
+    );
+    expect(button('Previous period').disabled).toBe(true);
+    prev();
+    expect(onStep).not.toHaveBeenCalled();
+  });
 });
 
 describe('resolveRange', () => {

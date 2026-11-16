@@ -14,6 +14,8 @@ import BiddersOverview from '../components/bidders/BiddersOverview';
 import BidderAlerts from '../components/bidders/BidderAlerts';
 import SelfBidsPanel, { type SelfScope } from '../components/bidders/SelfBidsPanel';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
+import { shownWeeksOf } from '../lib/bidderFilters';
+import { useReportClock } from '../lib/useReportClock';
 import { BiddersFilterBar, useBidderFilters } from '../components/bidders/biddersFilters';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { notify } from '../lib/notify';
@@ -41,10 +43,13 @@ export default function BiddersPage() {
   const bidderId = params.get('bidder');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const filterState = useBidderFilters(isAdmin);
-  const { filters, request } = filterState;
-  const ownerId = isAdmin ? filters.owner : '';
-  const showArchived = filters.archived;
+  // The server's report clock: the list's periods mean nothing until it loads (the bidder view doesn't need it).
+  const reportClock = useReportClock();
+  const filterState = useBidderFilters(isAdmin, reportClock.clock);
+  const filters = filterState?.filters;
+  const request = filterState?.request ?? null;
+  const ownerId = isAdmin ? (filters?.owner ?? '') : '';
+  const showArchived = filters?.archived ?? false;
   const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null);
   const [selfScope, setSelfScope] = useState<SelfScope | null>(null);
   const [archiving, setArchiving] = useState(false);
@@ -179,9 +184,16 @@ export default function BiddersPage() {
     <div className="space-y-5">
       {bidderId ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <WeekNav days={data?.week.days ?? null} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />
+          <WeekNav
+            shown={data && data.week.days.length > 0
+              ? { first: data.week.days[0].day, last: data.week.days[data.week.days.length - 1].day }
+              : null}
+            label={data?.week.label ?? null}
+            isCurrent={isCurrent}
+            onChange={(w) => setParam({ week: w })}
+          />
         </div>
-      ) : (
+      ) : filterState ? (
         <BiddersFilterBar
           f={filterState}
           isAdmin={isAdmin}
@@ -189,10 +201,22 @@ export default function BiddersPage() {
           ownerId={ownerId}
           serverLabel={request ? perf.data?.label : undefined}
           failed={!!perf.error}
+          shown={(request && perf.data && shownWeeksOf(perf.data)) || undefined}
         />
-      )}
+      ) : null}
 
-      {!bidderId ? (
+      {!bidderId && reportClock.error && !filterState ? (
+        <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
+          Couldn&apos;t load the pay week.{' '}
+          <button type="button" className="underline" onClick={reportClock.retry}>Retry</button>
+        </div>
+      ) : !bidderId && !filterState ? (
+        <div className="space-y-3" aria-busy="true">
+          <div className="panel space-y-2 p-4">
+            {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-8 w-full" />)}
+          </div>
+        </div>
+      ) : !bidderId && filters ? (
         <BiddersOverview
           ownerId={ownerId}
           onOpenBidder={(id, wk, day) => setParam({ bidder: id, week: wk, day: day ?? null, view: null, tab: null })}
@@ -203,7 +227,7 @@ export default function BiddersPage() {
           error={request ? perf.error : undefined}
           onRetry={() => void perf.mutate()}
           search={filters.q}
-          onClearSearch={() => filterState.patch({ q: '' })}
+          onClearSearch={() => filterState?.patch({ q: '' })}
           show={filters.show}
           onOpenSelf={(id, name, scope) => setSelfScope({ ownerId: id, ownerName: isAdmin ? name : undefined, ...scope })}
           // /bidders lists only the viewer's own bidders, so other owners' rows get no menu.

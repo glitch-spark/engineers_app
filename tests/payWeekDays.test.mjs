@@ -18,18 +18,19 @@ test('time columns follow the server days: 8 columns, labelled from the days, no
   assert.deepEqual(after.map((c) => c.label), ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
 });
 
-test('week navigation steps from the week\'s own first and last day, not a fixed 7 days', () => {
-  // From the 8-day week, +7 from its first day (Nov 15 -> Nov 22) or -7 from its last day (Nov 22 -> Nov 15) is the same week.
-  assert.deepEqual(neighbourWeekKeys(eight), { prev: '2026-11-14', next: '2026-11-23' });
-  assert.deepEqual(neighbourWeekKeys(seven), { prev: '2026-11-22', next: '2026-11-30' });
-  assert.deepEqual(neighbourWeekKeys(old), { prev: '2026-11-07', next: '2026-11-15' });
+test("week navigation steps from the week's own first and last day, not a fixed 7 days", () => {
+  // One stepper for the list and the bidder page (stepPayWeekDay): back = first - 1, forward = last + 7. From the
+  // 8-day week, +7 from its first day (Nov 15 -> Nov 22) would be the same week again; last + 7 is a day of the next.
+  assert.deepEqual(neighbourWeekKeys(eight), { prev: '2026-11-14', next: '2026-11-29' });
+  assert.deepEqual(neighbourWeekKeys(seven), { prev: '2026-11-22', next: '2026-12-06' });
+  assert.deepEqual(neighbourWeekKeys(old), { prev: '2026-11-07', next: '2026-11-21' });
   assert.equal(neighbourWeekKeys([]), null);
 });
 
-test('prev of a week lands in the week that ends the day before it starts (and next in the one starting after)', () => {
+test('prev of a week lands in the week that ends the day before it starts (and next in the one after it)', () => {
   const weeks = [old, eight, seven];
   for (let i = 1; i < weeks.length; i++) {
     assert.equal(neighbourWeekKeys(weeks[i]).prev, weeks[i - 1][weeks[i - 1].length - 1].day);
-    assert.equal(neighbourWeekKeys(weeks[i - 1]).next, weeks[i][0].day);
+    assert.ok(weeks[i].some((d) => d.day === neighbourWeekKeys(weeks[i - 1]).next));
   }
 });

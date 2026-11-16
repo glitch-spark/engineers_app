@@ -5,6 +5,7 @@ import {
   BIDDER_SHOW_OPTIONS,
   BIDDER_URL_DEFAULTS,
   bidderCanClear,
+  bidderCanStepBack,
   bidderCanStepForward,
   bidderDays,
   bidderLabel,
@@ -12,7 +13,6 @@ import {
   bidderPeriodRequest,
   parseBidderValues,
   pickBidderPreset,
-  reportClock,
   stepBidderPeriod,
   type BidderFilters,
   type BidderKey,
@@ -20,6 +20,7 @@ import {
   type BidderPreset,
   type BidderRowFilter,
   type ReportClock,
+  type ShownWeeks,
 } from '../../lib/bidderFilters';
 import { useUrlFilters } from '../../lib/useUrlFilters';
 import DateRangeFilter from '../filters/DateRangeFilter';
@@ -42,10 +43,11 @@ export type BidderFilterState = {
 /**
  * The Bidders list filters, read from and written to the URL (see lib/bidderFilters.ts for the keys). Other keys on the
  * page (`bidder`, `day`, `tab`, `mode`, `bid`) are never touched, so a bidder link survives every filter change.
+ * Null until the server's report clock (`useReportClock`) has loaded: the presets mean nothing without it.
  */
-export function useBidderFilters(isAdmin: boolean): BidderFilterState {
+export function useBidderFilters(isAdmin: boolean, clock: ReportClock | undefined): BidderFilterState | null {
   const [values, patch] = useUrlFilters(BIDDER_URL_DEFAULTS);
-  const clock = reportClock();
+  if (!clock) return null;
   const filters = parseBidderValues(values, clock);
   return {
     filters,
@@ -59,11 +61,12 @@ export function useBidderFilters(isAdmin: boolean): BidderFilterState {
 
 /**
  * The Bidders filter bar: Owner (admin), Show (All / Bidders / Self), Show archived, search, the date range, Clear. The pay-week presets are
- * stepped by the page's own logic and labelled with the server's pay-week label (`serverLabel`, undefined while it
- * loads; `failed` falls back to the dates).
+ * stepped by the page's own logic from the report days the server showed (`shown`, undefined while the period loads:
+ * ‹ waits for it) and labelled with the server's pay-week label (`serverLabel`, undefined while it loads; `failed`
+ * falls back to the dates).
  */
 export function BiddersFilterBar({
-  f, isAdmin, ownerOptions, ownerId, serverLabel, failed = false,
+  f, isAdmin, ownerOptions, ownerId, serverLabel, failed = false, shown,
 }: {
   f: BidderFilterState;
   isAdmin: boolean;
@@ -71,6 +74,7 @@ export function BiddersFilterBar({
   ownerId: string;
   serverLabel?: string;
   failed?: boolean;
+  shown?: ShownWeeks;
 }) {
   const ownerFieldId = useId();
   const { filters, clock, patch } = f;
@@ -105,13 +109,15 @@ export function BiddersFilterBar({
         presets={bidderPresetOptions(filters.range)}
         allowFuture={false}
         today={clock.today}
-        rangeFor={(preset) => bidderDays(preset === filters.range ? filters : { ...filters, range: preset, date: '' }, clock)}
+        rangeFor={(preset) =>
+          preset === filters.range ? bidderDays(filters, clock, shown) : bidderDays({ ...filters, range: preset, date: '' }, clock)}
         labelFor={(range) => bidderLabel(filters, range, serverLabel ?? (failed && range ? rangeLabel(range) : undefined))}
         onStep={(dir) => {
-          const change = stepBidderPeriod(filters, dir, clock);
+          const change = stepBidderPeriod(filters, dir, clock, shown);
           if (change) patch(change);
         }}
         canStepForward={bidderCanStepForward(filters, clock)}
+        canStepBack={bidderCanStepBack(filters, shown)}
       />
     </FilterBar>
   );

@@ -3192,6 +3192,21 @@ export type BidArchiveSuggestion = { bidderId: string; name: string; reason: 'id
 export type BidAlerts = { asOf: string; flags: BidAlert[] | null; archive: BidArchiveSuggestion[] | null };
 export const getBidAlerts = (params: { ownerId?: string }) => apiFetch<BidAlerts>(`/bids/alerts${qs(params)}`);
 
+/** "Now" as the server's report schedule sees it (`/bids/clock`); every value is a report day `YYYY-MM-DD`. */
+export interface BidClock {
+  /** The open report day. */
+  today: string;
+  /** The first and last report day of the pay week holding now (7 days, or 8 across a schedule switch). */
+  payWeekStart: string;
+  payWeekEnd: string;
+  /** The first report day of the pay week before it (that week may have 8 days). */
+  previousPayWeekStart: string;
+  /** The report time zone, e.g. America/Chicago. */
+  timezone: string;
+}
+
+export const getBidClock = () => apiFetch<BidClock>('/bids/clock');
+
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
 
 export const bidScreenshots = (id: string) => apiFetch<BidScreenshot[]>(`/bids/${id}/screenshots`);

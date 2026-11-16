@@ -63,6 +63,7 @@ export default function DateRangeFilter<P extends string = DatePreset>({
   labelFor,
   onStep,
   canStepForward,
+  canStepBack,
   rangeFor,
   label = 'Date range',
 }: {
@@ -79,6 +80,8 @@ export default function DateRangeFilter<P extends string = DatePreset>({
   onStep?: (dir: -1 | 1) => void;
   /** Replaces the built-in "can step forward" check. */
   canStepForward?: boolean;
+  /** Replaces the built-in "can step back" check (e.g. false until the page knows where its period starts). */
+  canStepBack?: boolean;
   /** Replaces the built-in date math for presets (for presets that aren't `DatePreset`s). */
   rangeFor?: (preset: P) => DateRange | null;
   /** The label above the dropdown. */
@@ -110,7 +113,7 @@ export default function DateRangeFilter<P extends string = DatePreset>({
 
   const text = labelFor ? labelFor(range) : range ? rangeLabel(range) : isAllTime ? rangeLabel(null) : '';
   const showStepper = !isAllTime && (isCustom ? error === null : inList);
-  const canGoBack = onStep !== undefined || range !== null;
+  const canGoBack = canStepBack ?? (onStep !== undefined || range !== null);
   const canGoForward = canStepForward ?? (range !== null && canStep(range, 1, now, allowFuture));
 
   const pick = (next: string) => {
