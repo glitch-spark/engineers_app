@@ -214,7 +214,7 @@ export default function InterviewsList({
                 <td className="px-3 py-2.5">{callerCell(iv)}</td>
                 <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{whenText(iv.scheduledAt, tz)}</td>
                 <td className="px-3 py-2.5">{statusCell(iv)}</td>
-                <td className="px-3 py-2.5"><ResumeScoreCell link={iv.resumeLink} /></td>
+                <td className="px-3 py-2.5">{iv.summaryOnly ? <span className="text-faint">—</span> : <ResumeScoreCell link={iv.resumeLink} />}</td>
                 <td className="px-3 py-2.5"><RoundTrail rounds={iv.stageHistory ?? []} tz={tz} /></td>
                 <td className="px-3 py-2.5"><NameWithAvatar name={iv.ownerName || iv.ownerEmail} size="sm" /></td>
                 <td className="px-3 py-2.5 text-right">{rowMenu(iv)}</td>

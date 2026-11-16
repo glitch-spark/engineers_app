@@ -48,6 +48,8 @@ export default function CallerRoundDialog({
   const when = entry?.scheduledAt
     ? formatInZone(parseServerTime(entry.scheduledAt), tz, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
     : '—';
+  // Someone else's interview (`summaryOnly`): no method, link or brief.
+  const summaryOnly = !!interview.summaryOnly;
   const method = CALLER_METHOD_OPTIONS.find((o) => o.value === caller?.method)?.label ?? 'TBD';
   const ownerId = typeof interview.createdBy === 'object' ? interview.createdBy?._id : interview.createdBy;
   // The current caller stays listed when it isn't on the list (typed before it, removed, or the owner).
@@ -103,8 +105,12 @@ export default function CallerRoundDialog({
           )}
           <dt className="text-muted">Owner</dt>
           <dd>{interview.ownerName || interview.ownerEmail || '—'}{account?.name ? ` · ${account.name}` : ''}</dd>
-          <dt className="text-muted">Method</dt>
-          <dd>{method}</dd>
+          {!summaryOnly && (
+            <>
+              <dt className="text-muted">Method</dt>
+              <dd>{method}</dd>
+            </>
+          )}
           {caller?.methodValue && (
             <>
               <dt className="text-muted">Link or number</dt>
@@ -153,10 +159,12 @@ export default function CallerRoundDialog({
         )}
 
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" className="btn-outline btn-sm" onClick={() => void brief()} disabled={briefing}
-            title="A PDF of this round, plus the resume, to share with whoever takes the interview">
-            <Download size={14} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
-          </button>
+          {!summaryOnly && (
+            <button type="button" className="btn-outline btn-sm" onClick={() => void brief()} disabled={briefing}
+              title="A PDF of this round, plus the resume, to share with whoever takes the interview">
+              <Download size={14} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
+            </button>
+          )}
           <button type="button" className="btn-outline btn-sm" onClick={onOpenInterview}>
             <ExternalLink size={14} aria-hidden /> Open interview
           </button>

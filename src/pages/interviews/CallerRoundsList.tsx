@@ -53,8 +53,10 @@ export default function CallerRoundsList({
   const when = (row: InterviewRoundRow) => formatInZone(new Date(row.scheduledAt), tz,
     { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const methodOf = (row: InterviewRoundRow) => {
-    const caller = (data?.interviews?.[row.interviewId] as unknown as Interview | undefined)
-      ?.stageHistory?.find((e) => e.id === row.roundId)?.caller;
+    const iv = data?.interviews?.[row.interviewId] as unknown as Interview | undefined;
+    // Someone else's interview: how the caller joins isn't sent.
+    if (iv?.summaryOnly) return { label: '—', value: '' };
+    const caller = iv?.stageHistory?.find((e) => e.id === row.roundId)?.caller;
     return {
       label: CALLER_METHOD_OPTIONS.find((o) => o.value === caller?.method)?.label ?? 'TBD',
       value: caller?.methodValue || '',
@@ -79,9 +81,10 @@ export default function CallerRoundsList({
   const roundsCell = (row: InterviewRoundRow) => (
     <RoundTrail rounds={(data?.interviews?.[row.interviewId] as unknown as Interview | undefined)?.stageHistory ?? []} tz={tz} />
   );
-  const scoreCell = (row: InterviewRoundRow) => (
-    <ResumeScoreCell link={(data?.interviews?.[row.interviewId] as unknown as Interview | undefined)?.resumeLink} />
-  );
+  const scoreCell = (row: InterviewRoundRow) => {
+    const iv = data?.interviews?.[row.interviewId] as unknown as Interview | undefined;
+    return iv?.summaryOnly ? <span className="text-faint">—</span> : <ResumeScoreCell link={iv?.resumeLink} />;
+  };
   const stageCell = (row: InterviewRoundRow) => <span className={`badge ${stageBadgeClass(row.stage)}`}>{stageLabel(row.stage)}</span>;
   const statusCell = (row: InterviewRoundRow) => {
     const s = normalizeInterviewStatus(row.status);
