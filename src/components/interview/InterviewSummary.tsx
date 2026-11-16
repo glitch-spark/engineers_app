@@ -67,18 +67,44 @@ function QuickAdd({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-/** Read view of an interview: spotlight round, details and a timeline of rounds. */
-export default function InterviewSummary({
-  iv,
-  tz,
-  canEdit,
-  user,
-  onStatus,
-  onConfirm,
-  onEditRound,
-  onDeleteRound,
-  onEditDetails,
-}: {
+/** What anyone signed in sees of an interview that isn't theirs: the rounds, each with its date, stage, status and
+ * caller's name. No notes, resume, brief or questions, and nothing here asks the server for them. */
+export function SummaryOnlyView({ iv, tz }: { iv: Interview; tz: string }) {
+  const rounds = [...(iv.stageHistory ?? [])].reverse();
+  return (
+    <div className="flex-1 space-y-5 overflow-y-auto p-4">
+      <section aria-label="Rounds">
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Rounds ({rounds.length})</h3>
+        {rounds.length === 0 ? (
+          <p className="text-sm text-muted">No rounds yet.</p>
+        ) : (
+          <ol className="relative space-y-3 border-l border-zinc-200 pl-4 dark:border-zinc-800">
+            {rounds.map((e) => {
+              const status = normalizeInterviewStatus(e.status);
+              return (
+                <li key={e.id} className="relative">
+                  <span className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-950 ${STATUS_DOT[status] ?? 'bg-zinc-300'}`} aria-hidden />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-strong">{stageLabel(e.stage)}</span>
+                    <span className="text-xs tabular-nums text-muted">{when(e.scheduledAt, e.endsAt, tz)}</span>
+                    <span className={`badge ml-auto ${interviewStatusBadgeClass(status)}`}>{interviewStatusLabel(status)}</span>
+                  </div>
+                  {e.caller?.enabled && (
+                    <div className="mt-1 inline-flex items-center gap-1 text-xs text-muted">
+                      <PhoneCall size={12} aria-hidden /> {e.caller.callerName && e.caller.callerName !== 'TBD' ? e.caller.callerName : 'Caller TBD'}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
+    </div>
+  );
+}
+
+type SummaryProps = {
   iv: Interview;
   tz: string;
   canEdit: boolean;
@@ -88,7 +114,25 @@ export default function InterviewSummary({
   onEditRound: (roundId: string) => void;
   onDeleteRound: (roundId: string) => void;
   onEditDetails: () => void;
-}) {
+};
+
+/** Read view of an interview: spotlight round, details and a timeline of rounds. Someone else's interview
+ * (`summaryOnly`) is just the rounds. */
+export default function InterviewSummary(props: SummaryProps) {
+  return props.iv.summaryOnly ? <SummaryOnlyView iv={props.iv} tz={props.tz} /> : <FullSummary {...props} />;
+}
+
+function FullSummary({
+  iv,
+  tz,
+  canEdit,
+  user,
+  onStatus,
+  onConfirm,
+  onEditRound,
+  onDeleteRound,
+  onEditDetails,
+}: SummaryProps) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const now = new Date();
   const history = iv.stageHistory ?? [];

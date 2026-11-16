@@ -43,5 +43,8 @@ export type Interview = {
   ownerEmail?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  /** Set by the server for someone else's interview: only company, position, profile, owner and the rounds (no notes,
+   * resume, brief or questions). */
+  summaryOnly?: boolean;
 };
 

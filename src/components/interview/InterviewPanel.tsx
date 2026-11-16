@@ -32,6 +32,11 @@ function creatorId(iv: Interview): string {
   return typeof iv.createdBy === 'object' ? iv.createdBy._id : iv.createdBy;
 }
 
+/** The owner's name: the list sends `ownerName`, the read-only summary only the populated `createdBy`. */
+function ownerLabel(iv: Interview): string {
+  return iv.ownerName || iv.ownerEmail || (typeof iv.createdBy === 'object' ? iv.createdBy.name || '' : '');
+}
+
 /** One side panel for viewing an interview and every create/edit action. */
 export default function InterviewPanel({
   open,
@@ -78,7 +83,7 @@ export default function InterviewPanel({
 
   if (!open) return null;
 
-  const canEdit = !iv || user?.role === 'admin' || creatorId(iv) === user?.id;
+  const canEdit = !iv || (!iv.summaryOnly && (user?.role === 'admin' || creatorId(iv) === user?.id));
   // Read-only for everyone else, whatever mode the caller asked for.
   const shownMode: PanelMode = canEdit ? mode : 'view';
   const rounds = [...(iv?.stageHistory ?? [])].reverse();
@@ -171,9 +176,9 @@ export default function InterviewPanel({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {iv.stage && <span className={`badge ${stageBadgeClass(iv.stage)}`}>{stageLabel(iv.stage)}</span>}
                 {iv.status && <span className={`badge ${interviewStatusBadgeClass(iv.status)}`}>{interviewStatusLabel(iv.status)}</span>}
-                {(iv.ownerName || iv.ownerEmail) && (
+                {ownerLabel(iv) && (
                   <span className="ml-1 inline-flex items-center gap-1 text-xs text-muted">
-                    Owner <NameWithAvatar name={iv.ownerName || iv.ownerEmail} size="sm" />
+                    Owner <NameWithAvatar name={ownerLabel(iv)} size="sm" />
                   </span>
                 )}
               </div>
@@ -217,7 +222,7 @@ export default function InterviewPanel({
               </footer>
             ) : (
               <footer className="shrink-0 border-t border-zinc-200 px-4 py-2.5 text-xs text-muted dark:border-zinc-800">
-                View only{iv.ownerName || iv.ownerEmail ? ` · owned by ${iv.ownerName || iv.ownerEmail}` : ''}
+                View only{ownerLabel(iv) ? ` · owned by ${ownerLabel(iv)}` : ''}
               </footer>
             )}
           </>

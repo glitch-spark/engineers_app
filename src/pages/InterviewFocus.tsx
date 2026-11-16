@@ -37,6 +37,8 @@ import { formatScheduledDate } from '../components/interview/format';
 import type { Interview } from '../components/interview/types';
 import { safeHref } from '../lib/safeHref';
 import { useBriefDownload } from '../components/interview/useBriefDownload';
+import { SummaryOnlyView } from '../components/interview/InterviewSummary';
+import NameWithAvatar from '../components/NameWithAvatar';
 
 type StepTone = 'done' | 'failed' | 'muted' | 'pending';
 
@@ -105,7 +107,10 @@ export default function InterviewFocusPage() {
     const next = new URLSearchParams(searchParams);
     next.delete('brief');
     setSearchParams(next, { replace: true });
-    if (history.some((e) => e.id === briefParam)) {
+    if (iv.summaryOnly) {
+      // Someone else's interview: no brief, and nothing is requested for it.
+      notify.info("The brief is only available to this interview's owner, its caller and the team that runs interviews.");
+    } else if (history.some((e) => e.id === briefParam)) {
       void startBrief(iv, briefParam).then((resumeSaved) => {
         if (!resumeSaved) notify.info("If the resume didn't download, allow downloads for this site and click Download brief again.");
       });
@@ -146,7 +151,9 @@ export default function InterviewFocusPage() {
 
   const account = typeof iv.accountId === 'object' ? iv.accountId : null;
   const createdById = typeof iv.createdBy === 'string' ? iv.createdBy : iv.createdBy?._id;
-  const canEdit = user?.role === 'admin' || createdById === user?.id;
+  const summaryOnly = !!iv.summaryOnly;
+  const canEdit = !summaryOnly && (user?.role === 'admin' || createdById === user?.id);
+  const ownerName = typeof iv.createdBy === 'object' ? iv.createdBy?.name : iv.ownerName;
   const applyUpdate = (next: Record<string, unknown>) => mutate(next, { revalidate: false });
 
   const onDelete = async () => {
@@ -208,6 +215,9 @@ export default function InterviewFocusPage() {
                 </a>
               )}
               {iv.interviewerName && <span className="text-muted">with {iv.interviewerName}</span>}
+              {summaryOnly && ownerName && (
+                <span className="inline-flex items-center gap-1 text-muted">Owner <NameWithAvatar name={ownerName} size="sm" /></span>
+              )}
             </div>
           </div>
           {iv.status && (
@@ -217,6 +227,15 @@ export default function InterviewFocusPage() {
           )}
         </section>
 
+        {summaryOnly ? (
+          <section className="panel-elevated overflow-hidden" aria-label="Read-only summary">
+            <SummaryOnlyView iv={iv} tz={tz} />
+            <p className="border-t border-zinc-200 px-4 py-2.5 text-xs text-muted dark:border-zinc-800">
+              View only{ownerName ? ` · owned by ${ownerName}` : ''}
+            </p>
+          </section>
+        ) : (
+        <>
         <StageStepper
           history={history}
           selectedId={selected?.id}
@@ -272,6 +291,8 @@ export default function InterviewFocusPage() {
               {canEdit ? 'Add the first round with the + button to start keeping scripts and notes.' : 'Nothing has been recorded for this interview.'}
             </p>
           </div>
+        )}
+        </>
         )}
       </main>
 
