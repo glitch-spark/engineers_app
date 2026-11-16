@@ -54,7 +54,7 @@ describe('parseInterviewValues', () => {
   it('reads the defaults for an empty URL', () => {
     expect(parse()).toEqual({
       user: 'me', profile: '', stage: '', status: '', caller: '', owner: '', call: '', q: '',
-      range: 'this_week', from: '', to: '', sort: 'latest', dir: 'desc', page: 1,
+      range: 'this_week', from: '', to: '', sort: 'latest', dir: 'desc', page: 1, size: 20,
     });
   });
   it('maps a bookmarked ?range=prev_week', () => {
@@ -65,6 +65,10 @@ describe('parseInterviewValues', () => {
     expect(f).toMatchObject({ range: 'this_week', from: '', to: '', sort: 'latest', dir: 'desc', page: 1, call: '', user: 'me' });
     expect(parse({ page: 'x' }).page).toBe(1);
     expect(parse({ page: '3' }).page).toBe(3);
+  });
+  it('reads size from the shared sizes only, default 20', () => {
+    for (const s of [10, 20, 50, 100]) expect(parse({ size: String(s) }).size).toBe(s);
+    for (const bad of ['', '25', '0', '-10', 'big', '1000']) expect(parse({ size: bad }).size).toBe(20);
   });
   it('keeps custom dates as typed so the bar can explain them', () => {
     const f = parse({ range: 'custom', from: '2026-02-31', to: '2026-03-01' });
@@ -147,6 +151,14 @@ describe('listQuery', () => {
     expect(q).toMatchObject({ creatorId: 'u1', accountId: 'a1', stage: 'intro', status: 'scheduled', callType: 'caller', q: 'acme' });
     expect('q' in listQuery(base({ q: '   ' }), 20, now, 'UTC')!).toBe(false);
     expect('creatorId' in listQuery(base({ user: 'all' }), 20, now, 'UTC')!).toBe(false);
+  });
+});
+
+describe('page size', () => {
+  const now = new Date('2026-11-11T17:00:00Z');
+  it('is sent as the request limit', () => {
+    expect(listQuery(base({ size: 100, page: 2 }), 100, now, 'UTC')).toMatchObject({ limit: 100, page: 2 });
+    expect(callerRoundsQuery(base({ size: 50 }), 50, now, 'UTC')).toMatchObject({ limit: 50 });
   });
 });
 

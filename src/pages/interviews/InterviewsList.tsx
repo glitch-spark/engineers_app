@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import type { KeyboardEvent } from 'react';
 import useSWR from 'swr';
 import { PhoneCall } from 'lucide-react';
 import ConfirmedBadge, { NoCallerBadge, needsConfirmBadge } from '../../components/interview/ConfirmedBadge';
@@ -11,6 +11,7 @@ import type { Interview } from '../../components/interview/types';
 import type { PanelMode } from '../../components/interview/InterviewPanel';
 import { formatProfileLabel } from '../../lib/countries';
 import { listQuery, type InterviewFilters, type ListSort } from '../../lib/interviewFilters';
+import Pagination from '../../components/Pagination';
 import { notify } from '../../lib/notify';
 import {
   INTERVIEW_STATUSES,
@@ -28,8 +29,6 @@ import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 
 export type OpenPanel = (iv: Interview, mode?: PanelMode, roundId?: string) => void;
-
-const PAGE_SIZES = [10, 20, 50];
 
 function whenText(iso: string | null | undefined, tz: string): string {
   if (!iso) return '—';
@@ -56,9 +55,8 @@ export default function InterviewsList({
   onDelete: (iv: Interview) => void;
 }) {
   const { user } = useAuth();
-  const [pageSize, setPageSize] = useState(20);
   const { tz } = useInterviewTimezone();
-  const query = listQuery(filters, pageSize, new Date(), tz);
+  const query = listQuery(filters, filters.size, new Date(), tz);
   // No query while the Custom range is invalid (the bar says why): nothing to load, so no endless spinner.
   const { data, isLoading, mutate } = useSWR(query ? ['interviews-list', JSON.stringify(query)] : null, () => api.listInterviews(query!), {
     keepPreviousData: true,
@@ -252,27 +250,13 @@ export default function InterviewsList({
         ))}
       </ul>
 
-      {pagination && (
-        <nav aria-label="Interviews pagination" className="flex flex-wrap items-center justify-between gap-3 text-sm">
-          <div className="text-muted">
-            {pagination.total === 0 ? 'No results' : `Showing ${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
-          </div>
-          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
-            <label htmlFor="iv-page-size" className="text-muted">Per page</label>
-            <select id="iv-page-size" className="select focus-ring !w-auto !pr-9" value={pageSize}
-              onChange={(e) => { setPageSize(Number(e.target.value)); update({ page: 1 }); }}>
-              {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <button type="button" className="btn-outline btn-sm" disabled={!pagination.hasPrev} onClick={() => update({ page: pagination.page - 1 })}>
-              Previous
-            </button>
-            <span className="tabular-nums text-muted">Page {pagination.page} of {Math.max(pagination.totalPages, 1)}</span>
-            <button type="button" className="btn-outline btn-sm" disabled={!pagination.hasNext} onClick={() => update({ page: pagination.page + 1 })}>
-              Next
-            </button>
-          </div>
-        </nav>
-      )}
+      <Pagination
+        info={pagination}
+        onPage={(page) => update({ page })}
+        pageSize={filters.size}
+        onPageSize={(size) => update({ size })}
+        label="Interviews pages"
+      />
     </div>
   );
 }

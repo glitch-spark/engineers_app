@@ -10,6 +10,7 @@ import {
   type DateRange,
 } from './dateRange';
 import { browserZone, toWall, zonedDayBounds } from './interviewTimezone';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/Pagination';
 import type { CallType, listCallerRounds } from '../api/endpoints';
 
 export type ListSort = 'latest' | 'company' | 'stage' | 'status';
@@ -40,6 +41,8 @@ export type InterviewFilters = {
   sort: ListSort;
   dir: SortDir;
   page: number;
+  /** Rows per page: one of the shared sizes (10 / 20 / 50 / 100). */
+  size: number;
 };
 
 export type FilterDefaults = { userId: string };
@@ -47,7 +50,7 @@ export type FilterDefaults = { userId: string };
 /** Every URL key this page owns (the values are all strings in the URL). Other keys (`panel`, `round`, `brief`, `zone`) are not ours. */
 export type InterviewKey =
   | 'user' | 'profile' | 'stage' | 'status' | 'caller' | 'owner' | 'call' | 'q'
-  | 'range' | 'from' | 'to' | 'sort' | 'dir' | 'page';
+  | 'range' | 'from' | 'to' | 'sort' | 'dir' | 'page' | 'size';
 export type InterviewUrlValues = Record<InterviewKey, string>;
 
 /** URL defaults (left out of the URL). `from` / `to` default to '' as the shared date control requires. */
@@ -67,6 +70,7 @@ export function interviewUrlDefaults(d: FilterDefaults): InterviewUrlValues {
     sort: 'latest',
     dir: 'desc',
     page: '1',
+    size: String(DEFAULT_PAGE_SIZE),
   };
 }
 
@@ -93,6 +97,7 @@ export function normalizeRange(raw: string): DatePreset {
 export function parseInterviewValues(values: InterviewUrlValues, d: FilterDefaults): InterviewFilters {
   const range = normalizeRange(values.range);
   const page = Number.parseInt(values.page, 10);
+  const size = Number.parseInt(values.size, 10);
   return {
     user: values.user || d.userId,
     profile: values.profile,
@@ -109,6 +114,7 @@ export function parseInterviewValues(values: InterviewUrlValues, d: FilterDefaul
     sort: (SORTS as string[]).includes(values.sort) ? (values.sort as ListSort) : 'latest',
     dir: values.dir === 'asc' ? 'asc' : 'desc',
     page: Number.isFinite(page) && page > 1 ? page : 1,
+    size: PAGE_SIZES.includes(size) ? size : DEFAULT_PAGE_SIZE,
   };
 }
 

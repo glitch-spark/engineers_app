@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import type { KeyboardEvent } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { InterviewRoundRow } from '../../api/endpoints';
@@ -12,13 +12,12 @@ import {
 } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
+import Pagination from '../../components/Pagination';
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, callerLabel, isUnassigned } from '../../lib/callerColors';
 import ConfirmedBadge, { needsConfirmBadge } from '../../components/interview/ConfirmedBadge';
 import RoundTrail from './RoundTrail';
 import { ResumeScoreCell } from '../../components/interview/LinkedResumeCard';
-
-const PAGE_SIZES = [10, 20, 50];
 
 /** Callers tab, List: every user's caller rounds, one row per round; click a row to see or assign its caller. */
 export default function CallerRoundsList({
@@ -30,10 +29,9 @@ export default function CallerRoundsList({
   update: (patch: Partial<InterviewFilters>) => void;
   onOpenRound: (iv: Interview, roundId: string) => void;
 }) {
-  const [pageSize, setPageSize] = useState(20);
   const { tz } = useInterviewTimezone();
   const { byId } = useCallers();
-  const query = callerRoundsQuery(filters, pageSize, new Date(), tz);
+  const query = callerRoundsQuery(filters, filters.size, new Date(), tz);
   // No query while the Custom range is invalid (the bar says why): nothing to load, so no endless spinner.
   const { data, isLoading } = useSWR(query ? ['caller-rounds-list', JSON.stringify(query)] : null, () => api.listCallerRounds(query!), {
     keepPreviousData: true,
@@ -192,27 +190,13 @@ export default function CallerRoundsList({
         )}
       </div>
 
-      {pagination && (
-        <nav aria-label="Caller rounds pagination" className="flex flex-wrap items-center justify-between gap-3 text-sm">
-          <div className="text-muted">
-            {pagination.total === 0 ? 'No results' : `Showing ${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
-          </div>
-          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
-            <label htmlFor="cr-page-size" className="text-muted">Per page</label>
-            <select id="cr-page-size" className="select focus-ring !w-auto !pr-9" value={pageSize}
-              onChange={(e) => { setPageSize(Number(e.target.value)); update({ page: 1 }); }}>
-              {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <button type="button" className="btn-outline btn-sm" disabled={!pagination.hasPrev} onClick={() => update({ page: pagination.page - 1 })}>
-              Previous
-            </button>
-            <span className="tabular-nums text-muted">Page {pagination.page} of {Math.max(pagination.totalPages, 1)}</span>
-            <button type="button" className="btn-outline btn-sm" disabled={!pagination.hasNext} onClick={() => update({ page: pagination.page + 1 })}>
-              Next
-            </button>
-          </div>
-        </nav>
-      )}
+      <Pagination
+        info={pagination}
+        onPage={(page) => update({ page })}
+        pageSize={filters.size}
+        onPageSize={(size) => update({ size })}
+        label="Caller rounds pages"
+      />
     </div>
   );
 }

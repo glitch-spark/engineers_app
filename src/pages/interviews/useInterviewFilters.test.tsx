@@ -53,6 +53,25 @@ describe('useInterviewFilters', () => {
     expect(seen.search).toBe('?q=acme&page=2');
   });
 
+  it('keeps page and size in the URL (defaults left out); a size change goes back to page 1', () => {
+    const { result } = setup('?page=3');
+    act(() => result.current.update({ size: 50 }));
+    expect(seen.search).toBe('?size=50');
+    expect(result.current.filters).toMatchObject({ size: 50, page: 1 });
+    act(() => result.current.update({ page: 2 }));
+    expect(seen.search).toBe('?size=50&page=2');
+    act(() => result.current.update({ q: 'x' }));
+    expect(seen.search).toBe('?size=50&q=x');
+    act(() => result.current.update({ size: 20 }));
+    expect(seen.search).toBe('?q=x');
+  });
+
+  it('Clear keeps the page size', () => {
+    const { result } = setup('?size=100&q=x');
+    act(() => result.current.clear());
+    expect(seen.search).toBe('?size=100');
+  });
+
   it('a date change with undefined from / to leaves no stale custom dates behind', () => {
     const { result } = setup('?range=custom&from=2026-11-01&to=2026-11-05');
     act(() => result.current.update({ range: 'last_week', from: undefined, to: undefined }));
