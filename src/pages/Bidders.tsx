@@ -5,6 +5,8 @@ import * as api from '../api/endpoints';
 import { BASE_URL } from '../api/client';
 import { useAuth } from '../auth/useAuth';
 import PageHeader from '../components/PageHeader';
+import Tabs from '../components/Tabs';
+import ActionMenu from '../components/ActionMenu';
 import BidderActions from '../components/bidders/BidderActions';
 import BidderView from '../components/bidders/BidderView';
 import FocusReview, { type FocusScope } from '../components/bids/FocusReview';
@@ -13,8 +15,12 @@ import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDial
 import BiddersOverview from '../components/bidders/BiddersOverview';
 import BidderAlerts from '../components/bidders/BidderAlerts';
 import SelfBidsPanel, { type SelfScope } from '../components/bidders/SelfBidsPanel';
+import MyBidsTab from '../components/bidders/MyBidsTab';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
 import { shownWeeksOf } from '../lib/bidderFilters';
+import {
+  ownerOptions as ownerOptionsFor, ownerScope, ownerSelectValue, sectionFromUrl, sectionPatch, type BidsSection,
+} from '../lib/bidsUrl';
 import { useReportClock } from '../lib/useReportClock';
 import { BiddersFilterBar, useBidderFilters } from '../components/bidders/biddersFilters';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -23,9 +29,20 @@ import WeekNav from '../components/bidders/WeekNav';
 import { dateInZone } from '../components/bidders/weekDates';
 
 /** URL state. The list's filters (range, date, from, to, q, archived, owner) are the bar's, see lib/bidderFilters.ts
- * (the old `week` / `period` keys still open that period). The rest: week (a bidder's pay week), bidder, day, tab
- * (history), mode (focus), bid, owner (the admin's empty-state link); `view` is from the old tabs. */
-type Param = 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view';
+ * (the old `week` / `period` keys still open that period). The tab is `section` (absent = Bidders, `mine`; the old
+ * `show=self` opens My bids and is rewritten), and `owner` is absent (an admin's own team), a user id or `all`, see
+ * lib/bidsUrl.ts. The rest: week (a bidder's pay week), bidder, day, tab (history), mode (focus), bid; `view` is from
+ * the old tabs. */
+type Param =
+  | 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view'
+  | 'section' | 'show' | 'q' | 'archived' | 'lens' | 'review' | 'at' | 'reviewBidder';
+
+const TABS = [
+  { key: 'bidders', label: 'Bidders' },
+  { key: 'mine', label: 'My bids' },
+  // Task 15 shows it.
+  { key: 'pay', label: 'Pay', hidden: true },
+];
 
 function statusText(b: api.Bidder | undefined, status: string | undefined) {
   if (status === 'archived') return 'Archived';
@@ -43,13 +60,23 @@ export default function BiddersPage() {
   const bidderId = params.get('bidder');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  // Owner-scoped requests wait for the signed-in user: without it an admin's default owner (themselves) is unknown,
+  // and no ownerId would ask the server for every owner.
+  const ready = !!user?.id;
+  // The Pay tab ships later (Task 15): until then section=pay is the Bidders tab.
+  const urlSection = sectionFromUrl((k) => params.get(k));
+  const section: BidsSection = urlSection === 'pay' ? 'bidders' : urlSection;
   // The server's report clock: the list's periods mean nothing until it loads (the bidder view doesn't need it).
   const reportClock = useReportClock();
   const filterState = useBidderFilters(isAdmin, reportClock.clock);
   const filters = filterState?.filters;
   const request = filterState?.request ?? null;
-  const ownerId = isAdmin ? (filters?.owner ?? '') : '';
-  const showArchived = filters?.archived ?? false;
+  // Admins open on their own team (`owner` absent); `all` is every owner (no ownerId); staff always see their own.
+  const scope = ownerScope(filters?.owner ?? '', isAdmin, user?.id);
+  const ownerId = scope.ownerId ?? '';
+  const allOwners = scope.all;
+  // Show archived is the Bidders tab's (a tab change drops it).
+  const showArchived = section === 'bidders' && (filters?.archived ?? false);
   const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null);
   const [selfScope, setSelfScope] = useState<SelfScope | null>(null);
   const [archiving, setArchiving] = useState(false);
@@ -70,6 +97,18 @@ export default function BiddersPage() {
     [setParams],
   );
 
+  // An old `show` link: `show=self` becomes section=mine, the others the Bidders tab (replaced, not a new entry).
+  const oldShow = params.get('show');
+  useEffect(() => {
+    if (oldShow === null) return;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('show');
+      if (oldShow === 'self' && !next.get('section')) next.set('section', 'mine');
+      return next;
+    }, { replace: true });
+  }, [oldShow, setParams]);
+
   // A bidder view always finds its bidder, archived or not.
   const includeArchived = showArchived || !!bidderId;
   // The owner filter narrows the team table only, so a bidder link opens whatever the filter.
@@ -80,22 +119,13 @@ export default function BiddersPage() {
   );
   // The list: one /bids/performance request for the bar's period (its label is the bar's too).
   const perf = useSWR(
-    !bidderId && request
+    !bidderId && request && ready
       ? (['bid-performance', request.period, request.date ?? '', request.to ?? '', request.weeks ?? 1, showArchived, ownerId] as const)
       : null,
     () => api.getBidPerformance({ ...request!, includeArchived: showArchived, ownerId: ownerId || undefined }),
   );
   const users = useSWR(isAdmin ? (['users-lookup'] as const) : null, () => api.lookupUsers());
-  const ownerOptions = useMemo(
-    () => [
-      { value: '', label: 'All users' },
-      ...(users.data?.users ?? []).map((u) => ({
-        value: u._id,
-        label: `${u.name || u.email || u._id}${u._id === user?.id ? ' (you)' : ''}`,
-      })),
-    ],
-    [users.data, user?.id],
-  );
+  const ownerOptions = useMemo(() => ownerOptionsFor(users.data?.users ?? [], user?.id), [users.data, user?.id]);
   // Full bidder records (own bidders) for the status details and the ⋯ menu; an admin's view of other owners'
   // bidders has none, so those rows get no management menu.
   const active = useSWR(['bidders', false] as const, () => api.listBidders(false));
@@ -121,7 +151,7 @@ export default function BiddersPage() {
 
   // The banners: one owner's bidders (staff: their own; an admin: the picked owner), whatever the week or period.
   const alerts = useSWR(
-    !bidderId && (!isAdmin || ownerId) ? (['bid-alerts', ownerId] as const) : null,
+    ready && !bidderId && (!isAdmin || ownerId) ? (['bid-alerts', ownerId] as const) : null,
     () => api.getBidAlerts({ ownerId: ownerId || undefined }),
     { revalidateOnFocus: false },
   );
@@ -164,7 +194,10 @@ export default function BiddersPage() {
       : focusBid && focusDay
         ? { scope: { day: focusDay }, startAt: focusBid, ids: navIds?.includes(focusBid) ? navIds : undefined, set: 'all' }
         : focusWeek
-          ? { scope: { queue: { period: 'week', date: focusWeek, bidderId: bidderId ?? undefined } }, set: 'pending' }
+          // The list's review is the bar's owner's; a bidder's is that bidder's, whoever owns it (Ruling 4).
+          ? { scope: { queue: {
+            period: 'week', date: focusWeek, bidderId: bidderId ?? undefined, ownerId: bidderId ? undefined : ownerId || undefined,
+          } }, set: 'pending' }
           : null;
   const exitFocus = () => setParam({ mode: null, bid: null });
   const reviewBid = (bidId: string, ids: string[]) => {
@@ -180,45 +213,68 @@ export default function BiddersPage() {
   });
 
 
-  const main = (
+  // My bids opens the read-only panel. It names the owner only when that isn't the viewer: an admin looking at another
+  // owner, or at All owners.
+  const openMine = (s: SelfScope) => {
+    const named = isAdmin && (allOwners || s.ownerId !== user?.id);
+    setSelfScope(named ? s : { ...s, ownerName: undefined });
+  };
+  // An admin looking at someone else's team (not their own, not All owners).
+  const otherOwner = isAdmin && !allOwners && !!ownerId && ownerId !== user?.id;
+
+  const loading = (
+    <div className="space-y-3" aria-busy="true">
+      <div className="panel space-y-2 p-4">
+        {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-8 w-full" />)}
+      </div>
+    </div>
+  );
+
+  const myBids = !request ? (
+    <div className="panel p-4 text-sm text-muted">Pick a valid date range to see your bids.</div>
+  ) : perf.error ? (
+    <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
+      Couldn&apos;t load your bids.{' '}
+      <button type="button" className="underline" onClick={() => void perf.mutate()}>Retry</button>
+    </div>
+  ) : !perf.data ? loading : (
+    <MyBidsTab data={perf.data} allOwners={allOwners} onOpen={openMine} />
+  );
+
+  const list = (
     <div className="space-y-5">
-      {bidderId ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <WeekNav
-            shown={data && data.week.days.length > 0
-              ? { first: data.week.days[0].day, last: data.week.days[data.week.days.length - 1].day }
-              : null}
-            label={data?.week.label ?? null}
-            isCurrent={isCurrent}
-            onChange={(w) => setParam({ week: w })}
-          />
-        </div>
-      ) : filterState ? (
+      {filterState && filters ? (
         <BiddersFilterBar
           f={filterState}
           isAdmin={isAdmin}
+          section={section}
           ownerOptions={ownerOptions}
-          ownerId={ownerId}
+          ownerValue={ownerSelectValue(filters.owner, user?.id)}
           serverLabel={request ? perf.data?.label : undefined}
           failed={!!perf.error}
           shown={(request && perf.data && shownWeeksOf(perf.data)) || undefined}
         />
       ) : null}
 
-      {!bidderId && reportClock.error && !filterState ? (
+      {section === 'bidders' && ready && alerts.data && (
+        <BidderAlerts
+          alerts={alerts.data}
+          onOpenBidder={(id, day) => setParam({ bidder: id, week: day ?? weekKey, day: day ?? null, view: null, tab: null })}
+          onOpenProfile={(id) => navigate(`/accounts/${id}`)}
+          onArchive={(id, name) => setPendingArchive({ id, name })}
+          canArchive={canManageBidders({ isAdmin, ownerId, userId: user?.id })}
+        />
+      )}
+
+      {reportClock.error && !filterState ? (
         <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
           Couldn&apos;t load the pay week.{' '}
           <button type="button" className="underline" onClick={reportClock.retry}>Retry</button>
         </div>
-      ) : !bidderId && !filterState ? (
-        <div className="space-y-3" aria-busy="true">
-          <div className="panel space-y-2 p-4">
-            {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-8 w-full" />)}
-          </div>
-        </div>
-      ) : !bidderId && filters ? (
+      ) : !filterState || !filters || !ready ? loading : section === 'mine' ? myBids : (
         <BiddersOverview
           ownerId={ownerId}
+          allOwners={allOwners}
           onOpenBidder={(id, wk, day) => setParam({ bidder: id, week: wk, day: day ?? null, view: null, tab: null })}
           onReview={(wk, id) => setParam({ mode: 'focus', bidder: id ?? null, bid: null, week: wk, view: null })}
           renderStatus={(row) => statusText(byId[row.id], row.bidderStatus ?? row.status)}
@@ -227,9 +283,7 @@ export default function BiddersPage() {
           error={request ? perf.error : undefined}
           onRetry={() => void perf.mutate()}
           search={filters.q}
-          onClearSearch={() => filterState?.patch({ q: '' })}
-          show={filters.show}
-          onOpenSelf={(id, name, scope) => setSelfScope({ ownerId: id, ownerName: isAdmin ? name : undefined, ...scope })}
+          onClearSearch={() => filterState.patch({ q: '' })}
           // /bidders lists only the viewer's own bidders, so other owners' rows get no menu.
           renderActions={(row) =>
             byId[row.id] ? (
@@ -240,20 +294,37 @@ export default function BiddersPage() {
               />
             ) : null
           }
-          empty={ownerId ? (
+          empty={otherOwner ? (
             <div className="empty-state">
-              <p className="font-medium text-strong">{showArchived ? 'This user has no bidders.' : 'This user has no active bidders.'}</p>
-              <button type="button" className="btn mt-4" onClick={() => setParam({ owner: null })}>Show all users</button>
+              <p className="font-medium text-strong">{showArchived ? 'This owner has no bidders.' : 'This owner has no active bidders.'}</p>
+              <button type="button" className="btn mt-4" onClick={() => filterState.patch({ owner: 'all' })}>Show all owners</button>
             </div>
           ) : (
             <div className="empty-state">
-              <p className="font-medium text-strong">{showArchived ? 'No bidders in this period.' : 'No bidders yet'}</p>
-              <p className="mt-1 text-sm text-muted">Add a bidder to start tracking and reviewing their bids.</p>
+              <p className="font-medium text-strong">No bidders yet</p>
+              <p className="mt-1 text-sm text-muted">Add a bidder, then send them the invite code and the Bid Track download.</p>
               <button type="button" className="btn mt-4" onClick={() => setFormOpen(true)}>Add bidder</button>
             </div>
           )}
         />
-      ) : board.error ? (
+      )}
+    </div>
+  );
+
+  // A bidder's page: their pay week, whoever owns them (Ruling 4).
+  const bidderPage = (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <WeekNav
+          shown={data && data.week.days.length > 0
+            ? { first: data.week.days[0].day, last: data.week.days[data.week.days.length - 1].day }
+            : null}
+          label={data?.week.label ?? null}
+          isCurrent={isCurrent}
+          onChange={(w) => setParam({ week: w })}
+        />
+      </div>
+      {board.error ? (
         <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
           Couldn&apos;t load the week.{' '}
           <button type="button" className="underline" onClick={() => board.mutate()}>Retry</button>
@@ -268,25 +339,25 @@ export default function BiddersPage() {
           </div>
         </div>
       ) : row && weekKey ? (
-          <BidderView
-            row={row}
-            board={data}
-            weekKey={weekKey}
-            bidder={byId[row.id]}
-            day={params.get('day')}
-            reviewing={!!focus}
-            tab={params.get('tab')}
-            isCurrent={isCurrent}
-            onParam={(patch) => setParam({ week: weekKey, ...patch })}
-            onReview={reviewBid}
-            onChanged={refresh}
-          />
-        ) : (
-          <div className="panel p-4 text-sm text-muted">
-            Bidder not found.{' '}
-            <button type="button" className="underline" onClick={() => setParam({ bidder: null, day: null, tab: null })}>Back to the team</button>
-          </div>
-        )}
+        <BidderView
+          row={row}
+          board={data}
+          weekKey={weekKey}
+          bidder={byId[row.id]}
+          day={params.get('day')}
+          reviewing={!!focus}
+          tab={params.get('tab')}
+          isCurrent={isCurrent}
+          onParam={(patch) => setParam({ week: weekKey, ...patch })}
+          onReview={reviewBid}
+          onChanged={refresh}
+        />
+      ) : (
+        <div className="panel p-4 text-sm text-muted">
+          Bidder not found.{' '}
+          <button type="button" className="underline" onClick={() => setParam({ bidder: null, day: null, tab: null })}>Back to the team</button>
+        </div>
+      )}
     </div>
   );
 
@@ -304,33 +375,24 @@ export default function BiddersPage() {
         />
       )}
       <PageHeader
-        title="Bidders"
+        title="Bids"
         action={!bidderId && (
           <div className="flex items-center gap-2">
-            {/* The Bid Track package the server ships (always the latest); install steps on hover. */}
-            <a
-              className="btn-outline"
-              href={`${BASE_URL}/ext/download`}
-              title={'Unzip it, open chrome://extensions, turn on Developer mode and click "Load unpacked" on the folder. To update: unzip over the folder, then Reload.'}
-            >
-              Download Bid Track
-            </a>
             <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>
+            {/* The Bid Track package the server ships (always the latest). */}
+            <ActionMenu
+              label="More actions"
+              items={[{ label: 'Download Bid Track', onSelect: () => window.location.assign(`${BASE_URL}/ext/download`) }]}
+            />
           </div>
         )}
       />
 
-      {!bidderId && alerts.data && (
-        <BidderAlerts
-          alerts={alerts.data}
-          onOpenBidder={(id, day) => setParam({ bidder: id, week: day ?? weekKey, day: day ?? null, view: null, tab: null })}
-          onOpenProfile={(id) => navigate(`/accounts/${id}`)}
-          onArchive={(id, name) => setPendingArchive({ id, name })}
-          canArchive={canManageBidders({ isAdmin, ownerId, userId: user?.id })}
-        />
+      {bidderId ? bidderPage : (
+        <Tabs tabs={TABS} value={section} onChange={(k) => setParam(sectionPatch(k as BidsSection))} ariaLabel="Bids sections">
+          {list}
+        </Tabs>
       )}
-
-      {main}
 
       <SelfBidsPanel scope={selfScope} onClose={() => setSelfScope(null)} />
 

@@ -61,7 +61,7 @@ const SECTIONS: Section[] = [
   {
     label: 'Apply',
     items: [
-      { href: '/bidders', label: 'Bidders', icon: Users },
+      { href: '/bidders', label: 'Bids', icon: Users },
       { href: '/job-applies', label: 'Auto apply', icon: Send },
       { href: '/resume', label: 'Tailor resume', icon: FilePenLine, isActive: isTailorSection },
     ],

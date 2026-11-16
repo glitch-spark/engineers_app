@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { addDays, type BidderPeriodRequest, type ReportClock, type ShownWeeks } from '../../lib/bidderFilters';
+import type { BidsSection } from '../../lib/bidsUrl';
 import { BiddersFilterBar, useBidderFilters } from './biddersFilters';
 
 // Wed Nov 18, 2026 09:00 Chicago, as the server's clock says: the long pay week Sun Nov 15 .. Sun Nov 22.
@@ -30,16 +31,17 @@ function Probe() {
   seen.search = useLocation().search;
   return null;
 }
-type BarProps = { admin?: boolean; label?: string; loading?: boolean };
-function Bar({ admin = false, label, loading = false }: BarProps) {
+type BarProps = { admin?: boolean; label?: string; loading?: boolean; section?: BidsSection };
+function Bar({ admin = false, label, loading = false, section = 'bidders' }: BarProps) {
   const f = useBidderFilters(admin, CLOCK)!;
   seen.request = f.request;
   return createElement(BiddersFilterBar, {
     f,
     isAdmin: admin,
-    ownerId: f.filters.owner,
+    section,
+    ownerValue: f.filters.owner,
     serverLabel: label,
-    ownerOptions: [{ value: '', label: 'All users' }, { value: 'u1', label: 'Pedro' }],
+    ownerOptions: [{ value: '', label: 'Me' }, { value: 'u1', label: 'Pedro' }, { value: 'all', label: 'All owners' }],
     // The period the server showed for the request (none while it loads).
     shown: loading ? undefined : served(f.request),
   });
@@ -68,6 +70,25 @@ describe('the bar', () => {
     renderBar('', { admin: true });
     fireEvent.change(screen.getByLabelText('Owner'), { target: { value: 'u1' } });
     expect(seen.search).toBe('?owner=u1');
+    fireEvent.change(screen.getByLabelText('Owner'), { target: { value: 'all' } });
+    expect(seen.search).toBe('?owner=all');
+    // Me is the default and is never written.
+    fireEvent.change(screen.getByLabelText('Owner'), { target: { value: '' } });
+    expect(seen.search).toBe('');
+  });
+
+  it('has no Show switch', () => {
+    renderBar('', { admin: true });
+    expect(screen.queryByRole('radiogroup', { name: 'Show' })).toBeNull();
+    expect(screen.queryByText('Self')).toBeNull();
+  });
+
+  it('My bids has the owner and the period, but no search or Show archived', () => {
+    renderBar('', { admin: true, section: 'mine' });
+    expect(screen.getByLabelText('Owner')).toBeTruthy();
+    expect(screen.getByLabelText('Date range')).toBeTruthy();
+    expect(screen.queryByPlaceholderText('Search bidders…')).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Show archived' })).toBeNull();
   });
 
   it('labels a pay week with the server label (dots while it loads)', () => {

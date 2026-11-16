@@ -1,14 +1,14 @@
 // The single Bidders page table (spec 2026-11-14-bidders-single-page-design.md): one row per bidder with the period's
 // time columns (a pay week's days, or a month's pay weeks), money and review counts, and the performance measures.
 // Replaces the Pay week table on the list and the Performance table.
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, ChevronsUpDown, Info } from 'lucide-react';
-import type { BidPerformance, BidPerformanceRow, SelfBidRow } from '../../api/endpoints';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Info } from 'lucide-react';
+import type { BidPerformance, BidPerformanceRow } from '../../api/endpoints';
 import { countryFlag } from '../../lib/countries';
 import { usd } from '../../lib/money';
 import { fmtCount } from '../../lib/profileMetrics';
 import { rowPer100Verdict } from '../../lib/bidderInsights';
-import { rowMoney, shownRows, timeColumns, type RowFilter } from '../../lib/bidderPage';
+import { rowMoney, timeColumns } from '../../lib/bidderPage';
 import { Arrow } from '../insights/compareParts';
 import { DayCount } from './TeamWeekTable';
 
@@ -97,133 +97,23 @@ function sortValue(r: BidPerformanceRow, key: SortKey): number | null {
 type Props = {
   data: BidPerformance;
   platformPer100: number | null | undefined;
+  /** All owners: an Owner column after Bidder. */
   showOwner: boolean;
   onOpenBidder: (id: string, day?: string) => void;
   /** Open the review overlay on this bidder's pending bids of the pay week (week mode). */
   onReview: (id: string) => void;
   renderStatus: (row: BidPerformanceRow) => ReactNode;
   renderActions: (row: BidPerformanceRow) => ReactNode;
-  /** All / Bidders / Self (the owner's own applies). */
-  show: RowFilter;
-  /** Open an owner's self bids: a day (a day cell) or the period's pay week; with `profile`, that profile's only. */
-  onOpenSelf: OpenSelf;
 };
 
-export type OpenSelf = (ownerId: string, ownerName: string, day?: string, profile?: { accountId: string; name: string }) => void;
-
-/**
- * The owners' Self rows (own applies from the extension, outside the totals). An owner who applied with more than one
- * profile in the period gets a sub-row per profile under it (open by default; the chevron folds them), so each
- * profile's applies are counted on their own; a single profile is named on the row instead.
- */
-export function SelfRows({ rows, cols, showOwner, now, onOpenSelf }: {
-  rows: SelfBidRow[];
-  cols: ReturnType<typeof timeColumns>;
-  showOwner: boolean;
-  now: number;
-  onOpenSelf: OpenSelf;
-}) {
-  const [folded, setFolded] = useState<Set<string>>(() => new Set());
-  const fold = (ownerId: string) =>
-    setFolded((prev) => {
-      const next = new Set(prev);
-      if (next.has(ownerId)) next.delete(ownerId);
-      else next.add(ownerId);
-      return next;
-    });
-
-  const cells = (counts: number[], label: string, open: (day: string) => void) =>
-    cols.map((c, i) => (
-      <td key={c.key} className="px-1 py-1.5 text-center">
-        {c.isFuture ? <span className="text-muted">–</span> : c.day && (counts[i] ?? 0) > 0 ? (
-          <button type="button" className="w-full rounded-md px-1 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            aria-label={`${label}, ${c.label} ${c.sub}: ${counts[i]} applies`}
-            onClick={(e) => { e.stopPropagation(); open(c.day!); }}>
-            {fmtCount(counts[i] ?? 0)}
-          </button>
-        ) : fmtCount(counts[i] ?? 0)}
-      </td>
-    ));
-  const tail = (total: number, interviews: number, lastBidAt: string | null | undefined, strong: boolean) => (
-    <>
-      <td className={`px-3 py-2 text-right ${strong ? 'font-medium text-strong' : ''}`}>{fmtCount(total)}</td>
-      <td className="px-3 py-2 text-right text-muted">—</td>
-      <td className="px-3 py-2 text-center text-muted">—</td>
-      <td className="px-3 py-2 text-right text-muted">—</td>
-      <td className="px-3 py-2 text-right">{fmtCount(interviews)}</td>
-      <td className="px-3 py-2 text-right text-muted">—</td>
-      <td className="px-3 py-2 text-right text-muted">—</td>
-      <td className="px-3 py-2 text-right whitespace-nowrap">
-        {lastBidAt ? relativeTime(lastBidAt, now) : <span className="text-muted">—</span>}
-      </td>
-      <td />
-    </>
-  );
-
-  return (
-    <>
-      {rows.map((s) => {
-        const profiles = s.profiles ?? [];
-        const split = profiles.length > 1;
-        const open = split && !folded.has(s.ownerId);
-        return (
-          <Fragment key={`self-${s.ownerId}`}>
-            <tr className="table-row cursor-pointer border-t border-zinc-100 font-normal text-body dark:border-zinc-800"
-              onClick={() => onOpenSelf(s.ownerId, s.ownerName)}>
-              <th scope="row" className="px-4 py-2 text-left font-normal">
-                <span className="inline-flex items-center gap-1">
-                  {split && (
-                    <button type="button" className="-ml-1 rounded p-0.5 text-muted hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      aria-expanded={open} aria-label={open ? 'Hide profiles' : 'Show profiles'}
-                      onClick={(e) => { e.stopPropagation(); fold(s.ownerId); }}>
-                      {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-                    </button>
-                  )}
-                  <button type="button" className="font-medium text-strong hover:underline"
-                    onClick={(e) => { e.stopPropagation(); onOpenSelf(s.ownerId, s.ownerName); }}>Self</button>
-                  {showOwner && s.ownerName && <span className="text-muted"> · {s.ownerName}</span>}
-                  {profiles.length === 1 && <span className="text-muted"> · {profiles[0].name}</span>}
-                </span>
-                <div className="text-[11px] text-muted">
-                  Own applies from the extension{split ? ` · ${profiles.length} profiles` : ''} · not in the totals
-                </div>
-              </th>
-              {cells(s.weekly, 'Self', (day) => onOpenSelf(s.ownerId, s.ownerName, day))}
-              {tail(s.total, s.interviews, s.lastBidAt, true)}
-            </tr>
-            {open && profiles.map((p) => {
-              const profile = { accountId: p.accountId, name: p.name };
-              return (
-                <tr key={`self-${s.ownerId}-${p.accountId}`}
-                  className="table-row cursor-pointer border-t border-zinc-100/70 font-normal text-body dark:border-zinc-800/70"
-                  onClick={() => onOpenSelf(s.ownerId, s.ownerName, undefined, profile)}>
-                  <th scope="row" className="py-1.5 pl-9 pr-4 text-left font-normal">
-                    <button type="button" className="text-body hover:underline"
-                      onClick={(e) => { e.stopPropagation(); onOpenSelf(s.ownerId, s.ownerName, undefined, profile); }}>
-                      {p.name}
-                    </button>
-                  </th>
-                  {cells(p.weekly, `Self, ${p.name}`, (day) => onOpenSelf(s.ownerId, s.ownerName, day, profile))}
-                  {tail(p.total, p.interviews, undefined, false)}
-                </tr>
-              );
-            })}
-          </Fragment>
-        );
-      })}
-    </>
-  );
-}
-
 export default function BiddersTable({
-  data, platformPer100, showOwner, onOpenBidder, onReview, renderStatus, renderActions, show, onOpenSelf,
+  data, platformPer100, showOwner, onOpenBidder, onReview, renderStatus, renderActions,
 }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
   const weekMode = !!data.payWeek;
   const cols = timeColumns(data);
-  const visible = shownRows(data, show);
   const rows = useMemo(() => {
-    const list = show === 'self' ? [] : data.bidders;
+    const list = data.bidders;
     if (!sort) return list;
     return [...list].sort((a, b) => {
       const x = sortValue(a, sort.key);
@@ -231,7 +121,7 @@ export default function BiddersTable({
       if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;
       return sort.dir === 'desc' ? y - x : x - y;
     });
-  }, [data, sort, show]);
+  }, [data, sort]);
   const toggle = (key: SortKey) =>
     setSort((s) => (s?.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: key === 'costPerInterview' ? 'asc' : 'desc' }));
   const now = Date.now();
@@ -263,6 +153,7 @@ export default function BiddersTable({
         <thead className="table-head">
           <tr>
             <th scope="col" className="px-4 py-2.5 text-left">Bidder</th>
+            {showOwner && <th scope="col" className="px-3 py-2.5 text-left">Owner</th>}
             {cols.map((c, i) => head(`t${i}`, (
               <span className="flex flex-col items-center leading-tight">
                 <span className={c.isToday ? 'text-sky-700 dark:text-sky-300' : ''}>{c.label}</span>
@@ -294,10 +185,11 @@ export default function BiddersTable({
                     {r.country && <span aria-hidden className="mr-1.5">{countryFlag(r.country)}</span>}{r.name}
                   </button>
                   <div className="text-[11px] text-muted whitespace-nowrap">
-                    {[r.profileName, showOwner ? r.ownerName : null, r.rate != null ? `${usd(r.rate)}/bid` : null].filter(Boolean).join(' · ')}
+                    {[r.profileName, r.rate != null ? `${usd(r.rate)}/bid` : null].filter(Boolean).join(' · ')}
                   </div>
                   <div className="text-[11px]">{renderStatus(r)}</div>
                 </th>
+                {showOwner && <td className="px-3 py-2 text-left whitespace-nowrap">{r.ownerName ?? '—'}</td>}
                 {cols.map((c, i) => (
                   <td key={c.key} className={`px-1 py-1.5 text-center ${c.isToday ? 'bg-sky-50/60 dark:bg-sky-950/30' : ''}`}>
                     {weekMode && r.dayCells?.[i] ? (
@@ -372,8 +264,9 @@ export default function BiddersTable({
           })}
         </tbody>
         <tfoot className="tabular-nums">
-          <tr className={`border-t border-zinc-200 bg-zinc-50/70 font-medium text-strong dark:border-zinc-700 dark:bg-zinc-900/40 ${visible.total ? '' : 'hidden'}`}>
+          <tr className="border-t border-zinc-200 bg-zinc-50/70 font-medium text-strong dark:border-zinc-700 dark:bg-zinc-900/40">
             <th scope="row" className="px-4 py-2 text-left">Total</th>
+            {showOwner && <td />}
             {cols.map((c, i) => (
               <td key={c.key} className="px-1 py-2 text-center">
                 {weekMode && t.days?.[i] ? <DayCount c={t.days[i]} future={!!c.isFuture} />
@@ -389,13 +282,6 @@ export default function BiddersTable({
             <td className="px-3 py-2 text-right">{t.costPerInterview == null ? '—' : dollars(t.costPerInterview)}</td>
             <td colSpan={2} />
           </tr>
-          <SelfRows
-            rows={(data.selfRows ?? []).filter((s) => visible.self.includes(s.ownerId))}
-            cols={cols}
-            showOwner={showOwner}
-            now={now}
-            onOpenSelf={onOpenSelf}
-          />
         </tfoot>
       </table>
     </div>

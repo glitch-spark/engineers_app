@@ -7,7 +7,7 @@ import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { BidPerformance, BidPerformanceRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
-import { matchesBidderSearch, type BidderPeriodRequest, type BidderRowFilter } from '../../lib/bidderFilters';
+import { matchesBidderSearch, type BidderPeriodRequest } from '../../lib/bidderFilters';
 import { cardOpen, stripItems, type StripItem } from '../../lib/bidderPage';
 import BiddersBand from './BiddersBand';
 import BiddersTable from './BiddersTable';
@@ -21,11 +21,11 @@ const TONE: Record<NonNullable<StripItem['tone']> | 'none', string> = {
   none: 'text-muted',
 };
 
-/** What the Self panel opens: a day or the shown pay week, optionally one profile's applies only. */
-export type SelfOpenScope = { day?: string; week?: string; accountId?: string; profileName?: string };
-
 type Props = {
+  /** The owner whose team this is ('' = every owner, or staff's own: the server decides). */
   ownerId: string;
+  /** All owners (admin): the table gets an Owner column. */
+  allOwners: boolean;
   /** Open a bidder at a day of `week` (a report day inside the pay week or period end). */
   onOpenBidder: (id: string, week: string, day?: string) => void;
   /** The review overlay over a pay week's pending bids (one bidder's, or everyone's). */
@@ -41,15 +41,10 @@ type Props = {
   /** The bar's search: narrows the table (not the totals) to bidders whose name or profile contains it. */
   search: string;
   onClearSearch: () => void;
-  /** The bar's Show filter: every row, the bidders only, or the owners' self-bid rows only. */
-  show: BidderRowFilter;
-  /** Open an owner's self bids for a day, or for the shown pay week. */
-  onOpenSelf: (ownerId: string, ownerName: string, scope: SelfOpenScope) => void;
 };
 
 export default function BiddersOverview({
-  ownerId, onOpenBidder, onReview, renderStatus, renderActions, empty, request, data, error, onRetry, search, onClearSearch,
-  show, onOpenSelf,
+  ownerId, allOwners, onOpenBidder, onReview, renderStatus, renderActions, empty, request, data, error, onRetry, search, onClearSearch,
 }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -82,9 +77,7 @@ export default function BiddersOverview({
   const anchor = data ? (data.payWeek?.days[0]?.day ?? data.end) : '';
   const items = data ? stripItems(data.totals) : [];
   const shown = data ? data.bidders.filter((b) => matchesBidderSearch(b, search)) : [];
-  // The search narrows bidders only; it's a miss when no bidder matches and no self row is left to show either.
-  const searchMiss = !!data && !!search.trim() && shown.length === 0 && show !== 'self'
-    && (show === 'bidders' || !(data.selfRows ?? []).length);
+  const searchMiss = !!data && !!search.trim() && shown.length === 0;
 
   return (
     <section className="space-y-4" aria-label="Bidders">
@@ -101,7 +94,7 @@ export default function BiddersOverview({
           <div className="skeleton h-40 w-full" />
           <div className="skeleton h-64 w-full" />
         </div>
-      ) : data.bidders.length === 0 && !(data.selfRows ?? []).length ? (
+      ) : data.bidders.length === 0 ? (
         empty
       ) : (
         <>
@@ -143,16 +136,11 @@ export default function BiddersOverview({
             <BiddersTable
               data={{ ...data, bidders: shown }}
               platformPer100={insights.data?.platform?.per100}
-              showOwner={isAdmin}
+              showOwner={allOwners}
               onOpenBidder={(id, day) => onOpenBidder(id, day ?? anchor, day)}
               onReview={(id) => onReview(anchor, id)}
               renderStatus={renderStatus}
               renderActions={renderActions}
-              show={show}
-              onOpenSelf={(id, name, day, profile) => onOpenSelf(id, name, {
-                ...(day ? { day } : { week: anchor }),
-                ...(profile ? { accountId: profile.accountId, profileName: profile.name } : {}),
-              })}
             />
           )}
         </>

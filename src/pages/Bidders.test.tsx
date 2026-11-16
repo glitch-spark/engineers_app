@@ -1,0 +1,242 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+import { SWRConfig } from 'swr';
+
+const api = vi.hoisted(() => ({
+  getBidClock: vi.fn(),
+  getBidPerformance: vi.fn(),
+  lookupUsers: vi.fn(),
+  listBidders: vi.fn(),
+  getBidAlerts: vi.fn(),
+  getBidInsights: vi.fn(),
+  getBidBacklog: vi.fn(),
+  bidsWeek: vi.fn(),
+  listBids: vi.fn(),
+  bidScreenshots: vi.fn(),
+  archiveBidder: vi.fn(),
+}));
+// The real module's constants (reasons, labels) stay; every call is mocked.
+vi.mock('../api/endpoints', async (orig) => ({ ...(await orig<object>()), ...api }));
+const auth = vi.hoisted(() => ({ user: { id: 'u1', role: 'admin' } as { id: string; role: string } | null }));
+vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: auth.user }) }));
+vi.mock('../components/bids/FocusReview', () => ({
+  default: (props: { scope: unknown; onExit: () => void }) => (
+    <div data-testid="focus">
+      {JSON.stringify(props.scope)}
+      <button type="button" onClick={props.onExit}>Close</button>
+    </div>
+  ),
+}));
+
+import BiddersPage from './Bidders';
+
+const AFTER = {
+  today: '2026-11-23', payWeekStart: '2026-11-23', payWeekEnd: '2026-11-29', previousPayWeekStart: '2026-11-15',
+  timezone: 'America/Chicago',
+};
+
+const DAYS = ['2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28', '2026-11-29'];
+
+function perf(selfOwner = { id: 'u1', name: 'Pat' }) {
+  return {
+    period: 'week', start: '2026-11-23', end: '2026-11-29', label: 'Week ending Sun Nov 29', recordsStart: null,
+    weeks: [{ start: '2026-11-23', end: '2026-11-29', partial: false }],
+    bidders: [{
+      id: 'b1', name: 'Ana', ownerName: 'Pat', profileId: 'a1', profileName: 'Alpha', status: 'active',
+      weekly: [13], total: 13, approved: 10, pending: 3, rejected: 0, previousTotal: 0, change: null,
+      longestStreak: 0, currentStreak: 0, hitDays: 0, weekdays: 0, hitRate: null, avgPerWeekday: null,
+      interviews: 0, sharedProfile: false, sharedWith: [], profileSelfBids: false, untaggedInterviews: 0, days: [],
+      per100: null, lastBidAt: null, rate: 0.06, pay: 0.6,
+      week: { approved: 10, pending: 3, rejected: 0, toReview: 3, pay: 0.6, source: 'records', error: null },
+    }],
+    totals: { total: 13, interviews: 0, hitRate: null, avgPerWeekday: null, per100: null, approved: 10, pending: 3, rejected: 0, toReview: 3, pay: 0.6 },
+    selfRows: [{
+      ownerId: selfOwner.id, ownerName: selfOwner.name, total: 2, weekly: [2, 0, 0, 0, 0, 0, 0], interviews: 0, lastBidAt: null,
+      profiles: [{ accountId: 'p1', name: 'Alpha', total: 2, weekly: [2, 0, 0, 0, 0, 0, 0], interviews: 0 }],
+    }],
+    payWeek: {
+      start: '2026-11-23', end: '2026-11-30', label: 'Week ending Sun Nov 29', timezone: 'America/Chicago',
+      days: DAYS.map((day) => ({ day, isToday: day === '2026-11-23', isFuture: day > '2026-11-23' })),
+    },
+    top: { bids: [], streak: [], interviews: [], conversion: [] },
+  };
+}
+
+const seen = { search: '' };
+function Probe() {
+  seen.search = useLocation().search;
+  return null;
+}
+
+function renderPage(initial: string) {
+  render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <MemoryRouter initialEntries={[initial]}>
+        <BiddersPage />
+        <Probe />
+      </MemoryRouter>
+    </SWRConfig>,
+  );
+}
+
+const lastPerfCall = () => api.getBidPerformance.mock.calls.at(-1)?.[0];
+const owner = () => screen.getByLabelText('Owner') as HTMLSelectElement;
+
+beforeEach(() => {
+  auth.user = { id: 'u1', role: 'admin' };
+  api.getBidClock.mockResolvedValue(AFTER);
+  api.getBidPerformance.mockResolvedValue(perf());
+  api.lookupUsers.mockResolvedValue({ users: [{ _id: 'u1', name: 'Pat', email: null }, { _id: 'u2', name: 'Zed', email: null }] });
+  api.listBidders.mockResolvedValue({ bidders: [] });
+  api.getBidAlerts.mockResolvedValue({ asOf: '2026-11-23', flags: [], archive: [] });
+  api.getBidInsights.mockResolvedValue({ mine: null, platform: null });
+  api.getBidBacklog.mockResolvedValue({ today: '2026-11-23', total: 0, todayCount: 0, oldestDay: null, bidders: [] });
+  api.listBids.mockResolvedValue({ bids: [], week: '2026-11-29' });
+});
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+describe('the Bids page', () => {
+  it("opens on Bids › Bidders with the admin's own team", async () => {
+    renderPage('/bidders');
+    expect(screen.getByRole('heading', { name: 'Bids' })).toBeTruthy();
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
+    expect(tabs).toEqual(['Bidders', 'My bids']);
+    expect(screen.queryByRole('tab', { name: 'Pay' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Bidders' }).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
+    expect(lastPerfCall()).toMatchObject({ ownerId: 'u1' });
+    expect(api.getBidPerformance.mock.calls.every(([p]) => p.ownerId === 'u1')).toBe(true);
+    await waitFor(() => expect(owner().selectedOptions[0].text).toBe('Me'));
+    expect([...owner().options].map((o) => o.text)).toEqual(['Me', 'Zed', 'All owners']);
+    expect(screen.queryByRole('radiogroup', { name: 'Show' })).toBeNull();
+    // Ana is in the table, the owner's own bids are not (they live on My bids).
+    expect(await screen.findByRole('button', { name: 'Ana' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Self' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: /Owner/ })).toBeNull();
+    expect(document.title).toContain('Bids');
+  });
+
+  it('show=self opens My bids', async () => {
+    renderPage('/bidders?show=self');
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'My bids' }).getAttribute('aria-selected')).toBe('true'));
+    expect(await screen.findByRole('button', { name: 'Alpha' })).toBeTruthy();
+    // The old key is replaced by the new one.
+    await waitFor(() => expect(seen.search).toBe('?section=mine'));
+    // My bids has no search or Show archived.
+    expect(screen.queryByPlaceholderText('Search bidders…')).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Show archived' })).toBeNull();
+  });
+
+  it('show=bidders and section=pay open the Bidders tab', async () => {
+    renderPage('/bidders?section=pay');
+    await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
+    expect(screen.getByRole('tab', { name: 'Bidders' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('button', { name: 'Ana' })).toBeTruthy();
+    cleanup();
+    renderPage('/bidders?show=bidders');
+    expect(screen.getByRole('tab', { name: 'Bidders' }).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() => expect(seen.search).toBe(''));
+  });
+
+  it('a tab change writes section and drops search and archived', async () => {
+    renderPage('/bidders?q=ana&archived=1');
+    await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('tab', { name: 'My bids' }));
+    expect(seen.search).toBe('?section=mine');
+    expect(screen.getByRole('tab', { name: 'My bids' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Bidders' }));
+    expect(seen.search).toBe('');
+  });
+
+  it('All owners asks for everyone and shows the Owner column', async () => {
+    renderPage('/bidders');
+    await waitFor(() => expect(owner().options.length).toBe(3));
+    fireEvent.change(owner(), { target: { value: 'all' } });
+    expect(seen.search).toBe('?owner=all');
+    await waitFor(() => expect(lastPerfCall().ownerId).toBeUndefined());
+    expect(await screen.findByRole('columnheader', { name: /Owner/ })).toBeTruthy();
+    // Back to Me: the default is never written.
+    fireEvent.change(owner(), { target: { value: '' } });
+    expect(seen.search).toBe('');
+  });
+
+  it("another owner with no bidders offers every owner's", async () => {
+    api.getBidPerformance.mockResolvedValue({ ...perf(), bidders: [], selfRows: [] });
+    renderPage('/bidders?owner=u2');
+    expect(await screen.findByText('This owner has no active bidders.')).toBeTruthy();
+    expect(lastPerfCall()).toMatchObject({ ownerId: 'u2' });
+    fireEvent.click(screen.getByRole('button', { name: 'Show all owners' }));
+    expect(seen.search).toBe('?owner=all');
+  });
+
+  it('an empty own team says how to start', async () => {
+    api.getBidPerformance.mockResolvedValue({ ...perf(), bidders: [], selfRows: [] });
+    renderPage('/bidders');
+    expect(await screen.findByText('No bidders yet')).toBeTruthy();
+    expect(screen.getByText('Add a bidder, then send them the invite code and the Bid Track download.')).toBeTruthy();
+  });
+
+  it('waits for the signed-in user before asking for anything owner-scoped', async () => {
+    auth.user = null;
+    renderPage('/bidders');
+    await waitFor(() => expect(api.getBidClock).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 30));
+    expect(api.getBidPerformance).not.toHaveBeenCalled();
+    expect(api.getBidAlerts).not.toHaveBeenCalled();
+    expect(api.getBidInsights).not.toHaveBeenCalled();
+    expect(document.querySelector('[aria-busy="true"]')).toBeTruthy();
+  });
+
+  it('staff see their own team without an owner id', async () => {
+    auth.user = { id: 'u3', role: 'user' };
+    renderPage('/bidders?owner=all');
+    await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
+    expect(lastPerfCall().ownerId).toBeUndefined();
+    expect(screen.queryByLabelText('Owner')).toBeNull();
+    expect(api.lookupUsers).not.toHaveBeenCalled();
+  });
+});
+
+describe('My bids panel names', () => {
+  const openAlpha = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Alpha' }));
+    await waitFor(() => expect(api.listBids).toHaveBeenCalled());
+  };
+
+  it("an admin's own bids are not named", async () => {
+    renderPage('/bidders?section=mine');
+    await openAlpha();
+    expect(await screen.findByText('Your own bids from Bid Track')).toBeTruthy();
+    expect(screen.queryByText(/Pat's own bids/)).toBeNull();
+  });
+
+  it('staff bids are not named', async () => {
+    auth.user = { id: 'u3', role: 'user' };
+    api.getBidPerformance.mockResolvedValue(perf({ id: 'u3', name: 'Sam' }));
+    renderPage('/bidders?section=mine');
+    await openAlpha();
+    expect(await screen.findByText('Your own bids from Bid Track')).toBeTruthy();
+    expect(screen.queryByText(/Sam's own bids/)).toBeNull();
+  });
+
+  it("another owner's bids are named", async () => {
+    api.getBidPerformance.mockResolvedValue(perf({ id: 'u2', name: 'Zed' }));
+    renderPage('/bidders?section=mine&owner=u2');
+    await openAlpha();
+    expect(await screen.findByText("Zed's own bids from Bid Track")).toBeTruthy();
+    expect(api.listBids.mock.calls[0][0]).toMatchObject({ self: true, ownerId: 'u2', accountId: 'p1' });
+  });
+
+  it('All owners names the owner', async () => {
+    renderPage('/bidders?section=mine&owner=all');
+    await openAlpha();
+    expect(await screen.findByText("Pat's own bids from Bid Track")).toBeTruthy();
+    const block = screen.getByRole('heading', { name: 'Pat' });
+    expect(within(block.parentElement!).getByRole('table')).toBeTruthy();
+  });
+});

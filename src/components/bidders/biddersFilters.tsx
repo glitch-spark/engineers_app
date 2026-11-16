@@ -2,7 +2,6 @@ import { useId } from 'react';
 import { rangeLabel } from '../../lib/dateRange';
 import {
   BIDDER_CLEAR_KEYS,
-  BIDDER_SHOW_OPTIONS,
   BIDDER_URL_DEFAULTS,
   bidderCanClear,
   bidderCanStepBack,
@@ -18,15 +17,14 @@ import {
   type BidderKey,
   type BidderPeriodRequest,
   type BidderPreset,
-  type BidderRowFilter,
   type ReportClock,
   type ShownWeeks,
 } from '../../lib/bidderFilters';
+import type { BidsSection } from '../../lib/bidsUrl';
 import { useUrlFilters } from '../../lib/useUrlFilters';
 import DateRangeFilter from '../filters/DateRangeFilter';
 import FilterBar, { FilterField } from '../filters/FilterBar';
 import SearchFilter from '../filters/SearchFilter';
-import Segmented from '../Segmented';
 import Select from '../Select';
 import Switch from '../Switch';
 
@@ -60,18 +58,22 @@ export function useBidderFilters(isAdmin: boolean, clock: ReportClock | undefine
 }
 
 /**
- * The Bidders filter bar: Owner (admin), Show (All / Bidders / Self), Show archived, search, the date range, Clear. The pay-week presets are
+ * The Bids filter bar: Owner (admin: Me / each owner / All owners), then on the Bidders tab Show archived and search,
+ * the date range, Clear. The pay-week presets are
  * stepped by the page's own logic from the report days the server showed (`shown`, undefined while the period loads:
  * ‹ waits for it) and labelled with the server's pay-week label (`serverLabel`, undefined while it loads; `failed`
  * falls back to the dates).
  */
 export function BiddersFilterBar({
-  f, isAdmin, ownerOptions, ownerId, serverLabel, failed = false, shown,
+  f, isAdmin, section, ownerOptions, ownerValue, serverLabel, failed = false, shown,
 }: {
   f: BidderFilterState;
   isAdmin: boolean;
+  /** Search and Show archived belong to the Bidders tab. */
+  section: BidsSection;
   ownerOptions: { value: string; label: string }[];
-  ownerId: string;
+  /** The select's value (`ownerSelectValue`: '' = Me). */
+  ownerValue: string;
   serverLabel?: string;
   failed?: boolean;
   shown?: ShownWeeks;
@@ -84,25 +86,21 @@ export function BiddersFilterBar({
         <FilterField label="Owner" htmlFor={ownerFieldId} width="w-52">
           <Select
             id={ownerFieldId}
-            value={ownerId}
-            onChange={(owner) => patch({ owner })}
+            value={ownerValue}
+            onChange={(v) => patch({ owner: v || undefined })}
             options={ownerOptions}
             className="w-full text-sm"
           />
         </FilterField>
       )}
-      <div className="flex h-[38px] items-center">
-        <Segmented<BidderRowFilter>
-          label="Show"
-          options={BIDDER_SHOW_OPTIONS}
-          value={filters.show}
-          onChange={(show) => patch({ show: show === 'all' ? undefined : show })}
-        />
-      </div>
-      <div className="flex h-[38px] items-center">
-        <Switch checked={filters.archived} onChange={(on) => patch({ archived: on ? '1' : '' })} label="Show archived" />
-      </div>
-      <SearchFilter value={filters.q} onChange={(q) => patch({ q })} placeholder="Search bidders…" />
+      {section === 'bidders' && (
+        <>
+          <div className="flex h-[38px] items-center">
+            <Switch checked={filters.archived} onChange={(on) => patch({ archived: on ? '1' : '' })} label="Show archived" />
+          </div>
+          <SearchFilter value={filters.q} onChange={(q) => patch({ q })} placeholder="Search bidders…" />
+        </>
+      )}
       <DateRangeFilter<BidderPreset>
         value={{ preset: filters.range, from: filters.from, to: filters.to }}
         onChange={(v) => patch(pickBidderPreset(v.preset, v.from, v.to, clock))}

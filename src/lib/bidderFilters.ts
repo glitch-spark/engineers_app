@@ -10,7 +10,7 @@
  * change can never shift a day.
  *
  * URL keys: `range` (this_pay_week when absent), `date` (the period's anchor day, set by stepping with ‹ ›), `from` /
- * `to` (Custom), `q`, `show=bidders|self`, `archived=1`, `owner` (admin). Old links keep working: `week=<a day>` opens that pay week and
+ * `to` (Custom), `q`, `archived=1`, `owner` (admin: absent = their own team, a user id, or `all`; see bidsUrl.ts). Old links keep working: `week=<a day>` opens that pay week and
  * `period=month|custom` with `date` / `to` open that month or range.
  *
  * A pay week's `date` (and the old `week`) is any report day inside it; the server finds its pay week. Stepping with
@@ -63,27 +63,18 @@ export function bidderPresetOptions(active: BidderPreset): { value: BidderPreset
  * pin the page to an old period. The other filters (owner, archived, search) leave them as they are.
  * An empty `range` is the default (This pay week).
  */
-export type BidderKey = 'owner' | 'show' | 'archived' | 'q' | 'range' | 'date' | 'from' | 'to' | 'week' | 'period';
+export type BidderKey = 'owner' | 'archived' | 'q' | 'range' | 'date' | 'from' | 'to' | 'week' | 'period';
 export type BidderUrlValues = Record<BidderKey, string>;
 export const BIDDER_URL_DEFAULTS: BidderUrlValues = {
-  owner: '', show: '', archived: '', q: '', range: '', date: '', from: '', to: '', week: '', period: '',
+  owner: '', archived: '', q: '', range: '', date: '', from: '', to: '', week: '', period: '',
 };
 /** What Clear (and any filter change) puts back: the bar's own keys plus the old URL's period keys. */
 export const BIDDER_CLEAR_KEYS: BidderKey[] = [
-  'owner', 'show', 'archived', 'q', 'range', 'date', 'from', 'to', 'week', 'period',
-];
-
-/** Which rows the table shows: everyone, the bidders only, or the owners' self-bid rows only. URL `show` ('' = all). */
-export type BidderRowFilter = 'all' | 'bidders' | 'self';
-export const BIDDER_SHOW_OPTIONS: { value: BidderRowFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'bidders', label: 'Bidders' },
-  { value: 'self', label: 'Self' },
+  'owner', 'archived', 'q', 'range', 'date', 'from', 'to', 'week', 'period',
 ];
 
 export type BidderFilters = {
   owner: string;
-  show: BidderRowFilter;
   archived: boolean;
   q: string;
   range: BidderPreset;
@@ -196,8 +187,7 @@ function settleUrl(range: BidderPreset, date: string, clock: ReportClock): { ran
 
 /** URL values (strings, possibly junk) -> typed filters. Never throws; bad values fall back to the defaults. */
 export function parseBidderValues(values: BidderUrlValues, clock: ReportClock): BidderFilters {
-  const show: BidderRowFilter = values.show === 'bidders' || values.show === 'self' ? values.show : 'all';
-  const base = { owner: values.owner, show, archived: values.archived === '1', q: values.q };
+  const base = { owner: values.owner, archived: values.archived === '1', q: values.q };
   let range: BidderPreset = BIDDER_DEFAULT_RANGE;
   let date = values.date;
   let from = values.from;
@@ -220,7 +210,7 @@ export function parseBidderValues(values: BidderUrlValues, clock: ReportClock): 
 
 /** Whether the bar shows anything that differs from its defaults (the Clear button). `owner` only counts for admins. */
 export function bidderCanClear(f: BidderFilters, isAdmin: boolean): boolean {
-  return (isAdmin && !!f.owner) || f.show !== 'all' || f.archived || !!f.q || f.range !== BIDDER_DEFAULT_RANGE || !!f.date;
+  return (isAdmin && !!f.owner) || f.archived || !!f.q || f.range !== BIDDER_DEFAULT_RANGE || !!f.date;
 }
 
 // ---- filters -> request ----------------------------------------------------
