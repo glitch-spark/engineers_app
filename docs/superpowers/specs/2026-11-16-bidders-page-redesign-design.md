@@ -250,3 +250,22 @@ Glossary, applied everywhere on the page, the bidder page, the overlay and the P
 - Whether the bidder page's Performance default period is Last month.
 - How "Review all" over a multi-pay-week range is served (new endpoint vs looping pay weeks client-side).
 - Whether the Pay tab ships in step 1 or step 4.
+
+## Step 5 — Daily and weekly bids Slack posts (added 2026-11-16, approved by the user)
+
+After steps 1–4 ship. Today's daily post lists every bidder, empty or not (Sun Nov 15: 29 rows, 23 with no bids),
+and offers only "View in app" (`app/bids/slack_format.py`).
+
+- **Leave out empty rows**: a bidder with no approved, pending or rejected bids in the period is not listed; an owner
+  whose bidders all have none is not listed. Rows that failed to read (⚠) stay. Nobody with bids → "No bids today."
+  (weekly: "No bids this week.").
+- **One line per bidder** in the page's words: `🇵🇭 Ana · Dev-A — 160 approved · 12 pending` (rejected only when > 0).
+- **Owner header + one link button per owner**: `@Owner — 380 approved · 32 pending` with **Review N pending** when
+  pending > 0 (deep link to the Bids page review overlay filtered to that owner's pending bids — the step-1 single
+  review flow; login keeps the link), else **Open Bids**. Plain URL buttons: no Slack interactivity needed.
+- **My bids line per owner** (user: yes): `My bids — 35 (Arda 12 · Cory 23)`, only when > 0, never in the totals.
+- **Footer**: `Total: 520 approved · 32 pending · 3 bidders with bids · View in app`.
+- **Weekly pay post**: same cleanup; per owner pay as today; an **Open Pay** button to that week on the Pay tab
+  (`/bidders?section=pay&range=pay_week&date=<a day of that week>`).
+- Keep: one post per period, edit-in-place after reviews, Slack's 50-block / 3,000-char limits (split into
+  "(cont.)" sections and thread replies as today).
