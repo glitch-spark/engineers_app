@@ -44,7 +44,9 @@ export function rowMoney(r: {
   return { approved: r.approved, bids: r.total, pay: r.pay ?? null, toReview: r.toReview ?? r.pending, folder: false };
 }
 
-export type TimeColumn = { key: string; label: string; sub: string; title: string; day?: string; isToday?: boolean; isFuture?: boolean };
+export type TimeColumn = { key: string; label: string; sub: string; title: string; day?: string;
+  /** A pay-week column of a month / range: the week's last report day, a key the read-only listing takes as `week`. */
+  end?: string; isToday?: boolean; isFuture?: boolean };
 
 const weekday = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
@@ -67,7 +69,7 @@ export function timeColumns(resp: {
     }));
   }
   return resp.weeks.map((w, i) => ({
-    key: `w${i}`, label: rangeLabel(w.start, w.end), sub: w.partial ? 'part' : '',
+    key: `w${i}`, label: rangeLabel(w.start, w.end), sub: w.partial ? 'part' : '', end: w.end,
     title: `Bids ${shortDay(w.start)} – ${shortDay(w.end)}${w.partial ? ' (part of the pay week)' : ''}`,
   }));
 }

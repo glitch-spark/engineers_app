@@ -40,6 +40,8 @@ test('time columns: report days in a pay week, pay weeks in a month', () => {
     { start: '2026-11-29', end: '2026-12-02', partial: false }] };
   assert.deepEqual(timeColumns(month).map((c) => [c.key, c.label, c.sub]), [
     ['w0', 'Oct 1–3', 'part'], ['w1', 'Oct 25–31', ''], ['w2', 'Nov 29 – Dec 2', '']]);
+  assert.deepEqual(timeColumns(month).map((c) => c.end), ['2026-10-03', '2026-10-31', '2026-12-02']);
+  assert.equal(timeColumns(week)[0].end, undefined);
 });
 
 test('the card is open unless closed before', () => {

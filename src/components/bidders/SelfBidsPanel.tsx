@@ -1,5 +1,5 @@
-// The owner's own applies recorded by the Bid Track extension (self bids) for a day or pay week, read-only: the day
-// panel without review controls, and a click opens that apply's screenshots.
+// The owner's own bids recorded by Bid Track (My bids) for a day or pay week, read-only: the day panel without review
+// parts (no status chips, Status or Checks), and a click opens that bid's screenshots.
 import { useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
@@ -10,11 +10,17 @@ import DayPanel from './DayPanel';
 
 export type SelfScope = { ownerId: string; ownerName?: string; day?: string; week?: string; accountId?: string; profileName?: string };
 
-function scopeLabel(s: SelfScope): string {
-  const when = s.day
-    ? new Date(`${s.day}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-    : 'this pay week';
-  return ['Self', s.ownerName, s.profileName, when].filter(Boolean).join(' · ');
+// "Tue Nov 24" (no comma), from a report day.
+function dayLabel(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  const part = (o: Intl.DateTimeFormatOptions) => d.toLocaleDateString('en-US', { ...o, timeZone: 'UTC' });
+  return `${part({ weekday: 'short' })} ${part({ month: 'short', day: 'numeric' })}`;
+}
+
+/** The title's last part: the day, or the pay week by the listing's `week` key ("…" until it arrives). */
+function whenLabel(s: SelfScope, weekKey: string | null | undefined): string {
+  if (s.day) return dayLabel(s.day);
+  return `Week ending ${weekKey ? dayLabel(weekKey) : '…'}`;
 }
 
 export default function SelfBidsPanel({ scope, onClose }: { scope: SelfScope | null; onClose: () => void }) {
@@ -34,8 +40,8 @@ export default function SelfBidsPanel({ scope, onClose }: { scope: SelfScope | n
     <>
       <DayPanel
         open={!!scope}
-        title={scope ? scopeLabel(scope) : ''}
-        subtitle="Your own applies from the Bid Track extension"
+        title={scope ? ['My bids', scope.ownerName, scope.profileName, whenLabel(scope, list.data?.week)].filter(Boolean).join(' · ') : ''}
+        subtitle={scope?.ownerName ? `${scope.ownerName}'s own bids from Bid Track` : 'Your own bids from Bid Track'}
         bids={bids}
         error={list.error}
         busy={false}
@@ -49,7 +55,7 @@ export default function SelfBidsPanel({ scope, onClose }: { scope: SelfScope | n
         onBulk={async () => undefined}
         onApproveAllComplete={() => undefined}
       />
-      <Modal open={!!open} onClose={() => setOpen(null)} title={open?.jobTitle || 'Apply'} size="lg">
+      <Modal open={!!open} onClose={() => setOpen(null)} title={open?.jobTitle || 'Bid'} size="lg">
         {open && (
           <div className="space-y-2">
             <p className="text-xs text-muted">
