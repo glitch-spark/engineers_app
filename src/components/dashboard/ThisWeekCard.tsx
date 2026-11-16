@@ -92,7 +92,7 @@ export default function ThisWeekCard({ userId }: { userId?: string }) {
 
       {noTarget && !userId && (
         <div className="mt-3">
-          <Link to="/report?tab=weekly" className="link-inline text-xs">
+          <Link to="/plans" className="link-inline text-xs">
             Set weekly targets
           </Link>
         </div>

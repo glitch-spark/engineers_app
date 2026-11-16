@@ -1,8 +1,18 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 
-function isResumesSection(pathname: string) {
-  return pathname === '/resume' || pathname.startsWith('/resume/generated');
+// Generate owns /resume, /resume/generated and /preferences; Prompt Eval owns /resume/eval*.
+function isGenerateSection(pathname: string) {
+  return (
+    pathname === '/resume' ||
+    pathname.startsWith('/resume/generated') ||
+    pathname === '/preferences' ||
+    pathname.startsWith('/preferences/')
+  );
+}
+
+function isPromptEvalActive(pathname: string) {
+  return pathname === '/resume/eval' || pathname.startsWith('/resume/eval/');
 }
 
 const NavLink = ({ href, label, isCollapsed, icon, badge, isActive }: {
@@ -44,6 +54,22 @@ const NavLink = ({ href, label, isCollapsed, icon, badge, isActive }: {
   );
 };
 
+// A labelled section of the menu; the heading is hidden when the sidebar is collapsed.
+const NavGroup = ({ label, children, isCollapsed }: {
+  label: string;
+  children: React.ReactNode;
+  isCollapsed: boolean;
+}) => (
+  <div role="group" aria-label={label} className="mt-3 space-y-1">
+    {!isCollapsed && (
+      <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+        {label}
+      </p>
+    )}
+    {children}
+  </div>
+);
+
 export default function Sidebar({
   isCollapsed,
   onToggle,
@@ -74,25 +100,61 @@ export default function Sidebar({
           />
 
           <NavLink
-            href="/accounts"
-            label="Profiles"
+            href="/plans"
+            label="Plans"
             isCollapsed={isCollapsed}
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             }
           />
-          <NavLink
-            href="/job-applies"
-            label="Job Applies"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6V5a2 2 0 012-2h2a2 2 0 012 2v1m-9 0h12a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2zm-2 6h16" />
-              </svg>
-            }
-          />
+
+          <NavGroup label="Resumes" isCollapsed={isCollapsed}>
+            <NavLink
+              href="/accounts"
+              label="Profiles"
+              isCollapsed={isCollapsed}
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              }
+            />
+            <NavLink
+              href="/resume"
+              label="Generate"
+              isCollapsed={isCollapsed}
+              isActive={isGenerateSection}
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              }
+            />
+            <NavLink
+              href="/job-applies"
+              label="Job Applies"
+              isCollapsed={isCollapsed}
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6V5a2 2 0 012-2h2a2 2 0 012 2v1m-9 0h12a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2zm-2 6h16" />
+                </svg>
+              }
+            />
+            <NavLink
+              href="/resume/eval"
+              label="Prompt Eval"
+              isCollapsed={isCollapsed}
+              isActive={isPromptEvalActive}
+              icon={
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6M10 9V3m4 6V3M8.5 9h7l3.2 11.2a1.6 1.6 0 01-1.54 2.05H6.84a1.6 1.6 0 01-1.54-2.05L8.5 9z" />
+                </svg>
+              }
+            />
+          </NavGroup>
+
           <NavLink
             href="/bidders"
             label="Bidders"
@@ -116,28 +178,6 @@ export default function Sidebar({
           />
 
           <NavLink
-            href="/statistics"
-            label="Statistics"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19V5m0 14h16M8 15v-3m4 3V8m4 7v-5" />
-              </svg>
-            }
-          />
-
-          <NavLink
-            href="/report"
-            label="Plans"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            }
-          />
-
-          <NavLink
             href="/transactions"
             label="Transactions"
             isCollapsed={isCollapsed}
@@ -148,24 +188,15 @@ export default function Sidebar({
             }
           />
 
+          <div aria-hidden="true" className="my-2 border-t border-zinc-200/80 dark:border-zinc-800" />
+
           <NavLink
-            href="/resume"
-            label="Resumes"
+            href="/statistics"
+            label="Statistics"
             isCollapsed={isCollapsed}
-            isActive={isResumesSection}
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            }
-          />
-          <NavLink
-            href="/resume/eval"
-            label="Prompt Eval"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6M10 9V3m4 6V3M8.5 9h7l3.2 11.2a1.6 1.6 0 01-1.54 2.05H6.84a1.6 1.6 0 01-1.54-2.05L8.5 9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19V5m0 14h16M8 15v-3m4 3V8m4 7v-5" />
               </svg>
             }
           />
@@ -173,12 +204,7 @@ export default function Sidebar({
           {/* Leaderboard is hidden for now (page kept in src/pages/Leaderboard.tsx). */}
 
         {role === 'admin' && (
-          <div className="mt-4 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
-            {!isCollapsed && (
-              <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
-                Admin
-              </p>
-            )}
+          <NavGroup label="Admin" isCollapsed={isCollapsed}>
             <NavLink
               href="/users"
               label="Users"
@@ -189,7 +215,7 @@ export default function Sidebar({
                 </svg>
               }
             />
-          </div>
+          </NavGroup>
         )}
       </nav>
 

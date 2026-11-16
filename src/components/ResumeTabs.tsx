@@ -3,7 +3,7 @@ import { FileDown, ListChecks, Settings } from 'lucide-react';
 
 const TABS = [
   { to: '/resume', label: 'Generate', icon: FileDown, exact: true },
-  { to: '/resume/generated', label: 'Generated Resumes', icon: ListChecks, exact: false },
+  { to: '/resume/generated', label: 'Generated resumes', icon: ListChecks, exact: false },
   { to: '/preferences', label: 'Prompts', icon: Settings, exact: true },
 ];
 

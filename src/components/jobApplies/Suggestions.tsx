@@ -286,7 +286,7 @@ export function ProfileCells({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-icon"
-                title="Screening Q&A, job description and cover letter (Generated Resumes)"
+                title="Screening Q&A, job description and cover letter (Generated resumes)"
                 aria-label={`Screening Q&A for ${profileName}'s tailored resume (opens in a new tab)`}
               >
                 <MessageSquareText className="h-3.5 w-3.5" aria-hidden />

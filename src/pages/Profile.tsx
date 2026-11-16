@@ -192,7 +192,7 @@ export default function ProfilePage() {
   if (isLoadingData) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Profile" />
+        <PageHeader title="Account settings" />
         <div className="card">
           <div className="flex items-center justify-center py-12">
             <div role="status" className="flex items-center justify-center">
@@ -207,7 +207,7 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Profile" />
+      <PageHeader title="Account settings" />
 
       <div className="card">
         <h2 className="sr-only">Profile details</h2>

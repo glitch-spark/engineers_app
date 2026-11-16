@@ -98,7 +98,7 @@ export default function ReportPage() {
         )}
         {isAdmin && viewUser && (
           <span className="ml-auto flex items-center gap-2 text-sm">
-            <Link to={`/report?week=${week}`} className="underline">← Team</Link>
+            <Link to={`/plans?week=${week}`} className="underline">← Team</Link>
             <span className="text-muted">Viewing {viewedName?.name || viewedName?.email || 'teammate'}</span>
           </span>
         )}
