@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import { notify } from '../../lib/notify';
 import { countryFlag } from '../../lib/countries';
+import { rateText } from '../../lib/bidsWords';
 import { usd } from '../../lib/money';
 import ConfirmDialog from '../ConfirmDialog';
 import Tabs from '../Tabs';
@@ -186,7 +187,7 @@ export default function BidderView({
             {row.profileName ? (
               <>Profile <span className="text-body">{row.profileName}</span>{resumeNames.length > 0 && <> · {resumeNames.join(', ')}</>}</>
             ) : 'No profile assigned'}
-            {' · '}{usd(row.rate)} per approved bid
+            {' · '}{rateText(row.rate)}
           </p>
         </div>
         {bidder && <BidderActions bidder={bidder} onChanged={onChanged} />}

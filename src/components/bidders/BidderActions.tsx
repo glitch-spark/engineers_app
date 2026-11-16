@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as api from '../../api/endpoints';
+import { ARCHIVE_CONFIRM } from '../../lib/bidsWords';
 import { notify } from '../../lib/notify';
 import ActionMenu from '../ActionMenu';
 import ConfirmDialog from '../ConfirmDialog';
@@ -10,16 +11,14 @@ const FAILED = { reset: 'Failed to reset login', archive: 'Failed to archive bid
 
 /**
  * The ⋯ menu of one bidder with its dialogs: Edit, New invite code, Reset login, Archive; an archived bidder offers
- * History (when `onHistory` is given) and Restore.
+ * Restore. (Past weeks is a tab, so there is no History item.)
  */
 export default function BidderActions({
   bidder,
   onChanged,
-  onHistory,
 }: {
   bidder: api.Bidder;
   onChanged: () => void;
-  onHistory?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [invite, setInvite] = useState<api.BidderInvite | null>(null);
@@ -59,14 +58,12 @@ export default function BidderActions({
     }
   };
 
-  const history = onHistory ? [{ label: 'History', onSelect: onHistory }] : [];
   const items = bidder.archivedAt
-    ? [...history, { label: 'Restore', onSelect: () => setConfirm('restore') }]
+    ? [{ label: 'Restore', onSelect: () => setConfirm('restore') }]
     : [
         { label: 'Edit', onSelect: () => setEditing(true) },
         ...(bidder.status === 'invited' ? [{ label: 'New invite code', onSelect: newInvite }] : []),
         ...(bidder.status === 'active' ? [{ label: 'Reset login', onSelect: () => setConfirm('reset') }] : []),
-        ...history,
         { label: 'Archive', danger: true, onSelect: () => setConfirm('archive') },
       ];
 
@@ -100,10 +97,10 @@ export default function BidderActions({
 
       <ConfirmDialog
         open={confirm === 'archive'}
-        title="Archive bidder"
-        body={`Archive ${bidder.name}? They'll stop appearing in reports. History is kept.`}
-        confirmLabel="Archive"
-        tone="danger"
+        title={ARCHIVE_CONFIRM.title}
+        body={ARCHIVE_CONFIRM.body(bidder.name)}
+        confirmLabel={ARCHIVE_CONFIRM.confirmLabel}
+        tone={ARCHIVE_CONFIRM.tone}
         busy={busy}
         onConfirm={run}
         onCancel={() => setConfirm(null)}

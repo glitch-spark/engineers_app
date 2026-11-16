@@ -11,7 +11,8 @@ import BidderActions from '../components/bidders/BidderActions';
 import BidderView from '../components/bidders/BidderView';
 import FocusReview, { type FocusScope } from '../components/bids/FocusReview';
 import BidderFormModal from '../components/bidders/BidderFormModal';
-import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDialog';
+import InviteDialog from '../components/bidders/InviteDialog';
+import BidsHelp from '../components/bidders/BidsHelp';
 import BiddersOverview from '../components/bidders/BiddersOverview';
 import BidderAlerts from '../components/bidders/BidderAlerts';
 import ToReviewBlock from '../components/bidders/ToReviewBlock';
@@ -26,6 +27,7 @@ import {
 import { useReportClock } from '../lib/useReportClock';
 import { BiddersFilterBar, useBidderFilters } from '../components/bidders/biddersFilters';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { ARCHIVE_CONFIRM, statusWords } from '../lib/bidsWords';
 import { notify } from '../lib/notify';
 import WeekNav from '../components/bidders/WeekNav';
 import { dateInZone } from '../components/bidders/weekDates';
@@ -47,13 +49,9 @@ const TABS = [
 ];
 
 function statusText(b: api.Bidder | undefined, status: string | undefined) {
-  if (status === 'archived') return 'Archived';
-  if (status === 'active') return b?.username ? `Active · @${b.username}` : 'Active';
-  // Another owner's bidder (admin view): no invite details to show.
-  if (!b) return 'Invited';
-  if (!b.inviteExpiresAt) return 'Invited · no code yet';
-  const expired = new Date(b.inviteExpiresAt).getTime() < Date.now();
-  return <span className={expired ? 'text-red-600' : undefined}>Invited · expires {formatInviteDate(b.inviteExpiresAt)}</span>;
+  const known = status === 'active' || status === 'archived' ? status : 'invited';
+  const { text, expired } = statusWords(known, b, Date.now());
+  return expired ? <span className="text-red-600">{text}</span> : text;
 }
 
 export default function BiddersPage() {
@@ -329,11 +327,7 @@ export default function BiddersPage() {
           // /bidders lists only the viewer's own bidders, so other owners' rows get no menu.
           renderActions={(row) =>
             byId[row.id] ? (
-              <BidderActions
-                bidder={byId[row.id]}
-                onChanged={refresh}
-                onHistory={() => setParam({ bidder: row.id, tab: 'history', day: null })}
-              />
+              <BidderActions bidder={byId[row.id]} onChanged={refresh} />
             ) : null
           }
           empty={otherOwner ? (
@@ -419,14 +413,17 @@ export default function BiddersPage() {
       )}
       <PageHeader
         title="Bids"
-        action={!bidderId && (
+        action={(
           <div className="flex items-center gap-2">
+            <BidsHelp />
+            {!bidderId && (<>
             <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>
             {/* The Bid Track package the server ships (always the latest). */}
             <ActionMenu
               label="More actions"
               items={[{ label: 'Download Bid Track', onSelect: () => window.location.assign(`${BASE_URL}/ext/download`) }]}
             />
+            </>)}
           </div>
         )}
       />
@@ -441,10 +438,10 @@ export default function BiddersPage() {
 
       <ConfirmDialog
         open={!!pendingArchive}
-        title="Archive bidder?"
-        body={<p>Archive {pendingArchive?.name}? They're signed out of the extension; you can restore them any time.</p>}
-        confirmLabel="Archive"
-        tone="default"
+        title={ARCHIVE_CONFIRM.title}
+        body={<p>{ARCHIVE_CONFIRM.body(pendingArchive?.name ?? '')}</p>}
+        confirmLabel={ARCHIVE_CONFIRM.confirmLabel}
+        tone={ARCHIVE_CONFIRM.tone}
         busy={archiving}
         onConfirm={archiveSuggested}
         onCancel={() => setPendingArchive(null)}

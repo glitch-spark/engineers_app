@@ -1,11 +1,10 @@
 import type { BidderInvite } from '../../api/endpoints';
 import { notify } from '../../lib/notify';
+import { formatInviteDate } from '../../lib/bidsWords';
 import Modal from '../Modal';
 
-/** `MMM d` in the viewer's local time zone. */
-export function formatInviteDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
+// The date wording lives with the rest of the Bids words; re-exported for existing importers.
+export { formatInviteDate };
 
 const INSTRUCTIONS =
   'Install Bid Track → click the icon → Register → enter this code and choose a username and password.' +
