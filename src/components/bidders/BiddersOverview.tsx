@@ -10,6 +10,7 @@ import { PeriodNav, Segmented, filtersError, isoDay } from '../statistics/contro
 import { cardOpen, stripItems, type PagePeriod, type RowFilter, type StripItem } from '../../lib/bidderPage';
 import BiddersBand from './BiddersBand';
 import BiddersTable from './BiddersTable';
+import { neighbourWeekKeys } from './weekDates';
 
 type Filters = PagePeriod;
 
@@ -39,7 +40,7 @@ type Props = {
   renderActions: (row: BidPerformanceRow) => ReactNode;
   empty: ReactNode;
   /** The period, kept in the URL by the page (so returning from a bidder keeps it). An empty pay-week day means the
-   *  pay week holding now (the server decides, past the Saturday cutoff too). */
+   *  pay week holding now (the server decides, past the weekly cutoff too). */
   filters: Filters;
   onFilters: (f: Filters) => void;
   /** Open an owner's self bids for a day, or for the shown pay week. */
@@ -87,6 +88,8 @@ export default function BiddersOverview({
   // A day inside the shown period: the pay week's first report day (week mode), else the period's end.
   const anchor = data ? (data.payWeek?.days[0]?.day ?? data.end) : '';
   const items = data ? stripItems(data.totals) : [];
+  // A pay week has 7 or 8 report days: step from its own first / last day, not a fixed 7 days.
+  const near = f.period === 'week' && data?.payWeek ? neighbourWeekKeys(data.payWeek.days) : null;
 
   return (
     <section className="space-y-4" aria-label="Bidders">
@@ -107,6 +110,7 @@ export default function BiddersOverview({
           </div>
         ) : (
           <PeriodNav period={f.period} day={f.day || anchor || today} label={data?.label}
+            prevDay={near?.prev} nextDay={near?.next}
             onDay={(day) => setFilters({ ...f, day })} />
         )}
       </div>

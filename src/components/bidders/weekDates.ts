@@ -12,6 +12,16 @@ export function addDaysKey(key: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * A day in the pay week before and after the one whose report days are `days` (the server's list: a pay week has 7 or,
+ * across a schedule switch, 8). Stepping a fixed 7 days from a day of the long week lands in the same week again, so
+ * go one day past either end instead. Null when the week has no days.
+ */
+export function neighbourWeekKeys(days: { day: string }[]): { prev: string; next: string } | null {
+  if (days.length === 0) return null;
+  return { prev: addDaysKey(days[0].day, -1), next: addDaysKey(days[days.length - 1].day, 1) };
+}
+
 /** { weekday: 'Sun', date: 'Oct 4' } for a period key. */
 export function dayParts(key: string): { weekday: string; date: string } {
   const d = fromKey(key);
