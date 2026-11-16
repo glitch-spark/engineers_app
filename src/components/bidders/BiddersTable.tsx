@@ -1,9 +1,9 @@
 // The single Bidders page table (spec 2026-11-14-bidders-single-page-design.md): one row per bidder with the period's
 // time columns (a pay week's days, or a month's pay weeks), money and review counts, and the performance measures.
 // Replaces the Pay week table on the list and the Performance table.
-import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Info } from 'lucide-react';
-import type { BidPerformance, BidPerformanceRow } from '../../api/endpoints';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, ChevronsUpDown, Info } from 'lucide-react';
+import type { BidPerformance, BidPerformanceRow, SelfBidRow } from '../../api/endpoints';
 import { countryFlag } from '../../lib/countries';
 import { usd } from '../../lib/money';
 import { fmtCount } from '../../lib/profileMetrics';
@@ -105,9 +105,115 @@ type Props = {
   renderActions: (row: BidPerformanceRow) => ReactNode;
   /** All / Bidders / Self (the owner's own applies). */
   show: RowFilter;
-  /** Open an owner's self bids: a day (a day cell) or the period's pay week. */
-  onOpenSelf: (ownerId: string, ownerName: string, day?: string) => void;
+  /** Open an owner's self bids: a day (a day cell) or the period's pay week; with `profile`, that profile's only. */
+  onOpenSelf: OpenSelf;
 };
+
+export type OpenSelf = (ownerId: string, ownerName: string, day?: string, profile?: { accountId: string; name: string }) => void;
+
+/**
+ * The owners' Self rows (own applies from the extension, outside the totals). An owner who applied with more than one
+ * profile in the period gets a sub-row per profile under it (open by default; the chevron folds them), so each
+ * profile's applies are counted on their own; a single profile is named on the row instead.
+ */
+export function SelfRows({ rows, cols, showOwner, now, onOpenSelf }: {
+  rows: SelfBidRow[];
+  cols: ReturnType<typeof timeColumns>;
+  showOwner: boolean;
+  now: number;
+  onOpenSelf: OpenSelf;
+}) {
+  const [folded, setFolded] = useState<Set<string>>(() => new Set());
+  const fold = (ownerId: string) =>
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(ownerId)) next.delete(ownerId);
+      else next.add(ownerId);
+      return next;
+    });
+
+  const cells = (counts: number[], label: string, open: (day: string) => void) =>
+    cols.map((c, i) => (
+      <td key={c.key} className="px-1 py-1.5 text-center">
+        {c.isFuture ? <span className="text-muted">–</span> : c.day && (counts[i] ?? 0) > 0 ? (
+          <button type="button" className="w-full rounded-md px-1 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            aria-label={`${label}, ${c.label} ${c.sub}: ${counts[i]} applies`}
+            onClick={(e) => { e.stopPropagation(); open(c.day!); }}>
+            {fmtCount(counts[i] ?? 0)}
+          </button>
+        ) : fmtCount(counts[i] ?? 0)}
+      </td>
+    ));
+  const tail = (total: number, interviews: number, lastBidAt: string | null | undefined, strong: boolean) => (
+    <>
+      <td className={`px-3 py-2 text-right ${strong ? 'font-medium text-strong' : ''}`}>{fmtCount(total)}</td>
+      <td className="px-3 py-2 text-right text-muted">—</td>
+      <td className="px-3 py-2 text-center text-muted">—</td>
+      <td className="px-3 py-2 text-right text-muted">—</td>
+      <td className="px-3 py-2 text-right">{fmtCount(interviews)}</td>
+      <td className="px-3 py-2 text-right text-muted">—</td>
+      <td className="px-3 py-2 text-right text-muted">—</td>
+      <td className="px-3 py-2 text-right whitespace-nowrap">
+        {lastBidAt ? relativeTime(lastBidAt, now) : <span className="text-muted">—</span>}
+      </td>
+      <td />
+    </>
+  );
+
+  return (
+    <>
+      {rows.map((s) => {
+        const profiles = s.profiles ?? [];
+        const split = profiles.length > 1;
+        const open = split && !folded.has(s.ownerId);
+        return (
+          <Fragment key={`self-${s.ownerId}`}>
+            <tr className="table-row cursor-pointer border-t border-zinc-100 font-normal text-body dark:border-zinc-800"
+              onClick={() => onOpenSelf(s.ownerId, s.ownerName)}>
+              <th scope="row" className="px-4 py-2 text-left font-normal">
+                <span className="inline-flex items-center gap-1">
+                  {split && (
+                    <button type="button" className="-ml-1 rounded p-0.5 text-muted hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      aria-expanded={open} aria-label={open ? 'Hide profiles' : 'Show profiles'}
+                      onClick={(e) => { e.stopPropagation(); fold(s.ownerId); }}>
+                      {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                    </button>
+                  )}
+                  <button type="button" className="font-medium text-strong hover:underline"
+                    onClick={(e) => { e.stopPropagation(); onOpenSelf(s.ownerId, s.ownerName); }}>Self</button>
+                  {showOwner && s.ownerName && <span className="text-muted"> · {s.ownerName}</span>}
+                  {profiles.length === 1 && <span className="text-muted"> · {profiles[0].name}</span>}
+                </span>
+                <div className="text-[11px] text-muted">
+                  Own applies from the extension{split ? ` · ${profiles.length} profiles` : ''} · not in the totals
+                </div>
+              </th>
+              {cells(s.weekly, 'Self', (day) => onOpenSelf(s.ownerId, s.ownerName, day))}
+              {tail(s.total, s.interviews, s.lastBidAt, true)}
+            </tr>
+            {open && profiles.map((p) => {
+              const profile = { accountId: p.accountId, name: p.name };
+              return (
+                <tr key={`self-${s.ownerId}-${p.accountId}`}
+                  className="table-row cursor-pointer border-t border-zinc-100/70 font-normal text-body dark:border-zinc-800/70"
+                  onClick={() => onOpenSelf(s.ownerId, s.ownerName, undefined, profile)}>
+                  <th scope="row" className="py-1.5 pl-9 pr-4 text-left font-normal">
+                    <button type="button" className="text-body hover:underline"
+                      onClick={(e) => { e.stopPropagation(); onOpenSelf(s.ownerId, s.ownerName, undefined, profile); }}>
+                      {p.name}
+                    </button>
+                  </th>
+                  {cells(p.weekly, `Self, ${p.name}`, (day) => onOpenSelf(s.ownerId, s.ownerName, day, profile))}
+                  {tail(p.total, p.interviews, undefined, false)}
+                </tr>
+              );
+            })}
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
 
 export default function BiddersTable({
   data, platformPer100, showOwner, onOpenBidder, onReview, renderStatus, renderActions, show, onOpenSelf,
@@ -283,37 +389,13 @@ export default function BiddersTable({
             <td className="px-3 py-2 text-right">{t.costPerInterview == null ? '—' : dollars(t.costPerInterview)}</td>
             <td colSpan={2} />
           </tr>
-          {(data.selfRows ?? []).filter((s) => visible.self.includes(s.ownerId)).map((s) => (
-            <tr key={`self-${s.ownerId}`} className="table-row cursor-pointer border-t border-zinc-100 font-normal text-body dark:border-zinc-800"
-              onClick={() => onOpenSelf(s.ownerId, s.ownerName)}>
-              <th scope="row" className="px-4 py-2 text-left font-normal">
-                <button type="button" className="font-medium text-strong hover:underline"
-                  onClick={(e) => { e.stopPropagation(); onOpenSelf(s.ownerId, s.ownerName); }}>Self</button>
-                {showOwner && s.ownerName && <span className="text-muted"> · {s.ownerName}</span>}
-                <div className="text-[11px] text-muted">Own applies from the extension · not in the totals</div>
-              </th>
-              {cols.map((c, i) => (
-                <td key={c.key} className="px-1 py-1.5 text-center">
-                  {c.isFuture ? <span className="text-muted">–</span> : c.day && (s.weekly[i] ?? 0) > 0 ? (
-                    <button type="button" className="w-full rounded-md px-1 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      aria-label={`Self, ${c.label} ${c.sub}: ${s.weekly[i]} applies`}
-                      onClick={(e) => { e.stopPropagation(); onOpenSelf(s.ownerId, s.ownerName, c.day); }}>
-                      {fmtCount(s.weekly[i] ?? 0)}
-                    </button>
-                  ) : fmtCount(s.weekly[i] ?? 0)}
-                </td>
-              ))}
-              <td className="px-3 py-2 text-right font-medium text-strong">{fmtCount(s.total)}</td>
-              <td className="px-3 py-2 text-right text-muted">—</td>
-              <td className="px-3 py-2 text-center text-muted">—</td>
-              <td className="px-3 py-2 text-right text-muted">—</td>
-              <td className="px-3 py-2 text-right">{fmtCount(s.interviews)}</td>
-              <td className="px-3 py-2 text-right text-muted">—</td>
-              <td className="px-3 py-2 text-right text-muted">—</td>
-              <td className="px-3 py-2 text-right whitespace-nowrap">{s.lastBidAt ? relativeTime(s.lastBidAt, now) : <span className="text-muted">—</span>}</td>
-              <td />
-            </tr>
-          ))}
+          <SelfRows
+            rows={(data.selfRows ?? []).filter((s) => visible.self.includes(s.ownerId))}
+            cols={cols}
+            showOwner={showOwner}
+            now={now}
+            onOpenSelf={onOpenSelf}
+          />
         </tfoot>
       </table>
     </div>

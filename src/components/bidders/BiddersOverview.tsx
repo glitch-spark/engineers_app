@@ -21,6 +21,9 @@ const TONE: Record<NonNullable<StripItem['tone']> | 'none', string> = {
   none: 'text-muted',
 };
 
+/** What the Self panel opens: a day or the shown pay week, optionally one profile's applies only. */
+export type SelfOpenScope = { day?: string; week?: string; accountId?: string; profileName?: string };
+
 type Props = {
   ownerId: string;
   /** Open a bidder at a day of `week` (a report day inside the pay week or period end). */
@@ -41,7 +44,7 @@ type Props = {
   /** The bar's Show filter: every row, the bidders only, or the owners' self-bid rows only. */
   show: BidderRowFilter;
   /** Open an owner's self bids for a day, or for the shown pay week. */
-  onOpenSelf: (ownerId: string, ownerName: string, scope: { day?: string; week?: string }) => void;
+  onOpenSelf: (ownerId: string, ownerName: string, scope: SelfOpenScope) => void;
 };
 
 export default function BiddersOverview({
@@ -146,7 +149,10 @@ export default function BiddersOverview({
               renderStatus={renderStatus}
               renderActions={renderActions}
               show={show}
-              onOpenSelf={(id, name, day) => onOpenSelf(id, name, day ? { day } : { week: anchor })}
+              onOpenSelf={(id, name, day, profile) => onOpenSelf(id, name, {
+                ...(day ? { day } : { week: anchor }),
+                ...(profile ? { accountId: profile.accountId, profileName: profile.name } : {}),
+              })}
             />
           )}
         </>

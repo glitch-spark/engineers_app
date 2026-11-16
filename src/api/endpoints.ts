@@ -2981,8 +2981,19 @@ export interface BidAttachment {
 
 /** `day` and `week` are exclusive; neither means the open daily window. */
 /** `self`: the owner's own applies from the extension (staff: their own; an admin one owner's via ownerId). */
-export const listBids = (params: { day?: string; week?: string; bidderId?: string; status?: BidStatus; self?: boolean; ownerId?: string }) =>
-  apiFetch<BidDay>(`/bids${qs(params)}`);
+export const listBids = (params: {
+  day?: string; week?: string; bidderId?: string; status?: BidStatus; self?: boolean; ownerId?: string;
+  /** Self bids only: one profile's. */
+  accountId?: string;
+}) => apiFetch<BidDay>(`/bids${qs(params)}`);
+
+/** One profile's share of an owner's self bids over the period (sub-row of the Self row). */
+export type SelfBidProfileRow = { accountId: string; name: string; total: number; weekly: number[]; interviews: number };
+/** An owner's self bids over the period: the sum over `profiles`. */
+export type SelfBidRow = {
+  ownerId: string; ownerName: string; total: number; weekly: number[]; interviews: number; lastBidAt: string | null;
+  profiles?: SelfBidProfileRow[];
+};
 
 // ---------- pay-week board ----------
 
@@ -3131,7 +3142,7 @@ export interface BidPerformance {
     today?: { day: string; approved: number; pending: number } | null;
   };
   /** The owners' own applies recorded by the extension (self bids), one row per owner in view; not in totals. */
-  selfRows?: { ownerId: string; ownerName: string; total: number; weekly: number[]; interviews: number; lastBidAt: string | null }[];
+  selfRows?: SelfBidRow[];
   /** Week mode: the pay week (its report days, which is today, which are still to come). */
   payWeek?: { start: string; end: string; label: string; timezone: string;
     days: { day: string; isToday: boolean; isFuture: boolean }[] } | null;

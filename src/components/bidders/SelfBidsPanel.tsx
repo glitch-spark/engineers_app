@@ -8,19 +8,22 @@ import Modal from '../Modal';
 import StepViewer from '../bids/StepViewer';
 import DayPanel from './DayPanel';
 
-export type SelfScope = { ownerId: string; ownerName?: string; day?: string; week?: string };
+export type SelfScope = { ownerId: string; ownerName?: string; day?: string; week?: string; accountId?: string; profileName?: string };
 
 function scopeLabel(s: SelfScope): string {
   const when = s.day
     ? new Date(`${s.day}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
     : 'this pay week';
-  return `Self${s.ownerName ? ` · ${s.ownerName}` : ''} · ${when}`;
+  return ['Self', s.ownerName, s.profileName, when].filter(Boolean).join(' · ');
 }
 
 export default function SelfBidsPanel({ scope, onClose }: { scope: SelfScope | null; onClose: () => void }) {
   const list = useSWR(
-    scope ? (['self-bids', scope.ownerId, scope.day ?? '', scope.week ?? ''] as const) : null,
-    () => api.listBids({ self: true, ownerId: scope!.ownerId || undefined, ...(scope!.day ? { day: scope!.day } : { week: scope!.week }) }),
+    scope ? (['self-bids', scope.ownerId, scope.day ?? '', scope.week ?? '', scope.accountId ?? ''] as const) : null,
+    () => api.listBids({
+      self: true, ownerId: scope!.ownerId || undefined, accountId: scope!.accountId || undefined,
+      ...(scope!.day ? { day: scope!.day } : { week: scope!.week }),
+    }),
   );
   const [open, setOpen] = useState<api.BidReviewItem | null>(null);
   const [step, setStep] = useState(0);
