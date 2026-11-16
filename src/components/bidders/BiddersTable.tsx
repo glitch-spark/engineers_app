@@ -69,6 +69,16 @@ function relativeTime(iso: string, now: number): string {
   return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
 }
 
+/** Marks money that couldn't be read for part of the period (a Bid Track listing failed): the figure beside it is
+ * "—" rather than a partial sum, and this says why. */
+export function PayReadNote({ error }: { error?: string | null }) {
+  if (!error) return null;
+  return (
+    <span className="ml-1 text-xs text-amber-700 dark:text-amber-400" title="Couldn't read Bid Track for part of this period"
+      role="img" aria-label="Couldn't read Bid Track for part of this period">⚠</span>
+  );
+}
+
 type SortKey = 'bids' | 'pay' | 'toReview' | 'hitRate' | 'interviews' | 'approvalRate' | 'costPerInterview' | 'lastBidAt' | `t${number}`;
 
 function sortValue(r: BidPerformanceRow, key: SortKey): number | null {
@@ -192,7 +202,7 @@ export default function BiddersTable({ data, platformPer100, showOwner, onOpenBi
                   <div className="font-medium text-strong">{fmtCount(m.bids)}</div>
                   <Change value={r.change} />
                 </td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{m.pay == null ? '—' : usd(m.pay)}</td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">{m.pay == null ? '—' : usd(m.pay)}<PayReadNote error={r.week?.error} /></td>
                 <td className="px-3 py-2 text-center">
                   {m.toReview ? (
                     weekMode ? (
@@ -257,7 +267,7 @@ export default function BiddersTable({ data, platformPer100, showOwner, onOpenBi
               </td>
             ))}
             <td className="px-3 py-2 text-right">{fmtCount(weekMode ? (t.approved ?? 0) + (t.pending ?? 0) : t.total)}</td>
-            <td className="px-3 py-2 text-right whitespace-nowrap">{t.pay == null ? '—' : usd(t.pay)}</td>
+            <td className="px-3 py-2 text-right whitespace-nowrap">{t.pay == null ? '—' : usd(t.pay)}<PayReadNote error={t.error} /></td>
             <td className="px-3 py-2 text-center">{t.toReview ?? '—'}</td>
             <td className="px-3 py-2 text-right">{pct(t.hitRate)}</td>
             <td className="px-3 py-2 text-right">{fmtCount(t.interviews)}</td>

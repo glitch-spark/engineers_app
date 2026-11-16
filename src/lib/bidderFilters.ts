@@ -54,7 +54,8 @@ export function bidderPresetOptions(active: BidderPreset): { value: BidderPreset
 
 /**
  * Every key the Bidders list reads or writes. `week` and `period` are the old URL's keys: they are read when `range`
- * is absent and cleared whenever a filter changes, so they can't pin the page to an old period.
+ * is absent and removed when the period changes (a preset pick, a step, a custom range) and by Clear, so they can't
+ * pin the page to an old period. The other filters (owner, archived, search) leave them as they are.
  * An empty `range` is the default (This pay week).
  */
 export type BidderKey = 'owner' | 'archived' | 'q' | 'range' | 'date' | 'from' | 'to' | 'week' | 'period';
@@ -80,6 +81,9 @@ export type BidderFilters = {
 
 // ---- the report clock ------------------------------------------------------
 
+// The pay-week schedule is hard-coded to the server's defaults: BID_REPORT_TIMEZONE (America/Chicago),
+// BID_DAILY_REPORT_TIME (18:30), BID_WEEKLY_REPORT_DAY (saturday) and BID_WEEKLY_REPORT_TIME (16:00). If those
+// settings change, change these and the Saturday test in reportClock; the server's own windows stay authoritative.
 const REPORT_TZ = 'America/Chicago';
 const DAILY_CUTOFF_MIN = 18 * 60 + 30;
 const WEEKLY_CUTOFF_MIN = 16 * 60;
@@ -116,7 +120,7 @@ export function reportClock(now: Date = new Date()): ReportClock {
   const num = (t: string) => Number(parts.find((p) => p.type === t)?.value);
   const date = `${String(num('year')).padStart(4, '0')}-${String(num('month')).padStart(2, '0')}-${String(num('day')).padStart(2, '0')}`;
   const minutes = num('hour') * 60 + num('minute');
-  const weekday = new Date(parseDay(date)).getUTCDay();
+  const weekday = new Date(parseDay(date)).getUTCDay(); // 6 = Saturday: BID_WEEKLY_REPORT_DAY
   const payWeekStart = weekday === 6 && minutes >= WEEKLY_CUTOFF_MIN ? addDays(date, 1) : payWeekStartOf(date);
   return { today: minutes >= DAILY_CUTOFF_MIN ? addDays(date, 1) : date, payWeekStart };
 }

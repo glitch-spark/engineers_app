@@ -62,18 +62,22 @@ export function StatTiles({ tiles }: { tiles: { label: string; value: string }[]
 export function StatsBody({ children }: { children: (data: InterviewRates) => ReactNode }) {
   const f = useStatsFilters();
   const { data, error, isLoading } = useInterviewRates(f);
+  // keepPreviousData hands back the last range's report even when the key is null: an invalid range shows none.
+  const shown = f.params ? data : undefined;
   return (
     <div className="space-y-4">
       <StatsFilterBar f={f}>
-        {isLoading && data && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
+        {isLoading && shown && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
       </StatsFilterBar>
-      {error ? (
+      {!f.params ? (
+        <p className="panel p-6 text-sm text-muted">Pick a valid date range to see statistics.</p>
+      ) : error ? (
         <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the statistics. Try again.</p>
-      ) : !data ? (
+      ) : !shown ? (
         <p className="panel flex items-center gap-2 p-6 text-sm text-muted" role="status">
           <span className="spinner spinner-sm" aria-hidden /> Loading statistics…
         </p>
-      ) : data.totals.selfInterviews === undefined ? <ServerUpdateNote /> : children(data)}
+      ) : shown.totals.selfInterviews === undefined ? <ServerUpdateNote /> : children(shown)}
     </div>
   );
 }

@@ -70,26 +70,29 @@ export default function CallersTab({ initialCaller }: {
     () => api.getCallerStats(params!),
     { keepPreviousData: true },
   );
+  const shown = params ? data : undefined; // keepPreviousData would otherwise show the last range under an invalid one
   const [picked, setPicked] = useState<string>(initialCaller || ALL);
 
   return (
     <div className="space-y-4">
       <StatsFilterBar f={f}>
-        {isLoading && data && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
+        {isLoading && shown && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
       </StatsFilterBar>
       <p className="text-xs text-muted">
         Interviews done = rounds held: passed, rejected or awaiting their result (canceled rounds aren’t counted). Pass
         rate = passed ÷ (passed + rejected); a caller is ranked from 5 decided rounds. A region shows its profiles’ interviews.
       </p>
-      {error ? (
+      {!params ? (
+        <p className="panel p-6 text-sm text-muted">Pick a valid date range to see statistics.</p>
+      ) : error ? (
         <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the callers. Try again.</p>
-      ) : !data ? (
+      ) : !shown ? (
         <p className="panel flex items-center gap-2 p-6 text-sm text-muted" role="status">
           <span className="spinner spinner-sm" aria-hidden /> Loading…
         </p>
       ) : (
         // An older server's response has no team totals: wait for the backend deploy instead of crashing.
-        !data.team ? <ServerUpdateNote /> : <CallersView data={data} picked={picked} onPick={setPicked} />
+        !shown.team ? <ServerUpdateNote /> : <CallersView data={shown} picked={picked} onPick={setPicked} />
       )}
     </div>
   );

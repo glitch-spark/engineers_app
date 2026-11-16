@@ -399,7 +399,7 @@ export default function TransactionsPage() {
               </tr>
             ) : transactions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-muted">No transactions found.</td>
+                <td colSpan={8} className="px-3 py-6 text-center text-muted">{params ? 'No transactions found.' : 'Pick a valid date range to see transactions.'}</td>
               </tr>
             ) : (
               transactions.map((t) => {

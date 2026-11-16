@@ -4,6 +4,7 @@ import { Loader2, Save, Zap, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { messageOf, notify } from '../lib/notify';
+import { profileUpdateBody } from '../lib/profileUpdate';
 import { listTimeZones, normalizeSlackTimezone } from '../lib/slackDigestPrefs';
 import PageHeader from '../components/PageHeader';
 
@@ -131,7 +132,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await api.updateProfile(formData);
+      await api.updateProfile(profileUpdateBody(formData, originalData));
       notify.success('Profile updated successfully');
       setOriginalData(formData);
       setIsEditing(false);

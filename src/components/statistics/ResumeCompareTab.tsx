@@ -84,11 +84,12 @@ export default function ResumeCompareTab() {
     () => api.getResumeCompare({ ...params!, q: q || undefined }),
     { keepPreviousData: true },
   );
+  const shown = params ? data : undefined; // keepPreviousData would otherwise show the last range under an invalid one
 
   return (
     <div className="space-y-4">
       <StatsFilterBar f={f}>
-        {isLoading && data && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
+        {isLoading && shown && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
       </StatsFilterBar>
       <p className="text-xs text-muted">
         Jobs that got an interview in this period. Each column is a person’s resume for the same job and its score;
@@ -96,14 +97,16 @@ export default function ResumeCompareTab() {
         interviews and resumes.
       </p>
 
-      {error ? (
+      {!params ? (
+        <p className="panel p-6 text-sm text-muted">Pick a valid date range to see statistics.</p>
+      ) : error ? (
         <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the comparison. Try again.</p>
-      ) : !data ? (
+      ) : !shown ? (
         <p className="panel flex items-center gap-2 p-6 text-sm text-muted" role="status">
           <span className="spinner spinner-sm" aria-hidden /> Loading…
         </p>
       ) : (
-        <CompareTable data={data} />
+        <CompareTable data={shown} />
       )}
     </div>
   );

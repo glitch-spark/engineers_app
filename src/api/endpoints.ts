@@ -3113,6 +3113,8 @@ export interface BidPerformance {
     pending?: number | null;
     rejected?: number | null;
     toReview?: number | null;
+    /** Two pay weeks: the first error of a week whose money couldn't be read (the sums above are then null). */
+    error?: string | null;
     approvalRate?: number | null;
     costPerInterview?: number | null;
     /** Week mode: the board's per-day totals and today's (current pay week only). */
