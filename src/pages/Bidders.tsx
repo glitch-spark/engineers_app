@@ -164,7 +164,7 @@ export default function BiddersPage() {
       : focusBid && focusDay
         ? { scope: { day: focusDay }, startAt: focusBid, ids: navIds?.includes(focusBid) ? navIds : undefined, set: 'all' }
         : focusWeek
-          ? { scope: { week: focusWeek }, set: 'pending' }
+          ? { scope: { queue: { period: 'week', date: focusWeek, bidderId: bidderId ?? undefined } }, set: 'pending' }
           : null;
   const exitFocus = () => setParam({ mode: null, bid: null });
   const reviewBid = (bidId: string, ids: string[]) => {
@@ -294,7 +294,7 @@ export default function BiddersPage() {
     <div className="space-y-5">
       {focus && (
         <FocusReview
-          key={`${'day' in focus.scope ? focus.scope.day : focus.scope.week}|${bidderId ?? ''}|${focus.startAt ?? ''}`}
+          key={`${'day' in focus.scope ? focus.scope.day : JSON.stringify(focus.scope.queue)}|${bidderId ?? ''}|${focus.startAt ?? ''}`}
           scope={focus.scope}
           bidderId={bidderId ?? undefined}
           startAt={focus.startAt}

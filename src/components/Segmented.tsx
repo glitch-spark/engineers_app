@@ -14,7 +14,8 @@ export default function Segmented<T extends string>({
   onChange,
 }: {
   label: string;
-  value: T;
+  /** null checks no option. */
+  value: T | null;
   options: SegmentOption<T>[];
   onChange: (value: T) => void;
 }) {
