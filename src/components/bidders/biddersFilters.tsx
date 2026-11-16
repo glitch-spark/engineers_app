@@ -2,12 +2,12 @@ import { useId } from 'react';
 import { rangeLabel } from '../../lib/dateRange';
 import {
   BIDDER_CLEAR_KEYS,
-  BIDDER_PRESETS,
   BIDDER_URL_DEFAULTS,
   bidderCanClear,
   bidderCanStepForward,
   bidderDays,
   bidderLabel,
+  bidderPresetOptions,
   bidderPeriodRequest,
   parseBidderValues,
   pickBidderPreset,
@@ -91,7 +91,7 @@ export function BiddersFilterBar({
       <DateRangeFilter<BidderPreset>
         value={{ preset: filters.range, from: filters.from, to: filters.to }}
         onChange={(v) => patch(pickBidderPreset(v.preset, v.from, v.to, clock))}
-        presets={BIDDER_PRESETS}
+        presets={bidderPresetOptions(filters.range)}
         allowFuture={false}
         today={clock.today}
         rangeFor={(preset) => bidderDays(preset === filters.range ? filters : { ...filters, range: preset, date: '' }, clock)}

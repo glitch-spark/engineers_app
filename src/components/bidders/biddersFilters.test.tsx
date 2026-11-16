@@ -93,9 +93,14 @@ describe('stepping with the arrows', () => {
     expect(seen.search).toBe('?range=last_pay_week');
     expect(seen.request).toEqual({ period: 'week', date: '2026-11-14' });
     prev();
-    expect(seen.search).toBe('?range=last_pay_week&date=2026-11-01');
+    expect(seen.search).toBe('?range=pay_week&date=2026-11-01');
     expect(seen.request).toEqual({ period: 'week', date: '2026-11-01' });
+    // The stepped week has its own dropdown entry while it is active.
+    expect(range().value).toBe('pay_week');
+    expect([...range().options].map((o) => o.text)).toContain('Pay week');
     next();
+    expect(seen.search).toBe('?range=last_pay_week');
+    expect([...range().options].map((o) => o.text)).not.toContain('Pay week');
     next();
     expect(seen.search).toBe('');
     expect((screen.getByRole('button', { name: 'Next period' }) as HTMLButtonElement).disabled).toBe(true);
@@ -104,13 +109,34 @@ describe('stepping with the arrows', () => {
   it('steps Last 2 pay weeks by two', () => {
     renderBar('?range=last_2_pay_weeks');
     prev();
+    expect(seen.search).toBe('?range=two_pay_weeks&date=2026-10-25');
     expect(seen.request).toEqual({ period: 'week', date: '2026-10-25', weeks: 2 });
+    expect(range().value).toBe('two_pay_weeks');
+    expect([...range().options].map((o) => o.text)).toContain('2 pay weeks');
+    next();
+    expect(seen.search).toBe('?range=last_2_pay_weeks');
+  });
+
+  it('keeps the server label for a stepped pay week', () => {
+    renderBar('?range=pay_week&date=2026-11-01', { label: 'Week ending Sat Nov 7' });
+    expect(screen.getByText('Week ending Sat Nov 7')).toBeTruthy();
+  });
+
+  it('a stepped pay week from a shared link opens, and picking a preset drops its date', () => {
+    renderBar('?range=pay_week&date=2026-11-01');
+    expect(seen.request).toEqual({ period: 'week', date: '2026-11-01' });
+    expect(range().value).toBe('pay_week');
+    fireEvent.change(range(), { target: { value: 'last_pay_week' } });
+    expect(seen.search).toBe('?range=last_pay_week');
   });
 
   it('steps a month, and a Custom range by its own length', () => {
     renderBar('?range=this_month');
     prev();
     expect(seen.search).toBe('?range=last_month');
+    prev();
+    expect(seen.search).toBe('?range=month&date=2026-09-01');
+    expect(range().value).toBe('month');
     cleanup();
     renderBar('?range=custom&from=2026-10-01&to=2026-10-10');
     prev();
@@ -147,7 +173,8 @@ describe('URLs', () => {
 
   it('an old week= link opens that pay week, and picking a period drops it', () => {
     renderBar('?bidder=b1&week=2026-11-10');
-    expect(seen.request).toEqual({ period: 'week', date: '2026-11-08' });
+    expect(seen.request).toEqual({ period: 'week', date: '2026-11-14' });
+    expect(range().value).toBe('last_pay_week');
     expect(screen.getByRole('button', { name: 'Clear' })).toBeTruthy();
     fireEvent.change(range(), { target: { value: 'this_pay_week' } });
     expect(seen.search).toBe('?bidder=b1');

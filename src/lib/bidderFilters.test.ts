@@ -6,6 +6,7 @@ import {
   bidderCanStepForward,
   bidderDays,
   bidderLabel,
+  bidderPresetOptions,
   bidderPeriodRequest,
   bidderRangeError,
   matchesBidderSearch,
@@ -96,13 +97,15 @@ describe('the report clock', () => {
 
 describe('old URLs', () => {
   it('week= opens that pay week', () => {
-    expect(parse({ week: '2026-11-10' })).toMatchObject({ range: 'this_pay_week', date: '2026-11-08' });
-    expect(request({ week: '2026-11-10' })).toEqual({ period: 'week', date: '2026-11-08' });
-    // A Saturday belongs to the pay week that ends on it.
-    expect(parse({ week: '2026-11-14' }).date).toBe('2026-11-08');
+    // The previous pay week is Last pay week; any day in it asks for that week.
+    expect(parse({ week: '2026-11-10' })).toMatchObject({ range: 'last_pay_week', date: '' });
+    expect(request({ week: '2026-11-10' })).toEqual({ period: 'week', date: '2026-11-14' });
+    // An older one is the stepped "Pay week", held by its Sunday. A Saturday belongs to the pay week that ends on it.
+    expect(parse({ week: '2026-11-03' })).toMatchObject({ range: 'pay_week', date: '2026-11-01' });
+    expect(request({ week: '2026-11-07' })).toEqual({ period: 'week', date: '2026-11-01' });
   });
   it('week= naming the current pay week is the default', () => {
-    expect(parse({ week: '2026-11-21' }).date).toBe('');
+    expect(parse({ week: '2026-11-21' })).toMatchObject({ range: 'this_pay_week', date: '' });
     expect(bidderCanClear(parse({ week: '2026-11-21' }), true)).toBe(false);
   });
   it('period=month&date= opens that month', () => {
@@ -155,7 +158,7 @@ describe('stepping', () => {
     expect(bidderPeriodRequest(last, CLOCK)).toEqual({ period: 'week', date: '2026-11-14' });
 
     const before = step(last, -1);
-    expect(before).toMatchObject({ range: 'last_pay_week', date: '2026-11-01' });
+    expect(before).toMatchObject({ range: 'pay_week', date: '2026-11-01' });
     expect(bidderPeriodRequest(before, CLOCK)).toEqual({ period: 'week', date: '2026-11-01' });
     expect(bidderPeriodRequest(step(before, -1), CLOCK)).toEqual({ period: 'week', date: '2026-10-25' });
   });
@@ -173,6 +176,83 @@ describe('stepping', () => {
     expect(bidderCanStepForward(parse({ range: 'last_month' }), CLOCK)).toBe(true);
     expect(step(parse(), 1)).toMatchObject({ range: 'this_pay_week', date: '' });
   });
+  it('step back twice from This pay week: Last pay week, then a "Pay week" held by date', () => {
+    const once = step(parse(), -1);
+    expect(once).toMatchObject({ range: 'last_pay_week', date: '' });
+    const twice = step(once, -1);
+    expect(twice).toMatchObject({ range: 'pay_week', date: '2026-11-01' });
+    expect(stepBidderPeriod(once, -1, CLOCK)).toEqual({
+      range: 'pay_week', date: '2026-11-01', from: undefined, to: undefined, week: undefined, period: undefined,
+    });
+    expect(bidderPeriodRequest(twice, CLOCK)).toEqual({ period: 'week', date: '2026-11-01' });
+    expect(bidderDays(twice, CLOCK)).toEqual({ from: '2026-11-01', to: '2026-11-07' });
+    expect(bidderCanClear(twice, false)).toBe(true);
+  });
+  it('step forward back onto This pay week: snaps to the preset and drops date', () => {
+    const twice = step(step(parse(), -1), -1);
+    const once = step(twice, 1);
+    expect(once).toMatchObject({ range: 'last_pay_week', date: '' });
+    expect(stepBidderPeriod(twice, 1, CLOCK)).toMatchObject({ range: 'last_pay_week', date: undefined });
+    const now = step(once, 1);
+    expect(now).toMatchObject({ range: 'this_pay_week', date: '' });
+    expect(stepBidderPeriod(once, 1, CLOCK)).toMatchObject({ range: '', date: undefined });
+    expect(bidderCanStepForward(now, CLOCK)).toBe(false);
+  });
+  it('a stepped pay week round-trips from a shared URL', () => {
+    const f = parse({ range: 'pay_week', date: '2026-11-01' });
+    expect(f).toMatchObject({ range: 'pay_week', date: '2026-11-01' });
+    expect(parse({ range: 'pay_week', date: '2026-11-04' }).date).toBe('2026-11-01'); // any day of the pay week
+    expect(bidderPeriodRequest(f, CLOCK)).toEqual({ period: 'week', date: '2026-11-01' });
+    // Its own entry is in the dropdown while active, and only then.
+    expect(bidderPresetOptions('pay_week').map((o) => o.label)).toEqual([
+      'This pay week', 'Last pay week', 'Last 2 pay weeks', 'Pay week', 'This month', 'Last month', 'Custom',
+    ]);
+    expect(bidderPresetOptions('this_pay_week')).toBe(BIDDER_PRESETS);
+    // The current / previous pay week in a shared URL is the named preset.
+    expect(parse({ range: 'pay_week', date: '2026-11-16' })).toMatchObject({ range: 'this_pay_week', date: '' });
+    expect(parse({ range: 'pay_week', date: '2026-11-10' })).toMatchObject({ range: 'last_pay_week', date: '' });
+  });
+  it('a stepped period with no usable date is the preset it came from', () => {
+    expect(parse({ range: 'pay_week' })).toMatchObject({ range: 'this_pay_week', date: '' });
+    expect(parse({ range: 'pay_week', date: 'junk' })).toMatchObject({ range: 'this_pay_week', date: '' });
+    expect(parse({ range: 'pay_week', date: '2027-02-01' })).toMatchObject({ range: 'this_pay_week', date: '' });
+    expect(parse({ range: 'two_pay_weeks' })).toMatchObject({ range: 'last_2_pay_weeks', date: '' });
+    expect(parse({ range: 'month' })).toMatchObject({ range: 'this_month', date: '' });
+  });
+  it('two pay weeks: stepping off Last 2 pay weeks is "2 pay weeks", held by date', () => {
+    const f = parse({ range: 'last_2_pay_weeks' });
+    const back = step(f, -1);
+    expect(back).toMatchObject({ range: 'two_pay_weeks', date: '2026-10-25' });
+    expect(bidderPeriodRequest(back, CLOCK)).toEqual({ period: 'week', date: '2026-10-25', weeks: 2 });
+    expect(bidderDays(back, CLOCK)).toEqual({ from: '2026-10-18', to: '2026-10-31' });
+    expect(bidderPresetOptions('two_pay_weeks').map((o) => o.label)).toContain('2 pay weeks');
+    // Forward again lands back on Last 2 pay weeks.
+    expect(step(back, 1)).toMatchObject({ range: 'last_2_pay_weeks', date: '' });
+    expect(stepBidderPeriod(back, 1, CLOCK)).toMatchObject({ range: 'last_2_pay_weeks', date: undefined });
+    // Forward from Last 2 pay weeks: the 2 pay weeks ending with this one, which has no preset either.
+    const ending = step(f, 1);
+    expect(ending).toMatchObject({ range: 'two_pay_weeks', date: '2026-11-15' });
+    expect(bidderCanStepForward(ending, CLOCK)).toBe(false);
+    expect(bidderCanStepForward(back, CLOCK)).toBe(true);
+  });
+  it('two pay weeks round-trips from a shared URL', () => {
+    const f = parse({ range: 'two_pay_weeks', date: '2026-10-25' });
+    expect(f).toMatchObject({ range: 'two_pay_weeks', date: '2026-10-25' });
+    expect(bidderPeriodRequest(f, CLOCK)).toEqual({ period: 'week', date: '2026-10-25', weeks: 2 });
+    expect(parse({ range: 'two_pay_weeks', date: '2026-11-10' })).toMatchObject({ range: 'last_2_pay_weeks', date: '' });
+  });
+  it('a stepped month is "Month", held by date, and round-trips', () => {
+    const f = parse({ range: 'month', date: '2026-09-15' });
+    expect(f).toMatchObject({ range: 'month', date: '2026-09-01' });
+    expect(bidderPeriodRequest(f, CLOCK)).toEqual({ period: 'month', date: '2026-09-01' });
+    expect(bidderPresetOptions('month').map((o) => o.label)).toEqual([
+      'This pay week', 'Last pay week', 'Last 2 pay weeks', 'This month', 'Last month', 'Month', 'Custom',
+    ]);
+  });
+  it('picking a preset from the dropdown drops date', () => {
+    expect(pickBidderPreset('last_pay_week', '', '', CLOCK)).toMatchObject({ range: 'last_pay_week', date: undefined });
+    expect(pickBidderPreset('this_pay_week', '', '', CLOCK)).toMatchObject({ range: '', date: undefined });
+  });
   it('steps Last 2 pay weeks by 14 days and never into the future', () => {
     const f = parse({ range: 'last_2_pay_weeks' });
     expect(bidderPeriodRequest(step(f, -1), CLOCK)).toEqual({ period: 'week', date: '2026-10-25', weeks: 2 });
@@ -183,9 +263,10 @@ describe('stepping', () => {
   it('steps months', () => {
     expect(step(parse({ range: 'this_month' }), -1)).toMatchObject({ range: 'last_month', date: '' });
     const sep = step(step(parse({ range: 'this_month' }), -1), -1);
-    expect(sep).toMatchObject({ range: 'last_month', date: '2026-09-01' });
+    expect(sep).toMatchObject({ range: 'month', date: '2026-09-01' });
     expect(bidderPeriodRequest(sep, CLOCK)).toEqual({ period: 'month', date: '2026-09-01' });
     expect(step(sep, 1)).toMatchObject({ range: 'last_month', date: '' });
+    expect(step(step(sep, 1), 1)).toMatchObject({ range: 'this_month', date: '' });
   });
   it('crosses a year boundary', () => {
     const jan: ReportClock = { today: '2027-01-05', payWeekStart: '2027-01-03' };

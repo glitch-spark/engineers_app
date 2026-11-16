@@ -9,6 +9,10 @@
  * URL keys: `range` (this_pay_week when absent), `date` (the period's anchor day, set by stepping with ‹ ›), `from` /
  * `to` (Custom), `q`, `archived=1`, `owner` (admin). Old links keep working: `week=<a day>` opens that pay week and
  * `period=month|custom` with `date` / `to` open that month or range.
+ *
+ * Stepping with the arrows can land on a period that has no named preset. The URL then says what it is, and the
+ * dropdown shows it only while it is active: `range=pay_week&date=` (one pay week), `two_pay_weeks` (two) and `month`.
+ * Landing on This / Last pay week (or month, or Last 2 pay weeks) again snaps back to that preset and drops `date`.
  */
 import { customError, isValidDate, rangeLabel, stepRange, type DateRange } from './dateRange';
 
@@ -18,7 +22,11 @@ export type BidderPreset =
   | 'last_2_pay_weeks'
   | 'this_month'
   | 'last_month'
-  | 'custom';
+  | 'custom'
+  /** Transient: a pay week / two pay weeks / month reached by stepping, held by `date`. */
+  | 'pay_week'
+  | 'two_pay_weeks'
+  | 'month';
 
 export const BIDDER_PRESETS: { value: BidderPreset; label: string }[] = [
   { value: 'this_pay_week', label: 'This pay week' },
@@ -29,6 +37,20 @@ export const BIDDER_PRESETS: { value: BidderPreset; label: string }[] = [
   { value: 'custom', label: 'Custom' },
 ];
 export const BIDDER_DEFAULT_RANGE: BidderPreset = 'this_pay_week';
+
+const TRANSIENT_OPTIONS: Partial<Record<BidderPreset, { label: string; after: BidderPreset }>> = {
+  pay_week: { label: 'Pay week', after: 'last_2_pay_weeks' },
+  two_pay_weeks: { label: '2 pay weeks', after: 'last_2_pay_weeks' },
+  month: { label: 'Month', after: 'last_month' },
+};
+
+/** The dropdown's options: the presets, plus the stepped period's own entry while one is active. */
+export function bidderPresetOptions(active: BidderPreset): { value: BidderPreset; label: string }[] {
+  const extra = TRANSIENT_OPTIONS[active];
+  if (!extra) return BIDDER_PRESETS;
+  const at = BIDDER_PRESETS.findIndex((o) => o.value === extra.after);
+  return [...BIDDER_PRESETS.slice(0, at + 1), { value: active, label: extra.label }, ...BIDDER_PRESETS.slice(at + 1)];
+}
 
 /**
  * Every key the Bidders list reads or writes. `week` and `period` are the old URL's keys: they are read when `range`
@@ -101,27 +123,55 @@ export function reportClock(now: Date = new Date()): ReportClock {
 
 // ---- URL -> filters --------------------------------------------------------
 
-const KNOWN = BIDDER_PRESETS.map((p) => p.value as string);
-const isWeekPreset = (r: BidderPreset) => r === 'this_pay_week' || r === 'last_pay_week' || r === 'last_2_pay_weeks';
-const isMonthPreset = (r: BidderPreset) => r === 'this_month' || r === 'last_month';
-const weeksOf = (r: BidderPreset): 1 | 2 => (r === 'last_2_pay_weeks' ? 2 : 1);
+const KNOWN = [...BIDDER_PRESETS.map((p) => p.value), 'pay_week', 'two_pay_weeks', 'month'] as string[];
+const isWeekPreset = (r: BidderPreset) =>
+  r === 'this_pay_week' || r === 'last_pay_week' || r === 'last_2_pay_weeks' || r === 'pay_week' || r === 'two_pay_weeks';
+const isMonthPreset = (r: BidderPreset) => r === 'this_month' || r === 'last_month' || r === 'month';
+const weeksOf = (r: BidderPreset): 1 | 2 => (r === 'last_2_pay_weeks' || r === 'two_pay_weeks' ? 2 : 1);
 
 /** The anchor day a preset has on its own (no `date`): the pay week's Sunday or the month's first day. */
 function ownAnchor(range: BidderPreset, clock: ReportClock): string {
-  if (range === 'this_pay_week') return clock.payWeekStart;
-  if (range === 'last_pay_week' || range === 'last_2_pay_weeks') return addDays(clock.payWeekStart, -7);
-  if (range === 'this_month') return firstOfMonth(clock.today);
+  if (range === 'this_pay_week' || range === 'pay_week') return clock.payWeekStart;
+  if (range === 'last_pay_week' || range === 'last_2_pay_weeks' || range === 'two_pay_weeks') return addDays(clock.payWeekStart, -7);
+  if (range === 'this_month' || range === 'month') return firstOfMonth(clock.today);
   if (range === 'last_month') return monthStep(clock.today, -1);
   return '';
 }
 
-/** `date` as the period's anchor (Sunday / first of month), or '' when it is the preset's own period or not a date. */
-function normalizeDate(range: BidderPreset, date: string, clock: ReportClock): string {
-  if (!isValidDate(date) || !(isWeekPreset(range) || isMonthPreset(range))) return '';
-  const anchor = isWeekPreset(range) ? payWeekStartOf(date) : firstOfMonth(date);
-  // Nothing past the current pay week / month: a future day in an old link opens the current one.
-  if (anchor > ownAnchor(isWeekPreset(range) ? 'this_pay_week' : 'this_month', clock)) return '';
-  return anchor === ownAnchor(range, clock) ? '' : anchor;
+/** The latest anchor a kind of period may have: the current pay week's Sunday / the current month's first day. */
+const currentAnchor = (range: BidderPreset, clock: ReportClock) =>
+  isWeekPreset(range) ? clock.payWeekStart : firstOfMonth(clock.today);
+
+/**
+ * The preset (and `date`) a period with this anchor is known by. The current and previous pay week / month snap to
+ * This / Last (no `date`); any other is the transient entry, held by `date`.
+ */
+function settle(range: BidderPreset, anchor: string, clock: ReportClock): { range: BidderPreset; date: string } {
+  if (isMonthPreset(range)) {
+    if (anchor === ownAnchor('this_month', clock)) return { range: 'this_month', date: '' };
+    if (anchor === ownAnchor('last_month', clock)) return { range: 'last_month', date: '' };
+    return { range: 'month', date: anchor };
+  }
+  if (weeksOf(range) === 2) {
+    return anchor === ownAnchor('last_2_pay_weeks', clock)
+      ? { range: 'last_2_pay_weeks', date: '' }
+      : { range: 'two_pay_weeks', date: anchor };
+  }
+  if (anchor === ownAnchor('this_pay_week', clock)) return { range: 'this_pay_week', date: '' };
+  if (anchor === ownAnchor('last_pay_week', clock)) return { range: 'last_pay_week', date: '' };
+  return { range: 'pay_week', date: anchor };
+}
+
+/** The period a URL's `range` and `date` name: the date's pay week / month when it is usable, else the preset's own. */
+function settleUrl(range: BidderPreset, date: string, clock: ReportClock): { range: BidderPreset; date: string } {
+  if (isValidDate(date)) {
+    const anchor = isWeekPreset(range) ? payWeekStartOf(date) : firstOfMonth(date);
+    // Nothing past the current pay week / month: a future day in an old link is not a period.
+    if (anchor <= currentAnchor(range, clock)) return settle(range, anchor, clock);
+  }
+  // No usable date: a stepped period has nothing to hold it, so it is the preset it was stepped from.
+  const own = range === 'pay_week' ? 'this_pay_week' : range === 'two_pay_weeks' ? 'last_2_pay_weeks' : range === 'month' ? 'this_month' : range;
+  return { range: own, date: '' };
 }
 
 /** URL values (strings, possibly junk) -> typed filters. Never throws; bad values fall back to the defaults. */
@@ -144,7 +194,7 @@ export function parseBidderValues(values: BidderUrlValues, clock: ReportClock): 
     date = values.week;
   }
   if (range === 'custom') return { ...base, range, date: '', from, to };
-  return { ...base, range, date: normalizeDate(range, date, clock), from: '', to: '' };
+  return { ...base, ...settleUrl(range, date, clock), from: '', to: '' };
 }
 
 /** Whether the bar shows anything that differs from its defaults (the Clear button). `owner` only counts for admins. */
@@ -206,7 +256,7 @@ export function bidderCanStepForward(f: BidderFilters, clock: ReportClock): bool
     return !!days && addDays(days.to, 1) <= clock.today;
   }
   const anchor = f.date || ownAnchor(f.range, clock);
-  return anchor < ownAnchor(isWeekPreset(f.range) ? 'this_pay_week' : 'this_month', clock);
+  return anchor < currentAnchor(f.range, clock);
 }
 
 /** The URL value `range` has for a preset (the default is left out of the URL). */
@@ -219,9 +269,9 @@ export function periodPatch(range: BidderPreset, date: string, from = '', to = '
 }
 
 /**
- * ‹ / ›: a pay week moves by 7 days on `date` (Last 2 pay weeks by 14), a month by a month, Custom by its own length of
- * days. A step that lands on This / Last pay week (or month) takes that preset, else the preset stays and `date`
- * holds the period. Stepping forward never goes past the current pay week / month / today. Null for a bad Custom.
+ * Arrows: a pay week moves by 7 days on `date` (two pay weeks by 14), a month by a month, Custom by its own length of
+ * days. A step that lands on This / Last pay week (or month, or Last 2 pay weeks) takes that preset; any other period
+ * becomes `pay_week` / `two_pay_weeks` / `month`, held by `date`. Stepping forward never goes past the current pay week / month / today. Null for a bad Custom.
  */
 export function stepBidderPeriod(f: BidderFilters, dir: -1 | 1, clock: ReportClock): BidderPatch | null {
   if (f.range === 'custom') {
@@ -230,22 +280,18 @@ export function stepBidderPeriod(f: BidderFilters, dir: -1 | 1, clock: ReportClo
     const next = stepRange(days, dir, 'custom');
     return periodPatch('custom', '', next.from, next.to > clock.today ? clock.today : next.to);
   }
-  const week = isWeekPreset(f.range);
-  const current = ownAnchor(week ? 'this_pay_week' : 'this_month', clock);
   const anchor = f.date || ownAnchor(f.range, clock);
-  let next = week ? addDays(anchor, 7 * weeksOf(f.range) * dir) : monthStep(anchor, dir);
-  if (next > current) next = current;
-  let range = f.range;
-  if (week && weeksOf(f.range) === 1) range = next === current ? 'this_pay_week' : next === ownAnchor('last_pay_week', clock) ? 'last_pay_week' : range;
-  else if (week) range = next === ownAnchor('last_2_pay_weeks', clock) ? 'last_2_pay_weeks' : range;
-  else range = next === current ? 'this_month' : next === ownAnchor('last_month', clock) ? 'last_month' : range;
-  return periodPatch(range, next === ownAnchor(range, clock) ? '' : next);
+  let next = isWeekPreset(f.range) ? addDays(anchor, 7 * weeksOf(f.range) * dir) : monthStep(anchor, dir);
+  if (next > currentAnchor(f.range, clock)) next = currentAnchor(f.range, clock);
+  const settled = settle(f.range, next, clock);
+  return periodPatch(settled.range, settled.date);
 }
 
 /** The change for a preset picked in the dropdown. Custom is seeded with the days the period covered, up to today. */
 export function pickBidderPreset(
   range: BidderPreset, from: string | undefined, to: string | undefined, clock: ReportClock,
 ): BidderPatch {
+  if (range === 'pay_week' || range === 'two_pay_weeks' || range === 'month') return {}; // only ever the active entry
   if (range !== 'custom') return periodPatch(range, '');
   const end = to && to > clock.today ? clock.today : to ?? '';
   const start = from && from > clock.today ? clock.today : from ?? '';
