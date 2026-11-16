@@ -94,6 +94,16 @@ function monthEnd(s: string, offset: number): string {
   return fmt(Date.UTC(y, m + offset, 0));
 }
 
+function isWholeMonth(range: DateRange): boolean {
+  const { y, m, d } = parse(range.from);
+  return d === 1 && range.to === lastOfMonth(y, m);
+}
+
+function isWholeYear(range: DateRange): boolean {
+  const { y, m, d } = parse(range.from);
+  return m === 1 && d === 1 && range.to === `${String(y).padStart(4, '0')}-12-31`;
+}
+
 function minDate(a: string, b: string): string {
   return a <= b ? a : b;
 }
@@ -180,8 +190,13 @@ export function matchPreset(
 /**
  * Move a range one step back (-1) or forward (+1). Week, 2-week, month and
  * year presets step to whole periods, snapped from the range's `from` (so a
- * clipped this_month steps to a whole month). Anything else (custom, today,
- * yesterday, ...) moves by the range's own inclusive day count.
+ * clipped this_month steps to a whole month). Any other preset (custom, today,
+ * yesterday, ...) steps by whole calendar months or years when the range is
+ * exactly one whole calendar month or year, and otherwise by the range's own
+ * inclusive day count.
+ *
+ * Stepping never clips: callers clip `to` to today themselves when
+ * `allowFuture` is false.
  */
 export function stepRange(range: DateRange, dir: -1 | 1, preset: DatePreset): DateRange {
   switch (preset) {
@@ -203,6 +218,8 @@ export function stepRange(range: DateRange, dir: -1 | 1, preset: DatePreset): Da
       return { from: `${year}-01-01`, to: `${year}-12-31` };
     }
     default: {
+      if (isWholeYear(range)) return stepRange(range, dir, 'this_year');
+      if (isWholeMonth(range)) return stepRange(range, dir, 'this_month');
       const n = dayCount(range.from, range.to);
       return { from: addDays(range.from, n * dir), to: addDays(range.to, n * dir) };
     }

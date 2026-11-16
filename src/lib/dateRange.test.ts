@@ -250,6 +250,23 @@ describe('stepRange', () => {
     expect(stepRange(r('2026-11-01', '2026-11-10'), -1, 'custom')).toEqual(r('2026-10-22', '2026-10-31'));
   });
 
+  it('steps a custom range covering one whole month by month', () => {
+    expect(stepRange(r('2026-09-01', '2026-09-30'), -1, 'custom')).toEqual(r('2026-08-01', '2026-08-31'));
+    expect(stepRange(r('2026-02-01', '2026-02-28'), 1, 'custom')).toEqual(r('2026-03-01', '2026-03-31'));
+  });
+
+  it('steps a custom range covering one whole year by year', () => {
+    expect(stepRange(r('2025-01-01', '2025-12-31'), 1, 'custom')).toEqual(r('2026-01-01', '2026-12-31'));
+    expect(stepRange(r('2026-01-01', '2026-12-31'), -1, 'custom')).toEqual(r('2025-01-01', '2025-12-31'));
+  });
+
+  it('keeps stepping other custom ranges by day count', () => {
+    // 14 days, not a whole month
+    expect(stepRange(r('2026-11-02', '2026-11-15'), 1, 'custom')).toEqual(r('2026-11-16', '2026-11-29'));
+    // a clipped month is not a whole month
+    expect(stepRange(r('2026-11-01', '2026-11-14'), -1, 'custom')).toEqual(r('2026-10-18', '2026-10-31'));
+  });
+
   it('steps today and yesterday by one day', () => {
     expect(stepRange(r('2026-11-14', '2026-11-14'), -1, 'today')).toEqual(r('2026-11-13', '2026-11-13'));
     expect(stepRange(r('2026-11-13', '2026-11-13'), 1, 'yesterday')).toEqual(r('2026-11-14', '2026-11-14'));
