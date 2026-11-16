@@ -1,29 +1,30 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { addDaysKey } from './weekDates';
+import { neighbourWeekKeys } from './weekDates';
 
 /**
- * Pay-week navigator: prev / next, "This week" and the label. `week` is any date inside the shown week (we pass the
- * date the week ends on); null while loading. `isCurrent` disables next and hides "This week".
+ * Pay-week navigator: prev / next, "This week" and the label. `days` are the shown week's report days (the server's
+ * list, 7 or 8 long); null while loading. `isCurrent` disables next and hides "This week".
  */
 export default function WeekNav({
-  week,
+  days,
   label,
   isCurrent,
   onChange,
 }: {
-  week: string | null;
+  days: { day: string }[] | null;
   label: string | null;
   isCurrent: boolean;
   onChange: (week: string | null) => void;
 }) {
+  const near = days && neighbourWeekKeys(days);
   return (
     <div className="toolbar flex items-center gap-2">
       <button
         type="button"
         className="btn-icon"
         aria-label="Previous week"
-        disabled={!week}
-        onClick={() => week && onChange(addDaysKey(week, -7))}
+        disabled={!near}
+        onClick={() => near && onChange(near.prev)}
       >
         <ChevronLeft size={18} aria-hidden />
       </button>
@@ -35,12 +36,12 @@ export default function WeekNav({
         type="button"
         className="btn-icon"
         aria-label="Next week"
-        disabled={!week || isCurrent}
-        onClick={() => week && onChange(addDaysKey(week, 7))}
+        disabled={!near || isCurrent}
+        onClick={() => near && onChange(near.next)}
       >
         <ChevronRight size={18} aria-hidden />
       </button>
-      {week && !isCurrent && (
+      {near && !isCurrent && (
         <button type="button" className="btn-outline text-xs" onClick={() => onChange(null)}>
           This week
         </button>

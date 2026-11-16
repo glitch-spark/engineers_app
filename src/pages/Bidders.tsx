@@ -179,7 +179,7 @@ export default function BiddersPage() {
     <div className="space-y-5">
       {bidderId ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <WeekNav week={weekKey} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />
+          <WeekNav days={data?.week.days ?? null} label={data?.week.label ?? null} isCurrent={isCurrent} onChange={(w) => setParam({ week: w })} />
         </div>
       ) : (
         <BiddersFilterBar
