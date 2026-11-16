@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ExternalLink, Trash2 } from 'lucide-react';
 import type { JobApplyRun } from '../../api/endpoints';
-import Pagination from '../Pagination';
+import Pagination, { DEFAULT_PAGE_SIZE } from '../Pagination';
 import Segmented from '../Segmented';
 import { APPLIED_UI } from './appliedUi';
 import { expiresHint, formatDateTime, isActive, runGroup, runStep } from './format';
@@ -15,7 +15,6 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'finished', label: 'Finished' },
   { value: 'all', label: 'All' },
 ];
-const SIZES = [10, 25, 50];
 
 /** What the run's row says: its step and what's left, and the one thing to do next. */
 export function runRow(run: JobApplyRun): { status: string; links: string; action: string | null } {
@@ -51,7 +50,7 @@ export default function RunsTable({ runs, onDelete }: { runs: JobApplyRun[]; onD
   for (const r of runs) counts[runGroup(r)] += 1;
   const [tab, setTab] = useState<Tab | null>(null);
   const [page, setPage] = useState(1);
-  const [size, setSize] = useState(SIZES[0]);
+  const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
   // Start on Needs you, or All when nothing needs you.
   const shown: Tab = tab ?? (counts.needs > 0 ? 'needs' : 'all');
   const list = shown === 'all' ? runs : runs.filter((r) => runGroup(r) === shown);
@@ -160,7 +159,6 @@ export default function RunsTable({ runs, onDelete }: { runs: JobApplyRun[]; onD
           setSize(n);
           setPage(1);
         }}
-        sizes={SIZES}
         label="Runs pages"
       />
     </section>

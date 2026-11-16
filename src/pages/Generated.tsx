@@ -15,11 +15,19 @@ import type { ResumeJob, ResumeJobStatus, ResumeJobStep, ScreeningPair } from '.
 import { notify } from '../lib/notify';
 import { archivedLabel, filterProfiles } from '../lib/profileArchive';
 import { useDialog } from '../lib/useDialog';
+import { useUrlFilters } from '../lib/useUrlFilters';
+import {
+  GENERATED_CLEAR_KEYS, GENERATED_URL_DEFAULTS, generatedCanClear, generatedListParams, parseGeneratedValues,
+  type GeneratedKey,
+} from '../lib/generatedFilters';
 import ResumeTabs from '../components/ResumeTabs';
 import { TailoredScore } from '../components/jobApplies/Suggestions';
 import PageHeader from '../components/PageHeader';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Select from '../components/Select';
+import FilterBar, { FilterField } from '../components/filters/FilterBar';
+import SearchFilter from '../components/filters/SearchFilter';
+import Pagination from '../components/Pagination';
 import ModelSelect from '../components/ModelSelect';
 import { useModelChoice } from '../lib/useModelChoice';
 import { formatUsd } from '../lib/modelCost';
@@ -49,7 +57,6 @@ const STATUS_LABEL: Record<ResumeJobStatus, string> = {
   failed: 'Failed',
 };
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 const EMPTY_JOBS: ResumeJob[] = [];
 
 function setsEqual(a: Set<string>, b: Set<string>): boolean {
@@ -108,12 +115,17 @@ function LlmProviderBadge({
 
 export default function GeneratedResumesPage() {
   const { user } = useAuth();
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
   const [panelJob, setPanelJob] = useState<ResumeJob | null>(null);
   // ?job=<id> (from Job Applies' Q&A link): open that resume's drawer.
   const [searchParams, setSearchParams] = useSearchParams();
   const deepJob = searchParams.get('job');
+  // Only `job` goes: the filters live in the same query string and must survive.
+  const dropJobParam = () =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('job');
+      return next;
+    }, { replace: true });
   useEffect(() => {
     if (!deepJob) return;
     let cancelled = false;
@@ -123,37 +135,28 @@ export default function GeneratedResumesPage() {
       .catch(() => {
         if (cancelled) return;
         notify.error(new Error("That resume isn't available"), "That resume isn't available");
-        setSearchParams({}, { replace: true });
+        dropJobParam();
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dropJobParam only wraps setSearchParams
   }, [deepJob, setSearchParams]);
   // Closing the drawer (open -> closed) drops ?job= so a reload doesn't reopen it.
   const wasOpen = useRef(false);
   useEffect(() => {
-    if (wasOpen.current && !panelJob && searchParams.has('job')) setSearchParams({}, { replace: true });
+    if (wasOpen.current && !panelJob && searchParams.has('job')) dropJobParam();
     wasOpen.current = !!panelJob;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dropJobParam only wraps setSearchParams
   }, [panelJob, searchParams, setSearchParams]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const filterId = useId();
 
-  // Filters
-  const [filterAccountId, setFilterAccountId] = useState('');
-  const [companyInput, setCompanyInput] = useState('');
-  const [companyFilter, setCompanyFilter] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => { setCompanyFilter(companyInput.trim()); setPage(1); }, 300);
-    return () => clearTimeout(t);
-  }, [companyInput]);
-  const [qInput, setQInput] = useState('');
-  const [qFilter, setQFilter] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => { setQFilter(qInput.trim()); setPage(1); }, 300);
-    return () => clearTimeout(t);
-  }, [qInput]);
+  // Filters live in the URL (`job` is the drawer's deep link and stays out of them).
+  const [urlValues, patchUrl] = useUrlFilters(GENERATED_URL_DEFAULTS);
+  const parsed = useMemo(() => parseGeneratedValues(urlValues), [urlValues]);
 
   const { data: accountsData } = useSWR('generated-accounts-lookup', () => api.lookupAccounts());
   const profileOptions = useMemo(() => {
@@ -166,15 +169,14 @@ export default function GeneratedResumesPage() {
     ];
   }, [accountsData, user?.id]);
 
+  // A profile in the URL that isn't one of yours (a stale or edited link) is ignored once the list is known.
+  const profileKnown = !parsed.profile || !accountsData || profileOptions.some((o) => o.value === parsed.profile);
+  const filters = useMemo(() => (profileKnown ? parsed : { ...parsed, profile: '' }), [parsed, profileKnown]);
+  const canClear = generatedCanClear(filters);
+
   const { data, mutate, isLoading } = useSWR(
-    ['resume-jobs-page', page, limit, filterAccountId, companyFilter, qFilter] as const,
-    () => api.listResumeJobs({
-      page,
-      limit,
-      accountId: filterAccountId || undefined,
-      company: companyFilter || undefined,
-      q: qFilter || undefined,
-    }),
+    ['resume-jobs-page', filters.page, filters.size, filters.profile, filters.company.trim(), filters.q.trim()] as const,
+    () => api.listResumeJobs(generatedListParams(filters)),
     { refreshInterval: 3000 },
   );
 
@@ -309,70 +311,48 @@ export default function GeneratedResumesPage() {
       <ResumeTabs />
       <div role="status" aria-live="polite" className="sr-only">{announcement}</div>
 
-      {/* Filters + bulk actions — merged toolbar */}
-      <div className="flex flex-wrap items-end justify-between gap-3 toolbar">
-        <div className="flex items-end gap-3 flex-wrap">
-          <div className="w-56">
-            <label htmlFor={`${filterId}-profile`} className="block text-xs text-muted mb-1">Profile</label>
-            <Select
-              id={`${filterId}-profile`}
-              value={filterAccountId}
-              onChange={(v) => { setFilterAccountId(v); setPage(1); }}
-              options={profileOptions}
-            />
-          </div>
-          <div className="w-56">
-            <label htmlFor={`${filterId}-company`} className="block text-xs text-muted mb-1">Company</label>
-            <input
-              id={`${filterId}-company`}
-              className="input w-full text-sm"
-              placeholder="Filter by company name"
-              value={companyInput}
-              onChange={(e) => setCompanyInput(e.target.value)}
-            />
-          </div>
-          <div className="w-full sm:w-72">
-            <label htmlFor={`${filterId}-q`} className="block text-xs text-muted mb-1">Search JD</label>
-            <input
-              id={`${filterId}-q`}
-              className="input w-full text-sm"
-              placeholder="skills, tech, anything (space = AND)"
-              aria-describedby={`${filterId}-q-hint`}
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-            />
-            <span id={`${filterId}-q-hint`} className="sr-only">Separate words with spaces; every word must match.</span>
-          </div>
-          {(filterAccountId || companyFilter || qFilter) && (
-            <button
-              type="button"
-              onClick={() => {
-                setFilterAccountId('');
-                setCompanyInput(''); setCompanyFilter('');
-                setQInput(''); setQFilter('');
-                setPage(1);
-              }}
-              className="link text-xs text-muted"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-3 pb-1">
-          <SaveFolderStatus />
-          <span className="text-xs text-muted" aria-live="polite">
-            {someChecked ? `${selected.size} selected` : 'Select rows for bulk actions'}
-          </span>
-          <button
-            type="button"
-            onClick={downloadSelected}
-            disabled={!someChecked || bulkDownloading}
-            className="btn btn-sm disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Download className="w-4 h-4" aria-hidden />}
-            Download {someChecked ? `(${selected.size})` : 'selected'}
-          </button>
-        </div>
+      <FilterBar
+        canClear={canClear}
+        onClear={() => patchUrl(Object.fromEntries(GENERATED_CLEAR_KEYS.map((k) => [k, undefined])) as Partial<Record<GeneratedKey, string>>)}
+      >
+        <FilterField label="Profile" htmlFor={`${filterId}-profile`} width="w-56">
+          <Select
+            id={`${filterId}-profile`}
+            className="w-full text-sm"
+            value={filters.profile}
+            onChange={(v) => patchUrl({ profile: v })}
+            options={profileOptions}
+          />
+        </FilterField>
+        <SearchFilter
+          label="Company"
+          value={filters.company}
+          onChange={(company) => patchUrl({ company })}
+          placeholder="Filter by company name"
+          width="w-56"
+        />
+        <SearchFilter
+          label="Job description"
+          value={filters.q}
+          onChange={(q) => patchUrl({ q })}
+          placeholder="Search job descriptions…"
+        />
+      </FilterBar>
+
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <SaveFolderStatus />
+        <span className="text-xs text-muted" aria-live="polite">
+          {someChecked ? `${selected.size} selected` : 'Select rows for bulk actions'}
+        </span>
+        <button
+          type="button"
+          onClick={downloadSelected}
+          disabled={!someChecked || bulkDownloading}
+          className="btn btn-sm disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Download className="w-4 h-4" aria-hidden />}
+          Download {someChecked ? `(${selected.size})` : 'selected'}
+        </button>
       </div>
 
       <div className="table-wrap">
@@ -382,7 +362,7 @@ export default function GeneratedResumesPage() {
           </p>
         ) : jobs.length === 0 ? (
           <p className="p-6 text-sm text-muted">
-            {filterAccountId || companyFilter
+            {canClear
               ? 'No resumes match the filters.'
               : 'No builds yet. Generate one from the Resume Generator.'}
           </p>
@@ -428,54 +408,13 @@ export default function GeneratedResumesPage() {
         )}
       </div>
 
-      {pagination && pagination.totalPages > 0 && (
-        <div className="flex items-center justify-between text-sm">
-          <div className="text-muted">
-            {pagination.total > 0 && (
-              <>
-                Showing {(pagination.page - 1) * pagination.limit + 1}–
-                {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs text-muted flex items-center gap-2">
-              Per page
-              <select
-                value={limit}
-                onChange={(e) => {
-                  setLimit(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="border border-field dark:border-zinc-600 rounded-md px-2 py-1 text-sm"
-              >
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={!pagination.hasPrev}
-              className="px-3 py-1 border border-zinc-200 dark:border-zinc-700 rounded text-sm disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              Previous
-            </button>
-            <span className="text-muted">
-              Page {pagination.page} / {pagination.totalPages || 1}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={!pagination.hasNext}
-              className="px-3 py-1 border border-zinc-200 dark:border-zinc-700 rounded text-sm disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        info={pagination}
+        onPage={(page) => patchUrl({ page: String(page) })}
+        pageSize={filters.size}
+        onPageSize={(size) => patchUrl({ size: String(size) })}
+        label="Generated resumes pagination"
+      />
 
       {panelJob && (
         <ScreeningPanel
