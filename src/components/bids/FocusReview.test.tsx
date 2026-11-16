@@ -6,7 +6,7 @@ import type { BidReviewItem, PendingBids } from '../../api/endpoints';
 
 vi.mock('../../api/endpoints', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../api/endpoints')>();
-  return { ...actual, listPendingBids: vi.fn(), bidScreenshots: vi.fn(), getBid: vi.fn(), reviewBid: vi.fn() };
+  return { ...actual, listPendingBids: vi.fn(), bidScreenshots: vi.fn(), getBidClock: vi.fn(), getBid: vi.fn(), reviewBid: vi.fn() };
 });
 
 import * as api from '../../api/endpoints';
@@ -14,6 +14,17 @@ import FocusReview from './FocusReview';
 
 const listPendingBids = vi.mocked(api.listPendingBids);
 const bidScreenshots = vi.mocked(api.bidScreenshots);
+const getBidClock = vi.mocked(api.getBidClock);
+
+// Wed Nov 18, 2026: the long pay week Sun Nov 15 .. Sun Nov 22. AFTER: past the Sunday 8 pm cutoff, the next pay week.
+const CLOCK = {
+  today: '2026-11-18', payWeekStart: '2026-11-15', payWeekEnd: '2026-11-22', previousPayWeekStart: '2026-11-08',
+  timezone: 'America/Chicago',
+};
+const AFTER = {
+  today: '2026-11-23', payWeekStart: '2026-11-23', payWeekEnd: '2026-11-29', previousPayWeekStart: '2026-11-15',
+  timezone: 'America/Chicago',
+};
 
 function pendingBid(id: string, extra: Partial<BidReviewItem> = {}): BidReviewItem {
   return {
@@ -68,6 +79,7 @@ function renderReview(extra: Partial<React.ComponentProps<typeof FocusReview>> =
 beforeEach(() => {
   listPendingBids.mockResolvedValue(page([pendingBid('x1')]));
   bidScreenshots.mockResolvedValue([]);
+  getBidClock.mockResolvedValue(CLOCK);
 });
 afterEach(() => {
   cleanup();
@@ -83,6 +95,44 @@ describe('FocusReview over a server queue', () => {
     const q = listPendingBids.mock.calls[0][0];
     expect(q.period).toBe('week');
     expect(q.since).toMatch(/Z$/);
+  });
+
+  it("freezes a dateless week queue on the clock's pay week for the whole visit", async () => {
+    renderReview();
+    await screen.findByText('Job x1');
+    expect(listPendingBids.mock.calls[0][0].date).toBe('2026-11-15');
+    getBidClock.mockResolvedValue(AFTER);
+    await act(async () => {
+      await swrMutate!((key) => Array.isArray(key) && key[0] === 'bid-clock');
+      await swrMutate!((key) => Array.isArray(key) && key[0] === 'bid-focus');
+    });
+    await waitFor(() => expect(listPendingBids).toHaveBeenCalledTimes(2));
+    expect(listPendingBids.mock.calls[1][0].date).toBe('2026-11-15');
+  });
+
+  it("freezes a dateless day queue on the clock's today", async () => {
+    renderReview({ scope: { queue: { period: 'day' } } });
+    await screen.findByText('Job x1');
+    expect(listPendingBids.mock.calls[0][0].date).toBe('2026-11-18');
+  });
+
+  it('keeps a given date and needs no clock for range or all', async () => {
+    renderReview({ scope: { queue: { period: 'all' } } });
+    await screen.findByText('Job x1');
+    expect(listPendingBids.mock.calls[0][0].date).toBeUndefined();
+  });
+
+  it('says so when a refresh drops the shown bid, and moves to the next pending one', async () => {
+    listPendingBids
+      .mockResolvedValueOnce(page([pendingBid('x1'), pendingBid('x2', { firstAt: '2026-11-24T16:00:00Z' })]))
+      .mockResolvedValueOnce(page([pendingBid('x2', { firstAt: '2026-11-24T16:00:00Z' })]));
+    renderReview();
+    await screen.findByText('Job x1');
+    await act(async () => {
+      await swrMutate!((key) => Array.isArray(key) && key[0] === 'bid-focus');
+    });
+    await screen.findByText('Job x2');
+    expect(screen.getByRole('alert').textContent).toContain('No longer in this queue');
   });
 
   it('the scope switch reports the pick', async () => {
