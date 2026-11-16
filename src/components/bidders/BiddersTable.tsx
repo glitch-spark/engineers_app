@@ -18,7 +18,7 @@ const dollars = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 const utcDay = (day: string) => new Date(`${day.slice(0, 10)}T00:00:00Z`);
 
 const HELP = {
-  bids: 'Approved + pending bids. In a pay week: the pay-week window (Sat 4 pm – Sat 4 pm), as the weekly report pays. Hover a value for the split.',
+  bids: 'Approved + pending bids. In a pay week: the pay-week window, as the weekly report pays. Hover a value for the split.',
   pay: 'Approved bids × the bidder\'s rate.',
   review: 'Pending bids waiting for your review.',
   hit: `Weekdays with ${TARGET}+ approved + pending bids, out of the bidder's weekdays in the period. Dots: filled = ${TARGET}+, hollow = under ${TARGET}, amber = today so far, faint = not active. Streak = ${TARGET}+ days in a row (weekends skipped).`,

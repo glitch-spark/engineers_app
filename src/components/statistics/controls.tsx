@@ -136,19 +136,25 @@ export function Segmented<T extends string>({
 
 /** ‹ label › for the selected week or month; no stepping into the future. */
 export function PeriodNav({
-  period, day, label, onDay,
-}: { period: StatsPeriod; day: string; label?: string; onDay: (day: string) => void }) {
+  period, day, label, onDay, prevDay, nextDay,
+}: {
+  period: StatsPeriod; day: string; label?: string; onDay: (day: string) => void;
+  /** A day of the period before / after, when stepping a fixed 7 days / a month isn't right (an 8-day pay week). */
+  prevDay?: string; nextDay?: string;
+}) {
+  const prev = prevDay ?? step(period, day, -1);
+  const next = nextDay ?? step(period, day, 1);
   return (
     <div className="flex items-center gap-1">
-      <button type="button" className="btn-icon" onClick={() => onDay(step(period, day, -1))} aria-label={`Previous ${period}`}>
+      <button type="button" className="btn-icon" onClick={() => onDay(prev)} aria-label={`Previous ${period}`}>
         <ChevronLeft className="h-4 w-4" aria-hidden />
       </button>
       <span className="min-w-[9.5rem] text-center text-sm font-medium tabular-nums" aria-live="polite">{label ?? '…'}</span>
       <button
         type="button"
         className="btn-icon"
-        onClick={() => onDay(step(period, day, 1))}
-        disabled={parseDay(step(period, day, 1)) > new Date()}
+        onClick={() => onDay(next)}
+        disabled={parseDay(next) > new Date()}
         aria-label={`Next ${period}`}
       >
         <ChevronRight className="h-4 w-4" aria-hidden />
