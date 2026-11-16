@@ -6,7 +6,7 @@ import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { formatUsd } from '../../lib/modelCost';
 import MultiSelect from '../MultiSelect';
-import Segmented from '../jobApplies/Segmented';
+import Segmented from '../Segmented';
 import {
   AI_USAGE_PERIODS,
   type AiUsagePeriod,

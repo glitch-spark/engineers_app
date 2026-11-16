@@ -1,6 +1,9 @@
-import type { Pagination as PaginationInfo } from '../../api/endpoints';
+import type { Pagination as PaginationInfo } from '../api/endpoints';
 
-export const PAGE_SIZES = [25, 50, 100, 200];
+/** Per-page choices every list offers unless it passes its own `sizes`. */
+export const PAGE_SIZES = [10, 20, 50, 100];
+/** The page size a list starts at (and what the URL omits). */
+export const DEFAULT_PAGE_SIZE = 20;
 
 /** Page numbers to show: first, last, and a window around the current page, with gaps as null. */
 function pageList(page: number, total: number): (number | null)[] {
@@ -67,21 +70,20 @@ export default function Pagination({
         </div>
       )}
       {onPageSize && (
-      <label className="flex items-center gap-1 whitespace-nowrap text-xs text-zinc-500">
-        <select
-          className="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-6 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-          value={pageSize}
-          onChange={(e) => onPageSize(Number(e.target.value))}
-          aria-label="Per page"
-        >
-          {sizes.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-        / page
-      </label>
+        <label className="flex items-center gap-2 whitespace-nowrap text-xs text-zinc-500">
+          Per page
+          <select
+            className="rounded-lg border border-zinc-200 bg-white py-1 pl-2 pr-6 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+            value={pageSize}
+            onChange={(e) => onPageSize(Number(e.target.value))}
+          >
+            {sizes.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
     </nav>
   );

@@ -250,9 +250,17 @@ export function rangeLabel(range: DateRange | null): string {
   return `${mon(a.m)} ${a.d}, ${a.y} – ${mon(b.m)} ${b.d}, ${b.y}`;
 }
 
+/** Whether `s` is a real calendar date in `YYYY-MM-DD` form (so `2026-02-31` is not). */
+export function isValidDate(s: string): boolean {
+  if (typeof s !== 'string') return false;
+  const match = DATE_RE.exec(s);
+  if (!match) return false;
+  return fmt(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) === s;
+}
+
 /** Validation message for a custom range, or null when it is fine. */
 export function customError(from: string, to: string): string | null {
-  if (!DATE_RE.test(from) || !DATE_RE.test(to)) return 'Pick both dates.';
+  if (!isValidDate(from) || !isValidDate(to)) return 'Pick both dates.';
   if (from > to) return 'From must be on or before To.';
   if (dayCount(from, to) > 366) return 'Pick a range of a year or less.';
   return null;

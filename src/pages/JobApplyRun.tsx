@@ -11,7 +11,7 @@ import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ModelSelect from '../components/ModelSelect';
 import RowDetail from '../components/jobApplies/RowDetail';
-import Pagination, { PAGE_SIZES } from '../components/jobApplies/Pagination';
+import Pagination from '../components/Pagination';
 import { type AppliedFile, ProfileCells, firstReadyTailored, orderedProfiles, profilesToTailor } from '../components/jobApplies/Suggestions';
 import { JobRoleMarks } from '../components/jobApplies/JobRoleMarks';
 import ApplyWorkflow from '../components/jobApplies/ApplyWorkflow';
@@ -23,7 +23,7 @@ import SourceLine from '../components/jobApplies/SourceLine';
 import ExportSheetDialog from '../components/jobApplies/ExportSheetDialog';
 import JobInfoPanel from '../components/jobApplies/JobInfoPanel';
 import { useRunRefresh } from '../components/jobApplies/useRunRefresh';
-import Segmented from '../components/jobApplies/Segmented';
+import Segmented from '../components/Segmented';
 import {
   ROW_STATUS_LABEL,
   TONE_CLASS,
@@ -46,6 +46,8 @@ const APPLIED_FILTERS: { value: JobApplyAppliedFilter; label: string }[] = [
   { value: 'any', label: 'Any' },
 ];
 const PAGE_SIZE_KEY = 'jobApplies.pageSize';
+/** The run table keeps its own sizes (not the shared 10/20/50/100). */
+const PAGE_SIZES = [25, 50, 100, 200];
 const SHORTCUTS: [string, string][] = [
   ['j / k', 'Next / previous job'],
   ['o', 'Open the job posting in a new tab'],
@@ -1233,7 +1235,7 @@ export default function JobApplyRun() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} label="Pages (bottom)" />
+            <Pagination info={pagination} onPage={goToPage} pageSize={pageSize} onPageSize={changePageSize} sizes={PAGE_SIZES} label="Pages (bottom)" />
             <button type="button" className="hint hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setShowHelp(true)}>
               Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> for keyboard shortcuts
             </button>

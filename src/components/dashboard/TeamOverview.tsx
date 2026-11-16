@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import { todayInputValue } from '../../lib/week';
 import NameWithAvatar from '../NameWithAvatar';
-import Segmented from '../jobApplies/Segmented';
+import Segmented from '../Segmented';
 
 const RANGES: { value: api.DashboardCompareRange; label: string }[] = [
   { value: 'week', label: 'This week' },

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canStep,
   customError,
+  isValidDate,
   legacyPreset,
   matchPreset,
   presetOptions,
@@ -339,7 +340,30 @@ describe('rangeLabel', () => {
   });
 });
 
+describe('isValidDate', () => {
+  it('accepts real calendar dates', () => {
+    expect(isValidDate('2026-11-14')).toBe(true);
+    expect(isValidDate('2028-02-29')).toBe(true);
+  });
+
+  it('rejects impossible dates, bad shapes and non-strings', () => {
+    expect(isValidDate('2026-02-31')).toBe(false);
+    expect(isValidDate('2027-02-29')).toBe(false);
+    expect(isValidDate('2026-13-01')).toBe(false);
+    expect(isValidDate('2026-00-10')).toBe(false);
+    expect(isValidDate('2026-1-5')).toBe(false);
+    expect(isValidDate('')).toBe(false);
+    expect(isValidDate('nope')).toBe(false);
+    expect(isValidDate(undefined as unknown as string)).toBe(false);
+  });
+});
+
 describe('customError', () => {
+  it('treats impossible dates as missing', () => {
+    expect(customError('2026-02-31', '2026-03-05')).toBe('Pick both dates.');
+    expect(customError('2026-03-01', '2026-04-31')).toBe('Pick both dates.');
+  });
+
   it('accepts a valid range', () => {
     expect(customError('2026-11-01', '2026-11-10')).toBeNull();
     expect(customError('2026-11-10', '2026-11-10')).toBeNull();

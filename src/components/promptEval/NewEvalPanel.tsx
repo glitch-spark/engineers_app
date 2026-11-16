@@ -6,7 +6,7 @@ import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
 import { formatUsd } from '../../lib/modelCost';
 import { useModelChoice } from '../../lib/useModelChoice';
-import Segmented from '../jobApplies/Segmented';
+import Segmented from '../Segmented';
 import ModelSelect from '../ModelSelect';
 import ResumePromptField from '../ResumePromptField';
 import Select from '../Select';
