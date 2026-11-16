@@ -193,7 +193,8 @@ export default function BiddersPage() {
       ? null
       : focusBid && focusDay
         ? { scope: { day: focusDay }, startAt: focusBid, ids: navIds?.includes(focusBid) ? navIds : undefined, set: 'all' }
-        : focusWeek
+        // The list's review waits for the user, like every owner-scoped request.
+        : focusWeek && (bidderId || ready)
           // The list's review is the bar's owner's; a bidder's is that bidder's, whoever owns it (Ruling 4).
           ? { scope: { queue: {
             period: 'week', date: focusWeek, bidderId: bidderId ?? undefined, ownerId: bidderId ? undefined : ownerId || undefined,
@@ -213,10 +214,10 @@ export default function BiddersPage() {
   });
 
 
-  // My bids opens the read-only panel. It names the owner only when that isn't the viewer: an admin looking at another
-  // owner, or at All owners.
+  // My bids opens the read-only panel. It names the owner only when that isn't the viewer (an admin looking at another
+  // owner's bids, alone or under All owners); the viewer's own bids are "Your own bids".
   const openMine = (s: SelfScope) => {
-    const named = isAdmin && (allOwners || s.ownerId !== user?.id);
+    const named = isAdmin && s.ownerId !== user?.id;
     setSelfScope(named ? s : { ...s, ownerName: undefined });
   };
   // An admin looking at someone else's team (not their own, not All owners).

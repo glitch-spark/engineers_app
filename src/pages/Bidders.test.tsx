@@ -202,6 +202,24 @@ describe('the Bids page', () => {
   });
 });
 
+describe('the review overlay', () => {
+  it("an old pay-week review link opens the admin's own queue, and Close leaves it", async () => {
+    renderPage('/bidders?mode=focus&week=2026-11-29');
+    const stub = await screen.findByTestId('focus');
+    expect(JSON.parse(stub.firstChild!.textContent!)).toEqual({ queue: { period: 'week', date: '2026-11-29', ownerId: 'u1' } });
+    fireEvent.click(within(stub).getByRole('button', { name: 'Close' }));
+    expect(seen.search).toBe('?week=2026-11-29');
+  });
+
+  it('waits for the signed-in user', async () => {
+    auth.user = null;
+    renderPage('/bidders?mode=focus&week=2026-11-29');
+    await waitFor(() => expect(api.getBidClock).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByTestId('focus')).toBeNull();
+  });
+});
+
 describe('My bids panel names', () => {
   const openAlpha = async () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Alpha' }));
@@ -232,11 +250,22 @@ describe('My bids panel names', () => {
     expect(api.listBids.mock.calls[0][0]).toMatchObject({ self: true, ownerId: 'u2', accountId: 'p1' });
   });
 
-  it('All owners names the owner', async () => {
+  it("All owners names other owners' bids, not the admin's own", async () => {
+    const zed = perf({ id: 'u2', name: 'Zed' }).selfRows[0];
+    api.getBidPerformance.mockResolvedValue({ ...perf(), selfRows: [...perf().selfRows, zed] });
+    const openIn = async (name: string) => {
+      const block = (await screen.findByRole('heading', { name })).parentElement!;
+      fireEvent.click(within(block).getByRole('button', { name: 'Alpha' }));
+      await waitFor(() => expect(api.listBids).toHaveBeenCalled());
+    };
     renderPage('/bidders?section=mine&owner=all');
-    await openAlpha();
-    expect(await screen.findByText("Pat's own bids from Bid Track")).toBeTruthy();
-    const block = screen.getByRole('heading', { name: 'Pat' });
-    expect(within(block.parentElement!).getByRole('table')).toBeTruthy();
+    await openIn('Pat');
+    expect(await screen.findByText('Your own bids from Bid Track')).toBeTruthy();
+    expect(screen.queryByText(/Pat's own bids/)).toBeNull();
+    cleanup();
+    api.listBids.mockClear();
+    renderPage('/bidders?section=mine&owner=all');
+    await openIn('Zed');
+    expect(await screen.findByText("Zed's own bids from Bid Track")).toBeTruthy();
   });
 });
