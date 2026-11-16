@@ -33,6 +33,9 @@ export interface ProfileShape {
   email: string;
   image: string;
   birthday: string | null;
+  phone?: string;
+  /** False while the account awaits admin approval. Missing from an older server. */
+  isActive?: boolean;
   leaderboardOptIn?: boolean;
   leaderboardName?: string;
   leaderboardAnon?: boolean;
@@ -117,6 +120,7 @@ export const updateProfile = (body: {
   email: string;
   image?: string;
   birthday?: string;
+  phone?: string;
   leaderboardOptIn?: boolean;
   leaderboardName?: string;
   leaderboardAnon?: boolean;

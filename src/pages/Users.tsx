@@ -217,9 +217,9 @@ export default function UsersPage() {
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
-                { value: '', label: 'All Status' },
+                { value: '', label: 'All statuses' },
                 { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
+                { value: 'inactive', label: 'Pending approval' },
               ]}
             />
           </div>

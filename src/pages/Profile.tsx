@@ -12,7 +12,14 @@ interface ProfileData {
   email: string;
   image: string;
   birthday: string;
+  phone: string;
 }
+
+const ROLE_LABELS: Record<string, string> = {
+  staff: 'Staff',
+  interview_manager: 'Interview manager',
+  admin: 'Admin',
+};
 
 interface PasswordData {
   currentPassword: string;
@@ -62,9 +69,10 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isActive, setIsActive] = useState(true);
 
   const EMPTY_PROFILE: ProfileData = {
-    username: '', email: '', image: '', birthday: '',
+    username: '', email: '', image: '', birthday: '', phone: '',
   };
   const [formData, setFormData] = useState<ProfileData>(EMPTY_PROFILE);
   const [passwordData, setPasswordData] = useState<PasswordData>({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -85,7 +93,9 @@ export default function ProfilePage() {
           email: data.user.email || user?.email || '',
           image: data.user.image || user?.image || '',
           birthday: data.user.birthday ? new Date(data.user.birthday).toISOString().slice(0, 10) : '',
+          phone: data.user.phone || '',
         };
+        setIsActive(data.user.isActive !== false);
         setFormData(userData);
         setOriginalData(userData);
       } catch (error) {
@@ -316,6 +326,21 @@ export default function ProfilePage() {
               </div>
 
               <div className="form-group">
+                <label htmlFor="phone" className="form-label">Phone</label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="input focus-ring"
+                  placeholder="Enter your phone number"
+                  autoComplete="tel"
+                  disabled={!isEditing}
+                />
+              </div>
+
+              <div className="form-group">
                 <label htmlFor="birthday" className="form-label">Birthday</label>
                 <input
                   id="birthday"
@@ -482,8 +507,8 @@ export default function ProfilePage() {
         <h2 className="card-header">Account Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-muted">Account Type</p>
-            <p className="text-strong">Standard Account</p>
+            <p className="text-sm font-medium text-muted">Role</p>
+            <p className="text-strong">{user?.role ? ROLE_LABELS[user.role] ?? user.role : '—'}</p>
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted">Member Since</p>
@@ -501,9 +526,15 @@ export default function ProfilePage() {
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted">Status</p>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300">
-              Active
-            </span>
+            {isActive ? (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300">
+                Active
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                Pending approval
+              </span>
+            )}
           </div>
         </div>
       </div>
