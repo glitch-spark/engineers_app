@@ -3207,6 +3207,18 @@ export interface BidClock {
 
 export const getBidClock = () => apiFetch<BidClock>('/bids/clock');
 
+/** One review scope of pending bids (`/bids/pending`): all of any age, a report day, a pay week (`weeks: 2` adds the
+ * one before), a month or a custom range. `date` / `to` are report days; `to` is the custom range's last. */
+export type PendingQuery = {
+  period: 'all' | 'day' | 'week' | 'month' | 'custom'; date?: string; to?: string; weeks?: number;
+  ownerId?: string; bidderId?: string;
+};
+export type PendingBids = { label: string; timezone: string; bidderName: string | null; bids: BidReviewItem[] };
+/** `since` (ISO) also keeps the bids decided at or after it, so a bid reviewed while the overlay is open stays listed.
+ * Oldest first. */
+export const listPendingBids = (q: PendingQuery & { since?: string }) =>
+  apiFetch<PendingBids>(`/bids/pending${qs(q)}`);
+
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
 
 export const bidScreenshots = (id: string) => apiFetch<BidScreenshot[]>(`/bids/${id}/screenshots`);
