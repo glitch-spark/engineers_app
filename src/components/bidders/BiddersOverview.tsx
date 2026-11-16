@@ -28,8 +28,8 @@ type Props = {
   allOwners: boolean;
   /** Open a bidder at a day of `week` (a report day inside the pay week or period end). */
   onOpenBidder: (id: string, week: string, day?: string) => void;
-  /** The review overlay over a pay week's pending bids (one bidder's, or everyone's). */
-  onReview: (week: string, bidderId?: string) => void;
+  /** The review overlay over one bidder's pending bids of the shown period (the page's range review). */
+  onReview: (bidderId: string) => void;
   renderStatus: (row: BidPerformanceRow) => ReactNode;
   renderActions: (row: BidPerformanceRow) => ReactNode;
   empty: ReactNode;
@@ -103,9 +103,6 @@ export default function BiddersOverview({
               <span key={i.key} className="inline-flex items-center gap-2">
                 {n > 0 && <span className="text-zinc-300 dark:text-zinc-700" aria-hidden>│</span>}
                 <span className={`font-medium tabular-nums ${TONE[i.tone ?? 'none']}`}>{i.text}</span>
-                {i.key === 'review' && data.payWeek && (data.totals.toReview ?? 0) > 0 && (
-                  <button type="button" className="btn-outline btn-sm" onClick={() => onReview(anchor)}>Review all</button>
-                )}
               </span>
             ))}
           </div>
@@ -138,7 +135,7 @@ export default function BiddersOverview({
               platformPer100={insights.data?.platform?.per100}
               showOwner={allOwners}
               onOpenBidder={(id, day) => onOpenBidder(id, day ?? anchor, day)}
-              onReview={(id) => onReview(anchor, id)}
+              onReview={onReview}
               renderStatus={renderStatus}
               renderActions={renderActions}
             />

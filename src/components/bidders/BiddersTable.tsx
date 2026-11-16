@@ -100,7 +100,7 @@ type Props = {
   /** All owners: an Owner column after Bidder. */
   showOwner: boolean;
   onOpenBidder: (id: string, day?: string) => void;
-  /** Open the review overlay on this bidder's pending bids of the pay week (week mode). */
+  /** Open the review overlay on this bidder's pending bids of the shown period (any period kind). */
   onReview: (id: string) => void;
   renderStatus: (row: BidPerformanceRow) => ReactNode;
   renderActions: (row: BidPerformanceRow) => ReactNode;
@@ -211,11 +211,9 @@ export default function BiddersTable({
                 <td className="px-3 py-2 text-right whitespace-nowrap">{m.pay == null ? '—' : usd(m.pay)}<PayReadNote error={r.week?.error} /></td>
                 <td className="px-3 py-2 text-center">
                   {m.toReview ? (
-                    weekMode ? (
-                      <button type="button" className="badge-warning hover:brightness-95"
-                        aria-label={`Review ${m.toReview} pending bids of ${r.name}`}
-                        onClick={(e) => { e.stopPropagation(); onReview(r.id); }}>{m.toReview} →</button>
-                    ) : <span className="badge-warning">{m.toReview}</span>
+                    <button type="button" className="badge-warning hover:brightness-95"
+                      aria-label={`Review ${m.toReview} pending bids of ${r.name}`}
+                      onClick={(e) => { e.stopPropagation(); onReview(r.id); }}>{m.toReview} →</button>
                   ) : <span className="text-muted">{m.toReview === 0 ? '0' : '—'}</span>}
                 </td>
                 <td className="px-3 py-2 text-right" title={r.avgPerWeekday == null ? undefined : `${r.avgPerWeekday.toFixed(1)} bids per weekday on average`}>

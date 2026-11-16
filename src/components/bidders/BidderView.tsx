@@ -14,6 +14,7 @@ import DayPanel from './DayPanel';
 import DayRow from './DayRow';
 import HistoryTab from './HistoryTab';
 import SummaryTiles, { type Tile } from './SummaryTiles';
+import { reviewPatch } from '../../lib/bidsUrl';
 import { dayParts } from './weekDates';
 
 /** POST /bids/review accepts 1..500 ids. */
@@ -25,7 +26,7 @@ const STATUS_BADGE: Record<api.BidWeekRow['status'], string> = {
   archived: 'badge-neutral',
 };
 
-type Patch = Partial<Record<'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid', string | null>>;
+type Patch = Partial<Record<'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'review' | 'at' | 'reviewBidder', string | null>>;
 
 /**
  * One bidder's pay week: header, tiles, and tabs This week (one row per day; a day opens its bids in a side panel, a
@@ -153,7 +154,8 @@ export default function BidderView({
       value: w.toReview ?? '—',
       hint: w.source === 'folders' ? 'folder count, not reviewed' : w.toReview ? 'oldest first' : 'nothing pending',
       tone: w.toReview ? 'warning' : 'default',
-      action: w.toReview ? { label: 'Review pending', onClick: () => onParam({ mode: 'focus', bid: null }) } : undefined,
+      // This pay week's pending bids of this bidder: the URL's own `bidder` filters the review.
+      action: w.toReview ? { label: 'Review pending', onClick: () => onParam(reviewPatch({ kind: 'week', at: weekKey })) } : undefined,
     },
     { label: 'Rejected', value: w.rejected ?? '—', hint: topReason ? `mostly ${topReason}` : undefined, tone: w.rejected ? 'danger' : 'default' },
     ...(today ? [{ label: 'Today', value: today.approved ?? '—', hint: today.pending ? `${today.pending} pending` : 'approved so far' } as Tile] : []),

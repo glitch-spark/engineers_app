@@ -189,6 +189,7 @@ describe('the Bids page', () => {
     expect(api.getBidPerformance).not.toHaveBeenCalled();
     expect(api.getBidAlerts).not.toHaveBeenCalled();
     expect(api.getBidInsights).not.toHaveBeenCalled();
+    expect(api.getBidBacklog).not.toHaveBeenCalled();
     expect(document.querySelector('[aria-busy="true"]')).toBeTruthy();
   });
 
@@ -199,6 +200,131 @@ describe('the Bids page', () => {
     expect(lastPerfCall().ownerId).toBeUndefined();
     expect(screen.queryByLabelText('Owner')).toBeNull();
     expect(api.lookupUsers).not.toHaveBeenCalled();
+  });
+});
+
+const BACKLOG = {
+  today: '2026-11-25', total: 3, todayCount: 1, oldestDay: '2026-11-23',
+  bidders: [{ bidderId: 'b1', name: 'Ana', ownerName: 'Pat', pending: 3, oldestDay: '2026-11-23' }],
+};
+const shownScope = async () => JSON.parse((await screen.findByTestId('focus')).firstChild!.textContent!);
+const closeReview = () => fireEvent.click(within(screen.getByTestId('focus')).getByRole('button', { name: 'Close' }));
+const toReview = async () => {
+  const line = await screen.findByText(/^To review · /);
+  return line.closest('[role="status"]') as HTMLElement;
+};
+
+function board() {
+  const days = DAYS.map((day) => ({
+    day, start: `${day}T00:00:00Z`, end: `${day}T23:00:00Z`, isToday: day === '2026-11-23', isFuture: day > '2026-11-23',
+  }));
+  const cell = (day: string) => ({ day, approved: 0, pending: 0, rejected: 0, source: 'records', error: null });
+  return {
+    week: { start: '2026-11-23T02:00:00Z', end: '2026-11-30T02:00:00Z', label: 'Week ending Sun Nov 29', timezone: 'America/Chicago', days },
+    bidders: [{
+      id: 'b1', name: 'Ana', status: 'active', country: null, profileName: 'Alpha', rate: 0.06, ownerId: 'u2', ownerName: 'Zed',
+      days: DAYS.map(cell), week: { approved: 10, pending: 3, rejected: 0, pay: 0.6, toReview: 3, source: 'records', error: null },
+    }],
+    totals: { approved: 10, pending: 3, rejected: 0, pay: 0.6, toReview: 3, days: [] },
+  };
+}
+
+describe('To review', () => {
+  beforeEach(() => {
+    api.getBidBacklog.mockResolvedValue(BACKLOG);
+  });
+
+  it("sits on the Bidders tab with the owner's backlog, all pending of any age", async () => {
+    renderPage('/bidders');
+    const block = await toReview();
+    expect(block.textContent).toContain('To review · 3 pending (all, any age) · oldest Mon Nov 23');
+    expect(api.getBidBacklog.mock.calls.every(([p]) => p.ownerId === 'u1')).toBe(true);
+    expect(within(block).getByRole('button', { name: 'Ana 3' })).toBeTruthy();
+    // The old strip's review item and its Review all are gone: the block is the one place.
+    await screen.findByRole('button', { name: 'Ana' });
+    expect(screen.getAllByRole('button', { name: 'Review all' })).toHaveLength(1);
+    expect(screen.queryByText(/to review$/)).toBeNull();
+  });
+
+  it('is not on My bids', async () => {
+    renderPage('/bidders?section=mine');
+    await screen.findByRole('button', { name: 'Alpha' });
+    expect(screen.queryByText(/^To review · /)).toBeNull();
+  });
+
+  it("the row's Pending badge opens the review over the list and Close returns to the list", async () => {
+    renderPage('/bidders');
+    fireEvent.click(await screen.findByRole('button', { name: 'Review 3 pending bids of Ana' }));
+    const q = new URLSearchParams(seen.search);
+    expect(q.get('mode')).toBe('focus');
+    expect(q.get('review')).toBe('range');
+    expect(q.get('reviewBidder')).toBe('b1');
+    expect(q.has('bidder')).toBe(false);
+    expect(await shownScope()).toEqual({ queue: { period: 'week', ownerId: 'u1', bidderId: 'b1' } });
+    closeReview();
+    expect(seen.search).toBe('');
+    expect(await screen.findByRole('button', { name: 'Ana' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '← Bidders' })).toBeNull();
+  });
+
+  it('To review › Review all walks every pending bid of the owner', async () => {
+    renderPage('/bidders');
+    fireEvent.click(within(await toReview()).getByRole('button', { name: 'Review all' }));
+    expect(await shownScope()).toEqual({ queue: { period: 'all', ownerId: 'u1' } });
+    closeReview();
+    expect(seen.search).toBe('');
+  });
+
+  it("a bidder's chip walks every pending bid of that bidder over the list", async () => {
+    renderPage('/bidders');
+    fireEvent.click(within(await toReview()).getByRole('button', { name: 'Ana 3' }));
+    expect(new URLSearchParams(seen.search).has('bidder')).toBe(false);
+    expect(await shownScope()).toEqual({ queue: { period: 'all', ownerId: 'u1', bidderId: 'b1' } });
+    closeReview();
+    expect(seen.search).toBe('');
+  });
+
+  it("Review today uses the server's today", async () => {
+    renderPage('/bidders');
+    fireEvent.click(within(await toReview()).getByRole('button', { name: 'Review today (1)' }));
+    expect(seen.search).toContain('review=day&at=2026-11-25');
+    expect(await shownScope()).toEqual({ queue: { period: 'day', date: '2026-11-25', ownerId: 'u1' } });
+  });
+
+  it("an old focus link opens that week's review", async () => {
+    renderPage('/bidders?mode=focus&week=2026-11-22');
+    expect(await shownScope()).toEqual({ queue: { period: 'week', date: '2026-11-22', ownerId: 'u1' } });
+  });
+
+  it("the bidder page's tile reviews that bidder's pay week, whoever owns it, and Close returns to the page", async () => {
+    api.bidsWeek.mockResolvedValue(board());
+    renderPage('/bidders?bidder=b1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Review pending' }));
+    const q = new URLSearchParams(seen.search);
+    expect(q.get('bidder')).toBe('b1');
+    expect(q.get('review')).toBe('week');
+    expect(q.get('at')).toBe('2026-11-29');
+    expect(q.has('reviewBidder')).toBe(false);
+    // The bidder's own owner (Ruling 4): no ownerId from the bar.
+    expect(await shownScope()).toEqual({ queue: { period: 'week', date: '2026-11-29', bidderId: 'b1' } });
+    closeReview();
+    expect(seen.search).toBe('?bidder=b1&week=2026-11-29');
+    expect(screen.queryByTestId('focus')).toBeNull();
+  });
+
+  it('Close from a Pay review returns to Pay', async () => {
+    renderPage('/bidders?section=pay&mode=focus&review=all');
+    expect(await shownScope()).toEqual({ queue: { period: 'all', ownerId: 'u1' } });
+    closeReview();
+    expect(seen.search).toBe('?section=pay');
+  });
+
+  it('nothing pending hides the block', async () => {
+    api.getBidBacklog.mockResolvedValue({ today: '2026-11-25', total: 0, todayCount: 0, oldestDay: null, bidders: [] });
+    renderPage('/bidders');
+    await screen.findByRole('button', { name: 'Ana' });
+    await waitFor(() => expect(api.getBidBacklog).toHaveBeenCalled());
+    expect(screen.queryByText(/^To review · /)).toBeNull();
   });
 });
 

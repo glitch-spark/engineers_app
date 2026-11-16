@@ -14,12 +14,14 @@ import BidderFormModal from '../components/bidders/BidderFormModal';
 import InviteDialog, { formatInviteDate } from '../components/bidders/InviteDialog';
 import BiddersOverview from '../components/bidders/BiddersOverview';
 import BidderAlerts from '../components/bidders/BidderAlerts';
+import ToReviewBlock from '../components/bidders/ToReviewBlock';
 import SelfBidsPanel, { type SelfScope } from '../components/bidders/SelfBidsPanel';
 import MyBidsTab from '../components/bidders/MyBidsTab';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
 import { shownWeeksOf } from '../lib/bidderFilters';
 import {
-  ownerOptions as ownerOptionsFor, ownerScope, ownerSelectValue, sectionFromUrl, sectionPatch, type BidsSection,
+  ownerOptions as ownerOptionsFor, ownerScope, ownerSelectValue, pendingQuery, REVIEW_EXIT, reviewFromUrl, reviewPatch,
+  reviewSwitchScope, reviewSwitchValue, sectionFromUrl, sectionPatch, type BidsSection, type ReviewScope, type ReviewSwitch,
 } from '../lib/bidsUrl';
 import { useReportClock } from '../lib/useReportClock';
 import { BiddersFilterBar, useBidderFilters } from '../components/bidders/biddersFilters';
@@ -31,8 +33,8 @@ import { dateInZone } from '../components/bidders/weekDates';
 /** URL state. The list's filters (range, date, from, to, q, archived, owner) are the bar's, see lib/bidderFilters.ts
  * (the old `week` / `period` keys still open that period). The tab is `section` (absent = Bidders, `mine`; the old
  * `show=self` opens My bids and is rewritten), and `owner` is absent (an admin's own team), a user id or `all`, see
- * lib/bidsUrl.ts. The rest: week (a bidder's pay week), bidder, day, tab (history), mode (focus), bid; `view` is from
- * the old tabs. */
+ * lib/bidsUrl.ts. The review overlay is mode=focus with review / at / reviewBidder (lib/bidsUrl.ts; `bid` + `day` is the
+ * day panel's walk). The rest: week (a bidder's pay week), bidder, day, tab (history); `view` is from the old tabs. */
 type Param =
   | 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view'
   | 'section' | 'show' | 'q' | 'archived' | 'lens' | 'review' | 'at' | 'reviewBidder';
@@ -85,7 +87,7 @@ export default function BiddersPage() {
   const [inviteShown, setInviteShown] = useState<{ name: string; invite: api.BidderInvite } | null>(null);
 
   const setParam = useCallback(
-    (patch: Partial<Record<Param, string | null>>) =>
+    (patch: Partial<Record<Param, string | null>>, opts?: { replace?: boolean }) =>
       setParams((prev) => {
         const next = new URLSearchParams(prev);
         for (const [key, value] of Object.entries(patch)) {
@@ -93,7 +95,7 @@ export default function BiddersPage() {
           else next.delete(key);
         }
         return next;
-      }),
+      }, opts),
     [setParams],
   );
 
@@ -141,7 +143,7 @@ export default function BiddersPage() {
     board.mutate();
     active.mutate();
     archived.mutate();
-    void mutateKeys((key) => Array.isArray(key) && ['bid-performance', 'bid-insights', 'bid-alerts'].includes(key[0] as string));
+    void mutateKeys((key) => Array.isArray(key) && ['bid-performance', 'bid-insights', 'bid-alerts', 'bid-backlog'].includes(key[0] as string));
   };
   // The open day's list and the bidder's week list too (decisions made in the overlay).
   const refreshAll = () => {
@@ -153,6 +155,13 @@ export default function BiddersPage() {
   const alerts = useSWR(
     ready && !bidderId && (!isAdmin || ownerId) ? (['bid-alerts', ownerId] as const) : null,
     () => api.getBidAlerts({ ownerId: ownerId || undefined }),
+    { revalidateOnFocus: false },
+  );
+  // The To review block: every pending bid of the owner's bidders, of any age (every owner's under All owners). It waits
+  // for the user like every owner-scoped request.
+  const backlog = useSWR(
+    ready && !bidderId && section === 'bidders' ? (['bid-backlog', ownerId] as const) : null,
+    () => api.getBidBacklog({ ownerId: ownerId || undefined }),
     { revalidateOnFocus: false },
   );
   const archiveSuggested = async () => {
@@ -181,26 +190,36 @@ export default function BiddersPage() {
 
   const row = bidderId ? data?.bidders.find((b) => b.id === bidderId) : undefined;
 
-  // Review overlay: a bid of the day panel opens at that bid and walks the panel's list (all bids of the day after a
-  // reload, when that list is gone); the Review buttons walk the pay week's pending bids. The scope is fixed by the
-  // URL, so the overlay never follows a later window.
+  // Review overlay, one way in and one way out. A bid of the day panel opens at that bid and walks the panel's list (all
+  // bids of the day after a reload, when that list is gone). Every other entry (the To review block, a row's Pending
+  // badge, the bidder page's tile, old `mode=focus` links) writes the review keys, and the overlay walks that server
+  // queue. Close removes only the review keys, so it lands where the review was opened (the list never gets `bidder`).
   const [navIds, setNavIds] = useState<string[] | null>(null);
   const focusDay = params.get('day');
   const focusBid = params.get('bid');
-  const focusWeek = week ?? weekKey;
+  const clock = reportClock.clock;
+  const target = reviewFromUrl((k) => params.get(k), clock?.today ?? '');
+  // The list's review waits for the user, like every owner-scoped request, and is the bar's owner's. A bidder page's is
+  // that bidder's, whoever owns it (Ruling 4), so it sends no owner. A dateless day review waits for the clock's today.
+  const queue = target && (target.scope.kind !== 'day' || target.scope.day) && (bidderId || ready)
+    ? pendingQuery(target, request, bidderId ? undefined : ownerId || undefined)
+    : null;
   const focus: { scope: FocusScope; startAt?: string; ids?: string[]; set: 'pending' | 'all' } | null =
     params.get('mode') !== 'focus'
       ? null
       : focusBid && focusDay
         ? { scope: { day: focusDay }, startAt: focusBid, ids: navIds?.includes(focusBid) ? navIds : undefined, set: 'all' }
-        // The list's review waits for the user, like every owner-scoped request.
-        : focusWeek && (bidderId || ready)
-          // The list's review is the bar's owner's; a bidder's is that bidder's, whoever owns it (Ruling 4).
-          ? { scope: { queue: {
-            period: 'week', date: focusWeek, bidderId: bidderId ?? undefined, ownerId: bidderId ? undefined : ownerId || undefined,
-          } }, set: 'pending' }
+        : queue
+          ? { scope: { queue }, set: 'pending' }
           : null;
-  const exitFocus = () => setParam({ mode: null, bid: null });
+  const exitFocus = () => setParam(REVIEW_EXIT);
+  const openReview = (scope: ReviewScope, id?: string | null) => setParam(reviewPatch(scope, id));
+  const scopeSwitch = target && clock && focus && 'queue' in focus.scope
+    ? {
+      value: reviewSwitchValue(target.scope, clock),
+      onChange: (v: ReviewSwitch) => setParam(reviewPatch(reviewSwitchScope(v, clock), target.bidderId), { replace: true }),
+    }
+    : undefined;
   const reviewBid = (bidId: string, ids: string[]) => {
     setNavIds(ids);
     setParam({ mode: 'focus', bid: bidId, week: weekKey });
@@ -244,6 +263,11 @@ export default function BiddersPage() {
 
   const list = (
     <div className="space-y-5">
+      {/* To review: the one place the backlog shows (all pending, any age), above the bar and the banners. */}
+      {section === 'bidders' && ready && backlog.data && (
+        <ToReviewBlock backlog={backlog.data} allOwners={allOwners} onReview={openReview} />
+      )}
+
       {filterState && filters ? (
         <BiddersFilterBar
           f={filterState}
@@ -260,7 +284,7 @@ export default function BiddersPage() {
       {section === 'bidders' && ready && alerts.data && (
         <BidderAlerts
           alerts={alerts.data}
-          onOpenBidder={(id, day) => setParam({ bidder: id, week: day ?? weekKey, day: day ?? null, view: null, tab: null })}
+          onOpenBidder={(id) => setParam({ bidder: id, week: null, day: null, view: null, tab: null })}
           onOpenProfile={(id) => navigate(`/accounts/${id}`)}
           onArchive={(id, name) => setPendingArchive({ id, name })}
           canArchive={canManageBidders({ isAdmin, ownerId, userId: user?.id })}
@@ -277,7 +301,8 @@ export default function BiddersPage() {
           ownerId={ownerId}
           allOwners={allOwners}
           onOpenBidder={(id, wk, day) => setParam({ bidder: id, week: wk, day: day ?? null, view: null, tab: null })}
-          onReview={(wk, id) => setParam({ mode: 'focus', bidder: id ?? null, bid: null, week: wk, view: null })}
+          // The row's own Pending: the shown period, filtered to the row (never `bidder`: Close returns to the list).
+          onReview={(id) => openReview({ kind: 'range' }, id)}
           renderStatus={(row) => statusText(byId[row.id], row.bidderStatus ?? row.status)}
           request={request}
           data={request ? perf.data : undefined}
@@ -366,13 +391,14 @@ export default function BiddersPage() {
     <div className="space-y-5">
       {focus && (
         <FocusReview
-          key={`${'day' in focus.scope ? focus.scope.day : JSON.stringify(focus.scope.queue)}|${bidderId ?? ''}|${focus.startAt ?? ''}`}
+          key={`${JSON.stringify(focus.scope)}${focus.startAt ?? ''}`}
           scope={focus.scope}
           bidderId={bidderId ?? undefined}
           startAt={focus.startAt}
           ids={focus.ids}
           set={focus.set}
           onExit={exitFocus}
+          scopeSwitch={scopeSwitch}
         />
       )}
       <PageHeader

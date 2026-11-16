@@ -8,13 +8,12 @@ test('strip: one line of totals, today only for the current pay week', () => {
   const t = { approved: 743, pay: 44.58, toReview: 18, rejected: 2, today: { day: '2026-11-18', approved: 0, pending: 18 } };
   assert.deepEqual(stripItems(t).map((i) => [i.key, i.text, i.tone]), [
     ['approved', '743 approved · $44.58 pay', 'good'],
-    ['review', '18 to review', 'warn'],
     ['rejected', '2 rejected', 'bad'],
     ['today', 'Today 0 (18 pending)', null],
   ]);
   const quiet = stripItems({ approved: 1200, pay: 0, toReview: 0, rejected: 0, today: null });
   assert.deepEqual(quiet.map((i) => [i.key, i.text, i.tone]), [
-    ['approved', '1,200 approved · $0.00 pay', 'good'], ['review', '0 to review', null], ['rejected', '0 rejected', null]]);
+    ['approved', '1,200 approved · $0.00 pay', 'good'], ['rejected', '0 rejected', null]]);
   assert.equal(stripItems({ approved: 5, pay: null, toReview: 0, rejected: 0 })[0].text, '5 approved');
 });
 
@@ -67,5 +66,10 @@ test('top bidders add longest streak and most interviews; an older server withou
 
 test('the strip shows a dash for counts it does not know (folder weeks)', () => {
   assert.deepEqual(stripItems({ approved: 30, pay: 15, toReview: null, rejected: null }).map((i) => i.text),
-    ['30 approved · $15.00 pay', '— to review', '— rejected']);
+    ['30 approved · $15.00 pay', '— rejected']);
+});
+
+test('the strip has no review item: the To review block is the one place for the backlog', () => {
+  const t = { approved: 743, pay: 44.58, toReview: 18, rejected: 2, today: { day: '2026-11-18', approved: 0, pending: 18 } };
+  assert.deepEqual(stripItems(t).map((i) => i.key), ['approved', 'rejected', 'today']);
 });

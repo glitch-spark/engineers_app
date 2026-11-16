@@ -7,16 +7,16 @@ import { shortDay } from './profileList.ts';
 // A count the server doesn't know (folder weeks: no review, no rejects) shows a dash, never a made-up 0.
 const count = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
 
-export type StripItem = { key: 'approved' | 'review' | 'rejected' | 'today'; text: string; tone: 'good' | 'warn' | 'bad' | null };
+export type StripItem = { key: 'approved' | 'rejected' | 'today'; text: string; tone: 'good' | 'warn' | 'bad' | null };
 
-/** The one-line strip: approved and pay, to review, rejected, and today (only for the current pay week). */
+/** The one-line strip: approved and pay, rejected, and today (only for the current pay week). The backlog is the To
+ *  review block's (one place to start a review), so the strip has no review item. */
 export function stripItems(t: {
-  approved?: number | null; pay?: number | null; toReview?: number | null; rejected?: number | null;
+  approved?: number | null; pay?: number | null; rejected?: number | null;
   today?: { approved: number; pending: number } | null;
 }): StripItem[] {
   const items: StripItem[] = [
     { key: 'approved', text: `${count(t.approved)} approved${t.pay == null ? '' : ` · ${usd(t.pay)} pay`}`, tone: 'good' },
-    { key: 'review', text: `${count(t.toReview)} to review`, tone: t.toReview ? 'warn' : null },
     { key: 'rejected', text: `${count(t.rejected)} rejected`, tone: t.rejected ? 'bad' : null },
   ];
   if (t.today) {

@@ -1,10 +1,11 @@
 // Bidders page banners (spec 2026-11-14-bidders-insights-design.md): red for bidders that need action, one sentence
 // each (not dismissible: it clears when the cause does); grey for archive suggestions, each with an Archive button.
-// Sentences: lib/bidderInsights. Same look as the Profiles banners.
+// Sentences: lib/bidderInsights. Same look as the Profiles banners. The review backlog is not a red flag here: the To
+// review block above covers it (attentionFlags).
 import { useState } from 'react';
 import * as api from '../../api/endpoints';
 import type { BidAlerts } from '../../api/endpoints';
-import { archiveText, flagText } from '../../lib/bidderInsights';
+import { archiveText, attentionFlags, flagText } from '../../lib/bidderInsights';
 
 const SHOWN = 8;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -12,8 +13,7 @@ const reasonLabel = (code: string) => api.REJECT_REASONS.find((r) => r.value ===
 
 type Props = {
   alerts: BidAlerts;
-  /** Open a bidder; `day` opens their review on that day (the oldest waiting bids). */
-  onOpenBidder: (id: string, day?: string) => void;
+  onOpenBidder: (id: string) => void;
   onOpenProfile: (id: string) => void;
   onArchive: (id: string, name: string) => void;
   /** False for an admin viewing another owner's bidders: the server refuses the archive, so no button. */
@@ -22,7 +22,7 @@ type Props = {
 
 export default function BidderAlerts({ alerts, onOpenBidder, onOpenProfile, onArchive, canArchive }: Props) {
   const [showAll, setShowAll] = useState(false);
-  const red = alerts.flags ?? [];
+  const red = attentionFlags(alerts);
   const grey = alerts.archive ?? [];
   if (!red.length && !grey.length) return null;
   const shown = showAll ? red : red.slice(0, SHOWN);
@@ -38,19 +38,13 @@ export default function BidderAlerts({ alerts, onOpenBidder, onOpenProfile, onAr
             {shown.map((f) => (
               <li key={f.bidderId} className="flex flex-wrap items-baseline gap-x-2 text-sm">
                 <button type="button" className="font-medium hover:underline"
-                  onClick={() => onOpenBidder(f.bidderId, f.kind === 'review_backlog' ? f.detail.oldestDay : undefined)}>
+                  onClick={() => onOpenBidder(f.bidderId)}>
                   {f.name || 'Unnamed'}
                 </button>
                 <span>→ {flagText(f, reasonLabel)}</span>
                 {f.kind === 'no_interviews' && f.detail.profileId && (
                   <button type="button" className="text-xs font-medium underline" onClick={() => onOpenProfile(f.detail.profileId!)}>
                     Open profile
-                  </button>
-                )}
-                {f.kind === 'review_backlog' && (
-                  <button type="button" className="text-xs font-medium underline"
-                    onClick={() => onOpenBidder(f.bidderId, f.detail.oldestDay)}>
-                    Review
                   </button>
                 )}
               </li>

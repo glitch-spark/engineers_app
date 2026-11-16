@@ -1,7 +1,7 @@
 // Bidders page insights helpers (spec 2026-11-14-bidders-insights-design.md): the card's cells (yours vs the platform),
 // the top bidders vs the best on the platform, and the banner sentences. Value imports carry `.ts` so Node's test
 // runner loads this file as is (tests/bidderInsights.test.mjs).
-import type { BidAlert, BidArchiveSuggestion, BidderStats, BidTopMeasure, BidTops } from '../api/endpoints';
+import type { BidAlert, BidAlerts, BidArchiveSuggestion, BidderStats, BidTopMeasure, BidTops } from '../api/endpoints';
 import { bars, shortDay, signed, type BandCell, type PlatformTop, type TopChip } from './profileList.ts';
 
 export type BidderCell = Omit<BandCell, 'key'> & { key: 'avg' | 'hit' | 'approval' | 'per100' | 'cost' };
@@ -147,9 +147,20 @@ export function canManageBidders(v: { isAdmin: boolean; ownerId: string; userId:
   return !v.isAdmin || (!!v.userId && v.ownerId === v.userId);
 }
 
-/** The SWR keys a review decision changes: the open day's and week's bid lists, and the banners (the backlog). */
+const REVIEWED_KEYS = [
+  'bids-day', 'bids-week', 'bid-alerts', 'bid-performance', 'bid-insights', 'bid-backlog', 'bid-pay', 'bid-focus',
+];
+
+/** The SWR keys a review decision changes: the open day's and week's bid lists, the banners, the To review block, the
+ *  Pay tab's pending warnings and the overlay's queues. */
 export function isReviewedDataKey(key: unknown): boolean {
-  return Array.isArray(key) && ['bids-day', 'bids-week', 'bid-alerts', 'bid-performance', 'bid-insights'].includes(key[0] as string);
+  return Array.isArray(key) && REVIEWED_KEYS.includes(key[0] as string);
+}
+
+/** The banner's flags without the review backlog, which the To review block covers. `flags` is null for an admin on
+ *  All owners. */
+export function attentionFlags(alerts: BidAlerts): BidAlert[] {
+  return (alerts.flags ?? []).filter((f) => f.kind !== 'review_backlog');
 }
 
 /** ▲ / ▼ on a row's interviews per 100 bids against the platform (100+ bids; ×1.25 / ×0.75). */
