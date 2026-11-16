@@ -3219,6 +3219,19 @@ export type PendingBids = { label: string; timezone: string; bidderName: string 
 export const listPendingBids = (q: PendingQuery & { since?: string }) =>
   apiFetch<PendingBids>(`/bids/pending${qs(q)}`);
 
+/** The To review counts (`/bids/backlog`): every pending bid of any age, per bidder (archived included). Bidders with
+ * nothing pending are left out; most pending first. `today` and the days are report days `YYYY-MM-DD`. */
+export interface BidBacklog {
+  today: string;
+  total: number;
+  /** Pending bids whose report day is `today`. */
+  todayCount: number;
+  oldestDay: string | null;
+  bidders: { bidderId: string; name: string; ownerName: string | null; pending: number; oldestDay: string }[];
+}
+
+export const getBidBacklog = (p: { ownerId?: string }) => apiFetch<BidBacklog>(`/bids/backlog${qs(p)}`);
+
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
 
 export const bidScreenshots = (id: string) => apiFetch<BidScreenshot[]>(`/bids/${id}/screenshots`);
