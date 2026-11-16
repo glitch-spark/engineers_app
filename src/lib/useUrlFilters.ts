@@ -10,8 +10,9 @@ import { useSearchParams } from 'react-router-dom';
  * Returns `[values, patch, reset]`:
  * - `values` has every key of `defaults`: the URL's value, or the default. It is the same object until the URL (or
  *   the defaults' content) changes, so pages can use it in SWR keys and effect dependencies.
- * - `patch` merges changes into the URL (history entry replaced, not pushed). If any key other than `page` changes
- *   and the patch doesn't set `page` itself, `page` goes back to its default.
+ * - `patch` merges changes into the URL (history entry replaced, not pushed). A key set to `undefined` goes back to
+ *   its default (and leaves the URL). If any key other than `page` changes and the patch doesn't set `page` itself,
+ *   `page` goes back to its default.
  * - `reset` removes only the hook's own keys.
  * `patch` and `reset` keep their identity across renders.
  */
@@ -50,13 +51,14 @@ export function useUrlFilters<T extends Record<string, string>>(
     const next = new URLSearchParams(latest.current);
     let otherKeyChanged = false;
     for (const [key, value] of Object.entries(changes)) {
-      if (value === undefined) continue;
+      // `undefined` means "back to the default", so `patch({ from: v.from })` can't leave a stale value behind.
+      const target = value === undefined ? (defs[key] ?? '') : value;
       const before = next.get(key) ?? defs[key] ?? '';
-      if (key !== 'page' && before !== value) otherKeyChanged = true;
-      if (value === (defs[key] ?? '')) next.delete(key);
-      else next.set(key, value);
+      if (key !== 'page' && before !== target) otherKeyChanged = true;
+      if (target === (defs[key] ?? '')) next.delete(key);
+      else next.set(key, target);
     }
-    if (otherKeyChanged && !('page' in changes)) next.delete('page');
+    if (otherKeyChanged && changes.page === undefined) next.delete('page');
     latest.current = next;
     lastRenderedKey.current = next.toString();
     setRef.current(next, { replace: true });

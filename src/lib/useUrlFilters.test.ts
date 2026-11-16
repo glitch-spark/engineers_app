@@ -70,6 +70,19 @@ describe('useUrlFilters', () => {
     expect(new URLSearchParams(seen.search).get('page')).toBe('3');
   });
 
+  it('treats undefined as "back to the default" and removes the key', () => {
+    const { result } = setup('?range=custom&from=2026-11-01&to=2026-11-07');
+    act(() => result.current[1]({ range: 'last_week', from: undefined, to: undefined }));
+    expect(seen.search).toBe('?range=last_week');
+    expect(result.current[0]).toEqual({ ...DEFAULTS, range: 'last_week' });
+  });
+
+  it('does not keep page when the patch passes page as undefined', () => {
+    const { result } = setup('?page=3&q=a');
+    act(() => result.current[1]({ page: undefined, q: 'x' }));
+    expect(seen.search).toBe('?q=x');
+  });
+
   it('applies two patches made in the same tick', () => {
     const { result } = setup('');
     act(() => {

@@ -13,7 +13,7 @@ import {
   type DateRange,
 } from '../../lib/dateRange';
 
-/** What the URL holds for a date range: a preset, plus `from`/`to` when it is `custom`. */
+/** What the URL holds for a date range: a preset, plus `from`/`to` when it is `custom` (the filter emits `''` for both otherwise). */
 export interface DateRangeValue<P extends string = DatePreset> {
   preset: P;
   from?: string;
@@ -115,9 +115,9 @@ export default function DateRangeFilter<P extends string = DatePreset>({
 
   const pick = (next: string) => {
     if (next === 'custom') {
-      onChange({ preset: next as P, from: range?.from, to: range?.to });
+      onChange({ preset: next as P, from: range?.from ?? '', to: range?.to ?? '' });
     } else {
-      onChange({ preset: next as P });
+      onChange({ preset: next as P, from: '', to: '' });
     }
     setUnit(null);
   };
@@ -150,7 +150,7 @@ export default function DateRangeFilter<P extends string = DatePreset>({
       onChange({ preset: 'custom' as P, from: next.from, to: next.to });
     } else {
       setUnit(null);
-      onChange({ preset: matched as P });
+      onChange({ preset: matched as P, from: '', to: '' });
     }
   };
 
