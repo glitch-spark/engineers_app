@@ -7,6 +7,7 @@ import {
   callerRoundsQuery,
   filtersForCalendar,
   interviewUrlDefaults,
+  legacyCallTarget,
   listQuery,
   normalizeRange,
   parseInterviewValues,
@@ -52,7 +53,7 @@ describe('normalizeRange (old URLs)', () => {
 describe('parseInterviewValues', () => {
   it('reads the defaults for an empty URL', () => {
     expect(parse()).toEqual({
-      user: 'me', profile: '', stage: '', status: '', caller: '', owner: '', call: '', q: '',
+      user: 'me', profile: '', stage: '', status: '', caller: '', owner: '', q: '',
       range: 'this_week', from: '', to: '', sort: 'latest', dir: 'desc', page: 1, size: 20,
     });
   });
@@ -60,8 +61,9 @@ describe('parseInterviewValues', () => {
     expect(parse({ range: 'prev_week' }).range).toBe('last_week');
   });
   it('survives junk without throwing', () => {
-    const f = parse({ range: 'xx', from: 'abc', to: '2026-02-31', sort: 'zzz', dir: '?', page: '-4', call: 'both', user: '' });
-    expect(f).toMatchObject({ range: 'this_week', from: '', to: '', sort: 'latest', dir: 'desc', page: 1, call: '', user: 'me' });
+    const f = parse({ range: 'xx', from: 'abc', to: '2026-02-31', sort: 'zzz', dir: '?', page: '-4', user: '' });
+    expect(f).toMatchObject({ range: 'this_week', from: '', to: '', sort: 'latest', dir: 'desc', page: 1, user: 'me' });
+    expect(f).not.toHaveProperty('call');
     expect(parse({ page: 'x' }).page).toBe(1);
     expect(parse({ page: '3' }).page).toBe(3);
   });
@@ -107,6 +109,11 @@ describe('rangeDates', () => {
 describe('listQuery', () => {
   // Wed Nov 11 2026 noon in New York is 17:00 UTC; EST (UTC-5) since Nov 1.
   const now = new Date('2026-11-11T17:00:00Z');
+  it('always asks for self interviews, whatever call is in the URL', () => {
+    for (const call of ['', 'self', 'caller', 'both']) {
+      expect(listQuery(parse(call ? { call } : {}), 20, now, 'UTC')).toMatchObject({ callType: 'self' });
+    }
+  });
   it('sends the chosen zone\'s midnights for the from / to calendar days', () => {
     const q = listQuery(base(), 20, now, 'America/New_York')!;
     expect(q.from).toBe('2026-11-09T05:00:00.000Z');
@@ -134,8 +141,8 @@ describe('listQuery', () => {
     expect(listQuery(base({ range: 'custom', from: '2026-02-31', to: '2026-03-01' }), 20, now, 'UTC')).toBeNull();
   });
   it('adds the filters, and q only when it has text', () => {
-    const q = listQuery(base({ user: 'u1', profile: 'a1', stage: 'intro', status: 'scheduled', call: 'caller', q: '  acme  ' }), 20, now, 'UTC')!;
-    expect(q).toMatchObject({ creatorId: 'u1', accountId: 'a1', stage: 'intro', status: 'scheduled', callType: 'caller', q: 'acme' });
+    const q = listQuery(base({ user: 'u1', profile: 'a1', stage: 'intro', status: 'scheduled', q: '  acme  ' }), 20, now, 'UTC')!;
+    expect(q).toMatchObject({ creatorId: 'u1', accountId: 'a1', stage: 'intro', status: 'scheduled', callType: 'self', q: 'acme' });
     expect('q' in listQuery(base({ q: '   ' }), 20, now, 'UTC')!).toBe(false);
     expect('creatorId' in listQuery(base({ user: 'all' }), 20, now, 'UTC')!).toBe(false);
   });
@@ -166,6 +173,12 @@ describe('roundsQuery (calendar)', () => {
     expect(roundsQuery(base({ user: 'u1', q: 'acme' }), r, 'UTC')).toMatchObject({ creatorId: 'u1', q: 'acme', from: '2026-11-09T00:00:00.000Z', to: '2026-11-16T00:00:00.000Z' });
     expect(roundsQuery(base({ caller: 'c1', q: 'acme' }), r, 'UTC', { callers: true })).toMatchObject({ callerOnly: 'true', callerId: 'c1', q: 'acme' });
     expect('q' in roundsQuery(base(), r, 'UTC')).toBe(false);
+  });
+  it('always asks for self rounds on the Self interviews calendar, never on Caller interviews', () => {
+    const r = { from: '2026-11-09', to: '2026-11-16' };
+    expect(roundsQuery(base(), r, 'UTC').callType).toBe('self');
+    expect(roundsQuery(parse({ call: 'caller' }), r, 'UTC').callType).toBe('self');
+    expect('callType' in roundsQuery(base(), r, 'UTC', { callers: true })).toBe(false);
   });
 });
 
@@ -225,15 +238,20 @@ describe('barDiffers / barKeys (Clear)', () => {
     expect(barDiffers(parse(), D, true)).toBe(false);
   });
   it('is true when anything the Interviews bar shows changed', () => {
-    for (const over of <Record<string, string>[]>[{ user: 'all' }, { profile: 'a' }, { call: 'self' }, { stage: 'intro' }, { status: 'passed' }, { q: 'x' }, { range: 'next_week' }, { range: 'prev_week' }]) {
+    for (const over of <Record<string, string>[]>[{ user: 'all' }, { profile: 'a' }, { stage: 'intro' }, { status: 'passed' }, { q: 'x' }, { range: 'next_week' }, { range: 'prev_week' }]) {
       expect(barDiffers(parse(over), D, false)).toBe(true);
     }
   });
-  it('is true when anything the Caller schedule bar shows changed, and ignores the Interviews-only keys', () => {
+  it('does not count the retired call key toward Clear', () => {
+    expect(barDiffers(parse({ call: 'self' }), D, false)).toBe(false);
+    expect(barDiffers(parse({ call: 'caller' }), D, false)).toBe(false);
+    expect(barKeys(false)).not.toContain('call');
+  });
+  it('is true when anything the Caller interviews bar shows changed, and ignores the Interviews-only keys', () => {
     for (const over of <Record<string, string>[]>[{ owner: 'u' }, { caller: 'c' }, { stage: 'intro' }, { q: 'x' }, { range: 'this_month' }]) {
       expect(barDiffers(parse(over), D, true)).toBe(true);
     }
-    expect(barDiffers(parse({ user: 'all', profile: 'a', call: 'self' }), D, true)).toBe(false);
+    expect(barDiffers(parse({ user: 'all', profile: 'a' }), D, true)).toBe(false);
   });
   it('never lists the deep-link or sort keys', () => {
     for (const callers of [false, true]) {
@@ -249,5 +267,24 @@ describe('viewSwitchQuery (List | Calendar and the tabs)', () => {
     const p = new URLSearchParams('range=next_week&q=acme&stage=intro&page=3&panel=abc&round=a:b&brief=1&zone=x');
     expect(viewSwitchQuery(p)).toBe('?range=next_week&q=acme&stage=intro&zone=x');
     expect(viewSwitchQuery(new URLSearchParams('page=2'))).toBe('');
+  });
+  it('no longer carries call', () => {
+    expect(viewSwitchQuery(new URLSearchParams('call=caller&q=acme&call=self'))).toBe('?q=acme');
+  });
+});
+
+describe('legacyCallTarget (old ?call= links)', () => {
+  it('sends call=caller to the matching Caller interviews view, keeping the other keys', () => {
+    expect(legacyCallTarget('/interviews', '?call=caller&q=acme&range=next_week')).toBe('/interviews/callers?q=acme&range=next_week');
+    expect(legacyCallTarget('/interviews/calendar', '?range=last_week&call=caller')).toBe('/interviews/callers/calendar?range=last_week');
+    expect(legacyCallTarget('/interviews', '?call=caller')).toBe('/interviews/callers');
+  });
+  it('drops call=self and other values without changing the tab', () => {
+    expect(legacyCallTarget('/interviews', '?call=self&q=acme')).toBe('/interviews?q=acme');
+    expect(legacyCallTarget('/interviews/calendar', '?call=bogus')).toBe('/interviews/calendar');
+  });
+  it('leaves links without call alone', () => {
+    expect(legacyCallTarget('/interviews', '?q=acme')).toBeNull();
+    expect(legacyCallTarget('/interviews', '')).toBeNull();
   });
 });

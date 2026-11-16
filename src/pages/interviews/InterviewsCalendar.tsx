@@ -23,7 +23,7 @@ import { useCallers } from '../../lib/useCallers';
 import { callerChipClass, callerInitials, callerLabel, isUnassigned } from '../../lib/callerColors';
 
 /** Week (default) and Month calendar of rounds; click a round to edit it, a slot to create one.
- * `callers`: the Callers calendar — every user's caller rounds, coloured by caller. */
+ * `callers`: the Caller interviews calendar — every user's caller rounds, coloured by caller. */
 export default function InterviewsCalendar({
   filters,
   update,

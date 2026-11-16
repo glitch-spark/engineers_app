@@ -1,7 +1,7 @@
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP } from '../../lib/callerColors';
 
-/** Caller schedule (List and Calendar): each caller's colour. */
+/** Caller interviews (List and Calendar): each caller's colour. */
 export default function CallersLegend() {
   const { callers } = useCallers();
   return (

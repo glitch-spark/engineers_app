@@ -15,7 +15,7 @@ import ConfirmedBadge, { NoCallerBadge, needsConfirmBadge } from './ConfirmedBad
 import { canConfirm, isTbdRound } from '../../lib/canConfirm';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
 
-/** A caller round from the Callers calendar: its details, and the caller (Admin / interview managers assign it). */
+/** A caller round from the Caller interviews calendar: its details, and the caller (Admin / interview managers assign it). */
 export default function CallerRoundDialog({
   interview,
   roundId,

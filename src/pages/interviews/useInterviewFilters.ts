@@ -25,9 +25,9 @@ export interface InterviewFilterState {
 }
 
 /**
- * Filters for the Interviews and Caller schedule tabs, read from and written to the URL (`user profile call caller
- * owner stage status q range from to sort dir page`). `callers`: the Caller schedule tab, whose bar shows Owner and
- * Caller instead of User, Profile and Self / Caller.
+ * Filters for the Self interviews and Caller interviews tabs, read from and written to the URL (`user profile caller
+ * owner stage status q range from to sort dir page`). `callers`: the Caller interviews tab, whose bar shows Owner and
+ * Caller instead of User and Profile.
  */
 export function useInterviewFilters(callers = false): InterviewFilterState {
   const { user } = useAuth();

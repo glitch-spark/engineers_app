@@ -31,8 +31,6 @@ export type InterviewFilters = {
   caller: string;
   /** Callers tab: one user's interviews, or '' for every user (kept apart from `user`, which defaults to you). */
   owner: string;
-  /** Interviews tab: self or caller interviews ('' for both). */
-  call: CallType | '';
   /** Company / position search ('' = none). */
   q: string;
   range: DatePreset;
@@ -49,7 +47,7 @@ export type FilterDefaults = { userId: string };
 
 /** Every URL key this page owns (the values are all strings in the URL). Other keys (`panel`, `round`, `brief`, `zone`) are not ours. */
 export type InterviewKey =
-  | 'user' | 'profile' | 'stage' | 'status' | 'caller' | 'owner' | 'call' | 'q'
+  | 'user' | 'profile' | 'stage' | 'status' | 'caller' | 'owner' | 'q'
   | 'range' | 'from' | 'to' | 'sort' | 'dir' | 'page' | 'size';
 export type InterviewUrlValues = Record<InterviewKey, string>;
 
@@ -62,7 +60,6 @@ export function interviewUrlDefaults(d: FilterDefaults): InterviewUrlValues {
     status: '',
     caller: '',
     owner: '',
-    call: '',
     q: '',
     range: DEFAULT_RANGE,
     from: '',
@@ -78,7 +75,7 @@ export function interviewUrlDefaults(d: FilterDefaults): InterviewUrlValues {
 export function barKeys(callersView: boolean): InterviewKey[] {
   return callersView
     ? ['owner', 'caller', 'stage', 'status', 'q', 'range', 'from', 'to']
-    : ['user', 'profile', 'call', 'stage', 'status', 'q', 'range', 'from', 'to'];
+    : ['user', 'profile', 'stage', 'status', 'q', 'range', 'from', 'to'];
 }
 
 const SORTS: ListSort[] = ['latest', 'company', 'stage', 'status'];
@@ -105,7 +102,6 @@ export function parseInterviewValues(values: InterviewUrlValues, d: FilterDefaul
     status: values.status,
     caller: values.caller,
     owner: values.owner,
-    call: values.call === 'self' || values.call === 'caller' ? values.call : '',
     q: values.q,
     range,
     // Only a Custom range reads from / to; they are kept as typed so the bar can say what is wrong with them.
@@ -132,7 +128,7 @@ export function patchToUrl(patch: Partial<InterviewFilters>): Partial<InterviewU
 export function barDiffers(f: InterviewFilters, d: FilterDefaults, callersView: boolean): boolean {
   if (f.stage || f.status || f.q.trim()) return true;
   if (f.range !== DEFAULT_RANGE) return true;
-  return callersView ? !!(f.owner || f.caller) : f.user !== d.userId || !!f.profile || !!f.call;
+  return callersView ? !!(f.owner || f.caller) : f.user !== d.userId || !!f.profile;
 }
 
 // ---- dates ----------------------------------------------------------------
@@ -222,7 +218,7 @@ function zoneToday(now: Date, tz: string): string {
   return dayKey(toWall(now, tz));
 }
 
-/** The Interviews list request, or null while the Date range is invalid (nothing to ask for). */
+/** The Self interviews list request (always `callType=self`: rounds with no caller), or null while the Date range is invalid (nothing to ask for). */
 export function listQuery(
   f: InterviewFilters,
   limit: number,
@@ -238,12 +234,12 @@ export function listQuery(
   if (f.profile) q.accountId = f.profile;
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
-  if (f.call) q.callType = f.call;
+  q.callType = 'self';
   if (searchText(f)) q.q = searchText(f);
   return q;
 }
 
-/** Callers list: the Date range like the Interviews list, the Caller filter, newest first by default. Null while the range is invalid. */
+/** Caller interviews list: the Date range like the Self interviews list, the Caller filter, newest first by default. Null while the range is invalid. */
 export function callerRoundsQuery(
   f: InterviewFilters,
   limit: number,
@@ -277,7 +273,7 @@ export type RoundsQuery = {
 };
 
 /** `range` is YYYY-MM-DD in `tz` with an exclusive `to`; sent as that zone's midnights.
- * `callers`: the Callers calendar — every user's caller rounds, narrowed by the Caller filter. */
+ * `callers`: the Caller interviews calendar — every user's caller rounds, narrowed by the Caller filter. */
 export function roundsQuery(
   f: InterviewFilters,
   range: { from: string; to: string },
@@ -292,7 +288,7 @@ export function roundsQuery(
   } else {
     if (f.user && f.user !== 'all') q.creatorId = f.user;
     if (f.profile) q.accountId = f.profile;
-    if (f.call) q.callType = f.call;
+    q.callType = 'self';
   }
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
@@ -301,13 +297,27 @@ export function roundsQuery(
 }
 
 /**
- * Query string for the List | Calendar switch and the Interviews | Caller schedule tabs: every filter carries
- * over (each view ignores the other's keys); only the page number and one-off links (`panel`, `round`, `brief`)
- * are dropped.
+ * Query string for the List | Calendar switch and the Self interviews | Caller interviews tabs: every filter carries
+ * over (each view ignores the other's keys); only the page number, one-off links (`panel`, `round`, `brief`)
+ * and the retired `call` key are dropped.
  */
 export function viewSwitchQuery(params: URLSearchParams): string {
   const keep = new URLSearchParams(params);
-  ['page', 'panel', 'round', 'brief'].forEach((k) => keep.delete(k));
+  ['page', 'panel', 'round', 'brief', 'call'].forEach((k) => keep.delete(k));
   const s = keep.toString();
   return s ? `?${s}` : '';
+}
+
+/**
+ * Old links: `/interviews?call=caller` (the retired Self / Caller filter) goes to the matching Caller interviews view with
+ * the other keys kept; a leftover `call=self` (or anything else) is dropped. Self interviews is always self rounds.
+ */
+export function legacyCallTarget(pathname: string, search: string): string | null {
+  const params = new URLSearchParams(search);
+  if (!params.has('call')) return null;
+  const toCallers = params.get('call') === 'caller';
+  params.delete('call');
+  const qs = params.toString();
+  const path = toCallers ? pathname.replace(/^\/interviews/, '/interviews/callers') : pathname;
+  return `${path}${qs ? `?${qs}` : ''}`;
 }

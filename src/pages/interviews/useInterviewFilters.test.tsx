@@ -38,7 +38,8 @@ describe('useInterviewFilters', () => {
 
   it('survives bad values', () => {
     const { result } = setup('?range=zzz&from=nope&to=2026-02-31&page=-1&sort=x&call=maybe');
-    expect(result.current.filters).toMatchObject({ range: 'this_week', from: '', to: '', page: 1, sort: 'latest', call: '' });
+    expect(result.current.filters).toMatchObject({ range: 'this_week', from: '', to: '', page: 1, sort: 'latest' });
+    expect(result.current.filters).not.toHaveProperty('call');
   });
 
   it('writes filters to the URL, leaves defaults out, and resets the page', () => {
@@ -85,8 +86,8 @@ describe('useInterviewFilters', () => {
     expect(Object.fromEntries(p)).toEqual({ panel: 'abc', round: 'i:r', brief: '1', zone: 'eastern', q: 'acme', stage: 'intro' });
   });
 
-  it('Clear puts back what the Interviews bar shows and keeps deep links, sort and the other tab\'s keys', () => {
-    const { result } = setup('?user=all&profile=p&call=self&stage=intro&status=passed&q=x&range=custom&from=2026-11-01&to=2026-11-05&owner=u&caller=c&sort=company&dir=asc&panel=abc&zone=eastern');
+  it('Clear puts back what the Self interviews bar shows and keeps deep links, sort and the other tab\'s keys', () => {
+    const { result } = setup('?user=all&profile=p&stage=intro&status=passed&q=x&range=custom&from=2026-11-01&to=2026-11-05&owner=u&caller=c&sort=company&dir=asc&panel=abc&zone=eastern');
     expect(result.current.canClear).toBe(true);
     act(() => result.current.clear());
     expect(Object.fromEntries(new URLSearchParams(seen.search))).toEqual({
@@ -94,11 +95,18 @@ describe('useInterviewFilters', () => {
     });
   });
 
-  it('Clear on the Caller schedule resets Owner and Caller and keeps the Interviews-only keys', () => {
+  it('Clear on Caller interviews resets Owner and Caller and keeps the Self-interviews-only keys', () => {
     const { result } = setup('?owner=u&caller=c&stage=intro&q=x&range=next_week&user=all&profile=p&brief=1', true);
     expect(result.current.canClear).toBe(true);
     act(() => result.current.clear());
     expect(Object.fromEntries(new URLSearchParams(seen.search))).toEqual({ user: 'all', profile: 'p', brief: '1' });
+  });
+
+  it('does not count call toward Clear, and leaves it in the URL', () => {
+    const { result } = setup('?call=caller');
+    expect(result.current.canClear).toBe(false);
+    act(() => result.current.update({ q: 'acme' }));
+    expect(result.current.sharedQs).toBe('?q=acme');
   });
 
   it('exposes the query string the List | Calendar switch carries', () => {

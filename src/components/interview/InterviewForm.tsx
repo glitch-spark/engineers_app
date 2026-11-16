@@ -26,7 +26,7 @@ import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone } from '../../lib/interviewTimezone';
 import { useAuth } from '../../auth/useAuth';
 
-/** `caller`: start with "Request a caller" on (new interview from the Callers calendar). */
+/** `caller`: start with "Request a caller" on (new interview from the Caller interviews calendar). */
 export type RoundPrefill = { date?: string; time?: string; stage?: string; caller?: boolean };
 
 function applicationFromInterview(iv: Interview): ApplicationFormState {

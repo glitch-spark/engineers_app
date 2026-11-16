@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import PageHeader from '../../components/PageHeader';
@@ -13,6 +13,7 @@ import InterviewFilters from './InterviewFilters';
 import InterviewsCalendar from './InterviewsCalendar';
 import InterviewsList from './InterviewsList';
 import { useInterviewFilters } from './useInterviewFilters';
+import { legacyCallTarget } from '../../lib/interviewFilters';
 import ZoneSelect from '../../components/interview/ZoneSelect';
 import CallerRoundDialog from '../../components/interview/CallerRoundDialog';
 import CallerRoundsList from './CallerRoundsList';
@@ -23,10 +24,17 @@ type PanelState = { interview: Interview | null; mode: PanelMode; roundId?: stri
 
 type View = 'list' | 'calendar';
 
-/** Interviews and Caller schedule tabs, each List (default) or Calendar, shared filters, one side panel.
+export default function InterviewsPage(props: { view: View; callers?: boolean; directory?: boolean }) {
+  const { pathname, search } = useLocation();
+  const target = props.callers || props.directory ? null : legacyCallTarget(pathname, search);
+  if (target) return <Navigate to={target} replace />;
+  return <InterviewsPageBody {...props} />;
+}
+
+/** Self interviews and Caller interviews tabs, each List (default) or Calendar, shared filters, one side panel.
  * `callers`: every user's caller rounds, coloured by caller; a click opens the caller dialog.
- * `directory`: the Callers tab (who the callers are, their load and pass rate) instead of rounds. */
-export default function InterviewsPage({ view, callers = false, directory = false }: { view: View; callers?: boolean; directory?: boolean }) {
+ * `directory`: the Manage callers tab (who the callers are, their load and pass rate) instead of rounds. */
+function InterviewsPageBody({ view, callers = false, directory = false }: { view: View; callers?: boolean; directory?: boolean }) {
   const { filters, update, sharedQs, canClear, clear } = useInterviewFilters(callers);
   const [params, setParams] = useSearchParams();
   const { mutate } = useSWRConfig();

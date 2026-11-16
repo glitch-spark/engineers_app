@@ -14,7 +14,7 @@ import { useCallers } from '../../lib/useCallers';
 const OVERVIEW_KEY = ['caller-overview'];
 const ZERO = { upcoming: 0, thisWeek: 0, passRate: null, rounds: 0 };
 
-/** Callers tab: platform users (read-only names) and external callers with their load and pass rate. */
+/** Manage callers tab: platform users (read-only names) and external callers with their load and pass rate. */
 export default function CallersDirectory() {
   const navigate = useNavigate();
   const { mutate: mutateAll } = useSWRConfig();

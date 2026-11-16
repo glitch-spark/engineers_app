@@ -15,9 +15,9 @@ import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { zonedDateKey } from '../../lib/interviewTimezone';
 
 /**
- * The one filter bar for List and Calendar, on the Interviews and Caller schedule tabs: who, Stage, Status, search,
+ * The one filter bar for List and Calendar, on the Self interviews and Caller interviews tabs: who, Stage, Status, search,
  * Date range, Clear. The Date range may reach the future (it offers Next week), and it also picks the calendar's period.
- * `callers`: the Caller schedule shows every user's caller rounds, so a Caller filter replaces User, Profile and Self / Caller.
+ * `callers`: Caller interviews shows every user's caller rounds, so a Caller filter replaces User and Profile. Self interviews has no Self / Caller filter: it is always self rounds.
  */
 export default function InterviewFilters({
   filters,
@@ -37,7 +37,7 @@ export default function InterviewFilters({
   const { user } = useAuth();
   const { tz } = useInterviewTimezone();
   const { callers, byId } = useCallers();
-  // An archived caller opened from the Callers tab (`?caller=`) stays selectable.
+  // An archived caller opened from the Manage callers tab (`?caller=`) stays selectable.
   const picked = filters.caller && filters.caller !== 'unassigned' ? byId.get(filters.caller) : undefined;
   const callerOptions = [
     { value: '', label: 'All callers' },
@@ -72,11 +72,6 @@ export default function InterviewFilters({
     ...(INTERVIEW_STAGE_ORDER as readonly string[]).map((s) => ({ value: s, label: stageLabel(s) })),
   ];
   const statusOptions = [{ value: '', label: 'All statuses' }, ...INTERVIEW_STATUSES];
-  const callOptions = [
-    { value: '', label: 'Self and caller' },
-    { value: 'self', label: 'Self' },
-    { value: 'caller', label: 'Caller' },
-  ];
 
   return (
     <FilterBar canClear={canClear} onClear={onClear}>
@@ -87,7 +82,7 @@ export default function InterviewFilters({
               id={id('owner')}
               value={filters.owner}
               onChange={(v) => update({ owner: v })}
-              // "All users" is '' here: the Callers tab shows everyone's caller rounds by default.
+              // "All users" is '' here: the Caller interviews tab shows everyone's caller rounds by default.
               options={userOptions.map((o) => (o.value === 'all' ? { ...o, value: '' } : o))}
             />
           </FilterField>
@@ -102,9 +97,6 @@ export default function InterviewFilters({
           </FilterField>
           <FilterField label="Profile" htmlFor={id('profile')} width="w-48">
             <Select id={id('profile')} value={filters.profile} onChange={(v) => update({ profile: v })} options={profileOptions} />
-          </FilterField>
-          <FilterField label="Self / Caller" htmlFor={id('call')} width="w-40">
-            <Select id={id('call')} value={filters.call} onChange={(v) => update({ call: v as Filters['call'] })} options={callOptions} />
           </FilterField>
         </>
       )}
