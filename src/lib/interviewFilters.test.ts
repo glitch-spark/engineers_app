@@ -7,7 +7,6 @@ import {
   callerRoundsQuery,
   filtersForCalendar,
   interviewUrlDefaults,
-  listDateRange,
   listQuery,
   normalizeRange,
   parseInterviewValues,
@@ -102,18 +101,6 @@ describe('rangeDates', () => {
     expect(rangeDates({ range: 'custom', from: '2026-11-05', to: '2026-11-01' }, TODAY)).toBeNull();
     expect(rangeDates({ range: 'custom', from: '2025-01-01', to: '2026-11-01' }, TODAY)).toBeNull();
     expect(rangeDates({ range: 'custom', from: '2026-11-01', to: '2026-11-05' }, TODAY)).toEqual({ from: '2026-11-01', to: '2026-11-05' });
-  });
-});
-
-describe('listDateRange (the Profiles list still passes the old names)', () => {
-  const now = new Date(2026, 10, 11);
-  it('maps prev_week / prev_month and keeps Monday-Sunday', () => {
-    expect(listDateRange({ range: 'this_week', from: '', to: '' }, now)).toEqual({ from: '2026-11-09', to: '2026-11-15' });
-    expect(listDateRange({ range: 'prev_week', from: '', to: '' }, now)).toEqual({ from: '2026-11-02', to: '2026-11-08' });
-    expect(listDateRange({ range: 'prev_month', from: '', to: '' }, now)).toEqual({ from: '2026-10-01', to: '2026-10-31' });
-    expect(listDateRange({ range: 'this_month', from: '', to: '' }, now)).toEqual({ from: '2026-11-01', to: '2026-11-30' });
-    expect(listDateRange({ range: 'this_year', from: '', to: '' }, now)).toEqual({ from: '2026-01-01', to: '2026-12-31' });
-    expect(listDateRange({ range: 'custom', from: '2026-01-01', to: '2026-01-09' }, now)).toEqual({ from: '2026-01-01', to: '2026-01-09' });
   });
 });
 

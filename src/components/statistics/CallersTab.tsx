@@ -9,7 +9,7 @@ import { notify } from '../../lib/notify';
 import { exportCallerStatsPdf } from '../../lib/callerStatsPdf';
 import { interviewStatusBadgeClass, stageLabel } from '../../lib/stageBadge';
 import { useChartTheme } from '../../theme/useChartTheme';
-import { Segmented } from './controls';
+import Segmented from '../Segmented';
 import { ServerUpdateNote, StatTiles, pct } from './rateShared';
 import { StatsFilterBar, regionLabel, useStatsFilters } from './statsFilters';
 

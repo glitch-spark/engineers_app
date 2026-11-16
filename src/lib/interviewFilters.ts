@@ -151,16 +151,6 @@ export function rangeDates(f: Pick<InterviewFilters, 'range' | 'from' | 'to'>, t
   return rangeFor(f.range, today, { allowFuture: true });
 }
 
-/**
- * Days for a range name as old callers pass it (the Profiles list keeps `prev_week` / `prev_month`): Monday-Sunday
- * weeks, whole months and years, or the raw from / to for Custom. `now` is a (wall-clock) Date.
- */
-export function listDateRange(f: { range: string; from: string; to: string }, now = new Date()): { from: string; to: string } {
-  if (f.range === 'custom') return { from: f.from, to: f.to };
-  const preset = (legacyPreset(f.range) ?? f.range) as DatePreset;
-  return rangeFor(preset, dayKey(now), { allowFuture: true }) ?? rangeFor('this_year', dayKey(now), { allowFuture: true })!;
-}
-
 function spanDays(r: DateRange): number {
   const [fy, fm, fd] = r.from.split('-').map(Number);
   const [ty, tm, td] = r.to.split('-').map(Number);
