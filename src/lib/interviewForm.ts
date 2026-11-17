@@ -79,8 +79,6 @@ export type RoundFormState = {
   callerIdSaved: string;
   callerMethod: string;
   callerMethodValue: string;
-  /** Caller lined up (edit an existing caller round only). */
-  confirmed: boolean;
 };
 
 export const DEFAULT_START_TIME = '10:00';
@@ -116,7 +114,6 @@ export function blankRound(
     callerIdSaved: '',
     callerMethod: '',
     callerMethodValue: '',
-    confirmed: false,
   };
 }
 
@@ -143,7 +140,6 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     callerIdSaved: callerId,
     callerMethod: caller?.method || '',
     callerMethodValue: caller?.methodValue || '',
-    confirmed: !!e.confirmed,
   };
 }
 

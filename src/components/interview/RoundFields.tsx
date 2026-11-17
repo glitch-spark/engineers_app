@@ -20,7 +20,6 @@ export default function RoundFields({
   idPrefix,
   tz,
   legend = 'Round',
-  confirmable = false,
   callerEditable = true,
   ownerId,
 }: {
@@ -31,8 +30,6 @@ export default function RoundFields({
   /** Zone the date and time are entered in. */
   tz: string;
   legend?: string;
-  /** Show the Confirmed switch (editing an existing round that has a caller). */
-  confirmable?: boolean;
   /** Whether this user may pick the caller (see CallerFields). */
   callerEditable?: boolean;
   /** The interview's owner, never offered as the caller. */
@@ -102,16 +99,6 @@ export default function RoundFields({
           onChange={(e) => onChange({ interviewerName: e.target.value })} />
       </div>
       <CallerFields round={round} onChange={onChange} disabled={disabled} idPrefix={idPrefix} callerEditable={callerEditable} ownerId={ownerId} />
-      {confirmable && round.callerEnabled && (
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-0.5" checked={round.confirmed} disabled={disabled}
-            onChange={(e) => onChange({ confirmed: e.target.checked })} />
-          <span>
-            <span className="font-medium">Confirmed</span>
-            <span className="block text-xs text-muted">The caller is lined up. Posts a confirmation in the #caller thread.</span>
-          </span>
-        </label>
-      )}
       <div>
         <label htmlFor={id('note')} className="block text-sm font-medium mb-1">Notes</label>
         <textarea id={id('note')} className="input min-h-[72px]" value={round.note} disabled={disabled}

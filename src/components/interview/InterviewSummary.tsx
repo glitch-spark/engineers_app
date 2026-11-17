@@ -16,8 +16,6 @@ import {
 } from '../../lib/stageBadge';
 import { STATUS_DOT } from '../../pages/interviews/RoundTrail';
 import ActionMenu from '../ActionMenu';
-import ConfirmedBadge, { needsConfirmBadge } from './ConfirmedBadge';
-import { canConfirm, isTbdRound } from '../../lib/canConfirm';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
 import RoundCallerPicker from './RoundCallerPicker';
 import { TailoredScore } from '../jobApplies/Suggestions';
@@ -94,19 +92,14 @@ export function SummaryOnlyView({
   tz,
   focusRoundId,
   onCallerSaved,
-  user,
-  onConfirm,
 }: {
   iv: Interview;
   tz: string;
   focusRoundId?: string;
   onCallerSaved: (saved: Interview) => void;
-  user: { id: string; role: string } | null | undefined;
-  onConfirm: (roundId: string, confirmed: boolean) => void;
 }) {
   const rounds = [...(iv.stageHistory ?? [])].reverse();
   const listRef = useScrollToFocused(focusRoundId, iv._id);
-  const now = new Date();
   return (
     <div className="flex-1 space-y-5 overflow-y-auto p-4">
       <section aria-label="Rounds">
@@ -130,12 +123,6 @@ export function SummaryOnlyView({
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                       <PhoneCall size={12} aria-hidden />
                       <RoundCallerPicker interview={iv} roundId={e.id} onSaved={onCallerSaved} />
-                      {needsConfirmBadge(e.status, e.scheduledAt, now) && !isTbdRound(e) && <ConfirmedBadge confirmed={e.confirmed} />}
-                      {canConfirm(user, iv, e) && !isTbdRound(e) && needsConfirmBadge(e.status, e.scheduledAt, now) && (
-                        <button type="button" className="btn-outline btn-sm" onClick={() => onConfirm(e.id, !e.confirmed)}>
-                          {e.confirmed ? 'Unconfirm' : 'Mark confirmed'}
-                        </button>
-                      )}
                     </div>
                   )}
                 </li>
@@ -154,9 +141,7 @@ type SummaryProps = {
   canEdit: boolean;
   /** Set the round's status and change its time: the owner, Admin and interview managers. */
   canSetStatus: boolean;
-  user: { id: string; role: string } | null | undefined;
   onStatus: (roundId: string, status: string) => void;
-  onConfirm: (roundId: string, confirmed: boolean) => void;
   onEditRound: (roundId: string) => void;
   onDeleteRound: (roundId: string) => void;
   onEditDetails: () => void;
@@ -177,8 +162,6 @@ export default function InterviewSummary(props: SummaryProps) {
       tz={props.tz}
       focusRoundId={props.focusRoundId}
       onCallerSaved={props.onCallerSaved}
-      user={props.user}
-      onConfirm={props.onConfirm}
     />
   ) : <FullSummary {...props} />;
 }
@@ -188,9 +171,7 @@ function FullSummary({
   tz,
   canEdit,
   canSetStatus,
-  user,
   onStatus,
-  onConfirm,
   onEditRound,
   onDeleteRound,
   onEditDetails,
@@ -273,15 +254,6 @@ function FullSummary({
               <PhoneCall size={14} className="text-sky-600" aria-hidden />
               <RoundCallerPicker interview={iv} roundId={spotRound.id} onSaved={onCallerSaved} />
               <span className="text-muted">· {methodLabel(spotRound.caller.method)}</span>
-              {needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && !isTbdRound(spotRound) && (
-                <ConfirmedBadge confirmed={spotRound.confirmed} />
-              )}
-              {canConfirm(user, iv, spotRound) && !isTbdRound(spotRound) && spot.kind === 'next' && needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && (
-                <button type="button" className="btn-outline btn-sm"
-                  onClick={() => onConfirm(spotRound.id, !spotRound.confirmed)}>
-                  {spotRound.confirmed ? 'Unconfirm' : 'Mark confirmed'}
-                </button>
-              )}
               {link && spot.kind === 'next' && (
                 <span className="ml-auto flex gap-1.5">
                   <button type="button" className="btn-outline btn-sm" onClick={() => copy(link)}>
@@ -413,7 +385,6 @@ function FullSummary({
                     <span className="inline-flex flex-wrap items-center gap-1.5">
                       <PhoneCall size={12} aria-hidden />
                       <RoundCallerPicker interview={iv} roundId={e.id} onSaved={onCallerSaved} />
-                      {needsConfirmBadge(e.status, e.scheduledAt, now) && !isTbdRound(e) && <ConfirmedBadge confirmed={e.confirmed} />}
                     </span>
                   )}
                 </div>

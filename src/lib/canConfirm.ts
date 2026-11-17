@@ -11,16 +11,6 @@ export function isTbdRound(round: Round): boolean {
   return !c.callerId && (!c.callerName || c.callerName === 'TBD');
 }
 
-/** Who may confirm / unconfirm a caller round: admin, interview manager, the interview's owner, or the round's assigned user caller. */
-export function canConfirm(user: Who, interview: Pick<Interview, 'createdBy'>, round: Round): boolean {
-  if (!user) return false;
-  if (user.role === 'admin' || user.role === 'interview_manager') return true;
-  const ownerId = typeof interview.createdBy === 'object' ? interview.createdBy?._id : interview.createdBy;
-  if (ownerId && ownerId === user.id) return true;
-  const caller = round?.caller;
-  return caller?.callerKind === 'user' && !!caller.callerId && caller.callerId === user.id;
-}
-
 /**
  * Who may set a round's status and change its time: admin, interview manager (on any interview) and the owner.
  * Never on someone else's view-only (`summaryOnly`) interview. Matches the server's `can_update_round`.
