@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../api/endpoints';
 import { BASE_URL } from '../api/client';
@@ -350,53 +351,64 @@ export default function BiddersPage() {
     </div>
   );
 
-  // A bidder's page: their pay week, whoever owns them (Ruling 4).
-  const bidderPage = (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <WeekNav
-          shown={data && data.week.days.length > 0
-            ? { first: data.week.days[0].day, last: data.week.days[data.week.days.length - 1].day }
-            : null}
-          label={data?.week.label ?? null}
-          isCurrent={isCurrent}
-          onChange={(w) => setParam({ week: w })}
-        />
-      </div>
-      {board.error ? (
-        <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
-          Couldn&apos;t load the week.{' '}
-          <button type="button" className="underline" onClick={() => board.mutate()}>Retry</button>
-        </div>
-      ) : !data ? (
-        <div className="space-y-3" aria-busy="true">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-24" />)}
-          </div>
-          <div className="panel space-y-2 p-4">
-            {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-8 w-full" />)}
-          </div>
-        </div>
-      ) : row && weekKey ? (
-        <BidderView
-          row={row}
-          board={data}
-          weekKey={weekKey}
-          bidder={byId[row.id]}
-          day={params.get('day')}
-          reviewing={!!focus}
-          tab={params.get('tab')}
-          isCurrent={isCurrent}
-          onParam={(patch) => setParam({ week: weekKey, ...patch })}
-          onReview={reviewBid}
-          onChanged={refresh}
-        />
-      ) : (
-        <div className="panel p-4 text-sm text-muted">
-          Bidder not found.{' '}
-          <button type="button" className="underline" onClick={() => setParam({ bidder: null, day: null, tab: null })}>Back to the team</button>
-        </div>
+  // A bidder's page: their pay week, whoever owns them (Ruling 4). The header (← Bidders, the actions, the week nav)
+  // is the view's; while the board loads or fails, a bare ← Bidders (and the week nav, once a week is known) stays.
+  // ← Bidders drops the browsed `week` too, so it doesn't leak into the list's period (F24).
+  const backToList = () => setParam({ bidder: null, day: null, tab: null, week: null });
+  const shownWeek = data && data.week.days.length > 0
+    ? { first: data.week.days[0].day, last: data.week.days[data.week.days.length - 1].day }
+    : null;
+  const changeWeek = (w: string | null) => setParam({ week: w, day: null });
+  const bareHeader = (
+    <div className="flex flex-wrap items-center gap-3">
+      <button type="button" className="btn-outline btn-sm" onClick={backToList}>
+        <ArrowLeft size={14} aria-hidden /> Bidders
+      </button>
+      {shownWeek && data && (
+        <WeekNav shown={shownWeek} label={data.week.label} isCurrent={isCurrent} onChange={changeWeek} />
       )}
+    </div>
+  );
+  const bidderPage = board.error ? (
+    <div className="space-y-5">
+      {bareHeader}
+      <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
+        Couldn&apos;t load the week.{' '}
+        <button type="button" className="underline" onClick={() => board.mutate()}>Retry</button>
+      </div>
+    </div>
+  ) : !data ? (
+    <div className="space-y-5">
+      {bareHeader}
+      <div className="space-y-3" aria-busy="true">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-24" />)}
+        </div>
+        <div className="panel space-y-2 p-4">
+          {Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-8 w-full" />)}
+        </div>
+      </div>
+    </div>
+  ) : row && weekKey && shownWeek ? (
+    <BidderView
+      row={row}
+      board={data}
+      weekKey={weekKey}
+      bidder={byId[row.id]}
+      day={params.get('day')}
+      reviewing={!!focus}
+      tab={params.get('tab')}
+      isCurrent={isCurrent}
+      week={{ shown: shownWeek, label: data.week.label, isCurrent, onChange: changeWeek }}
+      onBack={backToList}
+      onParam={(patch) => setParam({ week: weekKey, ...patch })}
+      onReview={reviewBid}
+      onChanged={refresh}
+    />
+  ) : (
+    <div className="space-y-5">
+      {bareHeader}
+      <div className="panel p-4 text-sm text-muted">Bidder not found.</div>
     </div>
   );
 
@@ -414,20 +426,19 @@ export default function BiddersPage() {
           scopeSwitch={scopeSwitch}
         />
       )}
+      {/* On a bidder's page the title (and the tab's) is the bidder's name; its header has the help and the actions. */}
       <PageHeader
-        title="Bids"
-        action={(
+        title={bidderId ? row?.name ?? 'Bids' : 'Bids'}
+        action={bidderId ? undefined : (
           <div className="flex items-center gap-2">
             {/* The Bidders tab has it beside its View switch. */}
-            {(bidderId || section !== 'bidders') && <BidsHelp />}
-            {!bidderId && (<>
+            {section !== 'bidders' && <BidsHelp />}
             <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>
             {/* The Bid Track package the server ships (always the latest). */}
             <ActionMenu
               label="More actions"
               items={[{ label: 'Download Bid Track', onSelect: () => window.location.assign(`${BASE_URL}/ext/download`) }]}
             />
-            </>)}
           </div>
         )}
       />

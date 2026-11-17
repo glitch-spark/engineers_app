@@ -10,15 +10,19 @@ import InviteDialog from './InviteDialog';
 const FAILED = { reset: 'Failed to reset login', archive: 'Failed to archive bidder', restore: 'Failed to restore bidder' };
 
 /**
- * The ⋯ menu of one bidder with its dialogs: Edit, New invite code, Reset login, Archive; an archived bidder offers
- * Restore. (Past weeks is a tab, so there is no History item.)
+ * One bidder's actions with their dialogs. `row` (a list row): the ⋯ menu with Edit, New invite code, Reset login,
+ * Archive; an archived bidder offers Restore. (Past weeks is a tab of the bidder page, so there is no History item.)
+ * `page` (the bidder page's header): Edit and Invite code (invited) or Reset login (active) are visible buttons, and
+ * the ⋯ menu holds only Archive (or Restore).
  */
 export default function BidderActions({
   bidder,
   onChanged,
+  layout = 'row',
 }: {
   bidder: api.Bidder;
   onChanged: () => void;
+  layout?: 'row' | 'page';
 }) {
   const [editing, setEditing] = useState(false);
   const [invite, setInvite] = useState<api.BidderInvite | null>(null);
@@ -67,9 +71,32 @@ export default function BidderActions({
         { label: 'Archive', danger: true, onSelect: () => setConfirm('archive') },
       ];
 
+  const archived = !!bidder.archivedAt;
+  const menu = layout === 'page'
+    ? (
+      <div className="flex flex-wrap items-center gap-2">
+        {!archived && (
+          <button type="button" className="btn-outline btn-sm" onClick={() => setEditing(true)}>Edit</button>
+        )}
+        {!archived && bidder.status === 'invited' && (
+          <button type="button" className="btn-outline btn-sm" onClick={() => void newInvite()}>Invite code</button>
+        )}
+        {!archived && bidder.status === 'active' && (
+          <button type="button" className="btn-outline btn-sm" onClick={() => setConfirm('reset')}>Reset login</button>
+        )}
+        <ActionMenu
+          label={`More actions for ${bidder.name}`}
+          items={archived
+            ? [{ label: 'Restore', onSelect: () => setConfirm('restore') }]
+            : [{ label: 'Archive', danger: true, onSelect: () => setConfirm('archive') }]}
+        />
+      </div>
+    )
+    : <ActionMenu label={`Actions for ${bidder.name}`} items={items} />;
+
   return (
     <>
-      <ActionMenu label={`Actions for ${bidder.name}`} items={items} />
+      {menu}
 
       <BidderFormModal
         open={editing}

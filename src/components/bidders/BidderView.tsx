@@ -1,22 +1,26 @@
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
+import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import { notify } from '../../lib/notify';
 import { countryFlag } from '../../lib/countries';
-import { rateText } from '../../lib/bidsWords';
+import { rateText, statusWords } from '../../lib/bidsWords';
+import type { ShownWeeks } from '../../lib/bidderFilters';
 import { usd } from '../../lib/money';
 import ConfirmDialog from '../ConfirmDialog';
 import Tabs from '../Tabs';
 import RejectDialog from '../bids/RejectDialog';
 import { byFirstAt, reasonLabel } from '../bids/util';
 import BidderActions from './BidderActions';
+import BidsHelp from './BidsHelp';
 import DayPanel from './DayPanel';
 import DayRow from './DayRow';
 import HistoryTab from './HistoryTab';
 import SummaryTiles, { type Tile } from './SummaryTiles';
 import { reviewPatch } from '../../lib/bidsUrl';
 import { dayParts } from './weekDates';
+import WeekNav from './WeekNav';
 
 /** POST /bids/review accepts 1..500 ids. */
 const BULK_MAX = 500;
@@ -30,8 +34,9 @@ const STATUS_BADGE: Record<api.BidWeekRow['status'], string> = {
 type Patch = Partial<Record<'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'review' | 'at' | 'reviewBidder', string | null>>;
 
 /**
- * One bidder's pay week: header, tiles, and tabs This week (one row per day; a day opens its bids in a side panel, a
- * bid opens the review overlay) and History (past weekly reports).
+ * One bidder's page: a header (← Bidders; name and status; profile, resumes and rate; the actions; the pay-week nav and
+ * the help) and tabs Days (the tiles and one row per day of the pay week; a day opens its bids in a side panel, a bid
+ * opens the review overlay) and Past weeks (past weekly reports; the URL keeps the old `tab=history`).
  */
 export default function BidderView({
   row,
@@ -42,6 +47,8 @@ export default function BidderView({
   reviewing,
   tab,
   isCurrent,
+  week,
+  onBack,
   onParam,
   onReview,
   onChanged,
@@ -57,6 +64,10 @@ export default function BidderView({
   reviewing: boolean;
   tab: string | null;
   isCurrent: boolean;
+  /** The header's pay-week nav. The page renders this view once the board has loaded, so `shown` is never null. */
+  week: { shown: ShownWeeks; label: string; isCurrent: boolean; onChange: (week: string | null) => void };
+  /** ← Bidders: back to the list (the page also drops the browsed `week`, so it doesn't leak into the list). */
+  onBack: () => void;
   onParam: (patch: Patch) => void;
   /** Open the review overlay at a bid of the open day, walking `ids`. */
   onReview: (bidId: string, ids: string[]) => void;
@@ -151,52 +162,60 @@ export default function BidderView({
   const tiles: Tile[] = [
     { label: 'Approved', value: w.approved ?? '—', hint: w.pay == null ? undefined : `${usd(w.pay)} pay`, tone: 'success' },
     {
-      label: 'To review',
-      value: w.toReview ?? '—',
+      label: 'Pending',
+      value: w.pending ?? '—',
       hint: w.source === 'folders' ? 'folder count, not reviewed' : w.toReview ? 'oldest first' : 'nothing pending',
       tone: w.toReview ? 'warning' : 'default',
       // This pay week's pending bids of this bidder: the URL's own `bidder` filters the review.
-      action: w.toReview ? { label: 'Review pending', onClick: () => onParam(reviewPatch({ kind: 'week', at: weekKey })) } : undefined,
+      action: w.toReview ? { label: 'Review', onClick: () => onParam(reviewPatch({ kind: 'week', at: weekKey })) } : undefined,
     },
     { label: 'Rejected', value: w.rejected ?? '—', hint: topReason ? `mostly ${topReason}` : undefined, tone: w.rejected ? 'danger' : 'default' },
     ...(today ? [{ label: 'Today', value: today.approved ?? '—', hint: today.pending ? `${today.pending} pending` : 'approved so far' } as Tile] : []),
   ];
 
   const sorted = useMemo(() => [...(dayBids.data?.bids ?? [])].sort(byFirstAt), [dayBids.data]);
-  const activeTab = tab === 'history' ? 'history' : 'week';
+  // `tab=history` (the old History tab's value, kept for links) is Past weeks; anything else is Days.
+  const activeTab = tab === 'history' ? 'history' : 'days';
+  const status = statusWords(row.status, bidder, Date.now());
   const panelDay = shownDay ? dayParts(shownDay) : null;
   const panelCounts = shownDay ? row.days[board.week.days.findIndex((d) => d.day === shownDay)] : null;
 
   return (
     <div className="space-y-5">
-      <section className="panel flex flex-wrap items-start gap-x-6 gap-y-3 p-4">
-        <button
-          type="button"
-          className="btn-outline btn-sm"
-          onClick={() => onParam({ bidder: null, day: null, tab: null })}
-        >
-          <ArrowLeft size={14} aria-hidden /> Team
+      <section className="panel space-y-4 p-4">
+        <button type="button" className="btn-outline btn-sm" onClick={onBack}>
+          <ArrowLeft size={14} aria-hidden /> Bidders
         </button>
-        <div className="min-w-0 flex-1 space-y-1">
-          <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold text-strong">
-            {row.country && <span aria-hidden>{countryFlag(row.country)}</span>}
-            {row.name}
-            <span className={STATUS_BADGE[row.status]}>{row.status}</span>
-          </h2>
-          <p className="text-sm text-muted">
-            {row.profileName ? (
-              <>Profile <span className="text-body">{row.profileName}</span>{resumeNames.length > 0 && <> · {resumeNames.join(', ')}</>}</>
-            ) : 'No profile assigned'}
-            {' · '}{rateText(row.rate)}
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0 flex-1 space-y-1">
+            <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold text-strong">
+              {row.country && <span aria-hidden>{countryFlag(row.country)}</span>}
+              {row.name}
+              <span className={`${STATUS_BADGE[row.status]}${status.expired ? ' text-red-600' : ''}`}>{status.text}</span>
+            </h2>
+            <p className="text-sm text-muted">
+              {row.profileName ? (
+                <>
+                  Profile{' '}
+                  {row.profileId
+                    ? <Link to={`/accounts/${row.profileId}`} className="text-body underline">{row.profileName}</Link>
+                    : <span className="text-body">{row.profileName}</span>}
+                  {resumeNames.length > 0 && <> · {resumeNames.join(', ')}</>}
+                </>
+              ) : 'No profile assigned'}
+              {' · '}{rateText(row.rate)}
+            </p>
+          </div>
+          {bidder && <BidderActions bidder={bidder} onChanged={onChanged} layout="page" />}
         </div>
-        {bidder && <BidderActions bidder={bidder} onChanged={onChanged} />}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <WeekNav shown={week.shown} label={week.label} isCurrent={week.isCurrent} onChange={week.onChange} />
+          <BidsHelp />
+        </div>
       </section>
 
-      <SummaryTiles tiles={tiles} />
-
       <Tabs
-        tabs={[{ key: 'week', label: 'This week' }, { key: 'history', label: 'History' }]}
+        tabs={[{ key: 'days', label: 'Days' }, { key: 'history', label: 'Past weeks' }]}
         value={activeTab}
         onChange={(k) => onParam({ tab: k === 'history' ? 'history' : null, day: null })}
         ariaLabel={`${row.name} views`}
@@ -204,23 +223,26 @@ export default function BidderView({
         {activeTab === 'history' ? (
           <HistoryTab bidderId={row.id} onOpenWeek={(wk) => onParam({ week: wk, tab: null, day: null })} />
         ) : (
-          <ul className="panel divide-y divide-zinc-100 overflow-hidden p-0 dark:divide-zinc-800">
-            {board.week.days.map((d, i) => (
-              <DayRow
-                key={d.day}
-                day={d}
-                counts={row.days[i]}
-                timezone={board.week.timezone}
-                active={shownDay === d.day}
-                onOpen={() => onParam({ day: d.day })}
-              />
-            ))}
-          </ul>
+          <div className="space-y-5">
+            <SummaryTiles tiles={tiles} />
+            <ul className="panel divide-y divide-zinc-100 overflow-hidden p-0 dark:divide-zinc-800">
+              {board.week.days.map((d, i) => (
+                <DayRow
+                  key={d.day}
+                  day={d}
+                  counts={row.days[i]}
+                  timezone={board.week.timezone}
+                  active={shownDay === d.day}
+                  onOpen={() => onParam({ day: d.day })}
+                />
+              ))}
+            </ul>
+          </div>
         )}
       </Tabs>
 
       <DayPanel
-        open={!!shownDay && !reviewing && activeTab === 'week'}
+        open={!!shownDay && !reviewing && activeTab === 'days'}
         title={panelDay ? `${panelDay.weekday} ${panelDay.date} · ${row.name}` : ''}
         subtitle={
           panelCounts?.source === 'folders'

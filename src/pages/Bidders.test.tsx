@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   listBids: vi.fn(),
   bidScreenshots: vi.fn(),
   archiveBidder: vi.fn(),
+  bidderReports: vi.fn(),
 }));
 // The real module's constants (reasons, labels) stay; every call is mocked.
 vi.mock('../api/endpoints', async (orig) => ({ ...(await orig<object>()), ...api }));
@@ -325,7 +326,7 @@ describe('To review', () => {
   it("the bidder page's tile reviews that bidder's pay week, whoever owns it, and Close returns to the page", async () => {
     api.bidsWeek.mockResolvedValue(board());
     renderPage('/bidders?bidder=b1');
-    fireEvent.click(await screen.findByRole('button', { name: 'Review pending' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
     const q = new URLSearchParams(seen.search);
     expect(q.get('bidder')).toBe('b1');
     expect(q.get('review')).toBe('week');
@@ -362,7 +363,7 @@ describe('To review', () => {
   it('Close after an in-app open from the bidder page steps back to that page', async () => {
     api.bidsWeek.mockResolvedValue(board());
     renderPage('/bidders?bidder=b1', ['/accounts']);
-    fireEvent.click(await screen.findByRole('button', { name: 'Review pending' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
     await shownScope();
     closeReview();
     await waitFor(() => expect(seen.search).toBe('?bidder=b1'));
@@ -396,6 +397,28 @@ describe('To review', () => {
     await screen.findByRole('button', { name: 'Ana' });
     await waitFor(() => expect(api.getBidBacklog).toHaveBeenCalled());
     expect(screen.queryByText(/^To review · /)).toBeNull();
+  });
+});
+
+describe("a bidder's page", () => {
+  it("is titled with the bidder's name; an old tab=history link opens Past weeks; ← Bidders drops the week", async () => {
+    api.bidsWeek.mockResolvedValue(board());
+    api.bidderReports.mockResolvedValue({ reports: [] });
+    renderPage('/bidders?bidder=b1&week=2026-11-22&day=2026-11-23&tab=history');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ana' })).toBeTruthy();
+    expect(document.title).toBe('Ana · Engineer');
+    expect(screen.getByRole('tab', { name: 'Past weeks' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Days' }));
+    expect(new URLSearchParams(seen.search).has('tab')).toBe(false);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Bidders' })[0]);
+    expect(seen.search).toBe('');
+  });
+
+  it('the header steps the pay week with the server days', async () => {
+    api.bidsWeek.mockResolvedValue(board());
+    renderPage('/bidders?bidder=b1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous week' }));
+    expect(new URLSearchParams(seen.search).get('week')).toBe('2026-11-22');
   });
 });
 

@@ -3035,6 +3035,8 @@ export interface BidWeekRow {
   name: string;
   status: Bidder['status'];
   country: string | null;
+  /** The profile (account) id when the profile exists, for the bidder page's link; null without one. */
+  profileId: string | null;
   profileName: string | null;
   rate: number;
   /** The user who owns the bidder; ownerName is null when that user no longer exists. */
