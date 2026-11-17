@@ -188,10 +188,15 @@ function settleUrl(range: BidderPreset, date: string, clock: ReportClock): { ran
   return { range: own, date: '' };
 }
 
-/** URL values (strings, possibly junk) -> typed filters. Never throws; bad values fall back to the defaults. */
-export function parseBidderValues(values: BidderUrlValues, clock: ReportClock): BidderFilters {
+/**
+ * URL values (strings, possibly junk) -> typed filters. Never throws; bad values fall back to the defaults.
+ * `defaultRange` is the preset an absent `range` means: This pay week on the Bidders tab, Last pay week on Pay.
+ */
+export function parseBidderValues(
+  values: BidderUrlValues, clock: ReportClock, defaultRange: BidderPreset = BIDDER_DEFAULT_RANGE,
+): BidderFilters {
   const base = { owner: values.owner, archived: values.archived === '1', q: values.q };
-  let range: BidderPreset = BIDDER_DEFAULT_RANGE;
+  let range: BidderPreset = defaultRange;
   let date = values.date;
   let from = values.from;
   let to = values.to;
@@ -212,8 +217,8 @@ export function parseBidderValues(values: BidderUrlValues, clock: ReportClock): 
 }
 
 /** Whether the bar shows anything that differs from its defaults (the Clear button). `owner` only counts for admins. */
-export function bidderCanClear(f: BidderFilters, isAdmin: boolean): boolean {
-  return (isAdmin && !!f.owner) || f.archived || !!f.q || f.range !== BIDDER_DEFAULT_RANGE || !!f.date;
+export function bidderCanClear(f: BidderFilters, isAdmin: boolean, defaultRange: BidderPreset = BIDDER_DEFAULT_RANGE): boolean {
+  return (isAdmin && !!f.owner) || f.archived || !!f.q || f.range !== defaultRange || !!f.date;
 }
 
 // ---- filters -> request ----------------------------------------------------
@@ -300,13 +305,16 @@ export function bidderCanStepBack(f: BidderFilters, shown?: ShownWeeks): boolean
   return !isWeekPreset(f.range) || !!shown;
 }
 
-/** The URL value `range` has for a preset (the default is left out of the URL). */
-export const rangeToUrl = (r: BidderPreset): string => (r === BIDDER_DEFAULT_RANGE ? '' : r);
+/** The URL value `range` has for a preset (the tab's default is left out of the URL). */
+export const rangeToUrl = (r: BidderPreset, defaultRange: BidderPreset = BIDDER_DEFAULT_RANGE): string =>
+  (r === defaultRange ? '' : r);
 
 /** The URL changes for a period: every period key (so no old key stays behind), `from` / `to` only for Custom. */
 export type BidderPatch = Partial<Record<BidderKey, string | undefined>>;
-export function periodPatch(range: BidderPreset, date: string, from = '', to = ''): BidderPatch {
-  return { range: rangeToUrl(range), date: date || undefined, from: from || undefined, to: to || undefined, week: undefined, period: undefined };
+export function periodPatch(
+  range: BidderPreset, date: string, from = '', to = '', defaultRange: BidderPreset = BIDDER_DEFAULT_RANGE,
+): BidderPatch {
+  return { range: rangeToUrl(range, defaultRange), date: date || undefined, from: from || undefined, to: to || undefined, week: undefined, period: undefined };
 }
 
 /**
@@ -316,12 +324,14 @@ export function periodPatch(range: BidderPreset, date: string, from = '', to = '
  * becomes `pay_week` / `two_pay_weeks` / `month`, held by `date`. Stepping forward never goes past the current pay
  * week / month / today. Null for a bad Custom, and for a pay week whose days haven't loaded (no `shown`).
  */
-export function stepBidderPeriod(f: BidderFilters, dir: -1 | 1, clock: ReportClock, shown?: ShownWeeks): BidderPatch | null {
+export function stepBidderPeriod(
+  f: BidderFilters, dir: -1 | 1, clock: ReportClock, shown?: ShownWeeks, defaultRange: BidderPreset = BIDDER_DEFAULT_RANGE,
+): BidderPatch | null {
   if (f.range === 'custom') {
     const days = bidderDays(f, clock);
     if (!days) return null;
     const next = stepRange(days, dir, 'custom');
-    return periodPatch('custom', '', next.from, next.to > clock.today ? clock.today : next.to);
+    return periodPatch('custom', '', next.from, next.to > clock.today ? clock.today : next.to, defaultRange);
   }
   let next: string;
   if (isWeekPreset(f.range)) {
@@ -333,18 +343,19 @@ export function stepBidderPeriod(f: BidderFilters, dir: -1 | 1, clock: ReportClo
     if (next > firstOfMonth(clock.today)) next = firstOfMonth(clock.today);
   }
   const settled = settle(f.range, next, clock);
-  return periodPatch(settled.range, settled.date);
+  return periodPatch(settled.range, settled.date, '', '', defaultRange);
 }
 
 /** The change for a preset picked in the dropdown. Custom is seeded with the days the period covered, up to today. */
 export function pickBidderPreset(
   range: BidderPreset, from: string | undefined, to: string | undefined, clock: ReportClock,
+  defaultRange: BidderPreset = BIDDER_DEFAULT_RANGE,
 ): BidderPatch {
   if (range === 'pay_week' || range === 'two_pay_weeks' || range === 'month') return {}; // only ever the active entry
-  if (range !== 'custom') return periodPatch(range, '');
+  if (range !== 'custom') return periodPatch(range, '', '', '', defaultRange);
   const end = to && to > clock.today ? clock.today : to ?? '';
   const start = from && from > clock.today ? clock.today : from ?? '';
-  return periodPatch('custom', '', start, end);
+  return periodPatch('custom', '', start, end, defaultRange);
 }
 
 // ---- search ----------------------------------------------------------------

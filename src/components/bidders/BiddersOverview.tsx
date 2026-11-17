@@ -16,6 +16,7 @@ import BiddersBand from './BiddersBand';
 import BiddersPerformanceTable from './BiddersPerformanceTable';
 import BiddersWeekTable from './BiddersWeekTable';
 import BidsHelp from './BidsHelp';
+import { PAY_POINTER } from '../../lib/bidsWords';
 
 const CARD_KEY = 'bidders.card.open';
 
@@ -23,8 +24,6 @@ const LENS_OPTIONS: { value: BidsLens; label: string }[] = [
   { value: 'week', label: 'Week' },
   { value: 'performance', label: 'Performance' },
 ];
-
-export const PAY_POINTER = 'Pay is shown for whole pay weeks. Pick This pay week, Last pay week or Last 2 pay weeks to see it.';
 
 type Props = {
   /** The table's view (`lens`) and its switch. */
@@ -40,6 +39,8 @@ type Props = {
   onOpenBidder: (id: string, week: string, day?: string) => void;
   /** The review overlay over one bidder's pending bids of the shown period (the page's range review). */
   onReview: (bidderId: string) => void;
+  /** Open the Pay tab (the range is kept: a month opens its pay weeks). */
+  onOpenPay: () => void;
   renderStatus: (row: BidPerformanceRow) => ReactNode;
   renderActions: (row: BidPerformanceRow) => ReactNode;
   empty: ReactNode;
@@ -54,7 +55,7 @@ type Props = {
 };
 
 export default function BiddersOverview({
-  lens, onLensChange, wholePayWeeks, ownerId, allOwners, onOpenBidder, onReview, renderStatus, renderActions, empty, request, data, error, onRetry, search, onClearSearch,
+  lens, onLensChange, wholePayWeeks, ownerId, allOwners, onOpenBidder, onReview, onOpenPay, renderStatus, renderActions, empty, request, data, error, onRetry, search, onClearSearch,
 }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -123,7 +124,12 @@ export default function BiddersOverview({
             />
           )}
 
-          {lens === 'week' && !wholePayWeeks && <p className="text-sm text-muted">{PAY_POINTER}</p>}
+          {lens === 'week' && !wholePayWeeks && (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-muted">{PAY_POINTER}</p>
+              <button type="button" className="btn-outline btn-sm" onClick={onOpenPay}>Open Pay tab</button>
+            </div>
+          )}
 
           {data.recordsStart && data.recordsStart.slice(0, 10) > data.start.slice(0, 10) && !data.payWeek && (
             <p className="text-xs text-muted">

@@ -3236,6 +3236,48 @@ export interface BidBacklog {
 
 export const getBidBacklog = (p: { ownerId?: string }) => apiFetch<BidBacklog>(`/bids/backlog${qs(p)}`);
 
+/** One bidder's line in a pay week (`/bids/pay`). `approved` / `pending` / `pay` are null when the count couldn't be read
+ *  (`error` is then set); `pending` is also null for an old folder-counted week (no pending figure exists for it). */
+export interface PayBidderRow {
+  bidderId: string;
+  name: string;
+  country: string | null;
+  profileName: string | null;
+  ownerId: string;
+  ownerName: string | null;
+  approved: number | null;
+  pending: number | null;
+  rate: number | null;
+  pay: number | null;
+  error: string | null;
+}
+/** One pay week: a closed week is what its weekly report stored (`source` "report"), or the live count when nothing was
+ *  stored ("live"); the open week is always live. */
+export interface PayWeekBlock {
+  /** The pay week's closing report day `YYYY-MM-DD` (a day inside it: what a review's `at` takes). */
+  weekEnd: string;
+  label: string;
+  /** The instant the pay week closes. */
+  end: string;
+  first: string;
+  last: string;
+  state: 'open' | 'closed';
+  source: 'report' | 'live';
+  bidders: PayBidderRow[];
+  totals: { approved: number; pending: number; pay: number; errors: number };
+}
+/** `/bids/pay`: each pay week touching the period, newest first. */
+export interface BidPay {
+  label: string;
+  timezone: string;
+  first: string;
+  last: string;
+  weeks: PayWeekBlock[];
+}
+
+export const getBidPay = (p: { period: 'week' | 'month' | 'custom'; date?: string; to?: string; weeks?: number; ownerId?: string }) =>
+  apiFetch<BidPay>(`/bids/pay${qs(p)}`);
+
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
 
 export const bidScreenshots = (id: string) => apiFetch<BidScreenshot[]>(`/bids/${id}/screenshots`);

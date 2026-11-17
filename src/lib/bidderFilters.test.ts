@@ -484,3 +484,30 @@ describe("a bidder's performance period", () => {
     expect(perf({ range: 'custom', from: '2026-10-20', to: '2026-10-05' })).toEqual(last);
   });
 });
+
+describe("the Pay tab's default range (Last pay week)", () => {
+  const PAY = 'last_pay_week' as const;
+  const parsePay = (over: Parameters<typeof parse>[0] = {}) =>
+    parseBidderValues({ ...BIDDER_URL_DEFAULTS, ...over }, AFTER, PAY);
+  it('parses an empty range as Last pay week; an explicit range still wins', () => {
+    expect(parsePay()).toMatchObject({ range: 'last_pay_week', date: '' });
+    expect(parsePay({ range: 'this_pay_week' })).toMatchObject({ range: 'this_pay_week' });
+    expect(bidderPeriodRequest(parsePay(), AFTER)).toEqual({ period: 'week', date: '2026-11-22' });
+  });
+  it('picking This pay week writes it (it is no longer the default); Last pay week leaves the URL', () => {
+    expect(pickBidderPreset('this_pay_week', '', '', AFTER, PAY)).toMatchObject({ range: 'this_pay_week', date: undefined });
+    expect(pickBidderPreset('last_pay_week', '', '', AFTER, PAY)).toMatchObject({ range: '', date: undefined });
+  });
+  it('Clear is not offered on Last pay week, but is on This pay week', () => {
+    expect(bidderCanClear(parsePay(), false, PAY)).toBe(false);
+    expect(bidderCanClear(parsePay({ range: 'this_pay_week' }), false, PAY)).toBe(true);
+  });
+  it('stepping back from Last pay week and forward again returns to the empty range', () => {
+    const last = parsePay();
+    const back = stepBidderPeriod(last, -1, AFTER, shownFor(last, AFTER), PAY)!;
+    expect(back).toMatchObject({ range: 'pay_week', date: '2026-11-14' });
+    const earlier = parseBidderValues({ ...BIDDER_URL_DEFAULTS, range: 'pay_week', date: '2026-11-14' }, AFTER, PAY);
+    const fwd = stepBidderPeriod(earlier, 1, AFTER, shownFor(earlier, AFTER), PAY)!;
+    expect(fwd).toMatchObject({ range: '', date: undefined });
+  });
+});

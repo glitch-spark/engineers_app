@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { rangeLabel } from '../../lib/dateRange';
 import {
   BIDDER_CLEAR_KEYS,
+  BIDDER_DEFAULT_RANGE,
   BIDDER_URL_DEFAULTS,
   bidderCanClear,
   bidderCanStepBack,
@@ -33,6 +34,8 @@ export type BidderFilterState = {
   /** The performance request for the period, or null while a Custom range is incomplete or invalid. */
   request: BidderPeriodRequest | null;
   clock: ReportClock;
+  /** What an absent `range` means on this tab (This pay week; the Pay tab's is Last pay week). */
+  defaultRange: BidderPreset;
   canClear: boolean;
   patch: (changes: Partial<Record<BidderKey, string>>) => void;
   clear: () => void;
@@ -43,15 +46,18 @@ export type BidderFilterState = {
  * page (`bidder`, `day`, `tab`, `mode`, `bid`) are never touched, so a bidder link survives every filter change.
  * Null until the server's report clock (`useReportClock`) has loaded: the presets mean nothing without it.
  */
-export function useBidderFilters(isAdmin: boolean, clock: ReportClock | undefined): BidderFilterState | null {
+export function useBidderFilters(
+  isAdmin: boolean, clock: ReportClock | undefined, defaultRange: BidderPreset = BIDDER_DEFAULT_RANGE,
+): BidderFilterState | null {
   const [values, patch] = useUrlFilters(BIDDER_URL_DEFAULTS);
   if (!clock) return null;
-  const filters = parseBidderValues(values, clock);
+  const filters = parseBidderValues(values, clock, defaultRange);
   return {
     filters,
     request: bidderPeriodRequest(filters, clock),
     clock,
-    canClear: bidderCanClear(filters, isAdmin),
+    defaultRange,
+    canClear: bidderCanClear(filters, isAdmin, defaultRange),
     patch,
     clear: () => patch(Object.fromEntries(BIDDER_CLEAR_KEYS.map((k) => [k, undefined])) as Partial<Record<BidderKey, string>>),
   };
@@ -103,7 +109,7 @@ export function BiddersFilterBar({
       )}
       <DateRangeFilter<BidderPreset>
         value={{ preset: filters.range, from: filters.from, to: filters.to }}
-        onChange={(v) => patch(pickBidderPreset(v.preset, v.from, v.to, clock))}
+        onChange={(v) => patch(pickBidderPreset(v.preset, v.from, v.to, clock, f.defaultRange))}
         presets={bidderPresetOptions(filters.range)}
         allowFuture={false}
         today={clock.today}
@@ -111,7 +117,7 @@ export function BiddersFilterBar({
           preset === filters.range ? bidderDays(filters, clock, shown) : bidderDays({ ...filters, range: preset, date: '' }, clock)}
         labelFor={(range) => bidderLabel(filters, range, serverLabel ?? (failed && range ? rangeLabel(range) : undefined))}
         onStep={(dir) => {
-          const change = stepBidderPeriod(filters, dir, clock, shown);
+          const change = stepBidderPeriod(filters, dir, clock, shown, f.defaultRange);
           if (change) patch(change);
         }}
         canStepForward={bidderCanStepForward(filters, clock)}

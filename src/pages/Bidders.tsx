@@ -19,8 +19,9 @@ import NeedsAttention from '../components/bidders/NeedsAttention';
 import ToReviewBlock from '../components/bidders/ToReviewBlock';
 import SelfBidsPanel, { type SelfScope } from '../components/bidders/SelfBidsPanel';
 import MyBidsTab from '../components/bidders/MyBidsTab';
+import PayTab from '../components/bidders/PayTab';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
-import { bidderPerfRequest, isWholePayWeeks, shownWeeksOf } from '../lib/bidderFilters';
+import { bidderPerfRequest, isWholePayWeeks, shownWeeksOf, type ShownWeeks } from '../lib/bidderFilters';
 import {
   lensFromUrl, lensPatch, ownerOptions as ownerOptionsFor, ownerScope, ownerSelectValue, pendingQuery, REVIEW_EXIT, reviewFromUrl, reviewPatch,
   reviewSwitchScope, reviewSwitchValue, sectionFromUrl, sectionPatch, type BidsSection, type ReviewScope, type ReviewSwitch,
@@ -45,8 +46,7 @@ type Param =
 const TABS = [
   { key: 'bidders', label: 'Bidders' },
   { key: 'mine', label: 'My bids' },
-  // Task 15 shows it.
-  { key: 'pay', label: 'Pay', hidden: true },
+  { key: 'pay', label: 'Pay' },
 ];
 
 function statusText(b: api.Bidder | undefined, status: string | undefined) {
@@ -64,12 +64,11 @@ export default function BiddersPage() {
   // Owner-scoped requests wait for the signed-in user: without it an admin's default owner (themselves) is unknown,
   // and no ownerId would ask the server for every owner.
   const ready = !!user?.id;
-  // The Pay tab ships later (Task 15): until then section=pay is the Bidders tab.
-  const urlSection = sectionFromUrl((k) => params.get(k));
-  const section: BidsSection = urlSection === 'pay' ? 'bidders' : urlSection;
+  const section: BidsSection = sectionFromUrl((k) => params.get(k));
   // The server's report clock: the list's periods mean nothing until it loads (the bidder view doesn't need it).
   const reportClock = useReportClock();
-  const filterState = useBidderFilters(isAdmin, reportClock.clock);
+  // The Pay tab opens on Last pay week (the week being paid), the others on This pay week.
+  const filterState = useBidderFilters(isAdmin, reportClock.clock, section === 'pay' ? 'last_pay_week' : undefined);
   const filters = filterState?.filters;
   const request = filterState?.request ?? null;
   // Admins open on their own team (`owner` absent); `all` is every owner (no ownerId); staff always see their own.
@@ -125,10 +124,18 @@ export default function BiddersPage() {
   );
   // The list: one /bids/performance request for the bar's period (its label is the bar's too).
   const perf = useSWR(
-    !bidderId && request && ready
+    !bidderId && request && ready && section !== 'pay'
       ? (['bid-performance', request.period, request.date ?? '', request.to ?? '', request.weeks ?? 1, showArchived, ownerId] as const)
       : null,
     () => api.getBidPerformance({ ...request!, includeArchived: showArchived, ownerId: ownerId || undefined }),
+  );
+  // The Pay tab: one /bids/pay request for the bar's period. Its key starts with `bid-pay`, which a review refreshes
+  // (isReviewedDataKey).
+  const pay = useSWR(
+    !bidderId && request && ready && section === 'pay'
+      ? (['bid-pay', request.period, request.date ?? '', request.to ?? '', request.weeks ?? 1, ownerId] as const)
+      : null,
+    () => api.getBidPay({ ...request!, ownerId: ownerId || undefined }),
   );
   const users = useSWR(isAdmin ? (['users-lookup'] as const) : null, () => api.lookupUsers());
   const ownerOptions = useMemo(() => ownerOptionsFor(users.data?.users ?? [], user?.id), [users.data, user?.id]);
@@ -271,6 +278,22 @@ export default function BiddersPage() {
     <MyBidsTab data={perf.data} allOwners={allOwners} onOpen={openMine} />
   );
 
+  // The report days the bar steps from: the pay weeks the server showed for the period.
+  const barShown: ShownWeeks | undefined = section === 'pay'
+    ? (pay.data ? { first: pay.data.first, last: pay.data.last } : undefined)
+    : (perf.data && shownWeeksOf(perf.data)) || undefined;
+
+  const payTab = !request ? (
+    <div className="panel p-4 text-sm text-muted">Pick a valid date range to see pay.</div>
+  ) : pay.error ? (
+    <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
+      Couldn&apos;t load pay.{' '}
+      <button type="button" className="underline" onClick={() => void pay.mutate()}>Retry</button>
+    </div>
+  ) : !pay.data ? loading : (
+    <PayTab data={pay.data} allOwners={allOwners} onReview={(weekEnd, id) => openReview({ kind: 'week', at: weekEnd }, id)} />
+  );
+
   const list = (
     <div className="space-y-5">
       {/* To review: the one place the backlog shows (all pending, any age), above the bar and the banners. */}
@@ -290,9 +313,9 @@ export default function BiddersPage() {
           section={section}
           ownerOptions={ownerOptions}
           ownerValue={ownerSelectValue(filters.owner, user?.id)}
-          serverLabel={request ? perf.data?.label : undefined}
-          failed={!!perf.error}
-          shown={(request && perf.data && shownWeeksOf(perf.data)) || undefined}
+          serverLabel={request ? (section === 'pay' ? pay.data : perf.data)?.label : undefined}
+          failed={!!(section === 'pay' ? pay.error : perf.error)}
+          shown={(request && barShown) || undefined}
         />
       ) : null}
 
@@ -311,7 +334,7 @@ export default function BiddersPage() {
           Couldn&apos;t load the pay week.{' '}
           <button type="button" className="underline" onClick={reportClock.retry}>Retry</button>
         </div>
-      ) : !filterState || !filters || !ready ? loading : section === 'mine' ? myBids : (
+      ) : !filterState || !filters || !ready ? loading : section === 'mine' ? myBids : section === 'pay' ? payTab : (
         <BiddersOverview
           lens={lensFromUrl((k) => params.get(k))}
           onLensChange={(l) => setParam(lensPatch(l))}
@@ -321,6 +344,7 @@ export default function BiddersPage() {
           onOpenBidder={(id, wk, day) => setParam({ bidder: id, week: wk, day: day ?? null, view: null, tab: null })}
           // The row's own Pending: the shown period, filtered to the row (never `bidder`: Close returns to the list).
           onReview={(id) => openReview({ kind: 'range' }, id)}
+          onOpenPay={() => setParam(sectionPatch('pay'))}
           renderStatus={(row) => statusText(byId[row.id], row.bidderStatus ?? row.status)}
           request={request}
           data={request ? perf.data : undefined}
@@ -434,8 +458,8 @@ export default function BiddersPage() {
         title={bidderId ? row?.name ?? 'Bids' : 'Bids'}
         action={bidderId ? undefined : (
           <div className="flex items-center gap-2">
-            {/* The Bidders tab has it beside its View switch. */}
-            {section !== 'bidders' && <BidsHelp />}
+            {/* The Bidders and Pay tabs have it in their own header. */}
+            {section === 'mine' && <BidsHelp />}
             <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>
             {/* The Bid Track package the server ships (always the latest). */}
             <ActionMenu

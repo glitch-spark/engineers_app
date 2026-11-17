@@ -49,6 +49,20 @@ export const BID_TRACK_STEPS =
 
 export const rateText = (rate: number): string => `${usd(rate)} per approved bid`;
 
+/** The Pay tab's words: a block's heading, its states, the pending warning and the empty week. */
+export const payWeekTitle = (label: string): string => label.replace('Week ending', 'Pay week ending');
+export const PAY_STATE = {
+  open: 'so far',
+  closedReport: 'closed (as posted to Slack)',
+  closedLive: 'closed (live count)',
+};
+/** The warning under a bidder's line; the copied text names the bidder (`⚠ Ana: 3 pending …`). */
+export const payPendingWarning = (n: number, name?: string): string =>
+  `⚠ ${name ? `${name}: ` : ''}${n} pending — not paid until reviewed`;
+export const PAY_EMPTY = 'No approved or pending bids in this pay week.';
+export const PAY_UNREADABLE = "couldn't read the count";
+export const PAY_POINTER = 'Pay is counted per pay week — see the Pay tab.';
+
 /** `MMM d` in the viewer's local time zone. */
 export function formatInviteDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

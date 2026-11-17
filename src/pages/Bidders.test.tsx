@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   getBidAlerts: vi.fn(),
   getBidInsights: vi.fn(),
   getBidBacklog: vi.fn(),
+  getBidPay: vi.fn(),
   bidsWeek: vi.fn(),
   listBids: vi.fn(),
   bidScreenshots: vi.fn(),
@@ -99,6 +100,15 @@ beforeEach(() => {
   api.getBidInsights.mockResolvedValue({ mine: null, platform: null });
   api.getBidBacklog.mockResolvedValue({ today: '2026-11-23', total: 0, todayCount: 0, oldestDay: null, bidders: [] });
   api.listBids.mockResolvedValue({ bids: [], week: '2026-11-29' });
+  api.getBidPay.mockResolvedValue({
+    label: 'Week ending Sun Nov 22', timezone: 'America/Chicago', first: '2026-11-15', last: '2026-11-22',
+    weeks: [{
+      weekEnd: '2026-11-22', label: 'Week ending Sun Nov 22', end: '2026-11-23T02:00:00Z', first: '2026-11-15', last: '2026-11-22',
+      state: 'closed', source: 'report',
+      bidders: [{ bidderId: 'b1', name: 'Ana', country: null, profileName: null, ownerId: 'u1', ownerName: 'Pat', approved: 10, pending: 3, rate: 0.06, pay: 0.6, error: null }],
+      totals: { approved: 10, pending: 3, pay: 0.6, errors: 0 },
+    }],
+  });
 });
 afterEach(() => {
   cleanup();
@@ -110,8 +120,7 @@ describe('the Bids page', () => {
     renderPage('/bidders');
     expect(screen.getByRole('heading', { name: 'Bids' })).toBeTruthy();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Bidders', 'My bids']);
-    expect(screen.queryByRole('tab', { name: 'Pay' })).toBeNull();
+    expect(tabs).toEqual(['Bidders', 'My bids', 'Pay']);
     expect(screen.getByRole('tab', { name: 'Bidders' }).getAttribute('aria-selected')).toBe('true');
     await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
     expect(lastPerfCall()).toMatchObject({ ownerId: 'u1' });
@@ -137,16 +146,42 @@ describe('the Bids page', () => {
     expect(screen.queryByRole('switch', { name: 'Show archived' })).toBeNull();
   });
 
-  it('show=bidders and section=pay open the Bidders tab', async () => {
-    renderPage('/bidders?section=pay');
-    await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
-    expect(screen.getByRole('tab', { name: 'Bidders' }).getAttribute('aria-selected')).toBe('true');
-    expect(await screen.findByRole('button', { name: 'Ana' })).toBeTruthy();
-    cleanup();
+  it('show=bidders opens the Bidders tab', async () => {
     renderPage('/bidders?show=bidders');
     expect(screen.getByRole('tab', { name: 'Bidders' }).getAttribute('aria-selected')).toBe('true');
     await waitFor(() => expect(seen.search).toBe(''));
   });
+
+  it('the Pay tab opens on Last pay week', async () => {
+    renderPage('/bidders?section=pay');
+    await waitFor(() => expect(api.getBidPay).toHaveBeenCalled());
+    expect(api.getBidPay).toHaveBeenCalledWith({ period: 'week', date: '2026-11-22', ownerId: 'u1' });
+    expect(screen.getByRole('tab', { name: 'Pay' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('button', { name: 'Copy pay summary' })).toBeTruthy();
+    // The bar shows the server's pay-week label, and the tab needs no performance request.
+    expect(await screen.findByText('Week ending Sun Nov 22')).toBeTruthy();
+    expect(api.getBidPerformance).not.toHaveBeenCalled();
+    expect(api.getBidPay.mock.calls.every(([p]) => p.ownerId === 'u1')).toBe(true);
+  });
+
+  it('a Pay tab Review opens that bidder over that pay week', async () => {
+    renderPage('/bidders?section=pay');
+    fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+    const q = new URLSearchParams(seen.search);
+    expect(q.get('review')).toBe('week');
+    expect(q.get('at')).toBe('2026-11-22');
+    expect(q.get('reviewBidder')).toBe('b1');
+    expect(q.get('section')).toBe('pay');
+  });
+
+  it('the Pay tab is reached from the tab bar', async () => {
+    renderPage('/bidders');
+    await screen.findByRole('button', { name: 'Ana' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Pay' }));
+    await waitFor(() => expect(new URLSearchParams(seen.search).get('section')).toBe('pay'));
+    await waitFor(() => expect(api.getBidPay).toHaveBeenCalledWith({ period: 'week', date: '2026-11-22', ownerId: 'u1' }));
+  });
+
 
   it('a tab change writes section and drops search and archived', async () => {
     renderPage('/bidders?q=ana&archived=1');
@@ -262,7 +297,7 @@ describe('To review', () => {
     const view = await screen.findByRole('radiogroup', { name: 'View' });
     expect(within(view).getByRole('radio', { name: 'Week' }).getAttribute('aria-checked')).toBe('true');
     expect(await screen.findByRole('columnheader', { name: 'Pay' })).toBeTruthy();
-    expect(screen.queryByText(/^Pay is shown for whole pay weeks/)).toBeNull();
+    expect(screen.queryByText(/^Pay is counted per pay week/)).toBeNull();
     expect(api.getBidInsights).not.toHaveBeenCalled();
     fireEvent.click(within(view).getByRole('radio', { name: 'Performance' }));
     expect(new URLSearchParams(seen.search).get('lens')).toBe('performance');
@@ -272,11 +307,15 @@ describe('To review', () => {
     expect(new URLSearchParams(seen.search).has('lens')).toBe(false);
   });
 
-  it('a month hides Pay and points to the pay-week presets', async () => {
+  it('a month hides Pay and points to the Pay tab, keeping the range', async () => {
     renderPage('/bidders?range=this_month');
-    expect(await screen.findByText(
-      'Pay is shown for whole pay weeks. Pick This pay week, Last pay week or Last 2 pay weeks to see it.')).toBeTruthy();
+    expect(await screen.findByText('Pay is counted per pay week — see the Pay tab.')).toBeTruthy();
     expect(screen.queryByRole('columnheader', { name: 'Pay' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Pay tab' }));
+    const q = new URLSearchParams(seen.search);
+    expect(q.get('section')).toBe('pay');
+    expect(q.get('range')).toBe('this_month');
+    await waitFor(() => expect(api.getBidPay).toHaveBeenCalledWith({ period: 'month', ownerId: 'u1' }));
   });
 
   it("the row's Pending badge opens the review over the list and Close returns to the list", async () => {
