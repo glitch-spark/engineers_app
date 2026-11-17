@@ -1,17 +1,25 @@
-/** Interviews tab filters, kept in the URL so views, reloads and shared links agree. */
+/** Interviews filters, kept in the URL so views, tabs, reloads and shared links agree. */
 import {
-  DATE_RANGE_PRESET_OPTIONS,
-  mondayOfWeek,
-  rangeForDatePreset,
-  toDateInputValue,
-  type DateRangePreset,
-} from './dateRangePresets';
+  customError,
+  legacyPreset,
+  matchPreset,
+  presetOptions,
+  rangeFor,
+  stepRange,
+  type DatePreset,
+  type DateRange,
+} from './dateRange';
 import { browserZone, toWall, zonedDayBounds } from './interviewTimezone';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/Pagination';
 import type { CallType, listCallerRounds } from '../api/endpoints';
 
 export type ListSort = 'latest' | 'company' | 'stage' | 'status';
 export type SortDir = 'asc' | 'desc';
 export type CalendarView = 'week' | 'month';
+
+/** The Interviews Date range: the standard presets plus Next week (the one page whose range may reach the future). */
+export const INTERVIEW_PRESETS = presetOptions({ before: ['next_week'] });
+export const DEFAULT_RANGE: DatePreset = 'this_week';
 
 export type InterviewFilters = {
   /** Owner id, or 'all' for every user. */
@@ -23,23 +31,28 @@ export type InterviewFilters = {
   caller: string;
   /** Callers tab: one user's interviews, or '' for every user (kept apart from `user`, which defaults to you). */
   owner: string;
-  /** Interviews tab: self or caller interviews ('' for both). */
-  call: CallType | '';
-  range: DateRangePreset;
+  /** Company / position search ('' = none). */
+  q: string;
+  range: DatePreset;
   from: string;
   to: string;
   sort: ListSort;
   dir: SortDir;
   page: number;
+  /** Rows per page: one of the shared sizes (10 / 20 / 50 / 100). */
+  size: number;
 };
 
 export type FilterDefaults = { userId: string };
 
-const SORTS: ListSort[] = ['latest', 'company', 'stage', 'status'];
-const PRESETS = DATE_RANGE_PRESET_OPTIONS.map((o) => o.value);
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** Every URL key this page owns (the values are all strings in the URL). Other keys (`panel`, `round`, `brief`, `zone`) are not ours. */
+export type InterviewKey =
+  | 'user' | 'profile' | 'stage' | 'status' | 'caller' | 'owner' | 'q'
+  | 'range' | 'from' | 'to' | 'sort' | 'dir' | 'page' | 'size';
+export type InterviewUrlValues = Record<InterviewKey, string>;
 
-function defaults(d: FilterDefaults): InterviewFilters {
+/** URL defaults (left out of the URL). `from` / `to` default to '' as the shared date control requires. */
+export function interviewUrlDefaults(d: FilterDefaults): InterviewUrlValues {
   return {
     user: d.userId,
     profile: '',
@@ -47,115 +60,146 @@ function defaults(d: FilterDefaults): InterviewFilters {
     status: '',
     caller: '',
     owner: '',
-    call: '',
-    range: 'this_week',
+    q: '',
+    range: DEFAULT_RANGE,
     from: '',
     to: '',
     sort: 'latest',
     dir: 'desc',
-    page: 1,
+    page: '1',
+    size: String(DEFAULT_PAGE_SIZE),
   };
 }
 
-export function parseInterviewFilters(params: URLSearchParams, d: FilterDefaults): InterviewFilters {
-  const base = defaults(d);
-  const get = (k: string) => params.get(k) ?? '';
-  const range = get('range') as DateRangePreset;
-  const sort = get('sort') as ListSort;
-  const page = Number.parseInt(get('page'), 10);
+/** The keys each tab's filter bar shows: what Clear resets and what makes Clear appear. */
+export function barKeys(callersView: boolean): InterviewKey[] {
+  return callersView
+    ? ['owner', 'caller', 'stage', 'status', 'q', 'range', 'from', 'to']
+    : ['user', 'profile', 'stage', 'status', 'q', 'range', 'from', 'to'];
+}
+
+const SORTS: ListSort[] = ['latest', 'company', 'stage', 'status'];
+const KNOWN_PRESETS = INTERVIEW_PRESETS.map((o) => o.value as string);
+
+/**
+ * The preset an old or odd URL value stands for: `prev_week` / `prev_month` (the old names) map to Last week /
+ * Last month; anything this page doesn't offer falls back to This week.
+ */
+export function normalizeRange(raw: string): DatePreset {
+  const mapped: string = legacyPreset(raw) ?? raw;
+  return KNOWN_PRESETS.includes(mapped) ? (mapped as DatePreset) : DEFAULT_RANGE;
+}
+
+/** URL values (strings, possibly junk) → typed filters. Never throws; bad values fall back to the defaults. */
+export function parseInterviewValues(values: InterviewUrlValues, d: FilterDefaults): InterviewFilters {
+  const range = normalizeRange(values.range);
+  const page = Number.parseInt(values.page, 10);
+  const size = Number.parseInt(values.size, 10);
   return {
-    user: get('user') || base.user,
-    profile: get('profile'),
-    stage: get('stage'),
-    status: get('status'),
-    caller: get('caller'),
-    owner: get('owner'),
-    call: get('call') === 'self' || get('call') === 'caller' ? (get('call') as CallType) : '',
-    range: PRESETS.includes(range) ? range : base.range,
-    from: DATE_RE.test(get('from')) ? get('from') : '',
-    to: DATE_RE.test(get('to')) ? get('to') : '',
-    sort: SORTS.includes(sort) ? sort : base.sort,
-    dir: get('dir') === 'asc' ? 'asc' : 'desc',
+    user: values.user || d.userId,
+    profile: values.profile,
+    stage: values.stage,
+    status: values.status,
+    caller: values.caller,
+    owner: values.owner,
+    q: values.q,
+    range,
+    // Only a Custom range reads from / to; they are kept as typed so the bar can say what is wrong with them.
+    from: range === 'custom' ? values.from : '',
+    to: range === 'custom' ? values.to : '',
+    sort: (SORTS as string[]).includes(values.sort) ? (values.sort as ListSort) : 'latest',
+    dir: values.dir === 'asc' ? 'asc' : 'desc',
     page: Number.isFinite(page) && page > 1 ? page : 1,
+    size: PAGE_SIZES.includes(size) ? size : DEFAULT_PAGE_SIZE,
   };
 }
 
-/** Query string for the URL; default values are left out. */
-export function serializeInterviewFilters(f: InterviewFilters, d: FilterDefaults): URLSearchParams {
-  const base = defaults(d);
-  const out = new URLSearchParams();
-  (Object.keys(base) as (keyof InterviewFilters)[]).forEach((k) => {
-    const v = f[k];
-    if (v === base[k] || v === '' || v === undefined) return;
-    out.set(k, String(v));
+/** A filters patch → URL string values (page numbers become strings; `undefined` stays, meaning "back to the default"). */
+export function patchToUrl(patch: Partial<InterviewFilters>): Partial<InterviewUrlValues> {
+  const out: Partial<InterviewUrlValues> = {};
+  (Object.keys(patch) as InterviewKey[]).forEach((k) => {
+    const v = patch[k];
+    out[k] = v === undefined ? undefined : String(v);
   });
   return out;
 }
 
-/** Monday → Sunday for week presets (the shared presets stop on Saturday). */
-export function listDateRange(f: Pick<InterviewFilters, 'range' | 'from' | 'to'>, now = new Date()): { from: string; to: string } {
-  if (f.range === 'custom') return { from: f.from, to: f.to };
-  const weekOffset = f.range === 'prev_week' ? -7 : f.range === 'next_week' ? 7 : f.range === 'this_week' ? 0 : null;
-  if (weekOffset !== null) {
-    const monday = mondayOfWeek(now);
-    monday.setDate(monday.getDate() + weekOffset);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return { from: toDateInputValue(monday), to: toDateInputValue(sunday) };
-  }
-  return rangeForDatePreset(f.range, now);
+/** Whether anything the tab's bar shows differs from its default (the Clear button). */
+export function barDiffers(f: InterviewFilters, d: FilterDefaults, callersView: boolean): boolean {
+  if (f.stage || f.status || f.q.trim()) return true;
+  if (f.range !== DEFAULT_RANGE) return true;
+  return callersView ? !!(f.owner || f.caller) : f.user !== d.userId || !!f.profile;
 }
 
-const WEEK_PRESETS: Record<string, number> = { prev_week: -1, this_week: 0, next_week: 1 };
+// ---- dates ----------------------------------------------------------------
 
-function parseKey(key: string): Date {
-  const [y, m, d] = key.split('-').map(Number);
-  return new Date(y, m - 1, d);
+/** A browser-local Date (e.g. from `toWall`) as `YYYY-MM-DD`. */
+export function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /**
- * What the calendar shows for the shared Date range: week presets → that
- * week; month presets and This year → Month view; Custom → the week of
- * `from` when it spans ≤ 7 days, else that month. `now` is today's wall date.
+ * The days the Date range stands for on `today` (`YYYY-MM-DD`, the chosen zone's date), or null while there are
+ * none to ask for: a Custom range that is missing a date, impossible, reversed or longer than a year.
  */
-export function calendarFromFilters(f: InterviewFilters, now: Date): { view: CalendarView; anchor: string } {
-  if (f.range in WEEK_PRESETS) return { view: 'week', anchor: listDateRange(f, now).from };
-  if (f.range === 'this_month' || f.range === 'prev_month') return { view: 'month', anchor: listDateRange(f, now).from };
-  if (f.range === 'custom' && f.from) {
-    const span = f.to ? Math.round((parseKey(f.to).getTime() - parseKey(f.from).getTime()) / 86400000) + 1 : 1;
-    return { view: span <= 7 ? 'week' : 'month', anchor: f.from };
-  }
-  if (f.range === 'this_year') {
-    return { view: 'month', anchor: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)) };
-  }
-  return { view: 'week', anchor: toDateInputValue(mondayOfWeek(now)) };
+export function rangeDates(f: Pick<InterviewFilters, 'range' | 'from' | 'to'>, today: string): DateRange | null {
+  if (f.range === 'custom') return customError(f.from, f.to) === null ? { from: f.from, to: f.to } : null;
+  return rangeFor(f.range, today, { allowFuture: true });
 }
 
-/** Date range for a calendar period (named presets when they match, else Custom). */
+function spanDays(r: DateRange): number {
+  const [fy, fm, fd] = r.from.split('-').map(Number);
+  const [ty, tm, td] = r.to.split('-').map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000) + 1;
+}
+
+/**
+ * What the calendar shows for the shared Date range. A range of a week or less shows that week; a longer one shows
+ * Month view of the month it starts in; This year shows the current month. null when the range has no dates (an
+ * invalid Custom range): the calendar then asks for nothing.
+ */
+export function calendarFromFilters(
+  f: Pick<InterviewFilters, 'range' | 'from' | 'to'>,
+  today: string,
+): { view: CalendarView; anchor: string } | null {
+  const r = rangeDates(f, today);
+  if (!r) return null;
+  if (f.range === 'this_year') return { view: 'month', anchor: `${today.slice(0, 7)}-01` };
+  return { view: spanDays(r) <= 7 ? 'week' : 'month', anchor: r.from };
+}
+
+/** The Date range value for a set of days: the preset it equals (Next week included), else Custom. */
+export function filtersForRange(range: DateRange, today: string): Pick<InterviewFilters, 'range' | 'from' | 'to'> {
+  const preset = matchPreset(range, today, INTERVIEW_PRESETS.map((o) => o.value), { allowFuture: true });
+  return preset === 'custom' ? { range: 'custom', from: range.from, to: range.to } : { range: preset, from: '', to: '' };
+}
+
+/** The whole week or month (as `view`) that contains `anchor`. */
+export function calendarPeriod(view: CalendarView, anchor: string): DateRange {
+  return rangeFor(view === 'week' ? 'this_week' : 'this_month', anchor, { allowFuture: true })!;
+}
+
+/** Date range for a calendar period (a named preset when it matches, else Custom). */
 export function filtersForCalendar(
   view: CalendarView,
   anchor: string,
-  now: Date,
+  today: string,
 ): Pick<InterviewFilters, 'range' | 'from' | 'to'> {
-  const day = parseKey(anchor);
-  if (view === 'week') {
-    const monday = mondayOfWeek(day);
-    const weeks = Math.round((monday.getTime() - mondayOfWeek(now).getTime()) / (7 * 86400000));
-    const named = Object.keys(WEEK_PRESETS).find((k) => WEEK_PRESETS[k] === weeks) as DateRangePreset | undefined;
-    if (named) return { range: named, from: '', to: '' };
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return { range: 'custom', from: toDateInputValue(monday), to: toDateInputValue(sunday) };
-  }
-  const months = (day.getFullYear() - now.getFullYear()) * 12 + (day.getMonth() - now.getMonth());
-  if (months === 0) return { range: 'this_month', from: '', to: '' };
-  if (months === -1) return { range: 'prev_month', from: '', to: '' };
-  return {
-    range: 'custom',
-    from: toDateInputValue(new Date(day.getFullYear(), day.getMonth(), 1)),
-    to: toDateInputValue(new Date(day.getFullYear(), day.getMonth() + 1, 0)),
-  };
+  return filtersForRange(calendarPeriod(view, anchor), today);
 }
+
+/** The calendar's own ‹ ›: one week or one month from `anchor`, written as the shared Date range. */
+export function stepCalendar(
+  view: CalendarView,
+  anchor: string,
+  dir: -1 | 1,
+  today: string,
+): Pick<InterviewFilters, 'range' | 'from' | 'to'> {
+  const next = stepRange(calendarPeriod(view, anchor), dir, view === 'week' ? 'this_week' : 'this_month');
+  return filtersForRange(next, today);
+}
+
+// ---- requests -------------------------------------------------------------
 
 /** Calendar day in the chosen zone → UTC instant, so "Monday" means that zone's Monday. */
 function dayStart(key: string, tz: string): string {
@@ -166,35 +210,52 @@ function dayEnd(key: string, tz: string): string {
   return new Date(zonedDayBounds(key, tz)[1].getTime() - 1).toISOString();
 }
 
+/** The search text to send, or nothing. */
+const searchText = (f: Pick<InterviewFilters, 'q'>): string => f.q.trim();
+
+/** Presets ("this week", …) are worked out from today's date in the chosen zone. */
+function zoneToday(now: Date, tz: string): string {
+  return dayKey(toWall(now, tz));
+}
+
+/** The Self interviews list request (always `callType=self`: rounds with no caller), or null while the Date range is invalid (nothing to ask for). */
 export function listQuery(
   f: InterviewFilters,
   limit: number,
   now = new Date(),
   tz: string = browserZone(),
-): Record<string, string | number> {
-  // Presets ("this week", …) are worked out from today's date in the chosen zone.
-  const { from, to } = listDateRange(f, toWall(now, tz));
+): Record<string, string | number> | null {
+  const days = rangeDates(f, zoneToday(now, tz));
+  if (!days) return null;
   const q: Record<string, string | number> = { page: f.page, limit, sort: f.sort, dir: f.dir };
-  if (from) q.from = dayStart(from, tz);
-  if (to) q.to = dayEnd(to, tz);
+  q.from = dayStart(days.from, tz);
+  q.to = dayEnd(days.to, tz);
   if (f.user && f.user !== 'all') q.creatorId = f.user;
   if (f.profile) q.accountId = f.profile;
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
-  if (f.call) q.callType = f.call;
+  q.callType = 'self';
+  if (searchText(f)) q.q = searchText(f);
   return q;
 }
 
-/** Callers list: the Date range like the Interviews list, the Caller filter, newest first by default. */
-export function callerRoundsQuery(f: InterviewFilters, limit: number, now = new Date(), tz: string = browserZone()) {
-  const { from, to } = listDateRange(f, toWall(now, tz));
+/** Caller interviews list: the Date range like the Self interviews list, the Caller filter, newest first by default. Null while the range is invalid. */
+export function callerRoundsQuery(
+  f: InterviewFilters,
+  limit: number,
+  now = new Date(),
+  tz: string = browserZone(),
+): Parameters<typeof listCallerRounds>[0] | null {
+  const days = rangeDates(f, zoneToday(now, tz));
+  if (!days) return null;
   const q: Parameters<typeof listCallerRounds>[0] = { page: f.page, limit, dir: f.dir };
-  if (from) q.from = dayStart(from, tz);
-  if (to) q.to = dayEnd(to, tz);
+  q.from = dayStart(days.from, tz);
+  q.to = dayEnd(days.to, tz);
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
   if (f.caller) q.callerId = f.caller;
   if (f.owner) q.creatorId = f.owner;
+  if (searchText(f)) q.q = searchText(f);
   return q;
 }
 
@@ -208,10 +269,11 @@ export type RoundsQuery = {
   callerOnly?: string;
   callerId?: string;
   callType?: CallType;
+  q?: string;
 };
 
 /** `range` is YYYY-MM-DD in `tz` with an exclusive `to`; sent as that zone's midnights.
- * `callers`: the Callers calendar — every user's caller rounds, narrowed by the Caller filter. */
+ * `callers`: the Caller interviews calendar — every user's caller rounds, narrowed by the Caller filter. */
 export function roundsQuery(
   f: InterviewFilters,
   range: { from: string; to: string },
@@ -226,22 +288,36 @@ export function roundsQuery(
   } else {
     if (f.user && f.user !== 'all') q.creatorId = f.user;
     if (f.profile) q.accountId = f.profile;
-    if (f.call) q.callType = f.call;
+    q.callType = 'self';
   }
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
+  if (searchText(f)) q.q = searchText(f);
   return q;
 }
 
 /**
- * Query string for the List | Calendar switch: every filter carries over
- * (each view ignores the other's keys); only the page number and one-off
- * `panel` links are dropped.
+ * Query string for the List | Calendar switch and the Self interviews | Caller interviews tabs: every filter carries
+ * over (each view ignores the other's keys); only the page number, one-off links (`panel`, `round`, `brief`)
+ * and the retired `call` key are dropped.
  */
 export function viewSwitchQuery(params: URLSearchParams): string {
   const keep = new URLSearchParams(params);
-  keep.delete('page');
-  keep.delete('panel');
+  ['page', 'panel', 'round', 'brief', 'call'].forEach((k) => keep.delete(k));
   const s = keep.toString();
   return s ? `?${s}` : '';
+}
+
+/**
+ * Old links: `/interviews?call=caller` (the retired Self / Caller filter) goes to the matching Caller interviews view with
+ * the other keys kept; a leftover `call=self` (or anything else) is dropped. Self interviews is always self rounds.
+ */
+export function legacyCallTarget(pathname: string, search: string): string | null {
+  const params = new URLSearchParams(search);
+  if (!params.has('call')) return null;
+  const toCallers = params.get('call') === 'caller';
+  params.delete('call');
+  const qs = params.toString();
+  const path = toCallers ? pathname.replace(/^\/interviews/, '/interviews/callers') : pathname;
+  return `${path}${qs ? `?${qs}` : ''}`;
 }

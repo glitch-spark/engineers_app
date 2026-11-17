@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, ScanSearch } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import { notify } from '../../lib/notify';
-import Segmented from './Segmented';
+import Segmented from '../Segmented';
 
 const PREFS_KEY = 'jobApplies.newRun';
 const LAST_SHEET_KEY = 'jobApplies.lastSheetUrl';

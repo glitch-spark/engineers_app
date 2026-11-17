@@ -1,21 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ExternalLink, Trash2 } from 'lucide-react';
 import type { JobApplyRun } from '../../api/endpoints';
-import Pagination from './Pagination';
-import Segmented from './Segmented';
+import Pagination from '../Pagination';
+import Segmented from '../Segmented';
 import { APPLIED_UI } from './appliedUi';
 import { expiresHint, formatDateTime, isActive, runGroup, runStep } from './format';
 import { safeHref } from '../../lib/safeHref';
+import { useUrlFilters } from '../../lib/useUrlFilters';
+import { RUN_URL_DEFAULTS, clampRunPage, parseRunValues, shownRunTab, type RunTab } from '../../lib/jobApplyRunFilters';
 
-type Tab = ReturnType<typeof runGroup> | 'all';
+type Tab = RunTab;
 const TABS: { value: Tab; label: string }[] = [
   { value: 'needs', label: 'Needs you' },
   { value: 'progress', label: 'In progress' },
   { value: 'finished', label: 'Finished' },
   { value: 'all', label: 'All' },
 ];
-const SIZES = [10, 25, 50];
 
 /** What the run's row says: its step and what's left, and the one thing to do next. */
 export function runRow(run: JobApplyRun): { status: string; links: string; action: string | null } {
@@ -49,16 +50,18 @@ export function runRow(run: JobApplyRun): { status: string; links: string; actio
 export default function RunsTable({ runs, onDelete }: { runs: JobApplyRun[]; onDelete: (run: JobApplyRun) => void }) {
   const counts = { needs: 0, progress: 0, finished: 0, all: runs.length };
   for (const r of runs) counts[runGroup(r)] += 1;
-  const [tab, setTab] = useState<Tab | null>(null);
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState(SIZES[0]);
+  const [urlValues, patchUrl] = useUrlFilters(RUN_URL_DEFAULTS);
+  const filters = parseRunValues(urlValues);
+  const size = filters.size;
   // Start on Needs you, or All when nothing needs you.
-  const shown: Tab = tab ?? (counts.needs > 0 ? 'needs' : 'all');
+  const shown = shownRunTab(filters, counts.needs);
   const list = shown === 'all' ? runs : runs.filter((r) => runGroup(r) === shown);
   const totalPages = Math.max(1, Math.ceil(list.length / size));
+  const page = clampRunPage(filters.page, list.length, size);
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+    // A link or a deleted run can leave the page past the end.
+    if (filters.page !== page) patchUrl({ page: String(page) });
+  }, [filters.page, page, patchUrl]);
   const pageRuns = list.slice((page - 1) * size, page * size);
   const info = { page, limit: size, total: list.length, totalPages, hasPrev: page > 1, hasNext: page < totalPages };
 
@@ -68,10 +71,7 @@ export default function RunsTable({ runs, onDelete }: { runs: JobApplyRun[]; onD
         label="Runs"
         value={shown}
         options={TABS.map((t) => ({ ...t, count: counts[t.value] }))}
-        onChange={(v) => {
-          setTab(v);
-          setPage(1);
-        }}
+        onChange={(v) => patchUrl({ status: v })}
       />
       <div className="table-wrap">
         {pageRuns.length === 0 ? (
@@ -154,13 +154,9 @@ export default function RunsTable({ runs, onDelete }: { runs: JobApplyRun[]; onD
       </div>
       <Pagination
         info={info}
-        onPage={setPage}
+        onPage={(n) => patchUrl({ page: String(n) })}
         pageSize={size}
-        onPageSize={(n) => {
-          setSize(n);
-          setPage(1);
-        }}
-        sizes={SIZES}
+        onPageSize={(n) => patchUrl({ size: String(n) })}
         label="Runs pages"
       />
     </section>

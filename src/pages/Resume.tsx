@@ -246,7 +246,7 @@ export default function ResumeGeneratorPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Resumes" />
+      <PageHeader title="Tailor resume" />
       <ResumeTabs />
 
       <div className="panel p-4">

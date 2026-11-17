@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import useSWR from 'swr';
 import { Download, ExternalLink } from 'lucide-react';
 import { BASE_URL } from '../../api/client';
@@ -7,7 +7,7 @@ import type { CompareEntry, CompareRow, ResumeCompare } from '../../api/endpoint
 import { safeHref } from '../../lib/safeHref';
 import { stageLabel } from '../../lib/stageBadge';
 import { bandClass } from '../jobApplies/format';
-import { FilterBar, filterParams, filtersError, type StatsFilters } from './controls';
+import { StatsFilterBar, useStatsFilters } from './statsFilters';
 
 function shortDay(iso: string | null): string {
   if (!iso) return '';
@@ -75,47 +75,38 @@ function JobCell({ row }: { row: CompareRow }) {
  * Resume compare: the jobs that got an interview, one row each, and one column per user with their resume for the
  * same job and its score. A cell that got the interview is highlighted.
  */
-export default function ResumeCompareTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
-  const params = filterParams(filters);
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => setQ(search.trim()), 300);
-    return () => clearTimeout(t);
-  }, [search]);
+export default function ResumeCompareTab() {
+  const f = useStatsFilters('resume');
+  const params = f.params;
+  const q = f.values.q.trim();
   const { data, error, isLoading } = useSWR(
-    filtersError(filters) ? null : ['resume-compare', params.region, params.period, params.date, params.to, q],
-    () => api.getResumeCompare({ ...params, q: q || undefined }),
+    params ? ['resume-compare', params.region, params.period, params.date, params.to, q] : null,
+    () => api.getResumeCompare({ ...params!, q: q || undefined }),
     { keepPreviousData: true },
   );
+  const shown = params ? data : undefined; // keepPreviousData would otherwise show the last range under an invalid one
 
   return (
     <div className="space-y-4">
-      <FilterBar value={filters} onChange={onFilters}>
-        <input
-          type="search"
-          className="input !w-56"
-          placeholder="Search company…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search company"
-        />
-        {isLoading && data && <span className="spinner spinner-sm" role="status" aria-label="Loading" />}
-      </FilterBar>
+      <StatsFilterBar f={f}>
+        {isLoading && shown && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
+      </StatsFilterBar>
       <p className="text-xs text-muted">
         Jobs that got an interview in this period. Each column is a person’s resume for the same job and its score;
         the highlighted cell got the interview. “—” means no resume for that job. A region shows its profiles’
         interviews and resumes.
       </p>
 
-      {error ? (
+      {!params ? (
+        <p className="panel p-6 text-sm text-muted">Pick a valid date range to see statistics.</p>
+      ) : error ? (
         <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the comparison. Try again.</p>
-      ) : !data ? (
+      ) : !shown ? (
         <p className="panel flex items-center gap-2 p-6 text-sm text-muted" role="status">
           <span className="spinner spinner-sm" aria-hidden /> Loading…
         </p>
       ) : (
-        <CompareTable data={data} />
+        <CompareTable data={shown} />
       )}
     </div>
   );

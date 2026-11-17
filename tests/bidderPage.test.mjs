@@ -1,22 +1,8 @@
 // The single Bidders page helpers (spec 2026-11-14-bidders-single-page-design.md). Run: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardOpen, periodFromParams, periodToParams, rowMoney, shownRows, stripItems, timeColumns } from '../src/lib/bidderPage.ts';
+import { cardOpen, rowMoney, timeColumns, weekCell } from '../src/lib/bidderPage.ts';
 import { bidderTopLines } from '../src/lib/bidderInsights.ts';
-
-test('strip: one line of totals, today only for the current pay week', () => {
-  const t = { approved: 743, pay: 44.58, toReview: 18, rejected: 2, today: { day: '2026-11-18', approved: 0, pending: 18 } };
-  assert.deepEqual(stripItems(t).map((i) => [i.key, i.text, i.tone]), [
-    ['approved', '743 approved · $44.58 pay', 'good'],
-    ['review', '18 to review', 'warn'],
-    ['rejected', '2 rejected', 'bad'],
-    ['today', 'Today 0 (18 pending)', null],
-  ]);
-  const quiet = stripItems({ approved: 1200, pay: 0, toReview: 0, rejected: 0, today: null });
-  assert.deepEqual(quiet.map((i) => [i.key, i.text, i.tone]), [
-    ['approved', '1,200 approved · $0.00 pay', 'good'], ['review', '0 to review', null], ['rejected', '0 rejected', null]]);
-  assert.equal(stripItems({ approved: 5, pay: null, toReview: 0, rejected: 0 })[0].text, '5 approved');
-});
 
 test('row money: the pay-week block in week mode, report-day sums otherwise', () => {
   const week = { approved: 10, pending: 4, rejected: 2, pay: 5, toReview: 4, source: 'records', error: null };
@@ -40,12 +26,22 @@ test('time columns: report days in a pay week, pay weeks in a month', () => {
     { start: '2026-11-29', end: '2026-12-02', partial: false }] };
   assert.deepEqual(timeColumns(month).map((c) => [c.key, c.label, c.sub]), [
     ['w0', 'Oct 1–3', 'part'], ['w1', 'Oct 25–31', ''], ['w2', 'Nov 29 – Dec 2', '']]);
+  assert.deepEqual(timeColumns(month).map((c) => c.end), ['2026-10-03', '2026-10-31', '2026-12-02']);
+  assert.equal(timeColumns(week)[0].end, undefined);
 });
 
-test('the card is open unless closed before', () => {
-  assert.equal(cardOpen(null), true);
+test('the card is folded unless opened before', () => {
+  assert.equal(cardOpen(null), false);
   assert.equal(cardOpen('open'), true);
   assert.equal(cardOpen('closed'), false);
+});
+
+test('week cell: the day cell in week mode, the column split from weeklyPending otherwise', () => {
+  const day = { day: '2026-11-16', approved: 10, pending: 0, rejected: 0 };
+  assert.deepEqual(weekCell({ weekly: [10], weeklyPending: [0], dayCells: [day] }, 0, true), day);
+  assert.deepEqual(weekCell({ weekly: [14], weeklyPending: [4] }, 0, false), { approved: 10, pending: 4, rejected: null });
+  // An older server without weeklyPending: the split is unknown, never a made-up number.
+  assert.deepEqual(weekCell({ weekly: [14] }, 0, false), { approved: null, pending: null, rejected: null });
 });
 
 test('top bidders add longest streak and most interviews; an older server without them still works', () => {
@@ -61,31 +57,4 @@ test('top bidders add longest streak and most interviews; an older server withou
     ['Most interviews', '2', 'Best on the platform', null],
   ]);
   assert.equal(bidderTopLines({ bids: none, per100: none, costPerInterview: none }).length, 3);
-});
-
-test('the period lives in the URL: week for a pay week, period / date / to otherwise', () => {
-  assert.deepEqual(periodFromParams({}, '2026-11-14'), { period: 'week', day: '', from: '2026-11-01', to: '2026-11-14' });
-  assert.deepEqual(periodFromParams({ week: '2026-11-08' }, '2026-11-14'), { period: 'week', day: '2026-11-08', from: '2026-11-01', to: '2026-11-14' });
-  assert.deepEqual(periodFromParams({ period: 'month', date: '2026-10-15' }, '2026-11-14'),
-    { period: 'month', day: '2026-10-15', from: '2026-11-01', to: '2026-11-14' });
-  assert.deepEqual(periodFromParams({ period: 'custom', date: '2026-10-01', to: '2026-10-20' }, '2026-11-14'),
-    { period: 'custom', day: '', from: '2026-10-01', to: '2026-10-20' });
-  assert.deepEqual(periodToParams({ period: 'week', day: '', from: 'x', to: 'y' }), { week: null, period: null, date: null, to: null });
-  assert.deepEqual(periodToParams({ period: 'week', day: '2026-11-08', from: 'x', to: 'y' }), { week: '2026-11-08', period: null, date: null, to: null });
-  assert.deepEqual(periodToParams({ period: 'month', day: '2026-10-15', from: 'x', to: 'y' }), { week: null, period: 'month', date: '2026-10-15', to: null });
-  assert.deepEqual(periodToParams({ period: 'custom', day: '', from: '2026-10-01', to: '2026-10-20' }),
-    { week: null, period: 'custom', date: '2026-10-01', to: '2026-10-20' });
-});
-
-test('the strip shows a dash for counts it does not know (folder weeks)', () => {
-  assert.deepEqual(stripItems({ approved: 30, pay: 15, toReview: null, rejected: null }).map((i) => i.text),
-    ['30 approved · $15.00 pay', '— to review', '— rejected']);
-});
-
-test('the All / Bidders / Self filter', () => {
-  const data = { bidders: [{ id: 'a' }, { id: 'b' }], selfRows: [{ ownerId: 'o' }] };
-  assert.deepEqual(shownRows(data, 'all'), { bidders: ['a', 'b'], self: ['o'], total: true });
-  assert.deepEqual(shownRows(data, 'bidders'), { bidders: ['a', 'b'], self: [], total: true });
-  assert.deepEqual(shownRows(data, 'self'), { bidders: [], self: ['o'], total: false });
-  assert.deepEqual(shownRows({ bidders: [{ id: 'a' }] }, 'self'), { bidders: [], self: [], total: false });
 });

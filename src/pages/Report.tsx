@@ -73,7 +73,7 @@ export default function ReportPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Plans" />
+      <PageHeader title="Daily plan" />
 
       <div className="toolbar flex flex-wrap items-center gap-2">
         <button type="button" className="btn-icon" aria-label="Previous week" onClick={() => setParam({ week: dateParam(addDays(monday, -7)) })}>
@@ -98,7 +98,7 @@ export default function ReportPage() {
         )}
         {isAdmin && viewUser && (
           <span className="ml-auto flex items-center gap-2 text-sm">
-            <Link to={`/report?week=${week}`} className="underline">← Team</Link>
+            <Link to={`/plans?week=${week}`} className="underline">← Team</Link>
             <span className="text-muted">Viewing {viewedName?.name || viewedName?.email || 'teammate'}</span>
           </span>
         )}

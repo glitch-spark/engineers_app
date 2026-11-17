@@ -1,32 +1,49 @@
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import useSWR from 'swr';
 import Select from '../../components/Select';
+import DateRangeFilter from '../../components/filters/DateRangeFilter';
+import FilterBar, { FilterField } from '../../components/filters/FilterBar';
+import SearchFilter from '../../components/filters/SearchFilter';
 import * as api from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { formatProfileLabel } from '../../lib/countries';
 import { archivedLabel, filterProfiles } from '../../lib/profileArchive';
-import { DATE_RANGE_PRESET_OPTIONS, type DateRangePreset } from '../../lib/dateRangePresets';
+import { INTERVIEW_PRESETS, type InterviewFilters as Filters } from '../../lib/interviewFilters';
 import { INTERVIEW_STAGE_ORDER, INTERVIEW_STATUSES, stageLabel } from '../../lib/stageBadge';
-import type { InterviewFilters as Filters } from '../../lib/interviewFilters';
 import { useCallers } from '../../lib/useCallers';
+import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
+import { zonedDateKey } from '../../lib/interviewTimezone';
 
-/** One filter bar for List and Calendar; the Date range also picks the calendar's period.
- * `callers`: the Callers calendar shows every user's caller rounds, so a Caller filter replaces User and Profile. */
+/**
+ * The one filter bar for List and Calendar, on the Self interviews and Caller interviews tabs: who, Stage, Status, search,
+ * Date range, Clear. The Date range may reach the future (it offers Next week), and it also picks the calendar's period.
+ * `callers`: Caller interviews shows every user's caller rounds, so a Caller filter replaces User and Profile. Self interviews has no Self / Caller filter: it is always self rounds.
+ */
 export default function InterviewFilters({
   filters,
   update,
+  canClear,
+  onClear,
   callers: callersView = false,
 }: {
   filters: Filters;
   update: (patch: Partial<Filters>) => void;
+  canClear: boolean;
+  onClear: () => void;
   callers?: boolean;
 }) {
+  const ids = useId();
+  const id = (name: string) => `${ids}-${name}`;
   const { user } = useAuth();
-  const { callers } = useCallers();
+  const { tz } = useInterviewTimezone();
+  const { callers, byId } = useCallers();
+  // An archived caller opened from the Manage callers tab (`?caller=`) stays selectable.
+  const picked = filters.caller && filters.caller !== 'unassigned' ? byId.get(filters.caller) : undefined;
   const callerOptions = [
     { value: '', label: 'All callers' },
     { value: 'unassigned', label: 'No caller yet' },
     ...callers.map((c) => ({ value: c._id, label: c.name })),
+    ...(picked?.archived ? [{ value: picked._id, label: `${picked.name} (archived)` }] : []),
   ];
   const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
   const { data: accountsData } = useSWR(['accounts-lookup'], () => api.lookupAccounts());
@@ -55,78 +72,49 @@ export default function InterviewFilters({
     ...(INTERVIEW_STAGE_ORDER as readonly string[]).map((s) => ({ value: s, label: stageLabel(s) })),
   ];
   const statusOptions = [{ value: '', label: 'All statuses' }, ...INTERVIEW_STATUSES];
-  const callOptions = [
-    { value: '', label: 'Self and caller' },
-    { value: 'self', label: 'Self' },
-    { value: 'caller', label: 'Caller' },
-  ];
 
   return (
-    <div className="panel flex flex-wrap items-end gap-3 px-4 py-3">
+    <FilterBar canClear={canClear} onClear={onClear}>
       {callersView ? (
         <>
-          <div className="w-48">
-            <label htmlFor="ivf-owner" className="mb-1 block text-xs text-muted">User</label>
+          <FilterField label="User" htmlFor={id('owner')} width="w-48">
             <Select
-              id="ivf-owner"
+              id={id('owner')}
               value={filters.owner}
               onChange={(v) => update({ owner: v })}
-              // "All users" is '' here: the Callers tab shows everyone's caller rounds by default.
+              // "All users" is '' here: the Caller interviews tab shows everyone's caller rounds by default.
               options={userOptions.map((o) => (o.value === 'all' ? { ...o, value: '' } : o))}
             />
-          </div>
-          <div className="w-48">
-            <label htmlFor="ivf-caller" className="mb-1 block text-xs text-muted">Caller</label>
-            <Select id="ivf-caller" value={filters.caller} onChange={(v) => update({ caller: v })} options={callerOptions} />
-          </div>
+          </FilterField>
+          <FilterField label="Caller" htmlFor={id('caller')} width="w-48">
+            <Select id={id('caller')} value={filters.caller} onChange={(v) => update({ caller: v })} options={callerOptions} />
+          </FilterField>
         </>
       ) : (
         <>
-          <div className="w-44">
-            <label htmlFor="ivf-user" className="mb-1 block text-xs text-muted">User</label>
-            <Select id="ivf-user" value={filters.user} onChange={(v) => update({ user: v, profile: '' })} options={userOptions} />
-          </div>
-          <div className="w-48">
-            <label htmlFor="ivf-profile" className="mb-1 block text-xs text-muted">Profile</label>
-            <Select id="ivf-profile" value={filters.profile} onChange={(v) => update({ profile: v })} options={profileOptions} />
-          </div>
-          <div className="w-40">
-            <label htmlFor="ivf-call" className="mb-1 block text-xs text-muted">Self / Caller</label>
-            <Select id="ivf-call" value={filters.call} onChange={(v) => update({ call: v as Filters['call'] })} options={callOptions} />
-          </div>
+          <FilterField label="User" htmlFor={id('user')}>
+            <Select id={id('user')} value={filters.user} onChange={(v) => update({ user: v, profile: '' })} options={userOptions} />
+          </FilterField>
+          <FilterField label="Profile" htmlFor={id('profile')} width="w-48">
+            <Select id={id('profile')} value={filters.profile} onChange={(v) => update({ profile: v })} options={profileOptions} />
+          </FilterField>
         </>
       )}
-      <div className="w-40">
-        <label htmlFor="ivf-stage" className="mb-1 block text-xs text-muted">Stage</label>
-        <Select id="ivf-stage" value={filters.stage} onChange={(v) => update({ stage: v })} options={stageOptions} />
-      </div>
-      <div className="w-36">
-        <label htmlFor="ivf-status" className="mb-1 block text-xs text-muted">Status</label>
-        <Select id="ivf-status" value={filters.status} onChange={(v) => update({ status: v })} options={statusOptions} />
-      </div>
-      <div className="w-44">
-        <label htmlFor="ivf-range" className="mb-1 block text-xs text-muted">Date range</label>
-        <Select
-          id="ivf-range"
-          value={filters.range}
-          onChange={(v) => update({ range: v as DateRangePreset })}
-          options={DATE_RANGE_PRESET_OPTIONS}
-        />
-      </div>
-      {filters.range === 'custom' && (
-        <>
-          <div className="w-40">
-            <label htmlFor="ivf-from" className="mb-1 block text-xs text-muted">From</label>
-            <input id="ivf-from" type="date" className="input text-sm" value={filters.from} max={filters.to || undefined}
-              onChange={(e) => update({ from: e.target.value })} />
-          </div>
-          <div className="w-40">
-            <label htmlFor="ivf-to" className="mb-1 block text-xs text-muted">To</label>
-            <input id="ivf-to" type="date" className="input text-sm" value={filters.to} min={filters.from || undefined}
-              onChange={(e) => update({ to: e.target.value })} />
-          </div>
-        </>
-      )}
-    </div>
+      <FilterField label="Stage" htmlFor={id('stage')} width="w-40">
+        <Select id={id('stage')} value={filters.stage} onChange={(v) => update({ stage: v })} options={stageOptions} />
+      </FilterField>
+      <FilterField label="Status" htmlFor={id('status')} width="w-36">
+        <Select id={id('status')} value={filters.status} onChange={(v) => update({ status: v })} options={statusOptions} />
+      </FilterField>
+      <SearchFilter value={filters.q} onChange={(q) => update({ q })} placeholder="Search interviews…" />
+      <DateRangeFilter
+        value={{ preset: filters.range, from: filters.from, to: filters.to }}
+        onChange={(v) => update({ range: v.preset, from: v.from, to: v.to })}
+        presets={INTERVIEW_PRESETS}
+        allowFuture
+        // The zone's date, so the bar, the list and the calendar all agree on what "this week" is.
+        today={zonedDateKey(new Date(), tz)}
+      />
+    </FilterBar>
   );
 }

@@ -3,6 +3,8 @@ import { useId } from 'react';
 interface SelectOption {
   value: string;
   label: string;
+  /** Not pickable: used for a group header (the native select has no optgroup here). */
+  disabled?: boolean;
 }
 
 interface SelectProps {
@@ -65,7 +67,12 @@ export default function Select({
             </option>
           )}
           {options.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option
+              key={option.value}
+              value={option.value}
+              disabled={option.disabled}
+              className={option.disabled ? 'font-semibold' : undefined}
+            >
               {option.label}
             </option>
           ))}

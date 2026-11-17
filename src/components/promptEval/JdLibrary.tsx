@@ -1,10 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { Archive, ArchiveRestore, Loader2, Pencil, Plus } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import { EVAL_ROLES, type EvalJobDescription, type EvalRole } from '../../api/endpoints';
 import { notify } from '../../lib/notify';
+import { useUrlFilters } from '../../lib/useUrlFilters';
+import { JD_CLEAR_KEYS, JD_URL_DEFAULTS, jdCanClear, matchesJd, parseJdValues, type JdKey } from '../../lib/promptEvalFilters';
 import ConfirmDialog from '../ConfirmDialog';
+import FilterBar, { FilterField } from '../filters/FilterBar';
+import SearchFilter from '../filters/SearchFilter';
 import Select from '../Select';
 import SidePanel from '../SidePanel';
 import Switch from '../Switch';
@@ -17,12 +21,14 @@ const EMPTY: Draft = { role: 'fullstack', title: '', company: '', text: '' };
 
 /** The shared sample-JD library: filter by role, add or edit postings, archive the ones to stop using. */
 export default function JdLibrary() {
-  const [role, setRole] = useState<'' | EvalRole>('');
-  const [showArchived, setShowArchived] = useState(false);
+  const filterId = useId();
+  const [urlValues, patchUrl] = useUrlFilters(JD_URL_DEFAULTS);
+  const filters = useMemo(() => parseJdValues(urlValues), [urlValues]);
+  const { role, archived: showArchived } = filters;
   const key = ['prompt-eval-jds', showArchived ? 'all' : 'active'] as const;
   const { data, isLoading, mutate } = useSWR(key, () => api.listEvalJds({ includeArchived: showArchived }));
   const { mutate: mutateAll } = useSWRConfig();
-  const jds = useMemo(() => (data?.jds ?? []).filter((j) => !role || j.role === role), [data, role]);
+  const jds = useMemo(() => (data?.jds ?? []).filter((j) => matchesJd(j, filters)), [data, filters]);
 
   const [editing, setEditing] = useState<EvalJobDescription | 'new' | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
@@ -102,20 +108,28 @@ export default function JdLibrary() {
 
   return (
     <div className="space-y-4">
-      <div className="toolbar flex flex-wrap items-end gap-3">
-        <div className="w-48">
-          <Select
-            label="Role"
-            labelClassName="block text-xs font-medium mb-1 text-muted"
-            value={role}
-            onChange={(v) => setRole(v as '' | EvalRole)}
-            options={[{ value: '', label: 'All roles' }, ...EVAL_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))]}
-          />
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <FilterBar
+            canClear={jdCanClear(filters)}
+            onClear={() => patchUrl(Object.fromEntries(JD_CLEAR_KEYS.map((k) => [k, undefined])) as Partial<Record<JdKey, string>>)}
+          >
+            <FilterField label="Role" htmlFor={`${filterId}-role`} width="w-48">
+              <Select
+                id={`${filterId}-role`}
+                className="w-full text-sm"
+                value={role}
+                onChange={(v) => patchUrl({ role: v })}
+                options={[{ value: '', label: 'All roles' }, ...EVAL_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))]}
+              />
+            </FilterField>
+            <div className="flex h-[38px] items-center">
+              <Switch checked={showArchived} onChange={(on) => patchUrl({ archived: on ? '1' : '' })} label="Show archived" />
+            </div>
+            <SearchFilter value={filters.q} onChange={(q) => patchUrl({ q })} placeholder="Search job descriptions…" />
+          </FilterBar>
         </div>
-        <div className="min-w-48">
-          <Switch checked={showArchived} onChange={setShowArchived} label="Show archived" />
-        </div>
-        <button type="button" className="btn btn-sm ml-auto" onClick={openNew}>
+        <button type="button" className="btn btn-sm mb-3" onClick={openNew}>
           <Plus className="h-4 w-4" aria-hidden /> Add job description
         </button>
       </div>

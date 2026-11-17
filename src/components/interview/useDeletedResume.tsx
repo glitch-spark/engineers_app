@@ -14,8 +14,8 @@ export type ResumeFile = { id: string; filename: string; uploadedAt: string | nu
 export const isDeletedResume = (err: unknown) => err instanceof ApiError && err.status === 404;
 
 /** Saves a profile resume's original file. Its link is a download (attachment), so the page stays where it is. */
-export async function saveResumeFile(accountId: string, resumeId: string): Promise<void> {
-  const { url } = await api.getAccountResumeFileUrl(accountId, resumeId);
+export async function saveResumeFile(accountId: string, resumeId: string, interviewId?: string): Promise<void> {
+  const { url } = await api.getAccountResumeFileUrl(accountId, resumeId, interviewId);
   const a = document.createElement('a');
   a.href = url;
   a.rel = 'noopener';

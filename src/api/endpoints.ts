@@ -33,6 +33,9 @@ export interface ProfileShape {
   email: string;
   image: string;
   birthday: string | null;
+  phone?: string;
+  /** False while the account awaits admin approval. Missing from an older server. */
+  isActive?: boolean;
   leaderboardOptIn?: boolean;
   leaderboardName?: string;
   leaderboardAnon?: boolean;
@@ -117,6 +120,7 @@ export const updateProfile = (body: {
   email: string;
   image?: string;
   birthday?: string;
+  phone?: string;
   leaderboardOptIn?: boolean;
   leaderboardName?: string;
   leaderboardAnon?: boolean;
@@ -380,12 +384,14 @@ export const uploadAccountResume = (accountId: string, file: File, markdown: str
 };
 
 /** Short-lived download link for a resume's original file (404 when only the text is stored). */
-export const getAccountResumeFileUrl = (accountId: string, resumeId: string) =>
-  apiFetch<{ url: string }>(`/accounts/${accountId}/resumes/${resumeId}/file`);
+export const getAccountResumeFileUrl = (accountId: string, resumeId: string, interviewId?: string) =>
+  apiFetch<{ url: string }>(`/accounts/${accountId}/resumes/${resumeId}/file${interviewId ? `?interviewId=${encodeURIComponent(interviewId)}` : ''}`);
 
 /** The profile's resumes whose original file is stored (owner, admin or interview manager). */
-export const listAccountResumeFiles = (accountId: string) =>
-  apiFetch<{ resumes: { id: string; filename: string; uploadedAt: string | null }[] }>(`/accounts/${accountId}/resume-files`);
+export const listAccountResumeFiles = (accountId: string, interviewId?: string) =>
+  apiFetch<{ resumes: { id: string; filename: string; uploadedAt: string | null }[] }>(
+    `/accounts/${accountId}/resume-files${interviewId ? `?interviewId=${encodeURIComponent(interviewId)}` : ''}`,
+  );
 
 // ---------- transactions ----------
 
@@ -663,6 +669,8 @@ export interface InterviewListParams {
   /** Column to sort by; legacy 'asc' | 'desc' means latest round date. */
   sort?: 'latest' | 'company' | 'stage' | 'status' | 'asc' | 'desc';
   dir?: 'asc' | 'desc';
+  /** Company or position contains this (case-insensitive). */
+  q?: string;
 }
 
 export const listInterviews = (params?: InterviewListParams) =>
@@ -704,6 +712,8 @@ export const listInterviewRounds = (params: {
   callerId?: string;
   /** Who takes the round: the owner ('self') or a caller. */
   callType?: CallType;
+  /** Company or position contains this (case-insensitive). */
+  q?: string;
 }) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>> }>(
   `/interviews/rounds${qs(params)}`,
 );
@@ -720,6 +730,8 @@ export const listCallerRounds = (params: {
   page: number;
   limit: number;
   dir: 'asc' | 'desc';
+  /** Company or position contains this (case-insensitive). */
+  q?: string;
 }) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>>; pagination: Pagination }>(
   `/interviews/caller-rounds${qs(params)}`,
 );
@@ -735,6 +747,8 @@ export interface InterviewCaller {
   callerName?: string;
   /** From the caller list; null = not assigned yet, or a name typed before the list existed. */
   callerId?: string | null;
+  /** Which list the caller is from: an external caller or a platform user. */
+  callerKind?: 'external' | 'user';
   /** Round start (UTC ISO). */
   startsAt?: string | null;
   method?: CallerMethod | null;
@@ -908,15 +922,29 @@ export type CallerColor = 'sky' | 'violet' | 'emerald' | 'amber' | 'rose' | 'tea
 
 export interface Caller {
   _id: string;
+  /** 'external' = a Caller doc; 'user' = a platform user who takes calls. */
+  kind: 'external' | 'user';
   name: string;
   color: CallerColor;
+  archived: boolean;
 }
 
 /** Everyone reads the list; `canManage` = Admin or interview manager (add, edit, delete). */
-export const listCallers = () => apiFetch<{ callers: Caller[]; canManage: boolean }>('/callers');
+export const listCallers = (archived?: boolean) =>
+  apiFetch<{ callers: Caller[]; canManage: boolean }>(`/callers${archived ? '?archived=1' : ''}`);
 export const createCaller = (body: { name: string; color?: CallerColor }) => postJSON<Caller>('/callers', body);
-export const updateCaller = (id: string, body: { name?: string; color?: CallerColor }) => putJSON<Caller>(`/callers/${id}`, body);
+/** Platform users (kind 'user') take a colour only. */
+export const updateCaller = (id: string, body: { name?: string; color?: CallerColor; archived?: boolean }) =>
+  putJSON<Caller>(`/callers/${id}`, body);
 export const deleteCaller = (id: string) => del<void>(`/callers/${id}`);
+
+/** Per caller (platform users and external): rounds coming up, this week, pass rate (null = none decided), all rounds. A missing id = zeros. */
+export type CallerOverview = Record<string, { upcoming: number; thisWeek: number; passRate: number | null; rounds: number }>;
+export const getCallerOverview = () => apiFetch<{ overview: CallerOverview }>('/callers/overview').then((r) => r.overview);
+
+/** Confirm or unconfirm a caller round (admin, interview manager, the owner, or the round's assigned user caller). */
+export const confirmRound = (id: string, stageId: string, confirmed: boolean) =>
+  postJSON<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}/confirm`, { confirmed });
 
 // ---------- leaderboard ----------
 
@@ -2608,10 +2636,10 @@ export const tailorAllJobApplies = (
   postJSON<{ queued: number; skippedCap: number; skipped: number }>(`/job-applies/runs/${runId}/tailor-all`, body);
 
 /** Download a generated (tailored) resume PDF by its generation job id. */
-export async function downloadTailoredResume(jobId: string, filename: string): Promise<void> {
+export async function downloadTailoredResume(jobId: string, filename: string, interviewId?: string): Promise<void> {
   const token = getToken();
   // no-store: a remade PDF (restore-pdf) must not be shadowed by a cached "missing" answer.
-  const res = await fetch(`${BASE_URL}/resume/jobs/${jobId}/download?format=pdf`, {
+  const res = await fetch(`${BASE_URL}/resume/jobs/${jobId}/download?format=pdf${interviewId ? `&interviewId=${encodeURIComponent(interviewId)}` : ''}`, {
     cache: 'no-store',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
@@ -2953,8 +2981,19 @@ export interface BidAttachment {
 
 /** `day` and `week` are exclusive; neither means the open daily window. */
 /** `self`: the owner's own applies from the extension (staff: their own; an admin one owner's via ownerId). */
-export const listBids = (params: { day?: string; week?: string; bidderId?: string; status?: BidStatus; self?: boolean; ownerId?: string }) =>
-  apiFetch<BidDay>(`/bids${qs(params)}`);
+export const listBids = (params: {
+  day?: string; week?: string; bidderId?: string; status?: BidStatus; self?: boolean; ownerId?: string;
+  /** Self bids only: one profile's. */
+  accountId?: string;
+}) => apiFetch<BidDay>(`/bids${qs(params)}`);
+
+/** One profile's share of an owner's self bids over the period (sub-row of the Self row). */
+export type SelfBidProfileRow = { accountId: string; name: string; total: number; weekly: number[]; interviews: number };
+/** An owner's self bids over the period: the sum over `profiles`. */
+export type SelfBidRow = {
+  ownerId: string; ownerName: string; total: number; weekly: number[]; interviews: number; lastBidAt: string | null;
+  profiles?: SelfBidProfileRow[];
+};
 
 // ---------- pay-week board ----------
 
@@ -2996,6 +3035,8 @@ export interface BidWeekRow {
   name: string;
   status: Bidder['status'];
   country: string | null;
+  /** The profile (account) id when the profile exists, for the bidder page's link; null without one. */
+  profileId: string | null;
   profileName: string | null;
   rate: number;
   /** The user who owns the bidder; ownerName is null when that user no longer exists. */
@@ -3030,8 +3071,10 @@ export interface BidPerformanceRow {
   profileId: string | null;
   profileName: string | null;
   status: string;
-  /** Bids per week, aligned with `BidPerformance.weeks`. */
+  /** Bids per week (approved + pending), aligned with `BidPerformance.weeks`. */
   weekly: number[];
+  /** Of `weekly`: the pending bids per column (newer servers). */
+  weeklyPending?: number[];
   total: number;
   approved: number;
   pending: number;
@@ -3094,6 +3137,8 @@ export interface BidPerformance {
     pending?: number | null;
     rejected?: number | null;
     toReview?: number | null;
+    /** Two pay weeks: the first error of a week whose money couldn't be read (the sums above are then null). */
+    error?: string | null;
     approvalRate?: number | null;
     costPerInterview?: number | null;
     /** Week mode: the board's per-day totals and today's (current pay week only). */
@@ -3101,7 +3146,7 @@ export interface BidPerformance {
     today?: { day: string; approved: number; pending: number } | null;
   };
   /** The owners' own applies recorded by the extension (self bids), one row per owner in view; not in totals. */
-  selfRows?: { ownerId: string; ownerName: string; total: number; weekly: number[]; interviews: number; lastBidAt: string | null }[];
+  selfRows?: SelfBidRow[];
   /** Week mode: the pay week (its report days, which is today, which are still to come). */
   payWeek?: { start: string; end: string; label: string; timezone: string;
     days: { day: string; isToday: boolean; isFuture: boolean }[] } | null;
@@ -3113,6 +3158,8 @@ export const getBidPerformance = (params: {
   period: 'week' | 'month' | 'custom';
   date?: string;
   to?: string;
+  /** With `period=week`: 2 = the pay week and the one before (1 or 2). */
+  weeks?: number;
   includeArchived?: boolean;
   ownerId?: string;
 }) => apiFetch<BidPerformance>(`/bids/performance${qs(params)}`);
@@ -3132,7 +3179,7 @@ export type BidTops = Partial<Record<BidTopMeasure, {
 export type BidInsights = {
   start: string; end: string; label: string; mine: BidderStats | null; platform: BidderStats | null; tops: BidTops | null;
 };
-export const getBidInsights = (params: { period: 'week' | 'month' | 'custom'; date?: string; to?: string; ownerId?: string }) =>
+export const getBidInsights = (params: { period: 'week' | 'month' | 'custom'; date?: string; to?: string; weeks?: number; ownerId?: string }) =>
   apiFetch<BidInsights>(`/bids/insights${qs(params)}`);
 
 export type BidAlertKind = 'inactive' | 'rejects' | 'no_interviews' | 'review_backlog';
@@ -3148,6 +3195,88 @@ export type BidArchiveSuggestion = { bidderId: string; name: string; reason: 'id
 /** One owner's banners (null lists: an admin viewing every owner). */
 export type BidAlerts = { asOf: string; flags: BidAlert[] | null; archive: BidArchiveSuggestion[] | null };
 export const getBidAlerts = (params: { ownerId?: string }) => apiFetch<BidAlerts>(`/bids/alerts${qs(params)}`);
+
+/** "Now" as the server's report schedule sees it (`/bids/clock`); every value is a report day `YYYY-MM-DD`. */
+export interface BidClock {
+  /** The open report day. */
+  today: string;
+  /** The first and last report day of the pay week holding now (7 days, or 8 across a schedule switch). */
+  payWeekStart: string;
+  payWeekEnd: string;
+  /** The first report day of the pay week before it (that week may have 8 days). */
+  previousPayWeekStart: string;
+  /** The report time zone, e.g. America/Chicago. */
+  timezone: string;
+}
+
+export const getBidClock = () => apiFetch<BidClock>('/bids/clock');
+
+/** One review scope of pending bids (`/bids/pending`): all of any age, a report day, a pay week (`weeks: 2` adds the
+ * one before), a month or a custom range. `date` / `to` are report days; `to` is the custom range's last. */
+export type PendingQuery = {
+  period: 'all' | 'day' | 'week' | 'month' | 'custom'; date?: string; to?: string; weeks?: number;
+  ownerId?: string; bidderId?: string;
+};
+export type PendingBids = { label: string; timezone: string; bidderName: string | null; bids: BidReviewItem[] };
+/** `since` (ISO) also keeps the bids decided at or after it, so a bid reviewed while the overlay is open stays listed.
+ * Oldest first. */
+export const listPendingBids = (q: PendingQuery & { since?: string }) =>
+  apiFetch<PendingBids>(`/bids/pending${qs(q)}`);
+
+/** The To review counts (`/bids/backlog`): every pending bid of any age, per bidder (archived included). Bidders with
+ * nothing pending are left out; most pending first. `today` and the days are report days `YYYY-MM-DD`. */
+export interface BidBacklog {
+  today: string;
+  total: number;
+  /** Pending bids whose report day is `today`. */
+  todayCount: number;
+  oldestDay: string | null;
+  bidders: { bidderId: string; name: string; ownerName: string | null; pending: number; oldestDay: string }[];
+}
+
+export const getBidBacklog = (p: { ownerId?: string }) => apiFetch<BidBacklog>(`/bids/backlog${qs(p)}`);
+
+/** One bidder's line in a pay week (`/bids/pay`). `approved` / `pending` / `pay` are null when the count couldn't be read
+ *  (`error` is then set); `pending` is also null for an old folder-counted week (no pending figure exists for it). */
+export interface PayBidderRow {
+  bidderId: string;
+  name: string;
+  country: string | null;
+  profileName: string | null;
+  ownerId: string;
+  ownerName: string | null;
+  approved: number | null;
+  pending: number | null;
+  rate: number | null;
+  pay: number | null;
+  error: string | null;
+}
+/** One pay week: a closed week is what its weekly report stored (`source` "report"), or the live count when nothing was
+ *  stored ("live"); the open week is always live. */
+export interface PayWeekBlock {
+  /** The pay week's closing report day `YYYY-MM-DD` (a day inside it: what a review's `at` takes). */
+  weekEnd: string;
+  label: string;
+  /** The instant the pay week closes. */
+  end: string;
+  first: string;
+  last: string;
+  state: 'open' | 'closed';
+  source: 'report' | 'live';
+  bidders: PayBidderRow[];
+  totals: { approved: number; pending: number; pay: number; errors: number };
+}
+/** `/bids/pay`: each pay week touching the period, newest first. */
+export interface BidPay {
+  label: string;
+  timezone: string;
+  first: string;
+  last: string;
+  weeks: PayWeekBlock[];
+}
+
+export const getBidPay = (p: { period: 'week' | 'month' | 'custom'; date?: string; to?: string; weeks?: number; ownerId?: string }) =>
+  apiFetch<BidPay>(`/bids/pay${qs(p)}`);
 
 export const getBid = (id: string) => apiFetch<BidReviewItem>(`/bids/${id}`);
 

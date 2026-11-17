@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarClock, Copy, Download, ExternalLink, NotebookPen, PhoneCall, Video } from 'lucide-react';
 import type { InterviewStageEntry } from '../../api/endpoints';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
@@ -17,7 +17,9 @@ import {
 import { STATUS_DOT } from '../../pages/interviews/RoundTrail';
 import ActionMenu from '../ActionMenu';
 import ConfirmedBadge, { needsConfirmBadge } from './ConfirmedBadge';
+import { canConfirm, isTbdRound } from '../../lib/canConfirm';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
+import RoundCallerPicker from './RoundCallerPicker';
 import { TailoredScore } from '../jobApplies/Suggestions';
 import { KIND_LABEL } from './CompanyMatchField';
 import { LinkedResumeDownload, reasonLabel } from './LinkedResumeCard';
@@ -66,26 +68,131 @@ function QuickAdd({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-/** Read view of an interview: spotlight round, details and a timeline of rounds. */
-export default function InterviewSummary({
+/** The round the pane was opened on: a caller round that is still caller-enabled (anything else gets no highlight). */
+function isFocused(e: InterviewStageEntry, focusRoundId?: string): boolean {
+  return !!focusRoundId && e.id === focusRoundId && !!e.caller?.enabled;
+}
+
+/** Ring on the focused round's list item. */
+const FOCUS_RING = 'rounded-lg ring-2 ring-sky-400 ring-offset-2 ring-offset-white dark:ring-offset-zinc-950';
+
+/** Scrolls the focused round into view on mount and when `focusRoundId` changes. Guarded: jsdom has no scrollIntoView. */
+function useScrollToFocused(focusRoundId: string | undefined, interviewId: string) {
+  const listRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    if (!focusRoundId) return;
+    const el = listRef.current?.querySelector<HTMLElement>('[data-focused="true"]');
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
+  }, [focusRoundId, interviewId]);
+  return listRef;
+}
+
+/** What anyone signed in sees of an interview that isn't theirs: the rounds, each with its date, stage, status and
+ * caller's name. No notes, resume, brief or questions, and nothing here asks the server for them. */
+export function SummaryOnlyView({
   iv,
   tz,
-  canEdit,
-  onStatus,
+  focusRoundId,
+  onCallerSaved,
+  user,
   onConfirm,
-  onEditRound,
-  onDeleteRound,
-  onEditDetails,
 }: {
   iv: Interview;
   tz: string;
+  focusRoundId?: string;
+  onCallerSaved: (saved: Interview) => void;
+  user: { id: string; role: string } | null | undefined;
+  onConfirm: (roundId: string, confirmed: boolean) => void;
+}) {
+  const rounds = [...(iv.stageHistory ?? [])].reverse();
+  const listRef = useScrollToFocused(focusRoundId, iv._id);
+  const now = new Date();
+  return (
+    <div className="flex-1 space-y-5 overflow-y-auto p-4">
+      <section aria-label="Rounds">
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Rounds ({rounds.length})</h3>
+        {rounds.length === 0 ? (
+          <p className="text-sm text-muted">No rounds yet.</p>
+        ) : (
+          <ol ref={listRef} className="relative space-y-3 border-l border-zinc-200 pl-4 dark:border-zinc-800">
+            {rounds.map((e) => {
+              const status = normalizeInterviewStatus(e.status);
+              const focused = isFocused(e, focusRoundId);
+              return (
+                <li key={e.id} className={`relative ${focused ? FOCUS_RING : ''}`} data-focused={focused ? 'true' : undefined}>
+                  <span className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-950 ${STATUS_DOT[status] ?? 'bg-zinc-300'}`} aria-hidden />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-strong">{stageLabel(e.stage)}</span>
+                    <span className="text-xs tabular-nums text-muted">{when(e.scheduledAt, e.endsAt, tz)}</span>
+                    <span className={`badge ml-auto ${interviewStatusBadgeClass(status)}`}>{interviewStatusLabel(status)}</span>
+                  </div>
+                  {e.caller?.enabled && (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                      <PhoneCall size={12} aria-hidden />
+                      <RoundCallerPicker interview={iv} roundId={e.id} onSaved={onCallerSaved} />
+                      {needsConfirmBadge(e.status, e.scheduledAt, now) && !isTbdRound(e) && <ConfirmedBadge confirmed={e.confirmed} />}
+                      {canConfirm(user, iv, e) && !isTbdRound(e) && needsConfirmBadge(e.status, e.scheduledAt, now) && (
+                        <button type="button" className="btn-outline btn-sm" onClick={() => onConfirm(e.id, !e.confirmed)}>
+                          {e.confirmed ? 'Unconfirm' : 'Mark confirmed'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
+    </div>
+  );
+}
+
+type SummaryProps = {
+  iv: Interview;
+  tz: string;
   canEdit: boolean;
+  user: { id: string; role: string } | null | undefined;
   onStatus: (roundId: string, status: string) => void;
   onConfirm: (roundId: string, confirmed: boolean) => void;
   onEditRound: (roundId: string) => void;
   onDeleteRound: (roundId: string) => void;
   onEditDetails: () => void;
-}) {
+  /** The round to scroll to and highlight (a caller round opened from the Caller interviews tab). */
+  focusRoundId?: string;
+  /** A caller was assigned from the pane: the saved interview. */
+  onCallerSaved: (saved: Interview) => void;
+};
+
+/** Read view of an interview: spotlight round, details and a timeline of rounds. Someone else's interview
+ * (`summaryOnly`) is just the rounds. */
+export default function InterviewSummary(props: SummaryProps) {
+  return props.iv.summaryOnly ? (
+    <SummaryOnlyView
+      iv={props.iv}
+      tz={props.tz}
+      focusRoundId={props.focusRoundId}
+      onCallerSaved={props.onCallerSaved}
+      user={props.user}
+      onConfirm={props.onConfirm}
+    />
+  ) : <FullSummary {...props} />;
+}
+
+function FullSummary({
+  iv,
+  tz,
+  canEdit,
+  user,
+  onStatus,
+  onConfirm,
+  onEditRound,
+  onDeleteRound,
+  onEditDetails,
+  focusRoundId,
+  onCallerSaved,
+}: SummaryProps) {
+  const listRef = useScrollToFocused(focusRoundId, iv._id);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const now = new Date();
   const history = iv.stageHistory ?? [];
@@ -158,10 +265,12 @@ export default function InterviewSummary({
           {spotRound.caller?.enabled && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <PhoneCall size={14} className="text-sky-600" aria-hidden />
-              <span>Caller: {spotRound.caller.callerName && spotRound.caller.callerName !== 'TBD' ? spotRound.caller.callerName : 'TBD'}</span>
+              <RoundCallerPicker interview={iv} roundId={spotRound.id} onSaved={onCallerSaved} />
               <span className="text-muted">· {methodLabel(spotRound.caller.method)}</span>
-              {needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && <ConfirmedBadge confirmed={spotRound.confirmed} />}
-              {canEdit && spot.kind === 'next' && needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && (
+              {needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && !isTbdRound(spotRound) && (
+                <ConfirmedBadge confirmed={spotRound.confirmed} />
+              )}
+              {canConfirm(user, iv, spotRound) && !isTbdRound(spotRound) && spot.kind === 'next' && needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && (
                 <button type="button" className="btn-outline btn-sm"
                   onClick={() => onConfirm(spotRound.id, !spotRound.confirmed)}>
                   {spotRound.confirmed ? 'Unconfirm' : 'Mark confirmed'}
@@ -221,6 +330,8 @@ export default function InterviewSummary({
                 <LinkedResumeDownload
                   link={iv.resumeLink}
                   accountId={typeof iv.accountId === 'object' ? iv.accountId._id : iv.accountId}
+                  interviewId={iv._id}
+                  ownerId={typeof iv.createdBy === 'object' ? iv.createdBy._id : iv.createdBy}
                   compact
                 />
               </span>
@@ -250,13 +361,14 @@ export default function InterviewSummary({
             ))}
           </ol>
         </div>
-        <ol className="relative space-y-3 border-l border-zinc-200 pl-4 dark:border-zinc-800">
+        <ol ref={listRef} className="relative space-y-3 border-l border-zinc-200 pl-4 dark:border-zinc-800">
           {rounds.map((e) => {
             const status = normalizeInterviewStatus(e.status);
+            const focused = isFocused(e, focusRoundId);
             const preview = notesPreview(e.note);
             const open = expanded.has(e.id);
             return (
-              <li key={e.id} className="relative">
+              <li key={e.id} className={`relative ${focused ? FOCUS_RING : ''}`} data-focused={focused ? 'true' : undefined}>
                 <span className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-950 ${STATUS_DOT[status] ?? 'bg-zinc-300'}`} aria-hidden />
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-strong">{stageLabel(e.stage)}</span>
@@ -289,9 +401,10 @@ export default function InterviewSummary({
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                   {e.interviewerName && <span>with {e.interviewerName}</span>}
                   {e.caller?.enabled && (
-                    <span className="inline-flex items-center gap-1">
-                      <PhoneCall size={12} aria-hidden /> {e.caller.callerName && e.caller.callerName !== 'TBD' ? e.caller.callerName : 'Caller TBD'}
-                      {needsConfirmBadge(e.status, e.scheduledAt, now) && <ConfirmedBadge confirmed={e.confirmed} />}
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      <PhoneCall size={12} aria-hidden />
+                      <RoundCallerPicker interview={iv} roundId={e.id} onSaved={onCallerSaved} />
+                      {needsConfirmBadge(e.status, e.scheduledAt, now) && !isTbdRound(e) && <ConfirmedBadge confirmed={e.confirmed} />}
                     </span>
                   )}
                 </div>

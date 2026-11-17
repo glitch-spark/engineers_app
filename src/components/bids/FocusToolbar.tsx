@@ -1,7 +1,9 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
 import Kbd from './Kbd';
+import Segmented from '../Segmented';
+import { REVIEW_SWITCH_OPTIONS, type ReviewSwitch } from '../../lib/bidsUrl';
 
-/** Close, the progress line, previous/next and Undo. */
+/** Close, the progress line, the scope (and its Review switch when given), previous/next and Undo. */
 export default function FocusToolbar({
   progress,
   approved,
@@ -13,6 +15,7 @@ export default function FocusToolbar({
   onExit,
   onMove,
   onUndo,
+  scopeSwitch,
 }: {
   progress: string;
   approved: number;
@@ -24,6 +27,8 @@ export default function FocusToolbar({
   onExit: () => void;
   onMove: (delta: 1 | -1) => void;
   onUndo: () => void;
+  /** `value` null checks no option (the scope is another day or pay week). */
+  scopeSwitch?: { value: ReviewSwitch | null; onChange: (v: ReviewSwitch) => void };
 }) {
   return (
     <div className="panel flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
@@ -35,6 +40,9 @@ export default function FocusToolbar({
         <span className="text-muted"> · {approved} approved · {rejected} rejected</span>
       </p>
       <p className="text-xs text-muted">{scope}</p>
+      {scopeSwitch && (
+        <Segmented label="Review" value={scopeSwitch.value} options={REVIEW_SWITCH_OPTIONS} onChange={scopeSwitch.onChange} />
+      )}
       <div className="ml-auto flex gap-2">
         <button type="button" className="btn-outline btn-sm" disabled={!canPrev} onClick={() => onMove(-1)} aria-label="Previous bid">
           <ChevronLeft size={14} aria-hidden /> <Kbd>←</Kbd>

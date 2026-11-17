@@ -5,7 +5,7 @@ import * as api from '../../api/endpoints';
 import type { JobApplyScreenBucket } from '../../api/endpoints';
 import { notify } from '../../lib/notify';
 import JobInfoPanel from './JobInfoPanel';
-import Pagination from './Pagination';
+import Pagination from '../Pagination';
 import { useApproveJob } from './useApproveJob';
 import { useInvalidJob } from './useInvalidJob';
 import { APPROVABLE_BUCKETS, BUCKET_LABEL, formatDate, locationLabel } from './format';

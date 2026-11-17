@@ -70,8 +70,8 @@ export default function DayPanel({
   onDecide: (bid: api.BidReviewItem, status: api.BidStatus) => void;
   onBulk: (ids: string[], status: api.BidStatus, reason?: api.RejectReason) => Promise<void>;
   onApproveAllComplete: (bids: api.BidReviewItem[]) => void;
-  /** Self bids (the owner's own applies): nothing to review — no status filter, ticks or decisions; a click opens the
-   *  screenshots. */
+  /** My bids (the owner's own bids): nothing to review — no status chips, Status or Checks columns, ticks or
+   *  decisions; a click opens the screenshots. */
   readOnly?: boolean;
 }) {
   const all = useMemo(() => bids ?? [], [bids]);
@@ -83,7 +83,7 @@ export default function DayPanel({
 
   const [filter, setFilter] = useState<Filter | null>(null);
   // Pending first when there is something to review; the choice sticks while the panel is open.
-  const shownFilter: Filter = filter ?? (counts.pending ? 'pending' : 'all');
+  const shownFilter: Filter = readOnly ? 'all' : (filter ?? (counts.pending ? 'pending' : 'all'));
   const [view, setView] = useState<View>(() => {
     try {
       return localStorage.getItem(VIEW_KEY) === 'shots' ? 'shots' : 'table';
@@ -137,8 +137,8 @@ export default function DayPanel({
   return (
     <SidePanel open={open} wide title={title} subtitle={subtitle} onClose={onClose}>
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div role="group" aria-label="Status" className={`flex flex-wrap gap-1.5 ${readOnly ? 'invisible' : ''}`}>
+        <div className={`flex flex-wrap items-center gap-2 ${readOnly ? 'justify-end' : 'justify-between'}`}>
+          {!readOnly && <div role="group" aria-label="Status" className="flex flex-wrap gap-1.5">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -157,7 +157,7 @@ export default function DayPanel({
                 {f.label} <span className="tabular-nums opacity-70">{counts[f.key]}</span>
               </button>
             ))}
-          </div>
+          </div>}
           <div role="group" aria-label="View" className="flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
             {([['table', 'Table', Table2], ['shots', 'Screenshots', LayoutGrid]] as const).map(([key, label, Icon]) => (
               <button
@@ -176,7 +176,7 @@ export default function DayPanel({
         </div>
 
         {readOnly ? (
-          <p className="text-xs text-muted">{all.length} {all.length === 1 ? 'apply' : 'applies'} · click one to see its screenshots</p>
+          <p className="text-xs text-muted">{all.length} {all.length === 1 ? 'bid' : 'bids'} · click one to see its screenshots</p>
         ) : (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {picked.length > 0 ? (
@@ -215,7 +215,7 @@ export default function DayPanel({
           </div>
         ) : shown.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted">
-            {all.length === 0 ? 'No bid records this day.' : `No ${shownFilter} bids this day.`}
+            {readOnly ? 'No bids in this period' : all.length === 0 ? 'No bid records this day.' : `No ${shownFilter} bids this day.`}
           </p>
         ) : view === 'table' ? (
           <div className="table-wrap">
@@ -233,8 +233,8 @@ export default function DayPanel({
                   <th scope="col" className="px-2 py-2">Time</th>
                   <th scope="col" className="px-2 py-2"><span className="sr-only">Screenshot</span></th>
                   <th scope="col" className="px-2 py-2">Job</th>
-                  <th scope="col" className="px-2 py-2">Checks</th>
-                  <th scope="col" className="px-2 py-2">Status</th>
+                  {!readOnly && <th scope="col" className="px-2 py-2">Checks</th>}
+                  {!readOnly && <th scope="col" className="px-2 py-2">Status</th>}
                   {!readOnly && <th scope="col" className="px-2 py-2"><span className="sr-only">Actions</span></th>}
                 </tr>
               </thead>
@@ -270,29 +270,29 @@ export default function DayPanel({
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex max-w-full items-center gap-1 text-xs text-muted hover:underline"
+                          className="inline-flex max-w-full items-start gap-1 text-xs text-muted hover:underline"
                         >
-                          <span className="truncate">{b.jobDomain || b.jobUrl}</span>
-                          <ExternalLink size={10} aria-hidden className="shrink-0" />
+                          <span className="break-all">{b.jobUrl}</span>
+                          <ExternalLink size={10} aria-hidden className="mt-0.5 shrink-0" />
                         </a>
                       ) : (
-                        <span className="text-xs text-muted">{b.jobDomain || b.jobUrl}</span>
+                        <span className="break-all text-xs text-muted">{b.jobUrl}</span>
                       )}
                     </td>
-                    <td className="px-2 py-1.5">
+                    {!readOnly && <td className="px-2 py-1.5">
                       <div className="flex flex-wrap gap-1 whitespace-nowrap">
                         <SubmittedBadge bid={b} />
                         {b.missingUploads > 0 && <span className="badge-warning">Missing upload</span>}
                       </div>
-                    </td>
-                    <td className="px-2 py-1.5">
+                    </td>}
+                    {!readOnly && <td className="px-2 py-1.5">
                       <div className="flex flex-wrap gap-1">
                         <span className={STATUS_BADGE[b.status]}>{b.status}</span>
                         {b.status === 'rejected' && b.rejectReason && (
                           <span className="badge-danger" title={b.note ?? undefined}>{reasonLabel(b.rejectReason)}</span>
                         )}
                       </div>
-                    </td>
+                    </td>}
                     {!readOnly && <td className="whitespace-nowrap px-2 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
@@ -334,8 +334,8 @@ export default function DayPanel({
                     <span className="block truncate text-sm font-medium text-strong">{b.jobTitle || 'Untitled job'}</span>
                     <span className="flex flex-wrap items-center gap-1 text-xs">
                       <span className="text-muted">{time(b.firstAt)}</span>
-                      <span className={STATUS_BADGE[b.status]}>{b.status}</span>
-                      {!b.submittedAt && <span className="badge-warning">Not submitted</span>}
+                      {!readOnly && <span className={STATUS_BADGE[b.status]}>{b.status}</span>}
+                      {!readOnly && !b.submittedAt && <span className="badge-warning">Not submitted</span>}
                     </span>
                   </span>
                 </button>

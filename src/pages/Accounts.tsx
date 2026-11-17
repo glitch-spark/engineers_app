@@ -1,6 +1,6 @@
 import useSWR from 'swr';
-import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef, useId, type ReactNode } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { notify } from '../lib/notify';
@@ -8,12 +8,21 @@ import ActionMenu from '../components/ActionMenu';
 import ConfirmDialog from '../components/ConfirmDialog';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
-import { countryFlag, countryName, PROFILE_REGIONS } from '../lib/countries';
-import { PROFILE_STATUS_OPTIONS, type ProfileStatus } from '../lib/profileArchive';
+import { countryFlag, countryName } from '../lib/countries';
+import { PROFILE_STATUS_OPTIONS } from '../lib/profileArchive';
+import { fmtCount, fmtPerWeek, fmtRate, fmtScore, tailoredText } from '../lib/profileMetrics';
 import {
-  PROFILE_RANGES, profileRangeDates, profileRangeError, readProfileRange, writeProfileRange, fmtCount, fmtPerWeek,
-  fmtRate, fmtScore, tailoredText, type ProfileRange,
-} from '../lib/profileMetrics';
+  PROFILE_CLEAR_KEYS, PROFILE_PRESETS, PROFILE_REGION_OPTIONS, PROFILE_URL_DEFAULTS, dropLegacyRange, legacyRangePatch,
+  parseProfileValues, readLegacyRange, profileBenchmarkParams, profileCanClear, profileDays, profileListParams, profileMetricsParams,
+  profileRangeError, type ProfileKey,
+} from '../lib/profileFilters';
+import { isoDay } from '../lib/dateRange';
+import { useUrlFilters } from '../lib/useUrlFilters';
+import DateRangeFilter, { type DateRangeValue } from '../components/filters/DateRangeFilter';
+import FilterBar, { FilterField } from '../components/filters/FilterBar';
+import SearchFilter from '../components/filters/SearchFilter';
+import Pagination from '../components/Pagination';
+import Select from '../components/Select';
 import { bidsBreakdown, interviewsAppliedBy, interviewsBreakdown, keptAlerts, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
 import ProfilesBand, { Arrow } from '../components/profiles/ProfilesBand';
 import ProfileAlerts from '../components/profiles/ProfileAlerts';
@@ -74,51 +83,59 @@ type Acc = {
 
 export default function AccountsPage() {
   const navigate = useNavigate();
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const filterId = useId();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [userId, setUserId] = useState('');
-  const [profileStatus, setProfileStatus] = useState<ProfileStatus>('active');
-  const [region, setRegion] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Acc | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [pendingArchive, setPendingArchive] = useState<{ id: string; name: string } | null>(null);
   const [archiving, setArchiving] = useState(false);
-  const [range, setRange] = useState<ProfileRange>(readProfileRange);
-  const allTime = range.preset === 'all';
-  const rangeError = profileRangeError(range);
-  const rangeDates = rangeError ? null : profileRangeDates(range);
+
+  // Filters live in the URL (defaults left out), so a reload or a shared link keeps them.
+  const [urlValues, patchUrl] = useUrlFilters(PROFILE_URL_DEFAULTS);
+  const filters = parseProfileValues(urlValues);
+  const profileStatus = filters.status;
+  const userId = filters.user;
+  const [searchParams] = useSearchParams();
+  const urlHasRange = searchParams.has('range');
+  // Local calendar day, as the page has always worked out its periods.
+  const today = isoDay(new Date());
+  const allTime = filters.range === 'all_time';
+  const rangeError = profileRangeError(filters);
+  const rangeDates = profileDays(filters, today);
+  const rangeValue: DateRangeValue = { preset: filters.range, from: filters.from, to: filters.to };
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
 
+  // The range this page used to keep in localStorage moves to the URL once (when the URL has none), then the old key
+  // is dropped. Nothing is requested until that is done, so the list doesn't load All time first.
+  const [legacyDone, setLegacyDone] = useState(() => readLegacyRange() === null);
+  const liveRef = useRef({ urlHasRange, patchUrl });
+  liveRef.current = { urlHasRange, patchUrl };
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      setCurrentPage(1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+    const stored = readLegacyRange();
+    if (stored !== null) {
+      const patch = legacyRangePatch(liveRef.current.urlHasRange, stored);
+      if (patch) liveRef.current.patchUrl(patch);
+      dropLegacyRange();
+    }
+    setLegacyDone(true);
+  }, []);
 
-  const { data, mutate, isLoading } = useSWR(
-    ['accounts', currentPage, pageSize, debouncedSearch, isAdmin ? userId : '', profileStatus, region] as const,
-    () => api.listAccounts({
-      page: currentPage,
-      limit: pageSize,
-      search: debouncedSearch,
-      status: profileStatus,
-      ...(region ? { region } : {}),
-      ...(isAdmin && userId ? { userId } : {}),
-    })
+  const listParams = profileListParams(filters, isAdmin);
+  const { data, mutate, isLoading: listLoading } = useSWR(
+    legacyDone ? (['accounts', JSON.stringify(listParams)] as const) : null,
+    () => api.listAccounts(listParams)
   );
+  const isLoading = listLoading || !legacyDone;
 
   // Metrics load on their own key so the list never waits on them. Archived profiles have none: no request then.
+  // A partial or invalid Custom range asks for nothing (the bar says why).
+  const metricsParams = profileMetricsParams(filters, today, isAdmin);
   const { data: metricsData, error: metricsError, isLoading: metricsLoading, mutate: mutateMetrics } = useSWR(
-    profileStatus === 'archived' || rangeError
+    profileStatus === 'archived' || !metricsParams || !legacyDone
       ? null
       : (['account-metrics', rangeDates?.from ?? 'all', rangeDates?.to ?? '', isAdmin ? userId : ''] as const),
-    () => api.getProfileMetrics({ ...(rangeDates ?? { weeks: 'all' as const }), ...(isAdmin && userId ? { userId } : {}) }),
+    () => api.getProfileMetrics(metricsParams ?? {}),
     { revalidateOnFocus: false }
   );
   const metricsById = useMemo(
@@ -134,9 +151,12 @@ export default function AccountsPage() {
   const noInterviewIds = useMemo(() => new Set((alerts?.noInterviews ?? []).map((a) => a.accountId)), [alerts]);
 
   // "All profiles" over the same days (cached on the server for 15 minutes); a failure only hides the comparison.
+  const benchParams = profileBenchmarkParams(filters, today);
   const { data: bench } = useSWR(
-    profileStatus === 'archived' || rangeError ? null : (['metrics-benchmark', rangeDates?.from ?? 'all', rangeDates?.to ?? ''] as const),
-    () => api.getMetricsBenchmark(rangeDates ? { period: 'custom', date: rangeDates.from, to: rangeDates.to } : { period: 'all' }),
+    profileStatus === 'archived' || !benchParams || !legacyDone
+      ? null
+      : (['metrics-benchmark', rangeDates?.from ?? 'all', rangeDates?.to ?? ''] as const),
+    () => api.getMetricsBenchmark(benchParams ?? { period: 'all' }),
     { revalidateOnFocus: false }
   );
   const compared = !!metricsData && windowsMatch(metricsData, bench) ? bench ?? null : null;
@@ -145,6 +165,9 @@ export default function AccountsPage() {
   // The lookup lists every user; /users is paginated (10 by default), which cut the filter short.
   const { data: usersData } = useSWR(isAdmin ? ['users-lookup'] : null, () => api.lookupUsers());
   const users = usersData?.users ?? [];
+
+  const clearFilters = () =>
+    patchUrl(Object.fromEntries(PROFILE_CLEAR_KEYS.map((k) => [k, undefined])) as Partial<Record<ProfileKey, string>>);
 
   const remove = async () => {
     const acc = pendingDelete;
@@ -357,16 +380,6 @@ export default function AccountsPage() {
     </td>
   );
 
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setCurrentPage(1);
-  };
-
-  const clearSearch = () => {
-    setSearchTerm('');
-    setDebouncedSearch('');
-  };
-
   const toggleShowInGenerate = async (acc: Acc) => {
     const next = acc.showInGenerate === false;
     try {
@@ -378,11 +391,6 @@ export default function AccountsPage() {
     }
   };
 
-  const changeRange = (patch: Partial<ProfileRange>) => {
-    const next = { ...range, ...patch };
-    setRange(next);
-    writeProfileRange(next);
-  };
   const selfSince = metricsData?.selfBidsSince;
   const selfSinceNote = `Self bids are counted from ${
     selfSince ? new Date(`${selfSince}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -417,9 +425,9 @@ export default function AccountsPage() {
     } else if (!metricsData.mine) {
       band = <p role="status" className="text-xs text-muted">{whose} profiles have no bids in this range yet.</p>;
     } else if (compared) {
-      const rangeLabel = range.preset === 'custom'
-        ? `${fmtDay(range.from)} – ${fmtDay(range.to)}`
-        : PROFILE_RANGES.find((o) => o.value === range.preset)?.label ?? '';
+      const rangeLabel = filters.range === 'custom'
+        ? `${fmtDay(filters.from)} – ${fmtDay(filters.to)}`
+        : PROFILE_PRESETS.find((o) => o.value === filters.range)?.label ?? '';
       band = (
         <ProfilesBand
           whose={whose}
@@ -454,129 +462,54 @@ export default function AccountsPage() {
         />
       )}
 
-      <div className="flex items-end gap-3 flex-wrap toolbar">
-        <div className="w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-64 sm:max-w-md">
-          <label className="block text-xs text-muted mb-1" htmlFor="accounts-search">Search</label>
-          <div className="relative">
-            <svg aria-hidden className="h-4 w-4 text-faint absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              id="accounts-search"
-              type="text"
-              placeholder="Search profiles..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input w-full text-sm !pl-9 !pr-8"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={clearSearch}
-                className="absolute inset-y-0 right-2 flex items-center text-faint hover:text-muted"
-                aria-label="Clear search"
-              >
-                <svg aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-
+      <FilterBar canClear={profileCanClear(filters, isAdmin)} onClear={clearFilters}>
         {isAdmin && (
-          <div className="w-56">
-            <label className="block text-xs text-muted mb-1" htmlFor="accounts-user">User</label>
-            <select
-              id="accounts-user"
-              className="select focus-ring w-full text-sm"
-              value={userId}
-              onChange={(e) => { setUserId(e.target.value); setCurrentPage(1); }}
-            >
-              <option value="">All users</option>
-              {users.map((u) => (
-                <option key={u._id} value={u._id}>
-                  {u.name || u.email}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterField label="User" htmlFor={`${filterId}-user`} width="w-52">
+            <Select
+              id={`${filterId}-user`}
+              className="w-full text-sm"
+              value={filters.user}
+              onChange={(v) => patchUrl({ user: v })}
+              options={[
+                { value: '', label: 'All users' },
+                ...users.map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
+              ]}
+            />
+          </FilterField>
         )}
+        <FilterField label="Status" htmlFor={`${filterId}-status`} width="w-36">
+          <Select
+            id={`${filterId}-status`}
+            className="w-full text-sm"
+            value={filters.status}
+            onChange={(v) => patchUrl({ status: v })}
+            options={PROFILE_STATUS_OPTIONS}
+          />
+        </FilterField>
+        <FilterField label="Region" htmlFor={`${filterId}-region`} width="w-36">
+          <Select
+            id={`${filterId}-region`}
+            className="w-full text-sm"
+            value={filters.region}
+            onChange={(v) => patchUrl({ region: v })}
+            options={PROFILE_REGION_OPTIONS}
+          />
+        </FilterField>
+        <SearchFilter value={filters.q} onChange={(q) => patchUrl({ q })} placeholder="Search profiles…" />
+        <DateRangeFilter
+          value={rangeValue}
+          onChange={(v) => patchUrl({ range: v.preset, from: v.from, to: v.to })}
+          presets={PROFILE_PRESETS}
+          allowFuture={false}
+          today={today}
+        />
+      </FilterBar>
 
-        <div className="w-32">
-          <label className="block text-xs text-muted mb-1" htmlFor="accounts-status">Status</label>
-          <select
-            id="accounts-status"
-            className="select focus-ring w-full text-sm"
-            value={profileStatus}
-            onChange={(e) => { setProfileStatus(e.target.value as ProfileStatus); setCurrentPage(1); }}
-          >
-            {PROFILE_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-
-        <div className="w-32">
-          <label className="block text-xs text-muted mb-1" htmlFor="accounts-region">Region</label>
-          <select
-            id="accounts-region"
-            className="select focus-ring w-full text-sm"
-            value={region}
-            onChange={(e) => { setRegion(e.target.value); setCurrentPage(1); }}
-          >
-            <option value="">All regions</option>
-            {PROFILE_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-            <option value="none">No region</option>
-          </select>
-        </div>
-
-        <div className="w-40">
-          <label className="block text-xs text-muted mb-1" htmlFor="accounts-range">Date range</label>
-          <select
-            id="accounts-range"
-            className="select focus-ring w-full text-sm"
-            value={range.preset}
-            onChange={(e) => changeRange({ preset: e.target.value as ProfileRange['preset'] })}
-          >
-            {PROFILE_RANGES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-        {range.preset === 'custom' && (
-          <div className="flex flex-wrap items-end gap-2">
-            <div>
-              <label className="block text-xs text-muted mb-1" htmlFor="accounts-from">From</label>
-              <input id="accounts-from" type="date" className="input !w-auto !py-1.5 text-sm" value={range.from}
-                onChange={(e) => changeRange({ from: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1" htmlFor="accounts-to">To</label>
-              <input id="accounts-to" type="date" className="input !w-auto !py-1.5 text-sm" value={range.to}
-                onChange={(e) => changeRange({ to: e.target.value })} />
-            </div>
-            {rangeError && <span className="pb-2 text-xs text-red-700 dark:text-red-400" role="alert">{rangeError}</span>}
-          </div>
-        )}
-
-        <div className="w-28">
-          <label className="block text-xs text-muted mb-1" htmlFor="accounts-page-size">Show</label>
-          <select
-            id="accounts-page-size"
-            value={pageSize}
-            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-            className="select focus-ring w-full text-sm"
-          >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-        </div>
-      </div>
-
-      {debouncedSearch && (
+      {filters.q && (
         <div role="status" className="text-sm text-muted">
           {pagination ? (
             <>
-              Found {pagination.total} result{pagination.total !== 1 ? 's' : ''} for "{debouncedSearch}"
+              Found {pagination.total} result{pagination.total !== 1 ? 's' : ''} for "{filters.q}"
               {pagination.total > 0 && (
                 <span className="ml-2">
                   (Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
@@ -585,7 +518,7 @@ export default function AccountsPage() {
               )}
             </>
           ) : (
-            `Searching for "${debouncedSearch}"...`
+            `Searching for "${filters.q}"...`
           )}
         </div>
       )}
@@ -641,8 +574,8 @@ export default function AccountsPage() {
             ) : accounts.length === 0 ? (
               <tr>
                 <td colSpan={12} className="px-3 py-6 text-center text-muted">
-                  {debouncedSearch
-                    ? `No profiles found matching "${debouncedSearch}"`
+                  {filters.q
+                    ? `No profiles found matching "${filters.q}"`
                     : profileStatus === 'archived' ? 'No archived profiles.' : 'No profiles found.'}
                 </td>
               </tr>
@@ -699,63 +632,13 @@ export default function AccountsPage() {
         </table>
       </div>
 
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted">
-            {!debouncedSearch && (
-              <>
-                Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-                {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                {pagination.total} results
-              </>
-            )}
-          </div>
-
-          <nav className="flex items-center gap-2" aria-label="Pagination">
-            <button
-              onClick={() => setCurrentPage(pagination.page - 1)}
-              disabled={!pagination.hasPrev}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              Previous
-            </button>
-
-            <div className="flex gap-1">
-              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                let pageNum;
-                if (pagination.totalPages <= 5) pageNum = i + 1;
-                else if (pagination.page <= 3) pageNum = i + 1;
-                else if (pagination.page >= pagination.totalPages - 2) pageNum = pagination.totalPages - 4 + i;
-                else pageNum = pagination.page - 2 + i;
-
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    aria-label={`Page ${pageNum}`}
-                    aria-current={pageNum === pagination.page ? 'page' : undefined}
-                    className={`px-3 py-1 border rounded text-sm ${
-                      pageNum === pagination.page
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setCurrentPage(pagination.page + 1)}
-              disabled={!pagination.hasNext}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              Next
-            </button>
-          </nav>
-        </div>
-      )}
+      <Pagination
+        info={pagination}
+        onPage={(page) => patchUrl({ page: String(page) })}
+        pageSize={filters.size}
+        onPageSize={(size) => patchUrl({ size: String(size) })}
+        label="Profiles pagination"
+      />
 
       <ConfirmDialog
         open={!!pendingArchive}

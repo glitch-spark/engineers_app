@@ -1,11 +1,19 @@
 import useSWR from 'swr';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId, useMemo } from 'react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
-import { Pencil, Trash2, Search, Plus, Users, UserCheck, UserX, Shield, Check, CalendarCheck } from 'lucide-react';
+import { Pencil, Trash2, Plus, Users, UserCheck, UserX, Shield, Check, CalendarCheck } from 'lucide-react';
 import * as api from '../api/endpoints';
 import { notify, messageOf } from '../lib/notify';
 import PageHeader from '../components/PageHeader';
+import FilterBar, { FilterField } from '../components/filters/FilterBar';
+import SearchFilter from '../components/filters/SearchFilter';
+import Pagination from '../components/Pagination';
+import { useUrlFilters } from '../lib/useUrlFilters';
+import {
+  USER_CLEAR_KEYS, USER_ROLE_FILTER_OPTIONS, USER_ROLE_OPTIONS, USER_STATUS_OPTIONS, USER_URL_DEFAULTS,
+  parseUserValues, userCanClear, userListParams, type UserKey,
+} from '../lib/userFilters';
 
 interface User {
   _id: string;
@@ -22,20 +30,14 @@ interface User {
   slackUserId?: string | null;
 }
 
-const ROLE_OPTIONS = [
-  { value: 'staff', label: 'Staff' },
-  { value: 'interview_manager', label: 'Interview manager' },
-  { value: 'admin', label: 'Admin' },
-];
+const ROLE_OPTIONS = USER_ROLE_OPTIONS;
 const roleLabel = (role: string) => ROLE_OPTIONS.find((o) => o.value === role)?.label ?? role;
 
 export default function UsersPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const filterId = useId();
+  const [urlValues, patchUrl] = useUrlFilters(USER_URL_DEFAULTS);
+  const filters = useMemo(() => parseUserValues(urlValues), [urlValues]);
+  const canClear = userCanClear(filters);
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
@@ -51,29 +53,10 @@ export default function UsersPage() {
     slackUserId: '',
   });
 
-  const [isSearching, setIsSearching] = useState(false);
-
   const { data, mutate, isLoading } = useSWR(
-    ['users', searchTerm, roleFilter, statusFilter, currentPage, pageSize] as const,
-    () => api.listUsers({
-      page: currentPage,
-      limit: pageSize,
-      ...(searchTerm ? { search: searchTerm } : {}),
-      ...(roleFilter ? { role: roleFilter } : {}),
-      ...(statusFilter ? { status: statusFilter } : {}),
-    })
+    ['users', filters.q, filters.role, filters.status, filters.page, filters.size] as const,
+    () => api.listUsers(userListParams(filters)),
   );
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchTerm || roleFilter || statusFilter) {
-        setIsSearching(true);
-        setCurrentPage(1);
-        mutate().finally(() => setIsSearching(false));
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, roleFilter, statusFilter, mutate]);
 
   useEffect(() => {
     if (editing) {
@@ -137,15 +120,7 @@ export default function UsersPage() {
   };
 
   const clearFilters = () => {
-    setSearchTerm('');
-    setRoleFilter('');
-    setStatusFilter('');
-    setCurrentPage(1);
-  };
-
-  const handlePageSizeChange = (newSize: number) => {
-    setPageSize(newSize);
-    setCurrentPage(1);
+    patchUrl(Object.fromEntries(USER_CLEAR_KEYS.map((k) => [k, undefined])) as Partial<Record<UserKey, string>>);
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -180,88 +155,35 @@ export default function UsersPage() {
         }
       />
 
-      <div className="card">
-        <div className="flex items-end gap-4 flex-wrap">
-          <div className="w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-64">
-            <label className="block text-xs mb-1 text-muted" htmlFor="users-search">Search Users</label>
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-faint" aria-hidden />
-              <input
-                id="users-search"
-                className="input !pl-10 w-full"
-                type="text"
-                placeholder="Search by name, email, or phone..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <Select
-              label="Role Filter"
-              labelClassName="text-xs mb-1 text-muted"
-              value={roleFilter}
-              onChange={setRoleFilter}
-              options={[
-                { value: '', label: 'All Roles' },
-                ...ROLE_OPTIONS,
-              ]}
-            />
-          </div>
-
-          <div>
-            <Select
-              label="Status"
-              labelClassName="text-xs mb-1 text-muted"
-              value={statusFilter}
-              onChange={setStatusFilter}
-              options={[
-                { value: '', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-            />
-          </div>
-
-          <button type="button" className="btn" onClick={clearFilters}>
-            Clear Filters
-          </button>
-
-          {isSearching && (
-            <div className="text-sm text-muted flex items-center">
-              <div className="spinner spinner-sm mr-2" aria-hidden></div>
-              Searching...
-            </div>
-          )}
-        </div>
-      </div>
+      <FilterBar canClear={canClear} onClear={clearFilters}>
+        <FilterField label="Role" htmlFor={`${filterId}-role`} width="w-44">
+          <Select
+            id={`${filterId}-role`}
+            className="w-full text-sm"
+            value={filters.role}
+            onChange={(v) => patchUrl({ role: v })}
+            options={USER_ROLE_FILTER_OPTIONS}
+          />
+        </FilterField>
+        <FilterField label="Status" htmlFor={`${filterId}-status`} width="w-44">
+          <Select
+            id={`${filterId}-status`}
+            className="w-full text-sm"
+            value={filters.status}
+            onChange={(v) => patchUrl({ status: v })}
+            options={USER_STATUS_OPTIONS}
+          />
+        </FilterField>
+        <SearchFilter value={filters.q} onChange={(q) => patchUrl({ q })} placeholder="Search users…" />
+      </FilterBar>
 
       {pagination && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted" role="status">
-            {searchTerm || roleFilter || statusFilter ? (
-              <span>Found {pagination.total} user{pagination.total !== 1 ? 's' : ''} matching your criteria</span>
-            ) : (
-              <span>Showing {pagination.total} user{pagination.total !== 1 ? 's' : ''} total</span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium" htmlFor="users-page-size">Show:</label>
-            <Select
-              id="users-page-size"
-              value={pageSize.toString()}
-              onChange={(value) => handlePageSizeChange(Number(value))}
-              options={[
-                { value: '5', label: '5' },
-                { value: '10', label: '10' },
-                { value: '20', label: '20' },
-                { value: '50', label: '50' }
-              ]}
-              className="w-20"
-            />
-          </div>
+        <div className="text-sm text-muted" role="status">
+          {canClear ? (
+            <span>Found {pagination.total} user{pagination.total !== 1 ? 's' : ''} matching your criteria</span>
+          ) : (
+            <span>Showing {pagination.total} user{pagination.total !== 1 ? 's' : ''} total</span>
+          )}
         </div>
       )}
 
@@ -290,7 +212,7 @@ export default function UsersPage() {
             ) : users.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                  {searchTerm || roleFilter || statusFilter ? (
+                  {canClear ? (
                     <div>
                       <p>No users found matching your search criteria.</p>
                       <p className="text-sm mt-1">Try adjusting your search terms or filters.</p>
@@ -386,29 +308,13 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted">
-            Page {pagination.page} of {pagination.totalPages}
-          </div>
-          <div className="flex gap-2">
-            <button
-              className="btn btn-sm"
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </button>
-            <button
-              className="btn btn-sm"
-              onClick={() => setCurrentPage(Math.min(pagination.totalPages, currentPage + 1))}
-              disabled={currentPage === pagination.totalPages}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        info={pagination}
+        onPage={(page) => patchUrl({ page: String(page) })}
+        pageSize={filters.size}
+        onPageSize={(size) => patchUrl({ size: String(size) })}
+        label="Users pagination"
+      />
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit User' : 'Add New User'}>
         <div className="space-y-4">

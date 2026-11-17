@@ -6,7 +6,7 @@ import { useAuth } from '../../auth/useAuth';
 import { notify } from '../../lib/notify';
 import { formatUsd } from '../../lib/modelCost';
 import { useModelChoice } from '../../lib/useModelChoice';
-import Segmented from '../jobApplies/Segmented';
+import Segmented from '../Segmented';
 import ModelSelect from '../ModelSelect';
 import ResumePromptField from '../ResumePromptField';
 import Select from '../Select';
@@ -33,13 +33,13 @@ export interface EvalPrefill {
 const JUDGE_HINT: Record<api.JudgeMode, string> = {
   llm: 'The judge gets a fresh context: the resume text and the JD only. Pick a model at least as strong as the resume model.',
   rules:
-    'Scores the way Job Applies does: required terms, keywords, years, title, education and wording overlap for match; stuffing, copied text, unbacked skills and timeline checks for believability. Each JD is read once by a cheap model and reused by later runs, so judging costs about nothing.',
+    'Scores the way Auto apply does: required terms, keywords, years, title, education and wording overlap for match; stuffing, copied text, unbacked skills and timeline checks for believability. Each JD is read once by a cheap model and reused by later runs, so judging costs about nothing.',
 };
 
 const MODE_HINT: Record<api.PromptMode, string> = {
   single: 'Every job description is generated with one resume unit: its template and the prompt below.',
   profile:
-    'Each job description gets the unit Job Applies would pick for it (or the one you choose below), with that unit’s template and prompt. Scores are shown per unit.',
+    'Each job description gets the unit Auto apply would pick for it (or the one you choose below), with that unit’s template and prompt. Scores are shown per unit.',
 };
 
 type PromptOrigin = 'profile' | 'global' | 'none' | 'prefill';
@@ -276,7 +276,7 @@ export default function NewEvalPanel({
       open={open}
       onClose={onClose}
       title="New prompt eval"
-      subtitle="Generates one resume per job description with one resume unit or the whole profile, then a judge (a model or the Job Applies rules) scores match and believability."
+      subtitle="Generates one resume per job description with one resume unit or the whole profile, then a judge (a model or the Auto apply rules) scores match and believability."
       dirty={dirty}
       wide
       footer={
@@ -392,7 +392,7 @@ export default function NewEvalPanel({
               value={judgeMode}
               onChange={setJudgeMode}
               options={[
-                { value: 'rules', label: 'Job Applies rules' },
+                { value: 'rules', label: 'Auto apply rules' },
                 { value: 'llm', label: 'AI model' },
               ]}
             />

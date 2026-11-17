@@ -9,8 +9,9 @@ import { notify } from '../../lib/notify';
 import { exportCallerStatsPdf } from '../../lib/callerStatsPdf';
 import { interviewStatusBadgeClass, stageLabel } from '../../lib/stageBadge';
 import { useChartTheme } from '../../theme/useChartTheme';
-import { FilterBar, REGIONS, Segmented, filterParams, filtersError, type StatsFilters } from './controls';
+import Segmented from '../Segmented';
 import { ServerUpdateNote, StatTiles, pct } from './rateShared';
+import { StatsFilterBar, regionLabel, useStatsFilters } from './statsFilters';
 
 type Sort = 'date' | 'company';
 const SORTS: { value: Sort; label: string }[] = [
@@ -58,33 +59,40 @@ function allRow(team: CallerStatsTotals): CallerStatsCaller {
  * Statistics → Callers: how many interviews each caller did and how often they pass. Compared across callers, by
  * round type (with self-taken rounds for reference), week by week, and the rounds held behind the numbers.
  */
-export default function CallersTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
-  const params = filterParams(filters);
+export default function CallersTab({ initialCaller }: {
+  /** Caller id to show first (falls back to All callers when they have no rounds in the period). */
+  initialCaller?: string;
+}) {
+  const f = useStatsFilters();
+  const params = f.params;
   const { data, error, isLoading } = useSWR(
-    filtersError(filters) ? null : ['caller-stats', params.region, params.period, params.date, params.to],
-    () => api.getCallerStats(params),
+    params ? ['caller-stats', params.region, params.period, params.date, params.to] : null,
+    () => api.getCallerStats(params!),
     { keepPreviousData: true },
   );
-  const [picked, setPicked] = useState<string>(ALL);
+  const shown = params ? data : undefined; // keepPreviousData would otherwise show the last range under an invalid one
+  const [picked, setPicked] = useState<string>(initialCaller || ALL);
 
   return (
     <div className="space-y-4">
-      <FilterBar value={filters} onChange={onFilters}>
-        {isLoading && data && <span className="spinner spinner-sm" role="status" aria-label="Loading" />}
-      </FilterBar>
+      <StatsFilterBar f={f}>
+        {isLoading && shown && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
+      </StatsFilterBar>
       <p className="text-xs text-muted">
         Interviews done = rounds held: passed, rejected or awaiting their result (canceled rounds aren’t counted). Pass
         rate = passed ÷ (passed + rejected); a caller is ranked from 5 decided rounds. A region shows its profiles’ interviews.
       </p>
-      {error ? (
+      {!params ? (
+        <p className="panel p-6 text-sm text-muted">Pick a valid date range to see statistics.</p>
+      ) : error ? (
         <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the callers. Try again.</p>
-      ) : !data ? (
+      ) : !shown ? (
         <p className="panel flex items-center gap-2 p-6 text-sm text-muted" role="status">
           <span className="spinner spinner-sm" aria-hidden /> Loading…
         </p>
       ) : (
         // An older server's response has no team totals: wait for the backend deploy instead of crashing.
-        !data.team ? <ServerUpdateNote /> : <CallersView data={data} picked={picked} onPick={setPicked} />
+        !shown.team ? <ServerUpdateNote /> : <CallersView data={shown} picked={picked} onPick={setPicked} />
       )}
     </div>
   );
@@ -310,7 +318,7 @@ function RoundsHeld({ data, caller, isAll, callers }: {
     try {
       await exportCallerStatsPdf({
         name: caller.name, isAll, periodLabel: data.label,
-        regionLabel: REGIONS.find((r) => r.value === data.region)?.label ?? data.region,
+        regionLabel: regionLabel(data.region),
         callers: isAll ? callers : [caller], team: data.team, self: data.self, rows: rounds,
         callerName: (r) => callerOf.get(keyOf(r))?.name ?? 'Unassigned',
       });

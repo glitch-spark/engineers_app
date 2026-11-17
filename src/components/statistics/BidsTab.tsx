@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { InterviewRateRow, InterviewRates } from '../../api/endpoints';
-import { type StatsFilters } from './controls';
 import { PerUserBars, RecordsNote, StatTiles, StatsBody, initialsFor, pct } from './rateShared';
 
 /** Statistics → Bids: self bids (typed in daily plans) and bidder bids (Bid Track records) per user. */
-export default function BidsTab({ filters, onFilters }: { filters: StatsFilters; onFilters: (f: StatsFilters) => void }) {
+export default function BidsTab() {
   return (
-    <StatsBody filters={filters} onFilters={onFilters}>
+    <StatsBody>
       {(data) => (
         <>
           <p className="text-xs text-muted">

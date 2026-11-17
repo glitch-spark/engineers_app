@@ -56,6 +56,19 @@ export class ApiError extends Error {
   }
 }
 
+const RETURN_KEY = 'login-return';
+
+/** The page a mid-session 401 left, once: Login goes back to it after signing in. */
+export function takeLoginReturn(): string | null {
+  try {
+    const v = window.sessionStorage.getItem(RETURN_KEY);
+    window.sessionStorage.removeItem(RETURN_KEY);
+    return v;
+  } catch {
+    return null;
+  }
+}
+
 export type ApiFetchOptions = RequestInit & {
   /** Abort the request after this many milliseconds. */
   timeoutMs?: number;
@@ -103,8 +116,11 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchOptions 
 
   if (res.status === 401) {
     clearToken();
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+    // The startup /auth/me check is left to AuthGuard, which sends the visitor to /login with the page they asked for.
+    if (path !== '/auth/me' && typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
       emitToast('info', 'Please log in to continue');
+      // A session that ended mid-use: remember the page so signing in comes back to it.
+      try { window.sessionStorage.setItem(RETURN_KEY, window.location.pathname + window.location.search); } catch { /* storage blocked */ }
       window.location.assign('/login');
     }
   } else if (res.status === 403) {

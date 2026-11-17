@@ -4,6 +4,7 @@ import { Loader2, Save, Zap, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { messageOf, notify } from '../lib/notify';
+import { profileUpdateBody } from '../lib/profileUpdate';
 import { listTimeZones, normalizeSlackTimezone } from '../lib/slackDigestPrefs';
 import PageHeader from '../components/PageHeader';
 
@@ -12,7 +13,14 @@ interface ProfileData {
   email: string;
   image: string;
   birthday: string;
+  phone: string;
 }
+
+const ROLE_LABELS: Record<string, string> = {
+  staff: 'Staff',
+  interview_manager: 'Interview manager',
+  admin: 'Admin',
+};
 
 interface PasswordData {
   currentPassword: string;
@@ -62,9 +70,10 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isActive, setIsActive] = useState(true);
 
   const EMPTY_PROFILE: ProfileData = {
-    username: '', email: '', image: '', birthday: '',
+    username: '', email: '', image: '', birthday: '', phone: '',
   };
   const [formData, setFormData] = useState<ProfileData>(EMPTY_PROFILE);
   const [passwordData, setPasswordData] = useState<PasswordData>({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -85,7 +94,9 @@ export default function ProfilePage() {
           email: data.user.email || user?.email || '',
           image: data.user.image || user?.image || '',
           birthday: data.user.birthday ? new Date(data.user.birthday).toISOString().slice(0, 10) : '',
+          phone: data.user.phone || '',
         };
+        setIsActive(data.user.isActive !== false);
         setFormData(userData);
         setOriginalData(userData);
       } catch (error) {
@@ -121,7 +132,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await api.updateProfile(formData);
+      await api.updateProfile(profileUpdateBody(formData, originalData));
       notify.success('Profile updated successfully');
       setOriginalData(formData);
       setIsEditing(false);
@@ -192,7 +203,7 @@ export default function ProfilePage() {
   if (isLoadingData) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Profile" />
+        <PageHeader title="Account settings" />
         <div className="card">
           <div className="flex items-center justify-center py-12">
             <div role="status" className="flex items-center justify-center">
@@ -207,7 +218,7 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Profile" />
+      <PageHeader title="Account settings" />
 
       <div className="card">
         <h2 className="sr-only">Profile details</h2>
@@ -313,6 +324,21 @@ export default function ProfilePage() {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="phone" className="form-label">Phone</label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="input focus-ring"
+                  placeholder="Enter your phone number"
+                  autoComplete="tel"
+                  disabled={!isEditing}
+                />
               </div>
 
               <div className="form-group">
@@ -482,8 +508,8 @@ export default function ProfilePage() {
         <h2 className="card-header">Account Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-muted">Account Type</p>
-            <p className="text-strong">Standard Account</p>
+            <p className="text-sm font-medium text-muted">Role</p>
+            <p className="text-strong">{user?.role ? ROLE_LABELS[user.role] ?? user.role : '—'}</p>
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted">Member Since</p>
@@ -501,9 +527,15 @@ export default function ProfilePage() {
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted">Status</p>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300">
-              Active
-            </span>
+            {isActive ? (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300">
+                Active
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                Pending approval
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -632,45 +664,50 @@ function SlackAlertsCard() {
         </p>
       </form>
 
-      {connected && (
-        <div className="mt-6 space-y-5 border-t border-zinc-200/80 pt-5 dark:border-zinc-800">
-          <div className="sm:max-w-xs">
-            <div className="form-group mb-0">
-              <label className="form-label" htmlFor="slackTimezone">
-                Timezone
-              </label>
-              <select
-                id="slackTimezone"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="input focus-ring"
-              >
-                {zoneOptions.map((z) => (
-                  <option key={z.value} value={z.value}>
-                    {z.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <div className="mt-6 space-y-5 border-t border-zinc-200/80 pt-5 dark:border-zinc-800">
+        <div className="sm:max-w-xs">
+          <div className="form-group mb-0">
+            <label className="form-label" htmlFor="slackTimezone">
+              Timezone
+            </label>
+            <select
+              id="slackTimezone"
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              disabled={!data}
+              className="input focus-ring"
+            >
+              {zoneOptions.map((z) => (
+                <option key={z.value} value={z.value}>
+                  {z.label}
+                </option>
+              ))}
+            </select>
           </div>
+        </div>
 
-          <p className="text-xs text-muted">
-            Sets your local day for in-app alerts and daily limits. Offsets include daylight time for that city
-            (UTC−12 through UTC+14).
-          </p>
+        {data && !connected && (
+          <p className="text-xs text-muted">Add your Slack member ID to be tagged in interview reminders.</p>
+        )}
 
-          <div className="flex flex-wrap gap-3">
-            <button type="button" className="btn" disabled={saving} onClick={handleSavePrefs}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
-              Save timezone
-            </button>
+        <p className="text-xs text-muted">
+          Sets your local day for in-app alerts and daily limits. Offsets include daylight time for that city
+          (UTC−12 through UTC+14).
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="btn" disabled={saving || !data} onClick={handleSavePrefs}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+            Save timezone
+          </button>
+          {connected && (
             <button type="button" className="btn-accent" disabled={!botReady || testing} onClick={handleTestDm}>
               {testing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Zap className="h-4 w-4" aria-hidden />}
               Send test DM
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -8,22 +8,24 @@ import { safeHref } from '../../lib/safeHref';
 import { TailoredScore } from '../jobApplies/Suggestions';
 import { KIND_LABEL, shortDay } from './CompanyMatchField';
 import { isDeletedResume } from './useDeletedResume';
-import { isMissingFile, useResumeRestore } from './useResumeRestore';
+import { useAuth } from '../../auth/useAuth';
+import { canRestoreResume, isMissingFile, MISSING_FILE_FOR_CALLER, useResumeRestore } from './useResumeRestore';
 
 export function reasonLabel(reason?: string | null): string {
   return NO_MATCH_REASONS.find((r) => r.value === reason)?.label ?? 'No reason given';
 }
 
-/** Save the linked resume: a tailored one's PDF, or an uploaded one's original file (from the profile). `onMissing`
- * gets a resume whose file is missing from storage (true = it handled it). */
+/** Save the linked resume: a tailored one's PDF, or an uploaded one's original file (from the profile). With
+ * `interviewId` the download is made on that interview's behalf (an assigned caller may open its resume only so).
+ * `onMissing` gets a resume whose file is missing from storage (true = it handled it). */
 export async function downloadLinkedResume(
-  link: InterviewResumeLink, accountId: string, onMissing?: (link: InterviewResumeLink) => boolean,
+  link: InterviewResumeLink, accountId: string, onMissing?: (link: InterviewResumeLink) => boolean, interviewId?: string,
 ): Promise<void> {
   try {
     if ((link.kind === 'tailored' || link.kind === 'fixed') && link.resumeJobId) {
-      await api.downloadTailoredResume(link.resumeJobId, link.filename || 'Resume.pdf');
+      await api.downloadTailoredResume(link.resumeJobId, link.filename || 'Resume.pdf', interviewId);
     } else if (link.kind === 'uploaded' && link.resumeId) {
-      const { url } = await api.getAccountResumeFileUrl(accountId, link.resumeId);
+      const { url } = await api.getAccountResumeFileUrl(accountId, link.resumeId, interviewId);
       window.open(url, '_blank', 'noopener');
     }
   } catch (err) {
@@ -51,10 +53,22 @@ export function ResumeScoreCell({ link }: { link?: InterviewResumeLink | null })
   return <span className="text-xs text-faint" title={link.filename || undefined}>Not scored</span>;
 }
 
-/** Download button for a linked resume; nothing for a link with no resume. */
-export function LinkedResumeDownload({ link, accountId, compact }: { link: InterviewResumeLink; accountId: string; compact?: boolean }) {
+/**
+ * Download button for a linked resume; nothing for a link with no resume. Inside an interview, pass its `interviewId`
+ * and `ownerId`: the download is then made for that interview, and a missing file is only offered to be made again to
+ * the owner, admins and interview managers (anyone else is told to ask the owner).
+ */
+export function LinkedResumeDownload({ link, accountId, compact, interviewId, ownerId }: {
+  link: InterviewResumeLink; accountId: string; compact?: boolean; interviewId?: string; ownerId?: string;
+}) {
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const restore = useResumeRestore();
+  const offerRestore = (l: InterviewResumeLink) => {
+    if (!interviewId || canRestoreResume(user, ownerId)) return restore.offer(l);
+    notify.error(MISSING_FILE_FOR_CALLER);
+    return true;
+  };
   const hasFile = ((link.kind === 'tailored' || link.kind === 'fixed') && link.resumeJobId) || (link.kind === 'uploaded' && link.resumeId);
   if (!hasFile || !accountId) return null;
   const label = `Download ${link.filename || 'resume'}`;
@@ -69,7 +83,7 @@ export function LinkedResumeDownload({ link, accountId, compact }: { link: Inter
         aria-label={label}
         onClick={async () => {
           setBusy(true);
-          await downloadLinkedResume(link, accountId, restore.offer);
+          await downloadLinkedResume(link, accountId, offerRestore, interviewId);
           setBusy(false);
         }}
       >

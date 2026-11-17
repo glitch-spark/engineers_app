@@ -2,9 +2,18 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
-import { ApiError } from '../api/client';
+import { ApiError, takeLoginReturn } from '../api/client';
 import { messageOf, notify } from '../lib/notify';
 import AuthShell from '../components/auth/AuthShell';
+
+/** Where to go after signing in: the page the guard bounced us from, when it is a local path; else the dashboard. */
+function returnPath(state: unknown): string {
+  const stored = takeLoginReturn();
+  const from = (state as { from?: unknown } | null)?.from ?? stored;
+  const isLogin = typeof from === 'string' && (from === '/login' || from.startsWith('/login?'));
+  if (typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !isLogin) return from;
+  return '/dashboard';
+}
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -35,7 +44,7 @@ export default function LoginPage() {
     try {
       await login(username, password);
       notify.success('Signed in');
-      navigate('/dashboard', { replace: true });
+      navigate(returnPath(location.state), { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError('Invalid username or password. Please try again.');

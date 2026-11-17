@@ -5,6 +5,13 @@ import type { InterviewResumeLink } from '../../api/endpoints';
 import Modal from '../Modal';
 import { notify } from '../../lib/notify';
 
+export const MISSING_FILE_FOR_CALLER = 'The resume file is missing — ask the owner to restore it.';
+
+/** Only the interview's owner, admins and interview managers may make a missing resume file again (the assigned
+ * caller asks one of them): the restore is a paid action their role can't start. */
+export const canRestoreResume = (user: { id: string; role: string } | null | undefined, ownerId: string | undefined) =>
+  user?.role === 'admin' || user?.role === 'interview_manager' || (!!user && !!ownerId && ownerId === user.id);
+
 /** The download answered 410: the resume's file is missing from storage (older files weren't moved on Nov 5). */
 export const isMissingFile = (err: unknown) => err instanceof ApiError && err.status === 410;
 

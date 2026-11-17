@@ -1,8 +1,9 @@
 import Select from '../Select';
+import { useAuth } from '../../auth/useAuth';
 import Switch from '../Switch';
 import type { CallerMethod } from '../../api/endpoints';
 import type { RoundFormState } from '../../lib/interviewForm';
-import { useCallers } from '../../lib/useCallers';
+import { useCallers, callerPickerOptions } from '../../lib/useCallers';
 import { CALLER_METHOD_OPTIONS } from './types';
 
 const METHOD_VALUE_PLACEHOLDER: Record<CallerMethod | '', string> = {
@@ -19,6 +20,7 @@ export default function CallerFields({
   disabled,
   idPrefix,
   callerEditable = true,
+  ownerId,
 }: {
   round: RoundFormState;
   onChange: (patch: Partial<RoundFormState>) => void;
@@ -26,20 +28,16 @@ export default function CallerFields({
   idPrefix: string;
   /** False: the caller is shown but only Admin / an interview manager changes it (an existing round). */
   callerEditable?: boolean;
+  /** The interview's owner (the current user on a new interview): never offered as the caller. */
+  ownerId?: string;
 }) {
   const method = (round.callerMethod || '') as CallerMethod | '';
   const id = (k: string) => `${idPrefix}-caller-${k}`;
-  const { callers, byId } = useCallers();
-  const saved = round.callerIdSaved;
-  // The saved caller stays pickable when it isn't on the list (typed before it, or removed since).
-  const offList = saved && !byId.has(saved)
-    ? [{ value: saved, label: `${round.callerName || 'Caller'} (not on the list)` }]
-    : [];
-  const callerOptions = [
-    { value: '', label: 'Not assigned yet' },
-    ...callers.map((c) => ({ value: c._id, label: c.name })),
-    ...offList,
-  ];
+  const { people, external } = useCallers();
+  const { user } = useAuth();
+  const callerOptions = callerPickerOptions({
+    people, external, ownerId, currentUserId: user?.id, savedId: round.callerIdSaved, savedName: round.callerName,
+  });
 
   return (
     <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">

@@ -4,20 +4,26 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { InterviewRoundRow } from '../../api/endpoints';
 import type { Interview } from '../../components/interview/types';
-import { monthGrid, rangeFor, shiftAnchor, weekDays } from '../../lib/calendarLayout';
-import { calendarFromFilters, filtersForCalendar, roundsQuery, type InterviewFilters } from '../../lib/interviewFilters';
-import { toDateInputValue } from '../../lib/dateRangePresets';
+import { monthGrid, rangeFor, weekDays } from '../../lib/calendarLayout';
+import {
+  calendarFromFilters,
+  dayKey,
+  filtersForCalendar,
+  roundsQuery,
+  stepCalendar,
+  type InterviewFilters,
+} from '../../lib/interviewFilters';
 import CalendarAgenda from './CalendarAgenda';
 import CalendarMonth from './CalendarMonth';
 import CalendarWeek from './CalendarWeek';
 import { parseLocalDate, rangeLabel, toEvents } from './calendarShared';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
-import { toWall, zonedDateKey } from '../../lib/interviewTimezone';
+import { toWall } from '../../lib/interviewTimezone';
 import { useCallers } from '../../lib/useCallers';
-import { callerChipClass, callerLabel } from '../../lib/callerColors';
+import { callerChipClass, callerInitials, callerLabel, isUnassigned } from '../../lib/callerColors';
 
 /** Week (default) and Month calendar of rounds; click a round to edit it, a slot to create one.
- * `callers`: the Callers calendar — every user's caller rounds, coloured by caller. */
+ * `callers`: the Caller interviews calendar — every user's caller rounds, coloured by caller. */
 export default function InterviewsCalendar({
   filters,
   update,
@@ -33,21 +39,26 @@ export default function InterviewsCalendar({
 }) {
   const { tz } = useInterviewTimezone();
   const { byId } = useCallers();
-  // One Date range drives both views: the calendar shows the period it names.
-  const now = toWall(new Date(), tz);
-  const { view, anchor: anchorKey } = calendarFromFilters(filters, now);
+  // One Date range drives both views: the calendar shows the period it names, and its own ‹ › Today and Week | Month
+  // write that range back (a named preset when it matches, else Custom), so the bar's label and the grid stay in step.
+  // Where they differ (the bar says This year, the grid is one month; or a 2-week range, shown as the month it starts
+  // in) the grid keeps showing what it always has. An invalid Custom range shows nothing until it is fixed.
+  const today = dayKey(toWall(new Date(), tz));
+  const shown = calendarFromFilters(filters, today);
+  const valid = shown !== null;
+  const { view, anchor: anchorKey } = shown ?? { view: 'week' as const, anchor: today };
   const anchor = parseLocalDate(anchorKey);
   const days = useMemo(() => (view === 'week' ? weekDays(anchor) : monthGrid(anchor)), [view, anchorKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const showPeriod = (v: 'week' | 'month', key: string) => update(filtersForCalendar(v, key, now));
+  const showPeriod = (v: 'week' | 'month', key: string) => update(filtersForCalendar(v, key, today));
   const range = rangeFor(view, anchor);
   const query = roundsQuery(filters, range, tz, { callers });
-  const { data, isLoading, isValidating } = useSWR(['interview-rounds', JSON.stringify(query)], () => api.listInterviewRounds(query), {
+  const { data, isLoading, isValidating } = useSWR(valid ? ['interview-rounds', JSON.stringify(query)] : null, () => api.listInterviewRounds(query), {
     keepPreviousData: true,
   });
   const events = useMemo(() => {
-    const base = toEvents(data?.rounds ?? [], tz);
-    return callers ? base.map((e) => ({ ...e, cls: callerChipClass(e.row, byId), detail: callerLabel(e.row) })) : base;
-  }, [data, tz, callers, byId]);
+    const base = toEvents(valid ? data?.rounds ?? [] : [], tz);
+    return callers ? base.map((e) => ({ ...e, cls: callerChipClass(e.row, byId), detail: isUnassigned(e.row) ? callerLabel(e.row) : `${callerInitials(callerLabel(e.row))} ${callerLabel(e.row)}` })) : base;
+  }, [data, valid, tz, callers, byId]);
   // First load, or a period / filter not fetched yet (the previous one stays dimmed underneath).
   const loading = isLoading;
 
@@ -56,14 +67,14 @@ export default function InterviewsCalendar({
     if (iv) onOpenRound(iv, row.roundId);
   };
   const newAt = (date: string, time?: string) => onNew({ date, time });
-  const go = (delta: number) => showPeriod(view, toDateInputValue(shiftAnchor(view, anchor, delta)));
+  const go = (dir: -1 | 1) => update(stepCalendar(view, anchorKey, dir, today));
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           <button type="button" className="btn-icon" onClick={() => go(-1)} aria-label={`Previous ${view}`}><ChevronLeft size={16} aria-hidden /></button>
-          <button type="button" className="btn-outline btn-sm" onClick={() => showPeriod(view, zonedDateKey(new Date(), tz))}>Today</button>
+          <button type="button" className="btn-outline btn-sm" onClick={() => showPeriod(view, today)}>Today</button>
           <button type="button" className="btn-icon" onClick={() => go(1)} aria-label={`Next ${view}`}><ChevronRight size={16} aria-hidden /></button>
           <h2 className="ml-2 text-sm font-semibold tabular-nums" aria-live="polite">{rangeLabel(view, days, anchor)}</h2>
           {isValidating && !loading && <span className="spinner spinner-sm ml-2" aria-label="Refreshing" />}
@@ -78,7 +89,10 @@ export default function InterviewsCalendar({
         </div>
       </div>
 
-      <div className="relative" aria-busy={loading}>
+      {!valid && (
+        <p className="panel p-4 text-center text-sm text-muted">Pick a valid date range to see the calendar.</p>
+      )}
+      <div className="relative" aria-busy={loading} hidden={!valid}>
         {view === 'week' ? (
           <>
             <div className="hidden sm:block"><CalendarWeek days={days} events={events} tz={tz} onOpen={open} onNew={newAt} /></div>
@@ -97,7 +111,7 @@ export default function InterviewsCalendar({
           </div>
         )}
       </div>
-      {callers && !loading && events.length === 0 && (
+      {valid && callers && !loading && events.length === 0 && (
         <p className="text-sm text-muted">No caller rounds in this period{filters.caller ? ' for this caller' : ''}.</p>
       )}
     </div>

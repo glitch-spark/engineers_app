@@ -1,17 +1,19 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { addDaysKey } from './weekDates';
+import { stepPayWeekDay, type ShownWeeks } from '../../lib/bidderFilters';
 
 /**
- * Pay-week navigator: prev / next, "This week" and the label. `week` is any date inside the shown week (we pass the
- * date the week ends on); null while loading. `isCurrent` disables next and hides "This week".
+ * Pay-week navigator: prev / next, "This week" and the label. `shown` is the shown week's first and last report day
+ * (the server's days: 7, or 8 across a schedule switch); null while loading. It steps like the Bidders list
+ * (`stepPayWeekDay`): back to the day before the first, forward to the last + 7. `isCurrent` disables next and hides
+ * "This week".
  */
 export default function WeekNav({
-  week,
+  shown,
   label,
   isCurrent,
   onChange,
 }: {
-  week: string | null;
+  shown: ShownWeeks | null;
   label: string | null;
   isCurrent: boolean;
   onChange: (week: string | null) => void;
@@ -22,8 +24,8 @@ export default function WeekNav({
         type="button"
         className="btn-icon"
         aria-label="Previous week"
-        disabled={!week}
-        onClick={() => week && onChange(addDaysKey(week, -7))}
+        disabled={!shown}
+        onClick={() => shown && onChange(stepPayWeekDay(shown, -1))}
       >
         <ChevronLeft size={18} aria-hidden />
       </button>
@@ -35,12 +37,12 @@ export default function WeekNav({
         type="button"
         className="btn-icon"
         aria-label="Next week"
-        disabled={!week || isCurrent}
-        onClick={() => week && onChange(addDaysKey(week, 7))}
+        disabled={!shown || isCurrent}
+        onClick={() => shown && onChange(stepPayWeekDay(shown, 1))}
       >
         <ChevronRight size={18} aria-hidden />
       </button>
-      {week && !isCurrent && (
+      {shown && !isCurrent && (
         <button type="button" className="btn-outline text-xs" onClick={() => onChange(null)}>
           This week
         </button>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import useSWR, { mutate as globalMutate, preload } from 'swr';
 import toast from 'react-hot-toast';
 import { CheckCircle2 } from 'lucide-react';
@@ -13,6 +13,9 @@ import StepViewer, { defaultStep } from './StepViewer';
 import { dayParts } from '../bidders/weekDates';
 import { byFirstAt, dialogIsOpen, isTypingTarget, reasonLabel } from './util';
 import { safeHref } from '../../lib/safeHref';
+import type { ReviewSwitch } from '../../lib/bidsUrl';
+import type { ReportClock } from '../../lib/bidderFilters';
+import { useReportClock } from '../../lib/useReportClock';
 
 type Bid = api.BidReviewItem;
 
@@ -36,6 +39,7 @@ const fetchShots = ([, id]: readonly [string, string]) => api.bidScreenshots(id)
 
 const titleOf = (b: Bid) => b.jobTitle || b.jobDomain || 'Untitled job';
 const changedText = (b: Bid) => `Changed by ${b.reviewedByName || 'another reviewer'} to ${b.status}`;
+const GONE_TEXT = 'No longer in this queue';
 
 /** After a decision in a given list: the next bid in it, else the first one still pending (`from` excluded). */
 function nextInList(ids: string[], bids: Bid[], from: Bid): string | null {
@@ -55,21 +59,56 @@ interface Notice {
   bidId: string;
   text: string;
   at: number;
+  /** 'gone': the bid shown before left the queue on a refresh, and this one replaced it. */
+  kind: 'changed' | 'gone';
+  /** For 'gone': the title of the bid that left. */
+  goneTitle?: string;
 }
 
-export type FocusScope = { day: string } | { week: string };
+/** A day's bids (the day panel's walk), or a server queue of pending bids (`/bids/pending`): a day, pay week, range or
+ * every pending bid. */
+export type FocusScope = { day: string } | { queue: api.PendingQuery };
 
-/** "Sun Oct 4" for a day scope, "Week ending Sat Oct 10" for a week scope. */
-const scopeLabel = (scope: FocusScope) => {
-  const key = 'day' in scope ? scope.day : scope.week;
-  const p = dayParts(key);
-  return 'day' in scope ? `${p.weekday} ${p.date}` : `Week ending ${p.weekday} ${p.date}`;
-};
+/** The Review switch in the toolbar; `value` null checks no option (another day or pay week). */
+export interface FocusScopeSwitch {
+  value: ReviewSwitch | null;
+  onChange: (v: ReviewSwitch) => void;
+}
+
+/** What the overlay walks, whichever endpoint it came from. `label` and `who` name the scope in the toolbar. */
+interface FocusData {
+  bids: Bid[];
+  label: string;
+  who: string | null;
+}
+
+/** A dateless day / pay-week queue means "the current one", which the server resolves from now on every request: after a
+ * cutoff a refresh would return the next period. The overlay fixes that date once per visit from the server clock. */
+const needsClockDate = (scope: FocusScope) =>
+  'queue' in scope && (scope.queue.period === 'day' || scope.queue.period === 'week') && !scope.queue.date;
+const clockDate = (scope: FocusScope, clock: ReportClock) =>
+  'queue' in scope && scope.queue.period === 'day' ? clock.today : clock.payWeekStart;
+
+/** Clock skew slack for `since`: a bid decided just before the overlay opened (by the server's clock) still shows. */
+const SINCE_SLACK_MS = 60_000;
+
+async function loadScope(scope: FocusScope, bidderId: string | undefined, visit: number): Promise<FocusData> {
+  if ('queue' in scope) {
+    // `since` keeps the bids decided while the overlay is open, so the shown one can say "Changed by…" instead of vanishing.
+    const data = await api.listPendingBids({ ...scope.queue, since: new Date(visit - SINCE_SLACK_MS).toISOString() });
+    return { bids: data.bids, label: data.label, who: data.bidderName ?? 'All bidders' };
+  }
+  const data = await api.listBids({ day: scope.day, bidderId: bidderId || undefined });
+  const p = dayParts(scope.day);
+  return { bids: data.bids, label: `${p.weekday} ${p.date}`, who: bidderId ? (data.summary[bidderId]?.name ?? null) : 'All bidders' };
+}
 
 /**
- * Full-screen review overlay over the bids of a fixed day or pay week (one bidder or all), decided from the keyboard.
- * `ids` (e.g. a filtered day table, in its order) is the list to walk, starting at `startAt`; without it
- * `set: 'pending'` walks the pending bids oldest first and `set: 'all'` every bid of the scope.
+ * Full-screen review overlay over the bids of a fixed day (one bidder or all) or a server queue of pending bids, decided
+ * from the keyboard. `ids` (e.g. a filtered day table, in its order) is the list to walk, starting at `startAt`; without
+ * it `set: 'pending'` walks the pending bids oldest first and `set: 'all'` every bid of the scope. `bidderId` filters a
+ * day scope; a queue carries its own filters. `scopeSwitch` adds the Review switch (Today / This pay week / Range / All
+ * pending) to the toolbar.
  */
 export default function FocusReview({
   scope,
@@ -78,6 +117,7 @@ export default function FocusReview({
   ids,
   set,
   onExit,
+  scopeSwitch,
 }: {
   scope: FocusScope;
   bidderId?: string;
@@ -85,14 +125,26 @@ export default function FocusReview({
   ids?: string[];
   set: 'pending' | 'all';
   onExit: () => void;
+  scopeSwitch?: FocusScopeSwitch;
 }) {
   // A key per visit: a cached list from an earlier visit is out of date (bids decided in the list since), and pinning a
   // bid from it would start the viewer on one that is no longer pending.
   const [visit] = useState(() => Date.now());
-  const scopeKey = 'day' in scope ? `day:${scope.day}` : `week:${scope.week}`;
-  const { data, error, mutate } = useSWR(['bid-focus', scopeKey, bidderId ?? '', visit] as const, () =>
-    api.listBids({ ...scope, bidderId: bidderId || undefined }),
+  // The current day / pay week for a dateless queue, fixed at the first clock read of this visit (see needsClockDate).
+  const needsDate = needsClockDate(scope);
+  const report = useReportClock();
+  const [frozenDate, setFrozenDate] = useState<string | null>(null);
+  if (needsDate && frozenDate === null && report.clock) setFrozenDate(clockDate(scope, report.clock));
+  const ready = !needsDate || frozenDate !== null;
+  const fixedScope: FocusScope =
+    needsDate && frozenDate && 'queue' in scope ? { queue: { ...scope.queue, date: frozenDate } } : scope;
+  const scopeKey = 'day' in fixedScope ? `day:${fixedScope.day}` : `queue:${JSON.stringify(fixedScope.queue)}`;
+  const swr = useSWR(ready ? (['bid-focus', scopeKey, bidderId ?? '', visit] as const) : null, () =>
+    loadScope(fixedScope, bidderId, visit),
   );
+  const { data, mutate } = swr;
+  const error = swr.error ?? (ready ? undefined : report.error);
+  const retry = () => (ready ? void mutate() : report.retry());
 
   const all = useMemo(() => [...(data?.bids ?? [])].sort(byFirstAt), [data]);
   const pending = useMemo(() => all.filter((b) => b.status === 'pending'), [all]);
@@ -103,8 +155,9 @@ export default function FocusReview({
   const [currentId, setCurrentId] = useState<string | null>(null);
   // startAt only picks the first bid shown: once the reviewer moves on (or runs out of pending bids), it's spent.
   const seed = useRef(startAt);
+  const pinned = currentId ? all.find((b) => b.id === currentId) : undefined;
   const current =
-    (currentId ? all.find((b) => b.id === currentId) : undefined) ??
+    pinned ??
     (!currentId && seed.current ? all.find((b) => b.id === seed.current) : undefined) ??
     pending[0] ??
     null;
@@ -144,7 +197,7 @@ export default function FocusReview({
 
   const rejectOpen = !!current && rejectFor === current.id;
   const otherChosen = rejectOpen && otherFor === current?.id;
-  const shownNotice = current && notice?.bidId === current.id ? notice.text : null;
+  const shownNotice = current && notice?.bidId === current.id ? notice : null;
 
   // Pin the first bid shown, so a refresh that brings an older pending bid doesn't swap it underneath the reviewer.
   useEffect(() => {
@@ -156,7 +209,7 @@ export default function FocusReview({
   const shownRef = useRef<{ bidId: string; status: api.BidStatus } | null>(null);
   const showChanged = useCallback((b: Bid) => {
     shownRef.current = { bidId: b.id, status: b.status };
-    noticeRef.current = { bidId: b.id, text: changedText(b), at: Date.now() };
+    noticeRef.current = { bidId: b.id, text: changedText(b), at: Date.now(), kind: 'changed' };
     setNotice(noticeRef.current);
   }, []);
   const expectStatus = (bidId: string, status: api.BidStatus) => {
@@ -183,6 +236,25 @@ export default function FocusReview({
     setOtherFor(null);
     setNote('');
   }, []);
+
+  // The shown bid left the queue on a refresh (not decided here: decided bids stay listed via `since`): say so, and show
+  // the next pending bid. The notice is pinned to that bid, so a press right after the swap doesn't count (NOTICE_GRACE_MS).
+  const lastPinned = useRef<Bid | null>(null);
+  useEffect(() => {
+    if (pinned) lastPinned.current = pinned;
+  }, [pinned]);
+  const lostId = data && currentId && !pinned ? currentId : null;
+  useLayoutEffect(() => {
+    if (!lostId) return;
+    const gone = lastPinned.current?.id === lostId ? lastPinned.current : null;
+    const next = gone ? after(all, gone) : (pending[0]?.id ?? null);
+    go(next);
+    if (next) {
+      noticeRef.current = { bidId: next, text: GONE_TEXT, at: Date.now(), kind: 'gone', goneTitle: gone ? titleOf(gone) : undefined };
+      setNotice(noticeRef.current);
+    }
+    // Runs once per lost bid; `all` and `pending` are read from this render.
+  }, [lostId]);
 
   const shotsSWR = useSWR(current ? shotsKey(current.id) : null, fetchShots, {
     revalidateOnFocus: false,
@@ -405,7 +477,7 @@ export default function FocusReview({
         <p className="text-red-600">{messageOf(error, 'Failed to load bids')}</p>
         <div className="flex gap-2">
           <button type="button" className="btn-outline btn-sm" onClick={onExit}>Back</button>
-          <button type="button" className="btn btn-sm" onClick={() => void mutate()}>Try again</button>
+          <button type="button" className="btn btn-sm" onClick={retry}>Try again</button>
         </div>
       </div>
     ) : (
@@ -416,8 +488,7 @@ export default function FocusReview({
   }
 
   const pendingPos = current ? pending.findIndex((b) => b.id === current.id) : -1;
-  const bidderName = bidderId ? data.summary[bidderId]?.name : 'All bidders';
-  const label = scopeLabel(scope);
+  const { label, who } = data;
   const progress =
     (ids || set === 'all') && pos >= 0
       ? `Bid ${pos + 1} of ${nav.length} · ${pending.length} pending`
@@ -429,7 +500,8 @@ export default function FocusReview({
       progress={progress}
       approved={approved}
       rejected={rejected}
-      scope={`${label}${bidderName ? ` · ${bidderName}` : ''}`}
+      scope={`${label}${who ? ` · ${who}` : ''}`}
+      scopeSwitch={scopeSwitch}
       canPrev={!busy && pos > 0}
       canNext={!busy && pos >= 0 && pos < nav.length - 1}
       canUndo={!busy && undoStack.length > 0}
@@ -445,7 +517,9 @@ export default function FocusReview({
         {toolbar}
         <div className="panel flex flex-col items-center gap-3 px-6 py-12 text-center">
           <CheckCircle2 size={32} aria-hidden className="text-emerald-600 dark:text-emerald-400" />
-          <p className="text-lg font-semibold">All bids for {label} reviewed</p>
+          <p className="text-lg font-semibold">
+            {'queue' in scope ? `No pending bids left · ${label}` : `All bids for ${label} reviewed`}
+          </p>
           <p className="text-sm text-muted">{approved} approved · {rejected} rejected</p>
           <button type="button" className="btn" onClick={onExit}>Back</button>
         </div>
@@ -470,7 +544,16 @@ export default function FocusReview({
         <aside aria-label="Bid details" className="panel space-y-4 p-4 lg:sticky lg:top-4">
           {shownNotice && (
             <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
-              <strong>{shownNotice}.</strong> Press the action again to apply it anyway.
+              {shownNotice.kind === 'gone' ? (
+                <>
+                  <strong>{shownNotice.text}.</strong> {shownNotice.goneTitle ? `"${shownNotice.goneTitle}" left` : 'The bid shown left'}{' '}
+                  this queue on a refresh; this is the next pending bid.
+                </>
+              ) : (
+                <>
+                  <strong>{shownNotice.text}.</strong> Press the action again to apply it anyway.
+                </>
+              )}
             </p>
           )}
           <BidEvidence bid={current} shots={shots} />

@@ -16,7 +16,11 @@ import {
 import * as api from '../../api/endpoints';
 import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
-import { PERIODS, PeriodNav, Segmented, filtersError, isoDay } from '../statistics/controls';
+import Segmented from '../Segmented';
+import DateRangeFilter, { type DateRangeValue } from '../filters/DateRangeFilter';
+import { isoDay } from '../../lib/dateRange';
+import { PANEL_URL_DEFAULTS, PROFILE_PRESETS, panelRequest, parsePanelValues } from '../../lib/profileFilters';
+import { useUrlFilters } from '../../lib/useUrlFilters';
 import { readView, writeView, fmtCount, fmtPerWeek, fmtRate, fmtScore, type MetricsView } from '../../lib/profileMetrics';
 import { attentionLines } from '../../lib/profileAttention';
 import {
@@ -39,16 +43,6 @@ const FADED_OPACITY = 0.4;
 const ROUND_KEYS = ['intro', 'tech', 'hiring', 'panel', 'final'] as const;
 const MIN_BIDS = 30;
 
-/** The Statistics periods, plus everything since the profile was created. */
-const TAB_PERIODS: { value: api.ProfileMetricPeriod; label: string }[] = [...PERIODS, { value: 'all', label: 'All time' }];
-
-type Filters = { period: api.ProfileMetricPeriod; day: string; from: string; to: string };
-
-function initialFilters(): Filters {
-  const today = new Date();
-  return { period: 'all', day: isoDay(today), from: isoDay(new Date(today.getFullYear(), today.getMonth(), 1)), to: isoDay(today) };
-}
-
 /** A day or a week's Monday (`2026-10-06`) as `Oct 6`; read as UTC so the date never shifts with the viewer's
  * timezone. */
 function dayLabel(day: string): string {
@@ -65,22 +59,27 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
   const chart = useChartTheme();
   const { theme } = useTheme();
   const c = SERIES[theme === 'dark' ? 'dark' : 'light'];
-  const [f, setFilters] = useState<Filters>(initialFilters);
+  // The range lives in the page's URL (range / from / to next to the page's own `tab`); All time until one is picked.
+  const [urlValues, patchUrl] = useUrlFilters(PANEL_URL_DEFAULTS);
+  const filters = parsePanelValues(urlValues);
+  const today = isoDay(new Date());
+  const rangeValue: DateRangeValue = { preset: filters.range, from: filters.from, to: filters.to };
   const [savedView, setSavedView] = useState<MetricsView>(readView);
   // All time opens on Week (a day per point is too many) until the user picks a view in this visit.
   const [pickedView, setPickedView] = useState(false);
-  const view: MetricsView = f.period === 'all' && !pickedView ? 'week' : savedView;
-  const rangeError = filtersError({ ...f, period: f.period === 'all' ? 'month' : f.period, region: 'all' });
-  const params = f.period === 'custom' ? { period: f.period, date: f.from, to: f.to }
-    : f.period === 'all' ? { period: f.period } : { period: f.period, date: f.day };
-  const key = [params.period, params.date ?? '', params.to ?? ''] as const;
+  const view: MetricsView = filters.range === 'all_time' && !pickedView ? 'week' : savedView;
+  // A partial or invalid Custom range asks for nothing; the date control says why.
+  const params = panelRequest(filters, today);
+  const key = params ? ([params.period, params.date ?? '', params.to ?? ''] as const) : null;
   const { data, error, isLoading } = useSWR(
-    rangeError ? null : (['account-metric', accountId, ...key] as const),
-    () => api.getProfileMetric(accountId, params),
+    key && params ? (['account-metric', accountId, ...key] as const) : null,
+    () => api.getProfileMetric(accountId, params ?? { period: 'all' }),
   );
   // Every owner's profiles over the same period: its own request, so the profile's numbers never wait for it.
-  const benchmark = useSWR(rangeError ? null : (['metrics-benchmark', ...key] as const), () => api.getMetricsBenchmark(params));
-  const today = isoDay(new Date());
+  const benchmark = useSWR(
+    key && params ? (['metrics-benchmark', ...key] as const) : null,
+    () => api.getMetricsBenchmark(params ?? { period: 'all' }),
+  );
 
   const changeView = (v: MetricsView) => {
     setSavedView(v);
@@ -135,20 +134,14 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
     <section className="panel space-y-4 p-6" aria-labelledby="profile-metrics-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="profile-metrics-title" className="card-title">Metrics</h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <Segmented label="Period" options={TAB_PERIODS} value={f.period} onChange={(period) => setFilters({ ...f, period })} />
-          {f.period === 'custom' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <input type="date" className="input !w-auto !py-1.5" aria-label="From" value={f.from} max={today}
-                onChange={(e) => setFilters({ ...f, from: e.target.value })} />
-              <span className="text-muted" aria-hidden>–</span>
-              <input type="date" className="input !w-auto !py-1.5" aria-label="To" value={f.to} max={today}
-                onChange={(e) => setFilters({ ...f, to: e.target.value })} />
-              {rangeError && <span className="text-xs text-red-700 dark:text-red-400" role="alert">{rangeError}</span>}
-            </div>
-          ) : f.period !== 'all' && (
-            <PeriodNav period={f.period} day={f.day} label={m?.label} onDay={(day) => setFilters({ ...f, day })} />
-          )}
+        <div className="flex flex-wrap items-end gap-3">
+          <DateRangeFilter
+            value={rangeValue}
+            onChange={(v) => patchUrl({ range: v.preset, from: v.from, to: v.to })}
+            presets={PROFILE_PRESETS}
+            allowFuture={false}
+            today={today}
+          />
           <Segmented
             label="View"
             options={[{ value: 'day', label: 'Day' }, { value: 'week', label: 'Week' }]}
@@ -158,7 +151,7 @@ export default function ProfileMetricsPanel({ accountId }: { accountId: string }
         </div>
       </div>
 
-      {rangeError ? null : error ? (
+      {!params ? null : error ? (
         <p role="status" className="text-sm text-muted">Couldn't load metrics</p>
       ) : isLoading || !m ? (
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4" aria-hidden>

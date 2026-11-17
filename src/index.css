@@ -431,28 +431,24 @@ table { font-variant-numeric: tabular-nums; }
   @apply mt-1 max-w-sm text-sm text-zinc-500 dark:text-zinc-400;
 }
 
+/* Sidebar: one row height, one icon size, one active style (soft tint). */
 .nav-item {
-  @apply relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200;
+  @apply flex h-9 items-center gap-3 rounded-lg px-3 text-sm transition-colors duration-150;
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60;
 }
 
 .nav-item-active {
-  @apply relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200;
-  @apply bg-zinc-200/70 text-zinc-900 ring-1 ring-zinc-200/80;
-  @apply dark:bg-zinc-800 dark:text-zinc-50 dark:ring-zinc-700/80;
+  @apply bg-sky-50 font-medium text-sky-800;
+  @apply dark:bg-sky-500/10 dark:text-sky-200;
 }
 
 .nav-item-inactive {
-  @apply relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200;
-  @apply text-zinc-600 hover:bg-zinc-200/40 hover:text-zinc-900;
-  @apply dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-100;
+  @apply text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900;
+  @apply dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100;
 }
 
-.nav-item-icon-active {
-  @apply text-sky-600 dark:text-sky-400;
-}
-
-.nav-item-icon-inactive {
-  @apply text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-200;
+.nav-heading {
+  @apply mb-1 px-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400;
 }
 
 .card {

@@ -12,6 +12,11 @@ export default function ConfirmedBadge({ confirmed }: { confirmed?: boolean }) {
   return confirmed ? (
     <span className="badge-success" title="The caller is lined up">Confirmed</span>
   ) : (
-    <span className="badge-warning" title="Waiting for the interview manager to line up a caller">Not confirmed</span>
+    <span className="badge-warning" title="Waiting for the caller to confirm">Not confirmed</span>
   );
+}
+
+/** A caller round nobody has been picked for yet; replaces the Confirmed badge there. */
+export function NoCallerBadge() {
+  return <span className="badge-warning" title="Pick a caller for this round">No caller yet</span>;
 }

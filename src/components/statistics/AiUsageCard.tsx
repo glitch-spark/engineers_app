@@ -6,16 +6,10 @@ import { useChartTheme } from '../../theme/useChartTheme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { formatUsd } from '../../lib/modelCost';
 import MultiSelect from '../MultiSelect';
-import Segmented from '../jobApplies/Segmented';
-import {
-  AI_USAGE_PERIODS,
-  type AiUsagePeriod,
-  aiUsageRange,
-  bucketLabel,
-  customRangeError,
-  defaultCustomRange,
-  viewerTimeZone,
-} from '../../lib/aiUsagePeriod';
+import Segmented from '../Segmented';
+import { aiUsageDates, aiUsageRange, bucketLabel, viewerTimeZone } from '../../lib/aiUsagePeriod';
+import { FilterField } from '../filters/FilterBar';
+import { StatsFilterBar, statsList, useStatsFilters } from './statsFilters';
 
 const FEATURE_LABELS: Record<string, string> = {
   resume: 'Resume',
@@ -82,18 +76,17 @@ export default function AiUsageCard() {
   const chart = useChartTheme();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const [period, setPeriod] = useState<AiUsagePeriod>('this_month');
-  const [custom, setCustom] = useState(() => defaultCustomRange());
-  const [users, setUsers] = useState<string[]>([]);
-  const [features, setFeatures] = useState<string[]>([]);
-  const [models, setModels] = useState<string[]>([]);
+  const f = useStatsFilters('ai');
+  const users = useMemo(() => statsList(f.values.users), [f.values.users]);
+  const features = useMemo(() => statsList(f.values.features), [f.values.features]);
+  const models = useMemo(() => statsList(f.values.models), [f.values.models]);
   const [stackBy, setStackBy] = useState<StackBy>('feature');
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'costUsd', dir: 'desc' });
   const [showAll, setShowAll] = useState(false);
 
   const tz = viewerTimeZone();
-  const customError = period === 'custom' ? customRangeError(custom) : null;
-  const range = customError ? null : aiUsageRange(period, custom);
+  const customError = f.rangeError;
+  const range = f.range ? aiUsageRange(aiUsageDates(f.value.preset, f.range, f.today)) : null;
   const filtered = users.length + features.length + models.length > 0;
 
   const { data, error, isLoading, mutate } = useSWR(
@@ -147,262 +140,217 @@ export default function AiUsageCard() {
         ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
         : { key, dir: COLUMNS.find((c) => c.key === key)?.numeric ? 'desc' : 'asc' },
     );
-  const clearFilters = () => {
-    setUsers([]);
-    setFeatures([]);
-    setModels([]);
-  };
 
   const palette = isDark ? SERIES_DARK : SERIES_LIGHT;
   const colorOf = (key: string, i: number) => (key === OTHER_KEY ? (isDark ? OTHER_DARK : OTHER_LIGHT) : palette[i]);
   const totals = data?.totals;
 
+  const bar = (
+    <StatsFilterBar
+      f={f}
+      before={
+        <>
+          <FilterField label="Users" htmlFor="ai-usage-users" width="w-56">
+            <MultiSelect
+              id="ai-usage-users"
+              value={users}
+              onChange={(v) => f.patch({ users: v.join(',') })}
+              options={(data?.options.users ?? []).map((u) => ({ value: u.id, label: u.name }))}
+              placeholder="All users"
+            />
+          </FilterField>
+          <FilterField label="Features" htmlFor="ai-usage-features" width="w-56">
+            <MultiSelect
+              id="ai-usage-features"
+              value={features}
+              onChange={(v) => f.patch({ features: v.join(',') })}
+              options={(data?.options.features ?? []).map((key) => ({ value: key, label: featureLabel(key) }))}
+              placeholder="All features"
+            />
+          </FilterField>
+          <FilterField label="Models" htmlFor="ai-usage-models" width="w-56">
+            <MultiSelect
+              id="ai-usage-models"
+              value={models}
+              onChange={(v) => f.patch({ models: v.join(',') })}
+              options={(data?.options.models ?? []).map((m) => ({ value: m, label: modelLabel(m) }))}
+              placeholder="All models"
+            />
+          </FilterField>
+        </>
+      }
+    />
+  );
+
   return (
-    <section className="panel p-4 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4">
+      {bar}
+      <section className="panel p-4 space-y-4">
         <div>
           <h2 className="card-title">AI usage</h2>
           <p className="text-xs text-muted">Times in {tz}</p>
         </div>
-        <div className="max-w-full overflow-x-auto">
-          <Segmented label="Period" value={period} options={AI_USAGE_PERIODS} onChange={setPeriod} />
-        </div>
-      </div>
 
-      {period === 'custom' && (
-        <div className="flex items-center flex-wrap gap-2">
-          <div className="w-44">
-            <input
-              type="date"
-              className="input"
-              aria-label="From"
-              value={custom.from}
-              onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
-            />
+        {customError ? (
+          <p className="text-sm text-muted">{customError}</p>
+        ) : error ? (
+          // Any error, even with older data kept by SWR: that data belongs to the previous selection.
+          <div>
+            <p className="mb-3 text-sm text-muted">Couldn&rsquo;t load AI usage.</p>
+            <button type="button" className="btn-outline" onClick={() => mutate()}>
+              Retry
+            </button>
           </div>
-          <span className="text-muted">–</span>
-          <div className="w-44">
-            <input
-              type="date"
-              className="input"
-              aria-label="To"
-              value={custom.to}
-              onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))}
-            />
+        ) : isLoading || !data || !totals ? (
+          <div className="space-y-3">
+            <div className="skeleton h-16 w-full" />
+            <div className="skeleton h-[280px] w-full" />
           </div>
-        </div>
-      )}
+        ) : (
+          <>
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <Tile label="Total cost" value={usd(totals.costUsd)} />
+              <Tile label="Calls" value={count.format(totals.calls)} />
+              <Tile label="Input tokens" value={compact.format(totals.inputTokens)} hint={count.format(totals.inputTokens)} />
+              <Tile label="Output tokens" value={compact.format(totals.outputTokens)} hint={count.format(totals.outputTokens)} />
+              <Tile label="Avg per call" value={totals.calls ? usd(totals.costUsd / totals.calls) : '—'} />
+            </dl>
+            {(totals.estimatedCostUsd > 0 || totals.unpricedCalls > 0) && (
+              <p className="text-xs text-muted">
+                {totals.estimatedCostUsd > 0 &&
+                  `${usd(totals.estimatedCostUsd)} of this is estimated: it was rebuilt from older records that stored one cost per job, not per step. `}
+                {totals.unpricedCalls > 0 &&
+                  `${count.format(totals.unpricedCalls)} calls used models without a known price and count as $0.`}
+              </p>
+            )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
-        <FilterField label="Users">
-          {(id) => (
-            <MultiSelect
-              id={id}
-              value={users}
-              onChange={setUsers}
-              options={(data?.options.users ?? []).map((u) => ({ value: u.id, label: u.name }))}
-              placeholder="All users"
-            />
-          )}
-        </FilterField>
-        <FilterField label="Features">
-          {(id) => (
-            <MultiSelect
-              id={id}
-              value={features}
-              onChange={setFeatures}
-              options={(data?.options.features ?? []).map((f) => ({ value: f, label: featureLabel(f) }))}
-              placeholder="All features"
-            />
-          )}
-        </FilterField>
-        <FilterField label="Models">
-          {(id) => (
-            <MultiSelect
-              id={id}
-              value={models}
-              onChange={setModels}
-              options={(data?.options.models ?? []).map((m) => ({ value: m, label: modelLabel(m) }))}
-              placeholder="All models"
-            />
-          )}
-        </FilterField>
-        <button type="button" className="btn-outline" onClick={clearFilters} disabled={!filtered}>
-          Clear filters
-        </button>
-      </div>
-
-      {customError ? (
-        <p className="text-sm text-muted">{customError}</p>
-      ) : error ? (
-        // Any error, even with older data kept by SWR: that data belongs to the previous selection.
-        <div>
-          <p className="mb-3 text-sm text-muted">Couldn&rsquo;t load AI usage.</p>
-          <button type="button" className="btn-outline" onClick={() => mutate()}>
-            Retry
-          </button>
-        </div>
-      ) : isLoading || !data || !totals ? (
-        <div className="space-y-3">
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-[280px] w-full" />
-        </div>
-      ) : (
-        <>
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <Tile label="Total cost" value={usd(totals.costUsd)} />
-            <Tile label="Calls" value={count.format(totals.calls)} />
-            <Tile label="Input tokens" value={compact.format(totals.inputTokens)} hint={count.format(totals.inputTokens)} />
-            <Tile label="Output tokens" value={compact.format(totals.outputTokens)} hint={count.format(totals.outputTokens)} />
-            <Tile label="Avg per call" value={totals.calls ? usd(totals.costUsd / totals.calls) : '—'} />
-          </dl>
-          {(totals.estimatedCostUsd > 0 || totals.unpricedCalls > 0) && (
-            <p className="text-xs text-muted">
-              {totals.estimatedCostUsd > 0 &&
-                `${usd(totals.estimatedCostUsd)} of this is estimated: it was rebuilt from older records that stored one cost per job, not per step. `}
-              {totals.unpricedCalls > 0 &&
-                `${count.format(totals.unpricedCalls)} calls used models without a known price and count as $0.`}
-            </p>
-          )}
-
-          {totals.calls === 0 ? (
-            <p className="text-sm text-muted">
-              {filtered ? 'No AI calls match these filters in this period.' : 'No AI calls in this period.'}
-            </p>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-medium text-strong">
-                  Cost per {data.bucket === 'hour' ? 'hour' : 'day'}
-                </h3>
-                <Segmented label="Split by" value={stackBy} options={STACKS} onChange={setStackBy} />
-              </div>
-              <div role="img" aria-label={`Stacked bar chart of AI cost per ${data.bucket}, split by ${stackBy}`}>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
-                    <XAxis dataKey="label" stroke={chart.axis} fontSize={12} tick={{ fill: chart.axis }} minTickGap={8} />
-                    <YAxis
-                      stroke={chart.axis}
-                      fontSize={12}
-                      tick={{ fill: chart.axis }}
-                      tickFormatter={(v: number) => `$${v < 10 ? v.toFixed(2) : Math.round(v)}`}
-                      width={56}
-                    />
-                    <Tooltip
-                      cursor={{ fill: chart.grid, opacity: 0.6 }}
-                      formatter={(value) => usd(Number(value))}
-                      itemStyle={{ color: chart.tooltipText }}
-                      contentStyle={{
-                        backgroundColor: chart.tooltipBg,
-                        borderColor: chart.tooltipBorder,
-                        color: chart.tooltipText,
-                      }}
-                    />
-                    <Legend
-                      wrapperStyle={{ fontSize: 12 }}
-                      formatter={(value) => <span style={{ color: chart.axis }}>{value}</span>}
-                    />
-                    {keys.map((k, i) => (
-                      <Bar
-                        key={k}
-                        dataKey={k}
-                        name={k === OTHER_KEY ? 'Other' : seriesName(k)}
-                        stackId="cost"
-                        fill={colorOf(k, i)}
-                        stroke={chart.tooltipBg}
-                        strokeWidth={1}
-                        maxBarSize={36}
+            {totals.calls === 0 ? (
+              <p className="text-sm text-muted">
+                {filtered ? 'No AI calls match these filters in this period.' : 'No AI calls in this period.'}
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-sm font-medium text-strong">
+                    Cost per {data.bucket === 'hour' ? 'hour' : 'day'}
+                  </h3>
+                  <Segmented label="Split by" value={stackBy} options={STACKS} onChange={setStackBy} />
+                </div>
+                <div role="img" aria-label={`Stacked bar chart of AI cost per ${data.bucket}, split by ${stackBy}`}>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
+                      <XAxis dataKey="label" stroke={chart.axis} fontSize={12} tick={{ fill: chart.axis }} minTickGap={8} />
+                      <YAxis
+                        stroke={chart.axis}
+                        fontSize={12}
+                        tick={{ fill: chart.axis }}
+                        tickFormatter={(v: number) => `$${v < 10 ? v.toFixed(2) : Math.round(v)}`}
+                        width={56}
                       />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+                      <Tooltip
+                        cursor={{ fill: chart.grid, opacity: 0.6 }}
+                        formatter={(value) => usd(Number(value))}
+                        itemStyle={{ color: chart.tooltipText }}
+                        contentStyle={{
+                          backgroundColor: chart.tooltipBg,
+                          borderColor: chart.tooltipBorder,
+                          color: chart.tooltipText,
+                        }}
+                      />
+                      <Legend
+                        wrapperStyle={{ fontSize: 12 }}
+                        formatter={(value) => <span style={{ color: chart.axis }}>{value}</span>}
+                      />
+                      {keys.map((k, i) => (
+                        <Bar
+                          key={k}
+                          dataKey={k}
+                          name={k === OTHER_KEY ? 'Other' : seriesName(k)}
+                          stackId="cost"
+                          fill={colorOf(k, i)}
+                          stroke={chart.tooltipBg}
+                          strokeWidth={1}
+                          maxBarSize={36}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
 
-              <div className="table-wrap overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="table-head">
-                    <tr>
-                      {COLUMNS.map((c) => {
-                        const active = sort.key === c.key;
-                        return (
-                          <th
-                            key={c.key}
-                            scope="col"
-                            aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                            className={`px-3 py-2 font-medium text-strong whitespace-nowrap ${c.numeric ? 'text-right' : 'text-left'}`}
-                          >
-                            <button type="button" className="inline-flex items-center gap-1 hover:underline" onClick={() => toggle(c.key)}>
-                              {c.label}
-                              <span aria-hidden className="text-xs text-muted">
-                                {active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
-                              </span>
-                            </button>
-                          </th>
-                        );
-                      })}
-                      <th scope="col" className="px-3 py-2 font-medium text-strong text-right whitespace-nowrap normal-case">
-                        Share
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="row-divider">
-                    {(showAll ? rows : rows.slice(0, ROW_LIMIT)).map((r) => (
-                      <tr key={`${r.userId ?? '-'}|${r.feature}|${r.model}`}>
-                        <td className={`px-3 py-2 ${r.userId ? '' : 'text-muted'}`}>{r.userName}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{featureLabel(r.feature)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{modelLabel(r.model)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{count.format(r.calls)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{count.format(r.inputTokens)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{count.format(r.outputTokens)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums" title={r.estimated ? 'Includes an estimated split' : undefined}>
-                          {usd(r.costUsd)}
-                          {r.estimated && <span className="text-muted">*</span>}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-muted">
-                          {totals.costUsd ? `${((r.costUsd / totals.costUsd) * 100).toFixed(1)}%` : '—'}
-                        </td>
+                <div className="table-wrap overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="table-head">
+                      <tr>
+                        {COLUMNS.map((c) => {
+                          const active = sort.key === c.key;
+                          return (
+                            <th
+                              key={c.key}
+                              scope="col"
+                              aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                              className={`px-3 py-2 font-medium text-strong whitespace-nowrap ${c.numeric ? 'text-right' : 'text-left'}`}
+                            >
+                              <button type="button" className="inline-flex items-center gap-1 hover:underline" onClick={() => toggle(c.key)}>
+                                {c.label}
+                                <span aria-hidden className="text-xs text-muted">
+                                  {active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
+                                </span>
+                              </button>
+                            </th>
+                          );
+                        })}
+                        <th scope="col" className="px-3 py-2 font-medium text-strong text-right whitespace-nowrap normal-case">
+                          Share
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="border-t border-zinc-200 dark:border-zinc-800">
-                    <tr className="font-semibold text-strong">
-                      <th scope="row" colSpan={3} className="px-3 py-2 text-left">
-                        Total
-                      </th>
-                      <td className="px-3 py-2 text-right tabular-nums">{count.format(totals.calls)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{count.format(totals.inputTokens)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{count.format(totals.outputTokens)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{usd(totals.costUsd)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">100%</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              {rows.length > ROW_LIMIT && (
-                <button type="button" className="btn-outline" onClick={() => setShowAll((v) => !v)}>
-                  {showAll ? `Show top ${ROW_LIMIT}` : `Show all ${count.format(rows.length)} rows`}
-                </button>
-              )}
-              {rows.some((r) => r.estimated) && (
-                <p className="text-xs text-muted">* Includes an estimated screening / cover-letter split.</p>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-function FilterField({ label, children }: { label: string; children: (id: string) => React.ReactNode }) {
-  const id = `ai-usage-${label.toLowerCase()}`;
-  return (
-    <div className="min-w-0">
-      <label htmlFor={id} className="block text-xs text-muted mb-1">
-        {label}
-      </label>
-      {children(id)}
+                    </thead>
+                    <tbody className="row-divider">
+                      {(showAll ? rows : rows.slice(0, ROW_LIMIT)).map((r) => (
+                        <tr key={`${r.userId ?? '-'}|${r.feature}|${r.model}`}>
+                          <td className={`px-3 py-2 ${r.userId ? '' : 'text-muted'}`}>{r.userName}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{featureLabel(r.feature)}</td>
+                          <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{modelLabel(r.model)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{count.format(r.calls)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{count.format(r.inputTokens)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{count.format(r.outputTokens)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums" title={r.estimated ? 'Includes an estimated split' : undefined}>
+                            {usd(r.costUsd)}
+                            {r.estimated && <span className="text-muted">*</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-muted">
+                            {totals.costUsd ? `${((r.costUsd / totals.costUsd) * 100).toFixed(1)}%` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t border-zinc-200 dark:border-zinc-800">
+                      <tr className="font-semibold text-strong">
+                        <th scope="row" colSpan={3} className="px-3 py-2 text-left">
+                          Total
+                        </th>
+                        <td className="px-3 py-2 text-right tabular-nums">{count.format(totals.calls)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{count.format(totals.inputTokens)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{count.format(totals.outputTokens)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{usd(totals.costUsd)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">100%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                {rows.length > ROW_LIMIT && (
+                  <button type="button" className="btn-outline" onClick={() => setShowAll((v) => !v)}>
+                    {showAll ? `Show top ${ROW_LIMIT}` : `Show all ${count.format(rows.length)} rows`}
+                  </button>
+                )}
+                {rows.some((r) => r.estimated) && (
+                  <p className="text-xs text-muted">* Includes an estimated screening / cover-letter split.</p>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </section>
     </div>
   );
 }

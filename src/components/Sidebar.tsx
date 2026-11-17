@@ -1,48 +1,121 @@
 import { Link, useLocation } from 'react-router-dom';
+import {
+  CalendarCheck2,
+  ChartColumn,
+  ChevronsLeft,
+  ChevronsRight,
+  FilePenLine,
+  FlaskConical,
+  House,
+  IdCard,
+  MessagesSquare,
+  Receipt,
+  Send,
+  UserCog,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 
-function isResumesSection(pathname: string) {
-  return pathname === '/resume' || pathname.startsWith('/resume/generated');
+// Tailor resume owns /resume, /resume/generated and /preferences; Prompt tests owns /resume/eval*.
+function isTailorSection(pathname: string) {
+  return (
+    pathname === '/resume' ||
+    pathname.startsWith('/resume/generated') ||
+    pathname === '/preferences' ||
+    pathname.startsWith('/preferences/')
+  );
 }
 
-const NavLink = ({ href, label, isCollapsed, icon, badge, isActive }: {
+function isPromptTestsActive(pathname: string) {
+  return pathname === '/resume/eval' || pathname.startsWith('/resume/eval/');
+}
+
+type Item = {
   href: string;
   label: string;
-  isCollapsed: boolean;
-  icon: React.ReactNode;
-  badge?: number;
+  icon: LucideIcon;
   isActive?: (pathname: string) => boolean;
-}) => {
+};
+
+type Section = { label?: string; items: Item[]; adminOnly?: boolean };
+
+/**
+ * The menu, in the order the work happens: plan the day, set things up, get applications out, then follow what
+ * comes back. Routes are fixed (bookmarks and Slack links point at them); only labels, icons and grouping live here.
+ */
+const SECTIONS: Section[] = [
+  {
+    items: [
+      { href: '/dashboard', label: 'Home', icon: House },
+      { href: '/plans', label: 'Daily plan', icon: CalendarCheck2 },
+    ],
+  },
+  {
+    label: 'Set up',
+    items: [
+      { href: '/accounts', label: 'Profiles', icon: IdCard },
+      { href: '/resume/eval', label: 'Prompt tests', icon: FlaskConical, isActive: isPromptTestsActive },
+    ],
+  },
+  {
+    label: 'Apply',
+    items: [
+      { href: '/bidders', label: 'Bids', icon: Users },
+      { href: '/job-applies', label: 'Auto apply', icon: Send },
+      { href: '/resume', label: 'Tailor resume', icon: FilePenLine, isActive: isTailorSection },
+    ],
+  },
+  {
+    // Standalone pages: no heading, a thin line keeps them apart from Apply.
+    items: [
+      { href: '/interviews', label: 'Interviews', icon: MessagesSquare },
+      { href: '/statistics', label: 'Statistics', icon: ChartColumn },
+      { href: '/transactions', label: 'Transactions', icon: Receipt },
+    ],
+  },
+  {
+    label: 'Admin',
+    adminOnly: true,
+    items: [{ href: '/users', label: 'Users', icon: UserCog }],
+  },
+];
+
+function NavLink({ item, isCollapsed }: { item: Item; isCollapsed: boolean }) {
   const { pathname } = useLocation();
-  const active = isActive
-    ? isActive(pathname)
-    : pathname === href || pathname.startsWith(`${href}/`);
+  const active = item.isActive
+    ? item.isActive(pathname)
+    : pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const Icon = item.icon;
   return (
     <Link
-      to={href}
-      className={`${active ? 'nav-item-active group' : 'nav-item-inactive group'} ${isCollapsed ? 'justify-center' : ''}`}
-      title={isCollapsed ? label : undefined}
+      to={item.href}
+      className={`nav-item ${active ? 'nav-item-active' : 'nav-item-inactive'} ${isCollapsed ? 'justify-center px-0' : ''}`}
+      title={isCollapsed ? item.label : undefined}
       aria-current={active ? 'page' : undefined}
     >
-      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 w-full'}`}>
-        <div aria-hidden="true" className={`flex-shrink-0 transition-colors duration-200 ${
-          active ? 'nav-item-icon-active' : 'nav-item-icon-inactive'
-        }`}>
-          {icon}
-        </div>
-        <span className={isCollapsed ? 'sr-only' : 'flex-1 text-sm'}>{label}</span>
-        {!isCollapsed && badge ? (
-          <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-sky-700 px-2 py-0.5 text-xs font-medium text-white">
-            {badge}
-          </span>
-        ) : null}
-      </div>
-      {active && !isCollapsed && (
-        <div aria-hidden="true" className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full bg-sky-500 dark:bg-sky-400" />
-      )}
+      <Icon aria-hidden size={18} strokeWidth={1.75} className="shrink-0" />
+      <span className={isCollapsed ? 'sr-only' : 'truncate'}>{item.label}</span>
     </Link>
   );
-};
+}
+
+// A block of the menu: a heading when it has a label, else a thin line. Collapsed, every heading becomes a line.
+function NavSection({ section, isCollapsed, first }: { section: Section; isCollapsed: boolean; first: boolean }) {
+  const labelled = !!section.label;
+  const line = !first && (isCollapsed || !labelled);
+  return (
+    <div role={labelled ? 'group' : undefined} aria-label={section.label} className={first ? '' : 'pt-4'}>
+      {labelled && !isCollapsed && <p className="nav-heading">{section.label}</p>}
+      {line && <div aria-hidden="true" className="mx-3 mb-3 border-t border-zinc-200 dark:border-zinc-800" />}
+      <div className="space-y-0.5">
+        {section.items.map((item) => (
+          <NavLink key={item.href} item={item} isCollapsed={isCollapsed} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Sidebar({
   isCollapsed,
@@ -52,7 +125,7 @@ export default function Sidebar({
   onToggle?: () => void;
 }) {
   const { user } = useAuth();
-  const role = user?.role;
+  const sections = SECTIONS.filter((s) => !s.adminOnly || user?.role === 'admin');
 
   return (
     <aside
@@ -60,137 +133,10 @@ export default function Sidebar({
         isCollapsed ? 'w-[4.75rem]' : 'w-64'
       }`}
     >
-      <nav aria-label="Main" className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
-
-          <NavLink
-            href="/dashboard"
-            label="Dashboard"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-              </svg>
-            }
-          />
-
-          <NavLink
-            href="/accounts"
-            label="Profiles"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            }
-          />
-          <NavLink
-            href="/job-applies"
-            label="Job Applies"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6V5a2 2 0 012-2h2a2 2 0 012 2v1m-9 0h12a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2zm-2 6h16" />
-              </svg>
-            }
-          />
-          <NavLink
-            href="/bidders"
-            label="Bidders"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            }
-          />
-
-          <NavLink
-            href="/interviews"
-            label="Interviews"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z" />
-              </svg>
-            }
-          />
-
-          <NavLink
-            href="/statistics"
-            label="Statistics"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19V5m0 14h16M8 15v-3m4 3V8m4 7v-5" />
-              </svg>
-            }
-          />
-
-          <NavLink
-            href="/report"
-            label="Plans"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            }
-          />
-
-          <NavLink
-            href="/transactions"
-            label="Transactions"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-            }
-          />
-
-          <NavLink
-            href="/resume"
-            label="Resumes"
-            isCollapsed={isCollapsed}
-            isActive={isResumesSection}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            }
-          />
-          <NavLink
-            href="/resume/eval"
-            label="Prompt Eval"
-            isCollapsed={isCollapsed}
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6M10 9V3m4 6V3M8.5 9h7l3.2 11.2a1.6 1.6 0 01-1.54 2.05H6.84a1.6 1.6 0 01-1.54-2.05L8.5 9z" />
-              </svg>
-            }
-          />
-
-          {/* Leaderboard is hidden for now (page kept in src/pages/Leaderboard.tsx). */}
-
-        {role === 'admin' && (
-          <div className="mt-4 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
-            {!isCollapsed && (
-              <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
-                Admin
-              </p>
-            )}
-            <NavLink
-              href="/users"
-              label="Users"
-              isCollapsed={isCollapsed}
-              icon={
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                </svg>
-              }
-            />
-          </div>
-        )}
+      <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 py-4">
+        {sections.map((section, i) => (
+          <NavSection key={section.label ?? `block-${i}`} section={section} isCollapsed={isCollapsed} first={i === 0} />
+        ))}
       </nav>
 
       {onToggle && (
@@ -202,13 +148,7 @@ export default function Sidebar({
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className="shell-icon-btn h-9 w-9"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              {isCollapsed ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-              )}
-            </svg>
+            {isCollapsed ? <ChevronsRight aria-hidden size={16} /> : <ChevronsLeft aria-hidden size={16} />}
           </button>
         </div>
       )}

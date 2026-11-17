@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { GitCompareArrows, Plus, X } from 'lucide-react';
@@ -9,6 +9,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import Tabs from '../components/Tabs';
+import FilterBar, { FilterField } from '../components/filters/FilterBar';
 import CompareView from '../components/promptEval/CompareView';
 import JdLibrary from '../components/promptEval/JdLibrary';
 import NewEvalPanel, { type EvalPrefill } from '../components/promptEval/NewEvalPanel';
@@ -16,6 +17,10 @@ import RunDetail from '../components/promptEval/RunDetail';
 import RunsTable from '../components/promptEval/RunsTable';
 import { MAX_COMPARE, isRunActive } from '../components/promptEval/format';
 import { notify } from '../lib/notify';
+import { useUrlFilters } from '../lib/useUrlFilters';
+import {
+  RUNS_CLEAR_KEYS, RUNS_URL_DEFAULTS, parseRunsValues, runsCanClear, runsListParams, type RunsKey,
+} from '../lib/promptEvalFilters';
 
 const TABS = [
   { key: 'runs', label: 'Runs' },
@@ -36,7 +41,10 @@ export default function ResumePromptEvalPage() {
   const isCompare = pathname.endsWith('/compare');
   const compareIds = useMemo(() => (params.get('ids') ?? '').split(',').filter(Boolean), [params]);
   const tab = params.get('tab') === 'jds' ? 'jds' : 'runs';
-  const accountFilter = params.get('account') ?? '';
+  const filterId = useId();
+  const [urlValues, patchUrl] = useUrlFilters(RUNS_URL_DEFAULTS);
+  const runFilters = useMemo(() => parseRunsValues(urlValues), [urlValues]);
+  const accountFilter = runFilters.account;
 
   // "Compare with…" from a run page preselects that run.
   const [selected, setSelected] = useState<Set<string>>(() => new Set(params.get('with') ? [params.get('with')!] : []));
@@ -46,7 +54,7 @@ export default function ResumePromptEvalPage() {
   }, [params]);
 
   const listActive = !runId && !isCompare && tab === 'runs';
-  const { data, isLoading, mutate } = useSWR(listActive ? ['prompt-eval-runs', accountFilter || 'all', 50] : null, () => api.listPromptEvalRuns({ accountId: accountFilter || undefined, limit: 50 }), {
+  const { data, isLoading, mutate } = useSWR(listActive ? ['prompt-eval-runs', accountFilter || 'all', 50] : null, () => api.listPromptEvalRuns(runsListParams(runFilters)), {
     refreshInterval: (latest) => (latest?.runs.some((r) => isRunActive(r.status)) ? 3000 : 0),
   });
   const runs = data?.runs ?? [];
@@ -128,36 +136,39 @@ export default function ResumePromptEvalPage() {
     content = <CompareView ids={compareIds} />;
   } else {
     content = (
-      <Tabs tabs={TABS} value={tab} onChange={(k) => setParam('tab', k === 'runs' ? '' : k)} ariaLabel="Prompt eval sections">
+      <Tabs tabs={TABS} value={tab} onChange={(k) => setParam('tab', k === 'runs' ? '' : k)} ariaLabel="Prompt tests sections">
         {tab === 'runs' ? (
           <div className="space-y-4">
-            <div className="toolbar flex flex-wrap items-end gap-3">
-              <div className="w-64">
+            <FilterBar
+              canClear={runsCanClear(runFilters)}
+              onClear={() => patchUrl(Object.fromEntries(RUNS_CLEAR_KEYS.map((k) => [k, undefined])) as Partial<Record<RunsKey, string>>)}
+            >
+              <FilterField label="Profile" htmlFor={`${filterId}-profile`} width="w-64">
                 <Select
-                  label="Profile"
-                  labelClassName="block text-xs font-medium mb-1 text-muted"
+                  id={`${filterId}-profile`}
+                  className="w-full text-sm"
                   value={accountFilter}
-                  onChange={(v) => setParam('account', v)}
+                  onChange={(v) => patchUrl({ account: v })}
                   options={[{ value: '', label: 'All profiles' }, ...profiles.map((p) => ({ value: p._id, label: p.name }))]}
                 />
+              </FilterField>
+            </FilterBar>
+            {selected.size > 0 && (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="text-xs text-muted tabular-nums">{selected.size} selected</span>
+                <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
+                  <X className="h-4 w-4" aria-hidden /> Clear selection
+                </button>
+                <button
+                  type="button"
+                  className="btn-accent btn-sm"
+                  disabled={selected.size < 2}
+                  onClick={() => navigate(`/resume/eval/compare?ids=${[...selected].join(',')}`)}
+                >
+                  <GitCompareArrows className="h-4 w-4" aria-hidden /> Compare {selected.size} runs
+                </button>
               </div>
-              {selected.size > 0 && (
-                <div className="ml-auto flex items-center gap-2">
-                  <span className="text-xs text-muted tabular-nums">{selected.size} selected</span>
-                  <button type="button" className="btn-outline btn-sm" onClick={() => setSelected(new Set())}>
-                    <X className="h-4 w-4" aria-hidden /> Clear
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-accent btn-sm"
-                    disabled={selected.size < 2}
-                    onClick={() => navigate(`/resume/eval/compare?ids=${[...selected].join(',')}`)}
-                  >
-                    <GitCompareArrows className="h-4 w-4" aria-hidden /> Compare {selected.size} runs
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
             <RunsTable runs={runs} loading={isLoading} selected={selected} onToggle={toggleSelected} onDelete={setPendingDelete} />
           </div>
         ) : (
@@ -170,7 +181,7 @@ export default function ResumePromptEvalPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Prompt Eval"
+        title="Prompt tests"
         backTo={runId || isCompare ? '/resume/eval' : undefined}
         action={
           <button type="button" className="btn btn-sm" onClick={() => openNew(undefined)}>

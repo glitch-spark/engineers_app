@@ -32,12 +32,18 @@ function creatorId(iv: Interview): string {
   return typeof iv.createdBy === 'object' ? iv.createdBy._id : iv.createdBy;
 }
 
+/** The owner's name: the list sends `ownerName`, the read-only summary only the populated `createdBy`. */
+function ownerLabel(iv: Interview): string {
+  return iv.ownerName || iv.ownerEmail || (typeof iv.createdBy === 'object' ? iv.createdBy.name || '' : '');
+}
+
 /** One side panel for viewing an interview and every create/edit action. */
 export default function InterviewPanel({
   open,
   interview,
   initialMode = 'view',
   initialRoundId,
+  focusRoundId,
   prefill,
   onClose,
   onChanged,
@@ -46,6 +52,8 @@ export default function InterviewPanel({
   interview?: Interview | null;
   initialMode?: PanelMode;
   initialRoundId?: string;
+  /** Opens the summary scrolled to this round, which is highlighted (a caller round from the Caller interviews tab). */
+  focusRoundId?: string;
   prefill?: RoundPrefill;
   onClose: () => void;
   /** Called with the saved interview, or null after it was deleted. */
@@ -78,15 +86,17 @@ export default function InterviewPanel({
 
   if (!open) return null;
 
-  const canEdit = !iv || user?.role === 'admin' || creatorId(iv) === user?.id;
+  const canEdit = !iv || (!iv.summaryOnly && (user?.role === 'admin' || creatorId(iv) === user?.id));
   // Read-only for everyone else, whatever mode the caller asked for.
   const shownMode: PanelMode = canEdit ? mode : 'view';
   const rounds = [...(iv?.stageHistory ?? [])].reverse();
   const account = iv && typeof iv.accountId === 'object' ? iv.accountId : null;
 
   const applySaved = (saved: Interview | null) => {
-    setIv(saved);
-    onChanged?.(saved);
+    // Someone else's interview stays view-only: the save endpoints return the full interview without the flag.
+    const next = saved && iv?.summaryOnly ? { ...saved, summaryOnly: true } : saved;
+    setIv(next);
+    onChanged?.(next);
   };
 
   const setRoundStatus = async (id: string, status: string) => {
@@ -110,7 +120,7 @@ export default function InterviewPanel({
   const setRoundConfirmed = async (id: string, confirmed: boolean) => {
     if (!iv) return;
     try {
-      const saved = await api.updateInterviewStage(iv._id, id, { confirmed });
+      const saved = await api.confirmRound(iv._id, id, confirmed);
       applySaved(saved as unknown as Interview);
       notify.success(confirmed ? 'Marked confirmed' : 'Confirmation removed');
     } catch (err) {
@@ -171,9 +181,9 @@ export default function InterviewPanel({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {iv.stage && <span className={`badge ${stageBadgeClass(iv.stage)}`}>{stageLabel(iv.stage)}</span>}
                 {iv.status && <span className={`badge ${interviewStatusBadgeClass(iv.status)}`}>{interviewStatusLabel(iv.status)}</span>}
-                {(iv.ownerName || iv.ownerEmail) && (
+                {ownerLabel(iv) && (
                   <span className="ml-1 inline-flex items-center gap-1 text-xs text-muted">
-                    Owner <NameWithAvatar name={iv.ownerName || iv.ownerEmail} size="sm" />
+                    Owner <NameWithAvatar name={ownerLabel(iv)} size="sm" />
                   </span>
                 )}
               </div>
@@ -192,11 +202,14 @@ export default function InterviewPanel({
               iv={iv}
               tz={tz}
               canEdit={canEdit}
+              user={user}
               onStatus={setRoundStatus}
               onConfirm={setRoundConfirmed}
               onEditRound={(id) => openForm('editRound', id)}
               onDeleteRound={(id) => setConfirm({ kind: 'round', id })}
               onEditDetails={() => openForm('editDetails')}
+              focusRoundId={focusRoundId}
+              onCallerSaved={applySaved}
             />
             {canEdit ? (
               <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
@@ -216,7 +229,7 @@ export default function InterviewPanel({
               </footer>
             ) : (
               <footer className="shrink-0 border-t border-zinc-200 px-4 py-2.5 text-xs text-muted dark:border-zinc-800">
-                View only{iv.ownerName || iv.ownerEmail ? ` · owned by ${iv.ownerName || iv.ownerEmail}` : ''}
+                View only{ownerLabel(iv) ? ` · owned by ${ownerLabel(iv)}` : ''}
               </footer>
             )}
           </>

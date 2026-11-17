@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  archiveText, arrowGood, bidderCells, bidderTopLines, canManageBidders, flagText, isReviewedDataKey, rowPer100Verdict,
+  archiveText, arrowGood, attentionFlags, bidderCells, bidderTopLines, canManageBidders, flagText, isReviewedDataKey, rowPer100Verdict,
 } from '../src/lib/bidderInsights.ts';
 
 const stats = (o = {}) => ({
@@ -98,7 +98,18 @@ test('reviewing refreshes the banners too', () => {
   assert.equal(isReviewedDataKey(['bids-week', 'b']), true);
   assert.equal(isReviewedDataKey(['bid-performance', 'week']), true);   // the single page's table and strip
   assert.equal(isReviewedDataKey(['bid-insights', 'month']), true);    // the card's approval and cost
+  assert.equal(isReviewedDataKey(['bid-backlog', 'u1']), true);      // the To review block
+  assert.equal(isReviewedDataKey(['bid-pay', 'u1']), true);          // the Pay tab's pending warnings
+  assert.equal(isReviewedDataKey(['bid-focus', '{}']), true);        // the overlay's queue
   assert.equal(isReviewedDataKey('bids-day'), false);
+});
+
+test('attention flags leave the review backlog to the To review block', () => {
+  const flag = (kind, bidderId) => ({ kind, bidderId, name: bidderId, detail: {} });
+  const alerts = { asOf: '2026-11-23', flags: [flag('review_backlog', 'b1'), flag('inactive', 'b2')], archive: [] };
+  assert.deepEqual(attentionFlags(alerts).map((f) => [f.kind, f.bidderId]), [['inactive', 'b2']]);
+  // An admin on All owners gets no flags (null).
+  assert.deepEqual(attentionFlags({ ...alerts, flags: null }), []);
 });
 
 test('row per-100 verdict against the platform', () => {

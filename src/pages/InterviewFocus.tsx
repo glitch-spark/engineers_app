@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  Download,
   ExternalLink,
   Minus,
   Pencil,
@@ -35,6 +36,9 @@ import ThemeToggle from '../components/ThemeToggle';
 import { formatScheduledDate } from '../components/interview/format';
 import type { Interview } from '../components/interview/types';
 import { safeHref } from '../lib/safeHref';
+import { useBriefDownload } from '../components/interview/useBriefDownload';
+import { SummaryOnlyView } from '../components/interview/InterviewSummary';
+import NameWithAvatar from '../components/NameWithAvatar';
 
 type StepTone = 'done' | 'failed' | 'muted' | 'pending';
 
@@ -90,6 +94,30 @@ export default function InterviewFocusPage() {
     [searchParams, setSearchParams],
   );
 
+  // `?brief=<roundId>` (the Slack "Download brief" button): run the brief download for that round once, then drop it.
+  const { tz } = useInterviewTimezone();
+  const { start: startBrief, busy: briefing, dialog: briefDialog } = useBriefDownload(tz);
+  const briefParam = searchParams.get('brief');
+  const briefRan = useRef('');
+  useEffect(() => {
+    if (!briefParam || !iv) return;
+    const key = `${iv._id}:${briefParam}`;
+    if (briefRan.current === key) return;
+    briefRan.current = key;
+    const next = new URLSearchParams(searchParams);
+    next.delete('brief');
+    setSearchParams(next, { replace: true });
+    if (iv.summaryOnly) {
+      // Someone else's interview: no brief, and nothing is requested for it.
+      notify.info("The brief is only available to this interview's owner, its caller and the team that runs interviews.");
+    } else if (history.some((e) => e.id === briefParam)) {
+      void startBrief(iv, briefParam).then((resumeSaved) => {
+        if (!resumeSaved) notify.info("If the resume didn't download, allow downloads for this site and click Download brief again.");
+      });
+    } else notify.error('That round is no longer on this interview.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [briefParam, iv]);
+
   useDocumentTitle(iv?.companyName ? `${iv.companyName} · Interview` : 'Interview');
 
   useEffect(() => {
@@ -123,8 +151,19 @@ export default function InterviewFocusPage() {
 
   const account = typeof iv.accountId === 'object' ? iv.accountId : null;
   const createdById = typeof iv.createdBy === 'string' ? iv.createdBy : iv.createdBy?._id;
-  const canEdit = user?.role === 'admin' || createdById === user?.id;
+  const summaryOnly = !!iv.summaryOnly;
+  const canEdit = !summaryOnly && (user?.role === 'admin' || createdById === user?.id);
+  const ownerName = typeof iv.createdBy === 'object' ? iv.createdBy?.name : iv.ownerName;
   const applyUpdate = (next: Record<string, unknown>) => mutate(next, { revalidate: false });
+  // Someone else's interview (view-only here): the caller picker and Mark confirmed still save, then refresh this page.
+  const setRoundConfirmed = async (roundId: string, confirmed: boolean) => {
+    try {
+      applyUpdate({ ...(await api.confirmRound(iv._id, roundId, confirmed)), summaryOnly: true });
+      notify.success(confirmed ? 'Marked confirmed' : 'Confirmation removed');
+    } catch (err) {
+      notify.error(err, 'Failed to update confirmation');
+    }
+  };
 
   const onDelete = async () => {
     setConfirmDelete(false);
@@ -185,6 +224,9 @@ export default function InterviewFocusPage() {
                 </a>
               )}
               {iv.interviewerName && <span className="text-muted">with {iv.interviewerName}</span>}
+              {summaryOnly && ownerName && (
+                <span className="inline-flex items-center gap-1 text-muted">Owner <NameWithAvatar name={ownerName} size="sm" /></span>
+              )}
             </div>
           </div>
           {iv.status && (
@@ -194,6 +236,15 @@ export default function InterviewFocusPage() {
           )}
         </section>
 
+        {summaryOnly ? (
+          <section className="panel-elevated overflow-hidden" aria-label="Read-only summary">
+            <SummaryOnlyView iv={iv} tz={tz} user={user} onCallerSaved={(saved) => applyUpdate({ ...(saved as unknown as Record<string, unknown>), summaryOnly: true })} onConfirm={setRoundConfirmed} />
+            <p className="border-t border-zinc-200 px-4 py-2.5 text-xs text-muted dark:border-zinc-800">
+              View only{ownerName ? ` · owned by ${ownerName}` : ''}
+            </p>
+          </section>
+        ) : (
+        <>
         <StageStepper
           history={history}
           selectedId={selected?.id}
@@ -237,6 +288,8 @@ export default function InterviewFocusPage() {
             entry={selected}
             index={history.findIndex((e) => e.id === selected.id)}
             canEdit={canEdit}
+            briefing={briefing}
+            onBrief={() => void startBrief(iv, selected.id)}
             onEditDetails={() => setPanel({ mode: 'editRound', roundId: selected.id })}
             onSaved={applyUpdate}
           />
@@ -248,7 +301,11 @@ export default function InterviewFocusPage() {
             </p>
           </div>
         )}
+        </>
+        )}
       </main>
+
+      {briefDialog}
 
       <ConfirmDialog
         open={confirmDelete}
@@ -413,6 +470,8 @@ function StageWorkspace({
   entry,
   index,
   canEdit,
+  briefing,
+  onBrief,
   onEditDetails,
   onSaved,
 }: {
@@ -420,6 +479,8 @@ function StageWorkspace({
   entry: InterviewStageEntry;
   index: number;
   canEdit: boolean;
+  briefing: boolean;
+  onBrief: () => void;
   onEditDetails: () => void;
   onSaved: (next: Record<string, unknown>) => unknown;
 }) {
@@ -490,11 +551,17 @@ function StageWorkspace({
             </p>
           )}
         </div>
-        {canEdit && (
-          <button type="button" className="btn-outline btn-sm" onClick={onEditDetails}>
-            <Pencil size={13} aria-hidden /> Edit details
+        <div className="flex items-center gap-1.5">
+          <button type="button" className="btn-outline btn-sm" disabled={briefing} onClick={onBrief}
+            title="A PDF of this round, plus the resume, to share with whoever takes the interview">
+            <Download size={13} aria-hidden /> {briefing ? 'Preparing…' : 'Download brief'}
           </button>
-        )}
+          {canEdit && (
+            <button type="button" className="btn-outline btn-sm" onClick={onEditDetails}>
+              <Pencil size={13} aria-hidden /> Edit details
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-5">

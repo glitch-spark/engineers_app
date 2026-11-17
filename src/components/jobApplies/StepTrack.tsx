@@ -34,7 +34,7 @@ export default function StepTrack({
 }) {
   if (large) {
     return (
-      <ol className="grid gap-3 sm:grid-cols-3" aria-label="How Job Applies works">
+      <ol className="grid gap-3 sm:grid-cols-3" aria-label="How Auto apply works">
         {STEPS.map((s) => (
           <li key={s.n} className="panel p-4">
             <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
@@ -48,7 +48,7 @@ export default function StepTrack({
   }
   return (
     <div>
-      <ol className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm" aria-label="Job Applies steps">
+      <ol className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm" aria-label="Auto apply steps">
         {STEPS.map((s, i) => {
           const label = `${NUM[s.n - 1]} ${s.title}`;
           const clickable = !!onStep && current !== s.n && s.n <= (reached ?? current ?? 0);

@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import type { KeyboardEvent } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { InterviewRoundRow } from '../../api/endpoints';
@@ -12,14 +12,15 @@ import {
 } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
+import Pagination from '../../components/Pagination';
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, callerLabel, isUnassigned } from '../../lib/callerColors';
+import ConfirmedBadge, { needsConfirmBadge } from '../../components/interview/ConfirmedBadge';
 import RoundTrail from './RoundTrail';
 import { ResumeScoreCell } from '../../components/interview/LinkedResumeCard';
 
-const PAGE_SIZES = [10, 20, 50];
-
-/** Callers tab, List: every user's caller rounds, one row per round; click a row to see or assign its caller. */
+/** Caller interviews tab, List: every user's caller rounds, one row per round; click a row to open its interview in the side pane,
+ * scrolled to that round, where admins and interview managers assign the caller. */
 export default function CallerRoundsList({
   filters,
   update,
@@ -29,15 +30,17 @@ export default function CallerRoundsList({
   update: (patch: Partial<InterviewFilters>) => void;
   onOpenRound: (iv: Interview, roundId: string) => void;
 }) {
-  const [pageSize, setPageSize] = useState(20);
   const { tz } = useInterviewTimezone();
   const { byId } = useCallers();
-  const query = callerRoundsQuery(filters, pageSize, new Date(), tz);
-  const { data, isLoading } = useSWR(['caller-rounds-list', JSON.stringify(query)], () => api.listCallerRounds(query), {
+  const query = callerRoundsQuery(filters, filters.size, new Date(), tz);
+  // No query while the Custom range is invalid (the bar says why): nothing to load, so no endless spinner.
+  const { data, isLoading } = useSWR(query ? ['caller-rounds-list', JSON.stringify(query)] : null, () => api.listCallerRounds(query!), {
     keepPreviousData: true,
   });
-  const rows = data?.rounds ?? [];
-  const pagination = data?.pagination;
+  // SWR keeps the last page of rows when the key goes null; an invalid range shows none.
+  const rows = (query ? data?.rounds : undefined) ?? [];
+  const pagination = query ? data?.pagination : undefined;
+  const emptyText = query ? 'No caller rounds match these filters.' : 'Pick a valid date range to see caller rounds.';
 
   const open = (row: InterviewRoundRow) => {
     const iv = data?.interviews?.[row.interviewId] as unknown as Interview | undefined;
@@ -52,14 +55,18 @@ export default function CallerRoundsList({
   const when = (row: InterviewRoundRow) => formatInZone(new Date(row.scheduledAt), tz,
     { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const methodOf = (row: InterviewRoundRow) => {
-    const caller = (data?.interviews?.[row.interviewId] as unknown as Interview | undefined)
-      ?.stageHistory?.find((e) => e.id === row.roundId)?.caller;
+    const iv = data?.interviews?.[row.interviewId] as unknown as Interview | undefined;
+    // Someone else's interview: how the caller joins isn't sent.
+    if (iv?.summaryOnly) return { label: '—', value: '' };
+    const caller = iv?.stageHistory?.find((e) => e.id === row.roundId)?.caller;
     return {
       label: CALLER_METHOD_OPTIONS.find((o) => o.value === caller?.method)?.label ?? 'TBD',
       value: caller?.methodValue || '',
     };
   };
 
+  const confirmedOf = (row: InterviewRoundRow) => (data?.interviews?.[row.interviewId] as unknown as Interview | undefined)
+    ?.stageHistory?.find((e) => e.id === row.roundId)?.confirmed;
   const callerCell = (row: InterviewRoundRow) => {
     const known = row.callerId ? byId.get(row.callerId) : undefined;
     const none = isUnassigned(row);
@@ -67,6 +74,8 @@ export default function CallerRoundsList({
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${none ? `border ${UNASSIGNED_CHIP}` : known ? CALLER_DOT[known.color] : 'bg-zinc-400'}`} aria-hidden />
         <span className={none ? 'text-muted' : 'font-medium'}>{callerLabel(row)}</span>
+        {/* The backend's flattened rows carry no callerKind or confirmed flag: TBD comes from callerId / callerName, confirmed from the interview. */}
+        {!none && needsConfirmBadge(row.status, row.scheduledAt) && <ConfirmedBadge confirmed={confirmedOf(row)} />}
       </span>
     );
   };
@@ -74,9 +83,10 @@ export default function CallerRoundsList({
   const roundsCell = (row: InterviewRoundRow) => (
     <RoundTrail rounds={(data?.interviews?.[row.interviewId] as unknown as Interview | undefined)?.stageHistory ?? []} tz={tz} />
   );
-  const scoreCell = (row: InterviewRoundRow) => (
-    <ResumeScoreCell link={(data?.interviews?.[row.interviewId] as unknown as Interview | undefined)?.resumeLink} />
-  );
+  const scoreCell = (row: InterviewRoundRow) => {
+    const iv = data?.interviews?.[row.interviewId] as unknown as Interview | undefined;
+    return iv?.summaryOnly ? <span className="text-faint">—</span> : <ResumeScoreCell link={iv?.resumeLink} />;
+  };
   const stageCell = (row: InterviewRoundRow) => <span className={`badge ${stageBadgeClass(row.stage)}`}>{stageLabel(row.stage)}</span>;
   const statusCell = (row: InterviewRoundRow) => {
     const s = normalizeInterviewStatus(row.status);
@@ -122,7 +132,7 @@ export default function CallerRoundsList({
                   <span className="inline-flex items-center gap-2" role="status"><span className="spinner spinner-sm" aria-hidden /> Loading caller rounds…</span>
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">No caller rounds match these filters.</td></tr>
+                <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">{emptyText}</td></tr>
               ) : rows.map((row) => {
                 const method = methodOf(row);
                 return (
@@ -153,7 +163,7 @@ export default function CallerRoundsList({
 
         <ul className="space-y-2 sm:hidden" aria-label="Caller rounds">
           {isLoading && !data && <li className="panel p-4 text-center text-sm text-muted" role="status">Loading caller rounds…</li>}
-          {!isLoading && rows.length === 0 && <li className="panel p-4 text-center text-sm text-muted">No caller rounds match these filters.</li>}
+          {!isLoading && rows.length === 0 && <li className="panel p-4 text-center text-sm text-muted">{emptyText}</li>}
           {rows.map((row) => (
             <li key={`${row.interviewId}:${row.roundId}`}>
               <div role="button" tabIndex={0} onClick={() => open(row)} onKeyDown={openOnKey(row)} className="panel block w-full space-y-2 p-3 text-left">
@@ -181,27 +191,13 @@ export default function CallerRoundsList({
         )}
       </div>
 
-      {pagination && (
-        <nav aria-label="Caller rounds pagination" className="flex flex-wrap items-center justify-between gap-3 text-sm">
-          <div className="text-muted">
-            {pagination.total === 0 ? 'No results' : `Showing ${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
-          </div>
-          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
-            <label htmlFor="cr-page-size" className="text-muted">Per page</label>
-            <select id="cr-page-size" className="select focus-ring !w-auto !pr-9" value={pageSize}
-              onChange={(e) => { setPageSize(Number(e.target.value)); update({ page: 1 }); }}>
-              {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <button type="button" className="btn-outline btn-sm" disabled={!pagination.hasPrev} onClick={() => update({ page: pagination.page - 1 })}>
-              Previous
-            </button>
-            <span className="tabular-nums text-muted">Page {pagination.page} of {Math.max(pagination.totalPages, 1)}</span>
-            <button type="button" className="btn-outline btn-sm" disabled={!pagination.hasNext} onClick={() => update({ page: pagination.page + 1 })}>
-              Next
-            </button>
-          </div>
-        </nav>
-      )}
+      <Pagination
+        info={pagination}
+        onPage={(page) => update({ page })}
+        pageSize={filters.size}
+        onPageSize={(size) => update({ size })}
+        label="Caller rounds pages"
+      />
     </div>
   );
 }

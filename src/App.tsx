@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthGuard } from './auth/AuthGuard';
 import { RoleGuard } from './auth/RoleGuard';
 import AppShell from './components/AppShell';
+import RedirectKeepQuery from './components/RedirectKeepQuery';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -86,11 +87,13 @@ export default function App() {
       <Route path="/accounts/:id" element={<Protected><AccountEdit /></Protected>} />
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
       <Route path="/statistics" element={<Protected><Statistics /></Protected>} />
-      <Route path="/report" element={<Protected><Report /></Protected>} />
-      <Route path="/weekly-plan" element={<Navigate to="/report" replace />} />
+      <Route path="/plans" element={<Protected><Report /></Protected>} />
+      <Route path="/report" element={<RedirectKeepQuery to="/plans" />} />
+      <Route path="/weekly-plan" element={<RedirectKeepQuery to="/plans" />} />
       <Route path="/interviews" element={<Protected><InterviewsPage view="list" /></Protected>} />
       <Route path="/interviews/calendar" element={<Protected><InterviewsPage view="calendar" /></Protected>} />
       <Route path="/interviews/callers" element={<Protected><InterviewsPage view="list" callers /></Protected>} />
+      <Route path="/interviews/callers/list" element={<Protected><InterviewsPage view="list" directory /></Protected>} />
       <Route path="/interviews/callers/calendar" element={<Protected><InterviewsPage view="calendar" callers /></Protected>} />
       <Route path="/interviews/live" element={<Navigate to="/interviews/calendar" replace />} />
       <Route path="/interviews/:id" element={<LegacyInterviewRedirect />} />
@@ -107,7 +110,8 @@ export default function App() {
       <Route path="/interview-prep" element={<Navigate to="/dashboard" replace />} />
       <Route path="/preferences" element={<Protected><Preferences /></Protected>} />
       <Route path="/users" element={<Protected><Users /></Protected>} />
-      <Route path="/profile" element={<Protected><Profile /></Protected>} />
+      <Route path="/account" element={<Protected><Profile /></Protected>} />
+      <Route path="/profile" element={<RedirectKeepQuery to="/account" />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

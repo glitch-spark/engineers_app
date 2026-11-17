@@ -8,6 +8,8 @@ const STAFF_ALLOWED = [
   '/leaderboard',
   '/accounts',
   '/transactions',
+  '/account',
+  '/plans',
   '/profile',
   '/report',
   '/weekly-plan',
