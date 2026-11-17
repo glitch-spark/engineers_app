@@ -15,12 +15,11 @@ import InterviewsList from './InterviewsList';
 import { useInterviewFilters } from './useInterviewFilters';
 import { legacyCallTarget } from '../../lib/interviewFilters';
 import ZoneSelect from '../../components/interview/ZoneSelect';
-import CallerRoundDialog from '../../components/interview/CallerRoundDialog';
 import CallerRoundsList from './CallerRoundsList';
 import CallersLegend from '../../components/interview/CallersLegend';
 import CallersDirectory from './CallersDirectory';
 
-type PanelState = { interview: Interview | null; mode: PanelMode; roundId?: string; prefill?: RoundPrefill };
+type PanelState = { interview: Interview | null; mode: PanelMode; roundId?: string; focusRoundId?: string; prefill?: RoundPrefill };
 
 type View = 'list' | 'calendar';
 
@@ -32,7 +31,8 @@ export default function InterviewsPage(props: { view: View; callers?: boolean; d
 }
 
 /** Self interviews and Caller interviews tabs, each List (default) or Calendar, shared filters, one side panel.
- * `callers`: every user's caller rounds, coloured by caller; a click opens the caller dialog.
+ * `callers`: every user's caller rounds, coloured by caller; a click opens the side panel on that round, where
+ * admins and interview managers assign the caller.
  * `directory`: the Manage callers tab (who the callers are, their load and pass rate) instead of rounds. */
 function InterviewsPageBody({ view, callers = false, directory = false }: { view: View; callers?: boolean; directory?: boolean }) {
   const { filters, update, sharedQs, canClear, clear } = useInterviewFilters(callers);
@@ -41,7 +41,6 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Interview | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [callerRound, setCallerRound] = useState<{ interview: Interview; roundId: string } | null>(null);
 
   const refresh = () => mutate(
     (key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list'].includes(key[0]),
@@ -67,7 +66,7 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelParam]);
 
-  // `?round=<interviewId>:<roundId>` (the Slack "Assign caller" button) opens that round's caller dialog.
+  // `?round=<interviewId>:<roundId>` (the Slack "Assign caller" button) opens the side panel on that round.
   const roundParam = params.get('round');
   useEffect(() => {
     if (!roundParam || !callers) return;
@@ -77,7 +76,7 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
     const [ivId, roundId] = roundParam.split(':');
     if (!ivId || !roundId) return;
     api.getInterview(ivId)
-      .then((iv) => { if (mounted.current) setCallerRound({ interview: iv as unknown as Interview, roundId }); })
+      .then((iv) => { if (mounted.current) setPanel({ interview: iv as unknown as Interview, mode: 'view', focusRoundId: roundId }); })
       .catch(() => { /* not viewable: stay on the schedule */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundParam, callers]);
@@ -136,7 +135,7 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
         <CallerRoundsList
           filters={filters}
           update={update}
-          onOpenRound={(iv, roundId) => setCallerRound({ interview: iv, roundId })}
+          onOpenRound={(iv, roundId) => setPanel({ interview: iv, mode: 'view', focusRoundId: roundId })}
         />
       ) : callers ? (
         <InterviewsCalendar
@@ -144,7 +143,7 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
           callers
           filters={filters}
           update={update}
-          onOpenRound={(iv, roundId) => setCallerRound({ interview: iv, roundId })}
+          onOpenRound={(iv, roundId) => setPanel({ interview: iv, mode: 'view', focusRoundId: roundId })}
           onNew={(prefill) => setPanel({ interview: null, mode: 'new', prefill: { ...prefill, caller: true } })}
         />
       ) : view === 'list' ? (
@@ -172,21 +171,12 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
             interview={panel.interview}
             initialMode={panel.mode}
             initialRoundId={panel.roundId}
+            focusRoundId={panel.focusRoundId}
             prefill={panel.prefill}
             onClose={() => setPanel(null)}
             onChanged={() => { refresh(); }}
           />
         </>
-      )}
-
-      {callerRound && (
-        <CallerRoundDialog
-          interview={callerRound.interview}
-          roundId={callerRound.roundId}
-          onClose={() => setCallerRound(null)}
-          onAssigned={(saved) => { setCallerRound({ interview: saved, roundId: callerRound.roundId }); refresh(); }}
-          onOpenInterview={() => { setPanel({ interview: callerRound.interview, mode: 'view' }); setCallerRound(null); }}
-        />
       )}
 
       <ConfirmDialog

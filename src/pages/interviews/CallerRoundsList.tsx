@@ -19,7 +19,8 @@ import ConfirmedBadge, { needsConfirmBadge } from '../../components/interview/Co
 import RoundTrail from './RoundTrail';
 import { ResumeScoreCell } from '../../components/interview/LinkedResumeCard';
 
-/** Caller interviews tab, List: every user's caller rounds, one row per round; click a row to see or assign its caller. */
+/** Caller interviews tab, List: every user's caller rounds, one row per round; click a row to open its interview in the side pane,
+ * scrolled to that round, where admins and interview managers assign the caller. */
 export default function CallerRoundsList({
   filters,
   update,

@@ -155,6 +155,15 @@ export default function InterviewFocusPage() {
   const canEdit = !summaryOnly && (user?.role === 'admin' || createdById === user?.id);
   const ownerName = typeof iv.createdBy === 'object' ? iv.createdBy?.name : iv.ownerName;
   const applyUpdate = (next: Record<string, unknown>) => mutate(next, { revalidate: false });
+  // Someone else's interview (view-only here): the caller picker and Mark confirmed still save, then refresh this page.
+  const setRoundConfirmed = async (roundId: string, confirmed: boolean) => {
+    try {
+      applyUpdate(await api.confirmRound(iv._id, roundId, confirmed));
+      notify.success(confirmed ? 'Marked confirmed' : 'Confirmation removed');
+    } catch (err) {
+      notify.error(err, 'Failed to update confirmation');
+    }
+  };
 
   const onDelete = async () => {
     setConfirmDelete(false);
@@ -229,7 +238,7 @@ export default function InterviewFocusPage() {
 
         {summaryOnly ? (
           <section className="panel-elevated overflow-hidden" aria-label="Read-only summary">
-            <SummaryOnlyView iv={iv} tz={tz} />
+            <SummaryOnlyView iv={iv} tz={tz} user={user} onCallerSaved={(saved) => applyUpdate(saved as unknown as Record<string, unknown>)} onConfirm={setRoundConfirmed} />
             <p className="border-t border-zinc-200 px-4 py-2.5 text-xs text-muted dark:border-zinc-800">
               View only{ownerName ? ` · owned by ${ownerName}` : ''}
             </p>

@@ -43,6 +43,7 @@ export default function InterviewPanel({
   interview,
   initialMode = 'view',
   initialRoundId,
+  focusRoundId,
   prefill,
   onClose,
   onChanged,
@@ -51,6 +52,8 @@ export default function InterviewPanel({
   interview?: Interview | null;
   initialMode?: PanelMode;
   initialRoundId?: string;
+  /** Opens the summary scrolled to this round, which is highlighted (a caller round from the Caller interviews tab). */
+  focusRoundId?: string;
   prefill?: RoundPrefill;
   onClose: () => void;
   /** Called with the saved interview, or null after it was deleted. */
@@ -203,6 +206,8 @@ export default function InterviewPanel({
               onEditRound={(id) => openForm('editRound', id)}
               onDeleteRound={(id) => setConfirm({ kind: 'round', id })}
               onEditDetails={() => openForm('editDetails')}
+              focusRoundId={focusRoundId}
+              onCallerSaved={applySaved}
             />
             {canEdit ? (
               <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
