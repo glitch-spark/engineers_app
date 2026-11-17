@@ -70,7 +70,9 @@ export default function BiddersPerformanceTable({
   const now = Date.now();
   const stale = staleBefore(new Date(now));
   const t = data.totals;
-  const weekMode = !!data.payWeek;
+  // The server sent board money (a pay week, or two: `pending` is in the totals, and each row has its `week` block):
+  // the Total row's Bids is then that money too, so it adds up to the rows (rowMoney). A month has report-day sums only.
+  const boardMoney = t.pending !== undefined || data.bidders.some((r) => r.week);
 
   return (
     <div className="table-wrap overflow-x-auto">
@@ -139,7 +141,7 @@ export default function BiddersPerformanceTable({
           <tr className="border-t border-zinc-200 bg-zinc-50/70 font-medium text-strong dark:border-zinc-700 dark:bg-zinc-900/40">
             <th scope="row" className={`px-4 py-2 text-left ${STICKY_EDGE}`}>Total</th>
             {showOwner && <td />}
-            <td className="px-3 py-2 text-right">{fmtCount(weekMode ? (t.approved ?? 0) + (t.pending ?? 0) : t.total)}</td>
+            <td className="px-3 py-2 text-right">{fmtCount(boardMoney ? (t.approved ?? 0) + (t.pending ?? 0) : t.total)}</td>
             <td className="px-3 py-2 text-right">{pct(t.hitRate)}</td>
             <td className="px-3 py-2 text-right">
               <div>{fmtCount(t.interviews)}</div>
