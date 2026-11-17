@@ -256,6 +256,28 @@ describe('To review', () => {
     expect(screen.queryByText(/^To review · /)).toBeNull();
   });
 
+  it('opens on the Week view; the View switch writes lens=performance and back to no key', async () => {
+    renderPage('/bidders');
+    const view = await screen.findByRole('radiogroup', { name: 'View' });
+    expect(within(view).getByRole('radio', { name: 'Week' }).getAttribute('aria-checked')).toBe('true');
+    expect(await screen.findByRole('columnheader', { name: 'Pay' })).toBeTruthy();
+    expect(screen.queryByText(/^Pay is shown for whole pay weeks/)).toBeNull();
+    expect(api.getBidInsights).not.toHaveBeenCalled();
+    fireEvent.click(within(view).getByRole('radio', { name: 'Performance' }));
+    expect(new URLSearchParams(seen.search).get('lens')).toBe('performance');
+    expect(await screen.findByRole('columnheader', { name: 'Days at 50+' })).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Pay' })).toBeNull();
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'View' })).getByRole('radio', { name: 'Week' }));
+    expect(new URLSearchParams(seen.search).has('lens')).toBe(false);
+  });
+
+  it('a month hides Pay and points to the pay-week presets', async () => {
+    renderPage('/bidders?range=this_month');
+    expect(await screen.findByText(
+      'Pay is shown for whole pay weeks. Pick This pay week, Last pay week or Last 2 pay weeks to see it.')).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Pay' })).toBeNull();
+  });
+
   it("the row's Pending badge opens the review over the list and Close returns to the list", async () => {
     renderPage('/bidders');
     fireEvent.click(await screen.findByRole('button', { name: 'Review 3 pending bids of Ana' }));

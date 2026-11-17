@@ -1,27 +1,37 @@
-// The single Bidders page body (spec 2026-11-14-bidders-single-page-design.md): the one-line totals strip, the
-// comparison card (collapsible) and one table — replacing the Pay week and Performance tabs. The period and the search
-// are the page's filter bar; the performance request is the page's too (its label is the bar's), so this gets the
-// result.
+// The Bidders tab body (spec 2026-11-16-bidders-page-redesign-design.md, "Bidders tab table"): the View switch
+// (Week, the default, or Performance; `lens` in the URL) beside the click help, then that view's table. The Week view
+// shows Pay only for whole pay weeks; the Performance view carries the comparison card, folded to one line. The period
+// and the search are the page's filter bar; the performance request is the page's too (its label is the bar's), so this
+// gets the result.
 import { useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { BidPerformance, BidPerformanceRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { matchesBidderSearch, type BidderPeriodRequest } from '../../lib/bidderFilters';
-import { cardOpen, stripItems, type StripItem } from '../../lib/bidderPage';
+import { cardOpen } from '../../lib/bidderPage';
+import type { BidsLens } from '../../lib/bidsUrl';
+import Segmented from '../Segmented';
 import BiddersBand from './BiddersBand';
-import BiddersTable from './BiddersTable';
+import BiddersPerformanceTable from './BiddersPerformanceTable';
+import BiddersWeekTable from './BiddersWeekTable';
+import BidsHelp from './BidsHelp';
 
 const CARD_KEY = 'bidders.card.open';
 
-const TONE: Record<NonNullable<StripItem['tone']> | 'none', string> = {
-  good: 'text-emerald-700 dark:text-emerald-300',
-  warn: 'text-amber-700 dark:text-amber-300',
-  bad: 'text-red-700 dark:text-red-300',
-  none: 'text-muted',
-};
+const LENS_OPTIONS: { value: BidsLens; label: string }[] = [
+  { value: 'week', label: 'Week' },
+  { value: 'performance', label: 'Performance' },
+];
+
+export const PAY_POINTER = 'Pay is shown for whole pay weeks. Pick This pay week, Last pay week or Last 2 pay weeks to see it.';
 
 type Props = {
+  /** The table's view (`lens`) and its switch. */
+  lens: BidsLens;
+  onLensChange: (lens: BidsLens) => void;
+  /** The range is whole pay weeks (isWholePayWeeks): only then does the Week view show Pay. */
+  wholePayWeeks: boolean;
   /** The owner whose team this is ('' = every owner, or staff's own: the server decides). */
   ownerId: string;
   /** All owners (admin): the table gets an Owner column. */
@@ -44,7 +54,7 @@ type Props = {
 };
 
 export default function BiddersOverview({
-  ownerId, allOwners, onOpenBidder, onReview, renderStatus, renderActions, empty, request, data, error, onRetry, search, onClearSearch,
+  lens, onLensChange, wholePayWeeks, ownerId, allOwners, onOpenBidder, onReview, renderStatus, renderActions, empty, request, data, error, onRetry, search, onClearSearch,
 }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -52,7 +62,7 @@ export default function BiddersOverview({
     try {
       return cardOpen(localStorage.getItem(CARD_KEY));
     } catch {
-      return true;
+      return false;
     }
   });
   const toggleCard = () => {
@@ -65,9 +75,10 @@ export default function BiddersOverview({
       return !v;
     });
   };
-  // The card: this owner's bidders vs the platform over the same period (its own request: the table never waits).
+  // The card and the platform's per-100 (Performance view only): this owner's bidders vs the platform over the same
+  // period (its own request: the table never waits).
   const insights = useSWR(
-    !request || (isAdmin && !ownerId)
+    lens !== 'performance' || !request || (isAdmin && !ownerId)
       ? null
       : (['bid-insights', request.period, request.date ?? '', request.to ?? '', request.weeks ?? 1, ownerId] as const),
     () => api.getBidInsights({ ...request!, ownerId: ownerId || undefined }),
@@ -75,12 +86,15 @@ export default function BiddersOverview({
   );
   // A day inside the shown period: the pay week's first report day (week mode), else the period's end.
   const anchor = data ? (data.payWeek?.days[0]?.day ?? data.end) : '';
-  const items = data ? stripItems(data.totals) : [];
   const shown = data ? data.bidders.filter((b) => matchesBidderSearch(b, search)) : [];
   const searchMiss = !!data && !!search.trim() && shown.length === 0;
 
   return (
     <section className="space-y-4" aria-label="Bidders">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Segmented label="View" value={lens} options={LENS_OPTIONS} onChange={onLensChange} />
+        <BidsHelp />
+      </div>
       {!request ? (
         <div className="panel p-4 text-sm text-muted">Pick a valid date range to see bidders.</div>
       ) : error ? (
@@ -98,16 +112,7 @@ export default function BiddersOverview({
         empty
       ) : (
         <>
-          <div className="panel flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 text-sm" role="status">
-            {items.map((i, n) => (
-              <span key={i.key} className="inline-flex items-center gap-2">
-                {n > 0 && <span className="text-zinc-300 dark:text-zinc-700" aria-hidden>│</span>}
-                <span className={`font-medium tabular-nums ${TONE[i.tone ?? 'none']}`}>{i.text}</span>
-              </span>
-            ))}
-          </div>
-
-          {insights.data?.mine && insights.data.platform && (
+          {lens === 'performance' && insights.data?.mine && insights.data.platform && (
             <BiddersBand
               insights={insights.data}
               whose={isAdmin && ownerId && ownerId !== user?.id ? 'These' : 'Your'}
@@ -117,6 +122,8 @@ export default function BiddersOverview({
               onToggle={toggleCard}
             />
           )}
+
+          {lens === 'week' && !wholePayWeeks && <p className="text-sm text-muted">{PAY_POINTER}</p>}
 
           {data.recordsStart && data.recordsStart.slice(0, 10) > data.start.slice(0, 10) && !data.payWeek && (
             <p className="text-xs text-muted">
@@ -130,15 +137,28 @@ export default function BiddersOverview({
               <button type="button" className="btn mt-4" onClick={onClearSearch}>Clear search</button>
             </div>
           ) : (
-            <BiddersTable
-              data={{ ...data, bidders: shown }}
-              platformPer100={insights.data?.platform?.per100}
-              showOwner={allOwners}
-              onOpenBidder={(id, day) => onOpenBidder(id, day ?? anchor, day)}
-              onReview={onReview}
-              renderStatus={renderStatus}
-              renderActions={renderActions}
-            />
+            lens === 'performance' ? (
+              <BiddersPerformanceTable
+                data={data}
+                rows={shown}
+                platformPer100={insights.data?.platform?.per100}
+                showOwner={allOwners}
+                onOpenBidder={(id) => onOpenBidder(id, anchor)}
+                renderStatus={renderStatus}
+                renderActions={renderActions}
+              />
+            ) : (
+              <BiddersWeekTable
+                data={data}
+                rows={shown}
+                showOwner={allOwners}
+                showPay={wholePayWeeks}
+                onOpenBidder={(id, day) => onOpenBidder(id, day ?? anchor, day)}
+                onReview={onReview}
+                renderStatus={renderStatus}
+                renderActions={renderActions}
+              />
+            )
           )}
         </>
       )}

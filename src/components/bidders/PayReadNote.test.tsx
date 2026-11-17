@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { PayReadNote } from './BiddersTable';
+import { PayReadNote } from './PayReadNote';
 
 afterEach(cleanup);
 

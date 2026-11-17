@@ -19,9 +19,9 @@ import ToReviewBlock from '../components/bidders/ToReviewBlock';
 import SelfBidsPanel, { type SelfScope } from '../components/bidders/SelfBidsPanel';
 import MyBidsTab from '../components/bidders/MyBidsTab';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
-import { shownWeeksOf } from '../lib/bidderFilters';
+import { isWholePayWeeks, shownWeeksOf } from '../lib/bidderFilters';
 import {
-  ownerOptions as ownerOptionsFor, ownerScope, ownerSelectValue, pendingQuery, REVIEW_EXIT, reviewFromUrl, reviewPatch,
+  lensFromUrl, lensPatch, ownerOptions as ownerOptionsFor, ownerScope, ownerSelectValue, pendingQuery, REVIEW_EXIT, reviewFromUrl, reviewPatch,
   reviewSwitchScope, reviewSwitchValue, sectionFromUrl, sectionPatch, type BidsSection, type ReviewScope, type ReviewSwitch,
 } from '../lib/bidsUrl';
 import { useReportClock } from '../lib/useReportClock';
@@ -35,8 +35,8 @@ import { dateInZone } from '../components/bidders/weekDates';
 /** URL state. The list's filters (range, date, from, to, q, archived, owner) are the bar's, see lib/bidderFilters.ts
  * (the old `week` / `period` keys still open that period). The tab is `section` (absent = Bidders, `mine`; the old
  * `show=self` opens My bids and is rewritten), and `owner` is absent (an admin's own team), a user id or `all`, see
- * lib/bidsUrl.ts. The review overlay is mode=focus with review / at / reviewBidder (lib/bidsUrl.ts; `bid` + `day` is the
- * day panel's walk). The rest: week (a bidder's pay week), bidder, day, tab (history); `view` is from the old tabs. */
+ * lib/bidsUrl.ts; `lens` is the Bidders table's view (absent = Week, `performance`). The review overlay is mode=focus
+ * with review / at / reviewBidder (lib/bidsUrl.ts; `bid` + `day` is the day panel's walk). The rest: week (a bidder's pay week), bidder, day, tab (history); `view` is from the old tabs. */
 type Param =
   | 'week' | 'bidder' | 'day' | 'tab' | 'mode' | 'bid' | 'owner' | 'view'
   | 'section' | 'show' | 'q' | 'archived' | 'lens' | 'review' | 'at' | 'reviewBidder';
@@ -312,6 +312,9 @@ export default function BiddersPage() {
         </div>
       ) : !filterState || !filters || !ready ? loading : section === 'mine' ? myBids : (
         <BiddersOverview
+          lens={lensFromUrl((k) => params.get(k))}
+          onLensChange={(l) => setParam(lensPatch(l))}
+          wholePayWeeks={isWholePayWeeks(filters.range)}
           ownerId={ownerId}
           allOwners={allOwners}
           onOpenBidder={(id, wk, day) => setParam({ bidder: id, week: wk, day: day ?? null, view: null, tab: null })}
@@ -415,7 +418,8 @@ export default function BiddersPage() {
         title="Bids"
         action={(
           <div className="flex items-center gap-2">
-            <BidsHelp />
+            {/* The Bidders tab has it beside its View switch. */}
+            {(bidderId || section !== 'bidders') && <BidsHelp />}
             {!bidderId && (<>
             <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>
             {/* The Bid Track package the server ships (always the latest). */}

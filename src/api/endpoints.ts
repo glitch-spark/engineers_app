@@ -3069,8 +3069,10 @@ export interface BidPerformanceRow {
   profileId: string | null;
   profileName: string | null;
   status: string;
-  /** Bids per week, aligned with `BidPerformance.weeks`. */
+  /** Bids per week (approved + pending), aligned with `BidPerformance.weeks`. */
   weekly: number[];
+  /** Of `weekly`: the pending bids per column (newer servers). */
+  weeklyPending?: number[];
   total: number;
   approved: number;
   pending: number;

@@ -136,6 +136,9 @@ export function shownWeeksOf(resp: {
 const KNOWN = [...BIDDER_PRESETS.map((p) => p.value), 'pay_week', 'two_pay_weeks', 'month'] as string[];
 const isWeekPreset = (r: BidderPreset) =>
   r === 'this_pay_week' || r === 'last_pay_week' || r === 'last_2_pay_weeks' || r === 'pay_week' || r === 'two_pay_weeks';
+/** The range is whole pay weeks (This / Last / Last 2 pay weeks and their stepped versions): only then is Pay shown,
+ *  so the page never shows a second pay total for a month or a custom range. */
+export const isWholePayWeeks = (r: BidderPreset): boolean => isWeekPreset(r);
 const isMonthPreset = (r: BidderPreset) => r === 'this_month' || r === 'last_month' || r === 'month';
 const weeksOf = (r: BidderPreset): 1 | 2 => (r === 'last_2_pay_weeks' || r === 'two_pay_weeks' ? 2 : 1);
 

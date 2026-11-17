@@ -1,32 +1,7 @@
-// The single Bidders page (spec 2026-11-14-bidders-single-page-design.md): the totals strip, each row's money and
-// review counts (the pay-week board in week mode), the time columns and the card's open state. The period filters
+// The single Bidders page (spec 2026-11-14-bidders-single-page-design.md): each row's money and review counts (the
+// pay-week board in week mode), the time columns and their cells, and the card's open state. The period filters
 // are in bidderFilters.ts. Value imports carry `.ts` so Node's test runner loads this file as is (tests/bidderPage.test.mjs).
-import { usd } from './money.ts';
 import { shortDay } from './profileList.ts';
-
-// A count the server doesn't know (folder weeks: no review, no rejects) shows a dash, never a made-up 0.
-const count = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
-
-export type StripItem = { key: 'approved' | 'rejected' | 'today'; text: string; tone: 'good' | 'warn' | 'bad' | null };
-
-/** The one-line strip: approved and pay, rejected, and today (only for the current pay week). The backlog is the To
- *  review block's (one place to start a review), so the strip has no review item. */
-export function stripItems(t: {
-  approved?: number | null; pay?: number | null; rejected?: number | null;
-  today?: { approved: number; pending: number } | null;
-}): StripItem[] {
-  const items: StripItem[] = [
-    { key: 'approved', text: `${count(t.approved)} approved${t.pay == null ? '' : ` · ${usd(t.pay)} pay`}`, tone: 'good' },
-    { key: 'rejected', text: `${count(t.rejected)} rejected`, tone: t.rejected ? 'bad' : null },
-  ];
-  if (t.today) {
-    items.push({
-      key: 'today', tone: null,
-      text: `Today ${count(t.today.approved)}${t.today.pending ? ` (${count(t.today.pending)} pending)` : ''}`,
-    });
-  }
-  return items;
-}
 
 type WeekBlock = { approved: number | null; pending: number | null; pay: number | null; toReview: number | null; source?: string };
 
@@ -74,5 +49,22 @@ export function timeColumns(resp: {
   }));
 }
 
-/** The comparison card stays open unless the viewer closed it (remembered in this browser). */
-export const cardOpen = (stored: string | null) => stored !== 'closed';
+/** A time column's cell of a row: the pay week's day cell (week mode), else the column's approved / pending split
+ *  (`weekly` is approved + pending, `weeklyPending` the pending part). Unknown parts are null, never a made-up 0. */
+export function weekCell(
+  row: { weekly: number[]; weeklyPending?: number[]; dayCells?: BidCountsLike[] | null },
+  i: number,
+  weekMode: boolean,
+): BidCountsLike {
+  if (weekMode) return row.dayCells?.[i] ?? { approved: null, pending: null, rejected: null };
+  const pending = row.weeklyPending?.[i];
+  const all = row.weekly[i];
+  if (pending == null || all == null) return { approved: null, pending: null, rejected: null };
+  return { approved: all - pending, pending, rejected: null };
+}
+
+/** api.BidCounts, plus a day cell's folder source and read error (week mode). */
+type BidCountsLike = { approved: number | null; pending: number | null; rejected: number | null; source?: string; error?: string | null };
+
+/** The comparison card is folded unless the viewer unfolded it (remembered in this browser). */
+export const cardOpen = (stored: string | null) => stored === 'open';

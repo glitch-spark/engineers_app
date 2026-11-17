@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isWholePayWeeks,
   BIDDER_PRESETS,
   BIDDER_URL_DEFAULTS,
   addDays,
@@ -446,5 +447,16 @@ describe('search', () => {
     expect(matchesBidderSearch(ana, '   ')).toBe(true);
     expect(matchesBidderSearch({ name: 'Bo', profileName: null }, 'bo')).toBe(true);
     expect(matchesBidderSearch({ name: 'Bo', profileName: null }, 'null')).toBe(false);
+  });
+});
+
+describe('whole pay weeks', () => {
+  it('is true for the pay-week presets and their stepped versions only', () => {
+    for (const r of ['this_pay_week', 'last_pay_week', 'last_2_pay_weeks', 'pay_week', 'two_pay_weeks'] as const) {
+      expect(isWholePayWeeks(r)).toBe(true);
+    }
+    for (const r of ['this_month', 'last_month', 'month', 'custom'] as const) {
+      expect(isWholePayWeeks(r)).toBe(false);
+    }
   });
 });

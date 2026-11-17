@@ -1,5 +1,5 @@
 /**
- * The Bids page's URL, as pure functions: the tab (`section`), the owner (`owner`), and the review overlay's scope
+ * The Bids page's URL, as pure functions: the tab (`section`), the table view (`lens`), the owner (`owner`), and the review overlay's scope
  * (`mode=focus`, `review`, `at`, `reviewBidder`). Nothing here reads the router, so the page passes a getter and
  * writes the patches these return (a `null` value removes its key; defaults are never written).
  *
@@ -28,6 +28,15 @@ export function sectionFromUrl(get: UrlGet): BidsSection {
 export function sectionPatch(next: BidsSection): { section: string | null; show: null; q: null; archived: null } {
   return { section: next === 'bidders' ? null : next, show: null, q: null, archived: null };
 }
+
+// ---- table view ------------------------------------------------------------
+
+/** The Bidders table's view: Week (the default, absent from the URL) or Performance. */
+export type BidsLens = 'week' | 'performance';
+
+export const lensFromUrl = (get: UrlGet): BidsLens => (get('lens') === 'performance' ? 'performance' : 'week');
+
+export const lensPatch = (l: BidsLens): { lens: string | null } => ({ lens: l === 'week' ? null : l });
 
 // ---- owner -----------------------------------------------------------------
 

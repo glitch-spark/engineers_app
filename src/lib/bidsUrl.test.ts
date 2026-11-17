@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  REVIEW_EXIT, REVIEW_SWITCH_OPTIONS, ownerOptions, ownerScope, ownerSelectValue, pendingQuery, reviewFromUrl,
+  REVIEW_EXIT, REVIEW_SWITCH_OPTIONS, lensFromUrl, lensPatch, ownerOptions, ownerScope, ownerSelectValue, pendingQuery, reviewFromUrl,
   reviewPatch, reviewSwitchScope, reviewSwitchValue, sectionFromUrl, sectionPatch,
 } from './bidsUrl';
 import type { ReportClock } from './bidderFilters';
@@ -175,5 +175,18 @@ describe('pending queries', () => {
         undefined,
       ),
     ).toEqual({ period: 'custom', date: '2026-11-01', to: '2026-11-09' });
+  });
+});
+
+describe('lens', () => {
+  it('reads the table view, defaulting to Week', () => {
+    expect(lensFromUrl(url(''))).toBe('week');
+    expect(lensFromUrl(url('lens=performance'))).toBe('performance');
+    expect(lensFromUrl(url('lens=junk'))).toBe('week');
+  });
+
+  it('never writes the default', () => {
+    expect(lensPatch('week')).toEqual({ lens: null });
+    expect(lensPatch('performance')).toEqual({ lens: 'performance' });
   });
 });
