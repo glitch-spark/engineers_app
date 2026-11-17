@@ -2,8 +2,8 @@
  * Bidders filters, kept in the URL so a reload, a shared link or coming back from a bidder keeps them.
  *
  * The periods are pay weeks, not calendar weeks, and the server works them out: its schedule (and a switch of it)
- * decides where a pay week starts and how many report days it has (7, or 8 across the switch). The client never
- * hard-codes that schedule. It reads "now" from the server's clock (`/bids/clock`: today's report day, this pay week's
+ * decides where a pay week starts and how many report days it has (1 to 8: 7 normally, 8 across the switch, 1 for a
+ * short week). The client never hard-codes that schedule. It reads "now" from the server's clock (`/bids/clock`: today's report day, this pay week's
  * first and last report day, the previous pay week's first) and steps from the report days the server showed for the
  * period (`ShownWeeks`). This module turns the URL into the request the server wants (`period`, `date`, `weeks`, `to`)
  * and steps the period; every date it makes is a calendar date `YYYY-MM-DD`, with UTC math so a daylight-saving
@@ -109,13 +109,28 @@ const monthStep = (s: string, n: number) => {
 const lastOfMonth = (s: string) => addDays(monthStep(s, 1), -1);
 
 /**
- * A report day of the pay week(s) next to the shown one(s): back = the day before the first; forward = the last plus
- * 7 days (two pay weeks: plus 14). A pay week has 7 report days or, across a schedule switch, 8, so 7 days from the
- * first would land in the same long week again; the last + 7 is inside the following week (the caller clamps a day
- * past the current pay week). The one pay-week stepper, for the list's arrows and the bidder page's WeekNav.
+ * A report day of the pay week(s) next to the shown one(s), for the `date` of the next request. A pay week has 1 to 8
+ * report days (a short week at a schedule switch, 7 normally, 8 across a switch without one), so no number of days
+ * from an edge is a week: only the server knows where weeks end.
+ *  - Back: the day before the first shown day, which is the last report day of the week before it. Two pay weeks: the
+ *    server anchors `weeks=2` on the LATER of the two (it shows that week and the one before), so this anchor shows
+ *    the two weeks before the shown ones.
+ *  - Forward, one pay week: the day after the shown last one, always the very next week's first report day.
+ *  - Forward, two pay weeks: the next two are W3 (first day = last + 1) and W4, and the anchor must be a day of W4.
+ *    The client knows W3's length only when W3 is the previous or the current pay week (the clock gives their
+ *    bounds): then the anchor is this pay week's first day (W4 = this week; with W3 = this week the step is cut back
+ *    to the last two pay weeks, the newest there is). For an older W3 the anchor is last + 8, a day of W4 for any W3
+ *    of 1 to 7 days; with W3 any longer it lands in W3, so the view overlaps by a week and never skips one. Without
+ *    a clock the anchor is last + 1 (W3: the same overlap).
+ * The one pay-week stepper, for the list's arrows and the bidder page's WeekNav.
  */
-export function stepPayWeekDay(shown: ShownWeeks, dir: -1 | 1, weeks: 1 | 2 = 1): string {
-  return dir < 0 ? addDays(shown.first, -1) : addDays(shown.last, 7 * weeks);
+export function stepPayWeekDay(shown: ShownWeeks, dir: -1 | 1, weeks: 1 | 2 = 1, clock?: ReportClock): string {
+  if (dir < 0) return addDays(shown.first, -1);
+  const next = addDays(shown.last, 1);
+  if (weeks === 1 || !clock) return next;
+  if (next >= clock.previousPayWeekStart) return clock.payWeekStart;
+  const guess = addDays(shown.last, 8);
+  return guess >= clock.previousPayWeekStart ? clock.previousPayWeekStart : guess;
 }
 
 /**
@@ -151,7 +166,7 @@ function ownAnchor(range: BidderPreset, clock: ReportClock): string {
   return '';
 }
 
-/** Whether a report day is in the previous pay week (the clock says where it starts: it may have 8 days). */
+/** Whether a report day is in the previous pay week (the clock says where it starts: it may have 1 to 8 days). */
 const inLastPayWeek = (day: string, clock: ReportClock) => day >= clock.previousPayWeekStart && day < clock.payWeekStart;
 
 /**
@@ -264,8 +279,9 @@ export function bidderPerfRequest(f: BidderFilters, clock: ReportClock): { reque
 /**
  * The days a period covers (a pay week's report days, a month, the Custom range), for the date inputs a Custom switch
  * is seeded from and for a label before the server's arrives. A pay week's are the ones the server showed (`shown`);
- * before they load, This / Last pay week's come from the clock (Last 2 pay weeks adds the 7 days before Last pay
- * week: only a seed, the server's days replace it) and a stepped pay week has none. Null for a bad Custom.
+ * before they load, This / Last pay week's come from the clock. Last 2 pay weeks has none: the clock doesn't say
+ * where the week before Last starts (it has 1 to 8 days), so it waits for the server's, and so does a stepped pay
+ * week. Null for a bad Custom.
  */
 export function bidderDays(f: BidderFilters, clock: ReportClock, shown?: ShownWeeks): DateRange | null {
   if (f.range === 'custom') return bidderRangeError(f) === null ? { from: f.from, to: f.to } : null;
@@ -278,7 +294,6 @@ export function bidderDays(f: BidderFilters, clock: ReportClock, shown?: ShownWe
   if (f.date) return null;
   if (f.range === 'this_pay_week') return { from: clock.payWeekStart, to: clock.payWeekEnd };
   if (f.range === 'last_pay_week') return lastWeek;
-  if (f.range === 'last_2_pay_weeks') return { from: addDays(lastWeek.from, -7), to: lastWeek.to };
   return null;
 }
 
@@ -319,7 +334,8 @@ export function periodPatch(
 
 /**
  * Arrows: a pay week steps from the report days the server showed (`stepPayWeekDay`: back to the day before the
- * first, forward to the last + 7, or + 14 for two pay weeks), a month by a month, Custom by its own length of days.
+ * first, forward to the day after the last, so never past a short week), a month by a month, Custom by its own length
+ * of days.
  * A step that lands on This / Last pay week (or month, or Last 2 pay weeks) takes that preset; any other period
  * becomes `pay_week` / `two_pay_weeks` / `month`, held by `date`. Stepping forward never goes past the current pay
  * week / month / today. Null for a bad Custom, and for a pay week whose days haven't loaded (no `shown`).
@@ -336,7 +352,7 @@ export function stepBidderPeriod(
   let next: string;
   if (isWeekPreset(f.range)) {
     if (!shown) return null;
-    next = stepPayWeekDay(shown, dir, weeksOf(f.range));
+    next = stepPayWeekDay(shown, dir, weeksOf(f.range), clock);
     if (next > clock.payWeekEnd) next = clock.payWeekStart;
   } else {
     next = monthStep(f.date || ownAnchor(f.range, clock), dir);

@@ -15,12 +15,20 @@ describe('WeekNav', () => {
     expect(onChange).toHaveBeenLastCalledWith('2026-11-22');
     cleanup();
 
-    // The 8-day week across the switch: back is the day before it, forward a day of the week after it.
+    // The 8-day week across the switch: back is the day before it, forward the day after it (the next week's first).
     render(<WeekNav shown={{ first: '2026-11-15', last: '2026-11-22' }} label="Week ending Sun Nov 22" isCurrent={false} onChange={onChange} />);
     click('Previous week');
     expect(onChange).toHaveBeenLastCalledWith('2026-11-14');
     click('Next week');
-    expect(onChange).toHaveBeenLastCalledWith('2026-11-29');
+    expect(onChange).toHaveBeenLastCalledWith('2026-11-23');
+    cleanup();
+
+    // The 1-day short week: back is the week ending Nov 14, forward the week starting Nov 16 (never skipped).
+    render(<WeekNav shown={{ first: '2026-11-15', last: '2026-11-15' }} label="Week ending Sun Nov 15" isCurrent={false} onChange={onChange} />);
+    click('Previous week');
+    expect(onChange).toHaveBeenLastCalledWith('2026-11-14');
+    click('Next week');
+    expect(onChange).toHaveBeenLastCalledWith('2026-11-16');
   });
 
   it('has nothing to step while the week loads', () => {

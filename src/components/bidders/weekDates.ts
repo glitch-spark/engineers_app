@@ -14,9 +14,9 @@ export function addDaysKey(key: string, days: number): string {
 }
 
 /**
- * A day in the pay week before and after the one whose report days are `days` (the server's list: a pay week has 7 or,
- * across a schedule switch, 8), stepped with `stepPayWeekDay` like the Bidders list: the day before the first, the
- * last + 7. Null when the week has no days.
+ * A day in the pay week before and after the one whose report days are `days` (the server's list: a pay week has 1 to
+ * 8 of them), stepped with `stepPayWeekDay` like the Bidders list: the day before the first, the day after the last
+ * (never past a short week). Null when the week has no days.
  */
 export function neighbourWeekKeys(days: { day: string }[]): { prev: string; next: string } | null {
   if (days.length === 0) return null;
