@@ -20,3 +20,14 @@ export function canConfirm(user: Who, interview: Pick<Interview, 'createdBy'>, r
   const caller = round?.caller;
   return caller?.callerKind === 'user' && !!caller.callerId && caller.callerId === user.id;
 }
+
+/**
+ * Who may set a round's status and change its time: admin, interview manager (on any interview) and the owner.
+ * Never on someone else's view-only (`summaryOnly`) interview. Matches the server's `can_update_round`.
+ */
+export function canUpdateRound(user: Who, interview: Pick<Interview, 'createdBy' | 'summaryOnly'>): boolean {
+  if (!user || interview.summaryOnly) return false;
+  if (user.role === 'admin' || user.role === 'interview_manager') return true;
+  const ownerId = typeof interview.createdBy === 'object' ? interview.createdBy?._id : interview.createdBy;
+  return !!ownerId && ownerId === user.id;
+}

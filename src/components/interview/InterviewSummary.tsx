@@ -152,12 +152,16 @@ type SummaryProps = {
   iv: Interview;
   tz: string;
   canEdit: boolean;
+  /** Set the round's status and change its time: the owner, Admin and interview managers. */
+  canSetStatus: boolean;
   user: { id: string; role: string } | null | undefined;
   onStatus: (roundId: string, status: string) => void;
   onConfirm: (roundId: string, confirmed: boolean) => void;
   onEditRound: (roundId: string) => void;
   onDeleteRound: (roundId: string) => void;
   onEditDetails: () => void;
+  /** Opens the change-time dialog for a round (managers, who cannot open the full round form). */
+  onReschedule?: (roundId: string) => void;
   /** The round to scroll to and highlight (a caller round opened from the Caller interviews tab). */
   focusRoundId?: string;
   /** A caller was assigned from the pane: the saved interview. */
@@ -183,12 +187,14 @@ function FullSummary({
   iv,
   tz,
   canEdit,
+  canSetStatus,
   user,
   onStatus,
   onConfirm,
   onEditRound,
   onDeleteRound,
   onEditDetails,
+  onReschedule,
   focusRoundId,
   onCallerSaved,
 }: SummaryProps) {
@@ -374,7 +380,7 @@ function FullSummary({
                   <span className="text-sm font-medium text-strong">{stageLabel(e.stage)}</span>
                   <span className="text-xs tabular-nums text-muted">{when(e.scheduledAt, e.endsAt, tz)}</span>
                   <span className="ml-auto flex items-center gap-1">
-                    {canEdit ? (
+                    {canSetStatus ? (
                       <select
                         aria-label={`Status of ${stageLabel(e.stage)}`}
                         className={`select focus-ring !h-7 !w-auto !py-0 !text-xs ${interviewStatusBadgeClass(status)}`}
@@ -390,6 +396,9 @@ function FullSummary({
                       label={`Actions for ${stageLabel(e.stage)} round`}
                       items={[
                         { label: 'Download brief', onSelect: () => void brief(e.id) },
+                        ...(canSetStatus && !canEdit && onReschedule ? [
+                          { label: 'Change time', onSelect: () => onReschedule(e.id) },
+                        ] : []),
                         ...(canEdit ? [
                           { label: 'Edit round', onSelect: () => onEditRound(e.id) },
                           { label: 'Delete round', danger: true, onSelect: () => onDeleteRound(e.id) },

@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import { PhoneCall } from 'lucide-react';
 import ConfirmedBadge, { NoCallerBadge, needsConfirmBadge } from '../../components/interview/ConfirmedBadge';
 import * as api from '../../api/endpoints';
-import { isTbdRound } from '../../lib/canConfirm';
+import { canUpdateRound, isTbdRound } from '../../lib/canConfirm';
 import { useAuth } from '../../auth/useAuth';
 import NameWithAvatar from '../../components/NameWithAvatar';
 import ActionMenu from '../../components/ActionMenu';
@@ -127,7 +127,7 @@ export default function InterviewsList({
 
   const statusCell = (iv: Interview) => {
     const status = normalizeInterviewStatus(iv.status);
-    if (!canEdit(iv) || !iv.stageHistory?.length) {
+    if (!canUpdateRound(user, iv) || !iv.stageHistory?.length) {
       return <span className={`badge ${interviewStatusBadgeClass(status)}`}>{interviewStatusLabel(status)}</span>;
     }
     return (
