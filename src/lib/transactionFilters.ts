@@ -27,7 +27,18 @@ export type TxFilters = {
   size: number;
 };
 
-/** URL defaults (left out of the URL). `from` / `to` default to '' as the shared date control requires. */
+/**
+ * The User filter's default: admins open on every user's transactions, staff on their own (every user while the
+ * signed-in user is unknown). The other functions take this value as `userId`.
+ */
+export function txDefaultUser(userId: string, isAdmin: boolean): string {
+  return isAdmin ? ALL_USERS : userId || ALL_USERS;
+}
+
+/**
+ * URL defaults (left out of the URL). `from` / `to` default to '' as the shared date control requires. `userId` is the
+ * User default (`txDefaultUser`).
+ */
 export function txUrlDefaults(userId: string): TxUrlValues {
   return {
     user: userId || ALL_USERS,

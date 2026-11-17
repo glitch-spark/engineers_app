@@ -14,6 +14,7 @@ import {
   parseTxValues,
   txCanClear,
   txListParams,
+  txDefaultUser,
   txUrlDefaults,
   type TxKey,
 } from '../lib/transactionFilters';
@@ -87,7 +88,8 @@ export default function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Filters live in the URL (defaults left out); an unrelated key such as the `renew` prefill is never touched.
-  const userId = user?.id ?? '';
+  // Admins open on every user's transactions, staff on their own; an explicit pick (Me, another user) stays in the URL.
+  const userId = txDefaultUser(user?.id ?? '', isAdmin);
   const [urlValues, patchUrl] = useUrlFilters(txUrlDefaults(userId));
   const filters = parseTxValues(urlValues, userId);
   // Local calendar day, as the page has always worked out its periods.

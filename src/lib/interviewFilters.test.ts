@@ -5,6 +5,7 @@ import {
   barKeys,
   calendarFromFilters,
   callerRoundsQuery,
+  defaultInterviewUser,
   filtersForCalendar,
   interviewUrlDefaults,
   legacyCallTarget,
@@ -229,6 +230,30 @@ describe('calendar <-> Date range', () => {
     expect(calendarFromFilters(base(f), TODAY)).toEqual({ view: 'week', anchor: '2026-11-23' });
     const m = stepCalendar('month', '2026-11-01', 1, TODAY);
     expect(calendarFromFilters(base(m), TODAY)).toEqual({ view: 'month', anchor: '2026-12-01' });
+  });
+});
+
+describe('the Self interviews User default', () => {
+  it("is the first team member for an admin, every user when there is no team", () => {
+    expect(defaultInterviewUser({ isAdmin: true, userId: 'adm', firstMember: 't1' })).toBe('t1');
+    expect(defaultInterviewUser({ isAdmin: true, userId: 'adm', firstMember: undefined })).toBe('all');
+  });
+  it('is their own for staff (every user while unknown), whatever the team', () => {
+    expect(defaultInterviewUser({ isAdmin: false, userId: 'u3', firstMember: 't1' })).toBe('u3');
+    expect(defaultInterviewUser({ isAdmin: false, userId: undefined, firstMember: 't1' })).toBe('all');
+  });
+  it("an admin's absent user asks for the first team member; an explicit All users or user wins", () => {
+    const d = { userId: defaultInterviewUser({ isAdmin: true, userId: 'adm', firstMember: 't1' }) };
+    const p = (over: Record<string, string> = {}) => parseInterviewValues({ ...interviewUrlDefaults(d), ...over }, d);
+    const now = new Date(2026, 10, 11, 12);
+    expect(listQuery(p(), 20, now, 'UTC')!.creatorId).toBe('t1');
+    expect(barDiffers(p(), d, false)).toBe(false);
+    expect('creatorId' in listQuery(p({ user: 'all' }), 20, now, 'UTC')!).toBe(false);
+    expect(barDiffers(p({ user: 'all' }), d, false)).toBe(true);
+    expect(listQuery(p({ user: 'adm' }), 20, now, 'UTC')!.creatorId).toBe('adm');
+    // Caller interviews keeps every user by default.
+    expect(interviewUrlDefaults(d).owner).toBe('');
+    expect('creatorId' in callerRoundsQuery(p(), 20, now, 'UTC')!).toBe(false);
   });
 });
 

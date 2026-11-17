@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  TX_CLEAR_KEYS,
   TX_PRESETS,
   normalizeTxRange,
   parseTxValues,
   txCanClear,
   txListParams,
+  txDefaultUser,
   txRange,
   txUrlDefaults,
   type TxFilters,
@@ -29,6 +31,33 @@ describe('presets and defaults', () => {
   });
   it('defaults the user to all while the signed-in user is unknown', () => {
     expect(txUrlDefaults('').user).toBe('all');
+  });
+});
+
+describe('the User default by role', () => {
+  it('admins default to All users, staff to themselves', () => {
+    expect(txDefaultUser(ME, true)).toBe('all');
+    expect(txDefaultUser(ME, false)).toBe(ME);
+    expect(txDefaultUser('', false)).toBe('all');
+  });
+  it("an admin's absent user is everyone's transactions (no userId)", () => {
+    const d = txDefaultUser(ME, true);
+    const f = parseTxValues(txUrlDefaults(d), d);
+    expect(f.user).toBe('all');
+    expect('userId' in txListParams(f, TODAY)!).toBe(false);
+    expect(txCanClear(f, d)).toBe(false);
+  });
+  it('an explicit Me (their own id) or another user is kept and offers Clear', () => {
+    const d = txDefaultUser(ME, true);
+    const me = parseTxValues({ ...txUrlDefaults(d), user: ME }, d);
+    expect(txListParams(me, TODAY)!.userId).toBe(ME);
+    expect(txCanClear(me, d)).toBe(true);
+    expect(parseTxValues({ ...txUrlDefaults(d), user: 'u2' }, d).user).toBe('u2');
+  });
+  it('Clear puts the User filter back to its default (left out of the URL)', () => {
+    expect(TX_CLEAR_KEYS).toContain('user');
+    expect(txUrlDefaults(txDefaultUser(ME, true)).user).toBe('all');
+    expect(txUrlDefaults(txDefaultUser(ME, false)).user).toBe(ME);
   });
 });
 

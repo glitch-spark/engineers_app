@@ -27,6 +27,7 @@ import {
   reviewSwitchScope, reviewSwitchValue, sectionFromUrl, sectionPatch, type BidsSection, type ReviewScope, type ReviewSwitch,
 } from '../lib/bidsUrl';
 import { useReportClock } from '../lib/useReportClock';
+import { useFirstTeamMember } from '../lib/useFirstTeamMember';
 import { BiddersFilterBar, useBidderFilters } from '../components/bidders/biddersFilters';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ARCHIVE_CONFIRM, statusWords } from '../lib/bidsWords';
@@ -36,7 +37,7 @@ import { dateInZone } from '../components/bidders/weekDates';
 
 /** URL state. The list's filters (range, date, from, to, q, archived, owner) are the bar's, see lib/bidderFilters.ts
  * (the old `week` / `period` keys still open that period). The tab is `section` (absent = Bidders, `mine`; the old
- * `show=self` opens My bids and is rewritten), and `owner` is absent (an admin's own team), a user id or `all`, see
+ * `show=self` opens My bids and is rewritten), and `owner` is absent (an admin's first team member), `me`, a user id or `all`, see
  * lib/bidsUrl.ts; `lens` is the Bidders table's view (absent = Week, `performance`). The review overlay is mode=focus
  * with review / at / reviewBidder (lib/bidsUrl.ts; `bid` + `day` is the day panel's walk). The rest: week (a bidder's pay week), bidder, day, tab (history); `view` is from the old tabs. */
 type Param =
@@ -61,9 +62,6 @@ export default function BiddersPage() {
   const bidderId = params.get('bidder');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  // Owner-scoped requests wait for the signed-in user: without it an admin's default owner (themselves) is unknown,
-  // and no ownerId would ask the server for every owner.
-  const ready = !!user?.id;
   const section: BidsSection = sectionFromUrl((k) => params.get(k));
   // The server's report clock: the list's periods mean nothing until it loads (the bidder view doesn't need it).
   const reportClock = useReportClock();
@@ -71,8 +69,14 @@ export default function BiddersPage() {
   const filterState = useBidderFilters(isAdmin, reportClock.clock, section === 'pay' ? 'last_pay_week' : undefined);
   const filters = filterState?.filters;
   const request = filterState?.request ?? null;
-  // Admins open on their own team (`owner` absent); `all` is every owner (no ownerId); staff always see their own.
-  const scope = ownerScope(filters?.owner ?? '', isAdmin, user?.id);
+  // Admins open on the first team member's team (`owner` absent; their own when there is no team), `me` is their own,
+  // `all` every owner (no ownerId); staff always see their own.
+  const rawOwner = filters?.owner ?? '';
+  const firstMember = useFirstTeamMember(isAdmin);
+  // Owner-scoped requests wait for the signed-in user and, for an admin's default, the team lookup: without them the
+  // default owner is unknown, and no ownerId would ask the server for every owner.
+  const ready = !!user?.id && !(isAdmin && !rawOwner && firstMember.loading);
+  const scope = ownerScope(rawOwner, isAdmin, user?.id, firstMember.id);
   const ownerId = scope.ownerId ?? '';
   const allOwners = scope.all;
   // Show archived is the Bidders tab's (a tab change drops it).
@@ -313,7 +317,7 @@ export default function BiddersPage() {
           isAdmin={isAdmin}
           section={section}
           ownerOptions={ownerOptions}
-          ownerValue={ownerSelectValue(filters.owner, user?.id)}
+          ownerValue={ownerSelectValue(filters.owner, user?.id, firstMember.id)}
           serverLabel={request ? (section === 'pay' ? pay.data : perf.data)?.label : undefined}
           failed={!!(section === 'pay' ? pay.error : perf.error)}
           shown={(request && barShown) || undefined}

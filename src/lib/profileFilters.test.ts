@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   PANEL_URL_DEFAULTS,
+  PROFILE_ALL_USERS,
+  PROFILE_CLEAR_KEYS,
   PROFILE_PRESETS,
   PROFILE_REGION_OPTIONS,
   PROFILE_URL_DEFAULTS,
@@ -15,6 +17,7 @@ import {
   profileListParams,
   profileMetricsParams,
   profileRangeError,
+  type ProfileUrlValues,
 } from './profileFilters';
 
 // Wed Nov 11, 2026.
@@ -36,7 +39,7 @@ describe('presets and defaults', () => {
       user: '', status: 'active', region: '', q: '', range: 'all_time', from: '', to: '', page: '1', size: '20',
     });
     expect(parse()).toEqual({
-      user: '', status: 'active', region: '', q: '', range: 'all_time', from: '', to: '', page: 1, size: 20,
+      user: 'all', status: 'active', region: '', q: '', range: 'all_time', from: '', to: '', page: 1, size: 20,
     });
   });
 });
@@ -142,6 +145,38 @@ describe('Clear', () => {
     expect(profileCanClear(parse({ user: 'u9' }), true)).toBe(true);
     expect(profileCanClear(parse({ user: 'u9' }), false)).toBe(false);
     expect(profileCanClear(parse({ page: '4', size: '50' }), false)).toBe(false);
+  });
+});
+
+describe("the admin's User default (the first team member)", () => {
+  const withDefault = (over: Partial<ProfileUrlValues> = {}) => parseProfileValues({ ...PROFILE_URL_DEFAULTS, ...over }, 't1');
+  it('an absent user is the first team member, sent as userId', () => {
+    const f = withDefault();
+    expect(f.user).toBe('t1');
+    expect(profileListParams(f, true)).toMatchObject({ userId: 't1' });
+    expect(profileMetricsParams(f, TODAY, true)).toEqual({ weeks: 'all', userId: 't1' });
+    expect(profileCanClear(f, true, 't1')).toBe(false);
+  });
+  it('an explicit All users survives (sent without userId) and offers Clear', () => {
+    const f = withDefault({ user: PROFILE_ALL_USERS });
+    expect(f.user).toBe('all');
+    expect('userId' in profileListParams(f, true)).toBe(false);
+    expect(profileMetricsParams(f, TODAY, true)).toEqual({ weeks: 'all' });
+    expect(profileCanClear(f, true, 't1')).toBe(true);
+  });
+  it('another user is kept; Clear removes the key, which is the default again', () => {
+    const f = withDefault({ user: 'u9' });
+    expect(profileListParams(f, true)).toMatchObject({ userId: 'u9' });
+    expect(profileCanClear(f, true, 't1')).toBe(true);
+    expect(PROFILE_CLEAR_KEYS).toContain('user');
+    expect(PROFILE_URL_DEFAULTS.user).toBe('');
+  });
+  it('without team members an absent user is every owner', () => {
+    expect(parse().user).toBe('all');
+    expect(profileCanClear(parse(), true, '')).toBe(false);
+  });
+  it('staff never send a user', () => {
+    expect('userId' in profileListParams(withDefault({ user: 'u9' }), false)).toBe(false);
   });
 });
 

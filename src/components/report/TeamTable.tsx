@@ -14,7 +14,7 @@ function lastLog(row: TeamRow, week: string): { text: string; stale: boolean } {
   return { text, stale };
 }
 
-/** Admin overview: everyone's Goal vs Done for the week; a row opens that person's board. */
+/** Team overview (every signed-in user): everyone's Goal vs Done for the week; a row opens that person's board. */
 export default function TeamTable({ week, onOpenUser }: { week: string; onOpenUser: (userId: string) => void }) {
   const { data, error, mutate } = useSWR(['team-report', week], () => api.getTeamReport(week));
 

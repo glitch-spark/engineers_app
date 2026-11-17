@@ -39,17 +39,32 @@ describe('owner', () => {
     expect(ownerScope('all', false, 'u1')).toEqual({ ownerId: undefined, all: false });
     expect(ownerScope('', true, undefined)).toEqual({ ownerId: undefined, all: false });
   });
+  it("an admin's absent owner is the first team member; an explicit Me, All or user wins", () => {
+    expect(ownerScope('', true, 'u1', 't1')).toEqual({ ownerId: 't1', all: false });
+    expect(ownerScope('me', true, 'u1', 't1')).toEqual({ ownerId: 'u1', all: false });
+    expect(ownerScope('all', true, 'u1', 't1')).toEqual({ ownerId: undefined, all: true });
+    expect(ownerScope('u2', true, 'u1', 't1')).toEqual({ ownerId: 'u2', all: false });
+    // Staff: their own, whatever the default.
+    expect(ownerScope('', false, 'u3', 't1')).toEqual({ ownerId: undefined, all: false });
+    expect(ownerScope('me', false, 'u3', 't1')).toEqual({ ownerId: undefined, all: false });
+  });
   it('shows the own id as Me', () => {
-    expect(ownerSelectValue('u1', 'u1')).toBe('');
+    expect(ownerSelectValue('u1', 'u1')).toBe('me');
+    expect(ownerSelectValue('me', 'u1')).toBe('me');
     expect(ownerSelectValue('u2', 'u1')).toBe('u2');
     expect(ownerSelectValue('all', 'u1')).toBe('all');
-    expect(ownerSelectValue('', 'u1')).toBe('');
+    expect(ownerSelectValue('', 'u1')).toBe('me');
+  });
+  it('shows the first team member when the owner is absent', () => {
+    expect(ownerSelectValue('', 'u1', 't1')).toBe('t1');
+    expect(ownerSelectValue('me', 'u1', 't1')).toBe('me');
+    expect(ownerSelectValue('all', 'u1', 't1')).toBe('all');
   });
   it('lists Me, the others by label (case-insensitive), then All owners', () => {
     expect(
       ownerOptions([{ _id: 'u2', name: 'Zed' }, { _id: 'u1', name: 'Pat' }, { _id: 'u3', email: 'a@x.io' }], 'u1'),
     ).toEqual([
-      { value: '', label: 'Me' },
+      { value: 'me', label: 'Me' },
       { value: 'u3', label: 'a@x.io' },
       { value: 'u2', label: 'Zed' },
       { value: 'all', label: 'All owners' },

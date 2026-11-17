@@ -45,6 +45,15 @@ export type InterviewFilters = {
 
 export type FilterDefaults = { userId: string };
 
+/**
+ * The Self interviews User default: an admin's is the first team member A–Z (every user, `all`, when there is no team);
+ * everyone else's is their own (every user while the signed-in user is unknown). Caller interviews has its own `owner`
+ * filter, whose default stays every user (`''`).
+ */
+export function defaultInterviewUser(a: { isAdmin: boolean; userId: string | undefined; firstMember: string | undefined }): string {
+  return a.isAdmin ? a.firstMember || 'all' : a.userId || 'all';
+}
+
 /** Every URL key this page owns (the values are all strings in the URL). Other keys (`panel`, `round`, `brief`, `zone`) are not ours. */
 export type InterviewKey =
   | 'user' | 'profile' | 'stage' | 'status' | 'caller' | 'owner' | 'q'

@@ -11,6 +11,7 @@ import { archivedLabel, filterProfiles } from '../../lib/profileArchive';
 import { INTERVIEW_PRESETS, type InterviewFilters as Filters } from '../../lib/interviewFilters';
 import { INTERVIEW_STAGE_ORDER, INTERVIEW_STATUSES, stageLabel } from '../../lib/stageBadge';
 import { useCallers } from '../../lib/useCallers';
+import { useTeamLookup } from '../../lib/useFirstTeamMember';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { zonedDateKey } from '../../lib/interviewTimezone';
 
@@ -45,7 +46,7 @@ export default function InterviewFilters({
     ...callers.map((c) => ({ value: c._id, label: c.name })),
     ...(picked?.archived ? [{ value: picked._id, label: `${picked.name} (archived)` }] : []),
   ];
-  const { data: usersData } = useSWR(['users-lookup', 'staff-only'], () => api.lookupUsers({ excludeRole: 'admin' }));
+  const { data: usersData } = useTeamLookup();
   const { data: accountsData } = useSWR(['accounts-lookup'], () => api.lookupAccounts());
 
   const userOptions = useMemo(() => {

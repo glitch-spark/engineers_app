@@ -42,19 +42,28 @@ export const lensPatch = (l: BidsLens): { lens: string | null } => ({ lens: l ==
 
 export type OwnerScope = { ownerId: string | undefined; all: boolean };
 
+/** `owner` values: Me (the admin's own team) and every owner. Anything else is a user id. */
+export const OWNER_ME = 'me';
+export const OWNER_ALL = 'all';
+
 /**
- * What the `owner` value means. Only an admin picks an owner: absent = their own id, `all` = every owner (no
- * `ownerId`), anything else = that user. Staff always see their own, whatever the URL says.
+ * What the `owner` value means. Only an admin picks an owner: absent = `defaultOwner` (the first team member, see
+ * useFirstTeamMember), else their own id; `me` = their own id; `all` = every owner (no `ownerId`); anything else = that
+ * user. Staff always see their own, whatever the URL says.
  */
-export function ownerScope(raw: string, isAdmin: boolean, userId: string | undefined): OwnerScope {
+export function ownerScope(
+  raw: string, isAdmin: boolean, userId: string | undefined, defaultOwner?: string,
+): OwnerScope {
   if (!isAdmin) return { ownerId: undefined, all: false };
-  if (raw === 'all') return { ownerId: undefined, all: true };
-  return { ownerId: raw || userId, all: false };
+  if (raw === OWNER_ALL) return { ownerId: undefined, all: true };
+  if (raw === OWNER_ME) return { ownerId: userId, all: false };
+  return { ownerId: raw || defaultOwner || userId, all: false };
 }
 
-/** The owner select's value: the own id shows as Me (`''`, the URL default). */
-export function ownerSelectValue(raw: string, userId: string | undefined): string {
-  return userId !== undefined && raw === userId ? '' : raw;
+/** The owner select's value: what an absent `owner` stands for, with the own id (an old link) shown as Me. */
+export function ownerSelectValue(raw: string, userId: string | undefined, defaultOwner?: string): string {
+  const value = raw || defaultOwner || OWNER_ME;
+  return userId !== undefined && value === userId ? OWNER_ME : value;
 }
 
 /** Me, the other users sorted by label (name, else email, else id; case-insensitive), then All owners. */
@@ -70,7 +79,7 @@ export function ownerOptions(
       const y = b.label.toLowerCase();
       return x < y ? -1 : x > y ? 1 : a.value < b.value ? -1 : a.value > b.value ? 1 : 0;
     });
-  return [{ value: '', label: 'Me' }, ...others, { value: 'all', label: 'All owners' }];
+  return [{ value: OWNER_ME, label: 'Me' }, ...others, { value: OWNER_ALL, label: 'All owners' }];
 }
 
 // ---- review ----------------------------------------------------------------

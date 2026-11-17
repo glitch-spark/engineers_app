@@ -19,8 +19,10 @@ import { MAX_COMPARE, isRunActive } from '../components/promptEval/format';
 import { notify } from '../lib/notify';
 import { useUrlFilters } from '../lib/useUrlFilters';
 import {
-  RUNS_CLEAR_KEYS, RUNS_URL_DEFAULTS, parseRunsValues, runsCanClear, runsListParams, type RunsKey,
+  RUNS_ALL_USERS, RUNS_CLEAR_KEYS, RUNS_URL_DEFAULTS, parseRunsValues, runsCanClear, runsForUser, runsListParams,
+  runsProfiles, type RunsKey,
 } from '../lib/promptEvalFilters';
+import { teamMembersAZ, useTeamLookup } from '../lib/useFirstTeamMember';
 
 const TABS = [
   { key: 'runs', label: 'Runs' },
@@ -34,6 +36,7 @@ export default function ResumePromptEvalPage() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   const [showNew, setShowNew] = useState(false);
   const [prefill, setPrefill] = useState<EvalPrefill | undefined>(undefined);
@@ -43,7 +46,13 @@ export default function ResumePromptEvalPage() {
   const tab = params.get('tab') === 'jds' ? 'jds' : 'runs';
   const filterId = useId();
   const [urlValues, patchUrl] = useUrlFilters(RUNS_URL_DEFAULTS);
-  const runFilters = useMemo(() => parseRunsValues(urlValues), [urlValues]);
+  // Admins pick whose profiles to see, starting on the first team member A–Z; All users and any pick stay in the URL.
+  const team = useTeamLookup(isAdmin);
+  const teamMembers = useMemo(() => teamMembersAZ(team.data?.users), [team.data]);
+  const defaultUser = isAdmin ? teamMembers[0]?._id ?? '' : '';
+  // While the default is unknown nothing is listed, so another user's runs never flash first.
+  const userPending = isAdmin && !urlValues.user && team.isLoading;
+  const runFilters = useMemo(() => parseRunsValues(urlValues, defaultUser), [urlValues, defaultUser]);
   const accountFilter = runFilters.account;
 
   // "Compare with…" from a run page preselects that run.
@@ -54,13 +63,22 @@ export default function ResumePromptEvalPage() {
   }, [params]);
 
   const listActive = !runId && !isCompare && tab === 'runs';
-  const { data, isLoading, mutate } = useSWR(listActive ? ['prompt-eval-runs', accountFilter || 'all', 50] : null, () => api.listPromptEvalRuns(runsListParams(runFilters)), {
-    refreshInterval: (latest) => (latest?.runs.some((r) => isRunActive(r.status)) ? 3000 : 0),
-  });
-  const runs = data?.runs ?? [];
+  const listParams = runsListParams(runFilters, isAdmin);
+  const { data, isLoading: runsLoading, mutate } = useSWR(
+    listActive && !userPending ? ['prompt-eval-runs', accountFilter || 'all', listParams.limit] : null,
+    () => api.listPromptEvalRuns(listParams),
+    { refreshInterval: (latest) => (latest?.runs.some((r) => isRunActive(r.status)) ? 3000 : 0) },
+  );
 
-  const { data: lookup } = useSWR(listActive ? 'resume-accounts-lookup' : null, () => api.lookupAccounts());
-  const profiles = useMemo(() => (lookup?.accounts ?? []).filter((a) => user?.role === 'admin' || a.createdBy === user?.id), [lookup, user]);
+  const { data: lookup, isLoading: lookupLoading } = useSWR(listActive ? 'resume-accounts-lookup' : null, () => api.lookupAccounts());
+  const profiles = useMemo(
+    () => runsProfiles(lookup?.accounts ?? [], runFilters, isAdmin, user?.id),
+    [lookup, runFilters, isAdmin, user?.id],
+  );
+  const profileIds = useMemo(() => new Set(profiles.map((p) => p._id)), [profiles]);
+  const runs = useMemo(() => runsForUser(data?.runs ?? [], runFilters, isAdmin, profileIds), [data, runFilters, isAdmin, profileIds]);
+  // An admin's user filter needs the profiles to narrow the runs: wait for them too.
+  const isLoading = runsLoading || userPending || (isAdmin && runFilters.user !== RUNS_ALL_USERS && lookupLoading);
 
   const [pendingDelete, setPendingDelete] = useState<PromptEvalRun | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -140,9 +158,24 @@ export default function ResumePromptEvalPage() {
         {tab === 'runs' ? (
           <div className="space-y-4">
             <FilterBar
-              canClear={runsCanClear(runFilters)}
+              canClear={runsCanClear(runFilters, isAdmin, defaultUser)}
               onClear={() => patchUrl(Object.fromEntries(RUNS_CLEAR_KEYS.map((k) => [k, undefined])) as Partial<Record<RunsKey, string>>)}
             >
+              {isAdmin && (
+                <FilterField label="User" htmlFor={`${filterId}-user`} width="w-52">
+                  <Select
+                    id={`${filterId}-user`}
+                    className="w-full text-sm"
+                    value={runFilters.user}
+                    // The picked profile may not be the new user's: back to All profiles.
+                    onChange={(v) => patchUrl({ user: v, account: undefined })}
+                    options={[
+                      { value: RUNS_ALL_USERS, label: 'All users' },
+                      ...teamMembers.map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
+                    ]}
+                  />
+                </FilterField>
+              )}
               <FilterField label="Profile" htmlFor={`${filterId}-profile`} width="w-64">
                 <Select
                   id={`${filterId}-profile`}

@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/useAuth';
 import {
   barDiffers,
   barKeys,
+  defaultInterviewUser,
   interviewUrlDefaults,
   parseInterviewValues,
   patchToUrl,
@@ -12,6 +13,7 @@ import {
   type InterviewUrlValues,
 } from '../../lib/interviewFilters';
 import { useUrlFilters } from '../../lib/useUrlFilters';
+import { useFirstTeamMember } from '../../lib/useFirstTeamMember';
 
 export interface InterviewFilterState {
   filters: InterviewFilters;
@@ -22,6 +24,11 @@ export interface InterviewFilterState {
   canClear: boolean;
   /** Puts back only what the tab's bar shows; `panel`, `round`, `brief`, `zone`, sort and the other tab's keys stay. */
   clear: () => void;
+  /**
+   * Self interviews: an admin's default user (the first team member) is still loading. Nothing should be asked for
+   * yet, so another user's interviews never flash first.
+   */
+  pending: boolean;
 }
 
 /**
@@ -31,11 +38,15 @@ export interface InterviewFilterState {
  */
 export function useInterviewFilters(callers = false): InterviewFilterState {
   const { user } = useAuth();
-  // Admins start on every user's interviews; everyone else on their own.
-  const userId = user?.role === 'admin' ? 'all' : user?.id || 'all';
+  const isAdmin = user?.role === 'admin';
+  const firstMember = useFirstTeamMember(isAdmin);
+  // Self interviews: admins start on the first team member A–Z (every user when there is no team); everyone else on
+  // their own. An explicit pick (All users, anyone) stays in the URL. Caller interviews has its own `owner` (all users).
+  const userId = defaultInterviewUser({ isAdmin, userId: user?.id, firstMember: firstMember.id });
   const d = useMemo(() => ({ userId }), [userId]);
   const [values, patch] = useUrlFilters<InterviewUrlValues>(interviewUrlDefaults(d));
   const [params] = useSearchParams();
+  const pending = isAdmin && !callers && firstMember.loading && !params.get('user');
 
   const filters = useMemo(() => parseInterviewValues(values, d), [values, d]);
   const update = useCallback((changes: Partial<InterviewFilters>) => patch(patchToUrl(changes)), [patch]);
@@ -46,5 +57,5 @@ export function useInterviewFilters(callers = false): InterviewFilterState {
     patch(Object.fromEntries(barKeys(callers).map((k) => [k, undefined])) as Partial<InterviewUrlValues>);
   }, [patch, callers]);
 
-  return { filters, update, sharedQs, canClear, clear };
+  return { filters, update, sharedQs, canClear, clear, pending };
 }

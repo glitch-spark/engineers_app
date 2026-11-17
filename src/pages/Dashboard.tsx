@@ -1,12 +1,11 @@
 import { useId, useState } from 'react';
-import useSWR from 'swr';
 import PageHeader from '../components/PageHeader';
 import ThisWeekCard from '../components/dashboard/ThisWeekCard';
 import NetIncomeCard from '../components/dashboard/NetIncomeCard';
 import CompareCard from '../components/dashboard/CompareCard';
 import TeamOverview from '../components/dashboard/TeamOverview';
 import { useAuth } from '../auth/useAuth';
-import * as api from '../api/endpoints';
+import { useTeamLookup } from '../lib/useFirstTeamMember';
 
 export default function DashboardPage() {
   const formId = useId();
@@ -14,10 +13,7 @@ export default function DashboardPage() {
   const isAdmin = user?.role === 'admin';
   const [selectedUserId, setSelectedUserId] = useState('');
 
-  const { data: lookupData } = useSWR(
-    isAdmin ? ['users-lookup', 'exclude-admin'] : null,
-    () => api.lookupUsers({ excludeRole: 'admin' }),
-  );
+  const { data: lookupData } = useTeamLookup(isAdmin);
   const users = lookupData?.users ?? [];
 
   const userId = isAdmin ? (selectedUserId || undefined) : undefined;

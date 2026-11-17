@@ -11,7 +11,8 @@ const api = vi.hoisted(() => ({
   lookupUsers: vi.fn(),
 }));
 vi.mock('../api/endpoints', () => api);
-vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'u1', role: 'user' } }) }));
+const auth = vi.hoisted(() => ({ user: { id: 'u1', role: 'user' } }));
+vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: auth.user }) }));
 
 import AccountsPage from './Accounts';
 
@@ -35,6 +36,7 @@ function renderPage(initial: string) {
 const pagination = { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false };
 
 beforeEach(() => {
+  auth.user = { id: 'u1', role: 'user' };
   localStorage.clear();
   api.listAccounts.mockResolvedValue({ accounts: [], pagination });
   api.getProfileMetrics.mockResolvedValue({ start: '2026-01-01', end: '2026-01-02', weeks: 'all', rows: [] });
@@ -110,5 +112,45 @@ describe('the range this page used to keep in localStorage', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe("an admin's User filter: the first team member A–Z by default", () => {
+  beforeEach(() => {
+    auth.user = { id: 'adm', role: 'admin' };
+    api.lookupUsers.mockImplementation(async (p?: { excludeRole?: string }) => {
+      const team = [{ _id: 't2', name: 'Zoe' }, { _id: 't1', name: 'ben' }];
+      return { users: p?.excludeRole === 'admin' ? team : [{ _id: 'adm', name: 'Admin' }, ...team] };
+    });
+  });
+  const userSelect = () => screen.getByLabelText('User') as HTMLSelectElement;
+
+  it("asks only for the first team member's profiles, never everyone's first", async () => {
+    renderPage('/accounts');
+    await waitFor(() => expect(api.listAccounts).toHaveBeenCalled());
+    expect(api.listAccounts.mock.calls.every(([p]) => p.userId === 't1')).toBe(true);
+    await waitFor(() => expect(api.getProfileMetrics).toHaveBeenCalled());
+    expect(api.getProfileMetrics.mock.calls.every(([p]) => p.userId === 't1')).toBe(true);
+    await waitFor(() => expect(userSelect().selectedOptions[0]?.text).toBe('ben'));
+    expect(seen.search).toBe('');
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
+  });
+
+  it('All users is written to the URL, survives a reload, and Clear goes back to the default', async () => {
+    renderPage('/accounts?user=all');
+    await waitFor(() => expect(api.listAccounts).toHaveBeenCalled());
+    expect(api.listAccounts.mock.calls.every(([p]) => !('userId' in p))).toBe(true);
+    await waitFor(() => expect(userSelect().selectedOptions[0]?.text).toBe('All users'));
+    screen.getByRole('button', { name: 'Clear' }).click();
+    await waitFor(() => expect(seen.search).toBe(''));
+    await waitFor(() => expect(api.listAccounts.mock.calls.at(-1)?.[0]).toMatchObject({ userId: 't1' }));
+  });
+
+  it('staff ask for their own without a user, whatever the team', async () => {
+    auth.user = { id: 'u1', role: 'user' };
+    renderPage('/accounts');
+    await waitFor(() => expect(api.listAccounts).toHaveBeenCalled());
+    expect(api.listAccounts).toHaveBeenCalledWith({ page: 1, limit: 20, search: '', status: 'active' });
+    expect(screen.queryByLabelText('User')).toBeNull();
   });
 });
