@@ -7,6 +7,7 @@ import type { BidPerformance, BidPerformanceRow } from '../../api/endpoints';
 import { fmtCount } from '../../lib/profileMetrics';
 import { rowPer100Verdict } from '../../lib/bidderInsights';
 import { rowMoney } from '../../lib/bidderPage';
+import { relativeTime } from '../../lib/bidsWords';
 import { Arrow } from '../insights/compareParts';
 import { BidderName, SortHead, STICKY_EDGE, sortByName, sortRows, type SortState } from './BiddersWeekTable';
 
@@ -26,14 +27,6 @@ function staleBefore(now: Date): number {
   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   do d.setDate(d.getDate() - 1); while (d.getDay() === 0 || d.getDay() === 6);
   return d.getTime();
-}
-
-function relativeTime(iso: string, now: number): string {
-  const mins = Math.floor((now - new Date(iso).getTime()) / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
 }
 
 type SortKey = 'name' | 'bids' | 'hitRate' | 'interviews' | 'approvalRate' | 'costPerInterview' | 'lastBidAt';

@@ -78,3 +78,12 @@ export const ARCHIVE_CONFIRM = {
   confirmLabel: 'Archive',
   tone: 'default' as const,
 };
+
+/** How long ago an instant was: "just now", "5m ago", "3h ago", "2d ago". */
+export function relativeTime(iso: string, now: number): string {
+  const mins = Math.floor((now - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
+}

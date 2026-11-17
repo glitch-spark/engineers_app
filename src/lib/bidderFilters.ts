@@ -245,6 +245,18 @@ export function bidderPeriodRequest(f: BidderFilters, clock: ReportClock): Bidde
 }
 
 /**
+ * The period a bidder's page shows its performance line for: the month or Custom range the list was showing when the
+ * user drilled in (`fromList`), else Last month. There is no picker; the line names the period it shows.
+ */
+export function bidderPerfRequest(f: BidderFilters, clock: ReportClock): { request: BidderPeriodRequest; fromList: boolean } {
+  if (isMonthPreset(f.range) || f.range === 'custom') {
+    const request = bidderPeriodRequest(f, clock);
+    if (request) return { request, fromList: true };
+  }
+  return { request: { period: 'month', date: ownAnchor('last_month', clock) }, fromList: false };
+}
+
+/**
  * The days a period covers (a pay week's report days, a month, the Custom range), for the date inputs a Custom switch
  * is seeded from and for a label before the server's arrives. A pay week's are the ones the server showed (`shown`);
  * before they load, This / Last pay week's come from the clock (Last 2 pay weeks adds the 7 days before Last pay

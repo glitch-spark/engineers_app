@@ -5,7 +5,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import type * as Api from '../../api/endpoints';
 
-const api = vi.hoisted(() => ({ listBids: vi.fn(), bidderReports: vi.fn() }));
+const api = vi.hoisted(() => ({
+  listBids: vi.fn(), bidderReports: vi.fn(), getBidPerformance: vi.fn(), getBidInsights: vi.fn(),
+}));
 vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), ...api }));
 vi.mock('../../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'u1', role: 'staff' } }) }));
 
@@ -54,6 +56,7 @@ function renderView(over: { tab?: string | null; onParam?: () => void; onBack?: 
           reviewing={false}
           tab={over.tab ?? null}
           isCurrent
+          perfRequest={{ period: 'month', date: '2026-10-01' }}
           week={{ shown: { first: DAYS[0], last: DAYS[6] }, label: 'Week ending Sun Nov 29', isCurrent: true, onChange: vi.fn() }}
           onBack={onBack}
           onParam={onParam}
@@ -69,6 +72,11 @@ function renderView(over: { tab?: string | null; onParam?: () => void; onBack?: 
 beforeEach(() => {
   api.listBids.mockResolvedValue({ bids: [], week: '2026-11-29' });
   api.bidderReports.mockResolvedValue({ reports: [] });
+  api.getBidPerformance.mockResolvedValue({ label: 'Oct 2026', bidders: [{
+    id: 'b1', name: 'Ana', hitDays: 14, weekdays: 21, interviews: 3, per100: 0.8, total: 120, approvalRate: 0.96,
+    costPerInterview: 5, lastBidAt: null,
+  }] });
+  api.getBidInsights.mockResolvedValue({ platform: { per100: 1.5 } });
 });
 
 describe('BidderView', () => {
@@ -92,6 +100,15 @@ describe('BidderView', () => {
     renderView({ tab: 'history' });
     expect(screen.getByRole('tab', { name: 'Past weeks' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText('Approved')).toBeNull();
+  });
+
+  it("shows the bidder's performance line under the header on both tabs, for the bidder's own owner", async () => {
+    renderView();
+    expect(await screen.findByText(/^Oct 2026: 50\+ on 14 of 21 weekdays/)).toBeTruthy();
+    expect(api.getBidPerformance).toHaveBeenCalledWith({ period: 'month', date: '2026-10-01', ownerId: 'u1', includeArchived: true });
+    cleanup();
+    renderView({ tab: 'history' });
+    expect(await screen.findByText(/^Oct 2026: 50\+ on 14 of 21 weekdays/)).toBeTruthy();
   });
 
   it("the Pending tile's Review opens this pay week's review", () => {

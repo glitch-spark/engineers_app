@@ -9,6 +9,7 @@ import {
   bidderCanStepForward,
   bidderDays,
   bidderLabel,
+  bidderPerfRequest,
   bidderPresetOptions,
   bidderPeriodRequest,
   bidderRangeError,
@@ -458,5 +459,28 @@ describe('whole pay weeks', () => {
     for (const r of ['this_month', 'last_month', 'month', 'custom'] as const) {
       expect(isWholePayWeeks(r)).toBe(false);
     }
+  });
+});
+
+describe("a bidder's performance period", () => {
+  const perf = (over: Parameters<typeof parse>[0] = {}) => bidderPerfRequest(parse(over, AFTER), AFTER);
+  it('is Last month by default and for any pay-week range', () => {
+    const last = { request: { period: 'month', date: '2026-10-01' }, fromList: false };
+    expect(perf()).toEqual(last);
+    expect(perf({ range: 'last_pay_week' })).toEqual(last);
+    expect(perf({ range: 'two_pay_weeks', date: '2026-11-14' })).toEqual(last);
+  });
+  it("is the list's month, stepped months and valid Custom ranges, marked as from the list", () => {
+    expect(perf({ range: 'this_month' })).toEqual({ request: { period: 'month' }, fromList: true });
+    expect(perf({ range: 'last_month' })).toEqual({ request: { period: 'month', date: '2026-10-01' }, fromList: true });
+    expect(perf({ range: 'month', date: '2026-09-01' })).toEqual({ request: { period: 'month', date: '2026-09-01' }, fromList: true });
+    expect(perf({ range: 'custom', from: '2026-10-05', to: '2026-10-20' })).toEqual({
+      request: { period: 'custom', date: '2026-10-05', to: '2026-10-20' }, fromList: true,
+    });
+  });
+  it('falls back to Last month for a Custom range that is partial or invalid', () => {
+    const last = { request: { period: 'month', date: '2026-10-01' }, fromList: false };
+    expect(perf({ range: 'custom', from: '2026-10-05' })).toEqual(last);
+    expect(perf({ range: 'custom', from: '2026-10-20', to: '2026-10-05' })).toEqual(last);
   });
 });

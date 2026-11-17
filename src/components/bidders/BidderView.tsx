@@ -6,13 +6,14 @@ import * as api from '../../api/endpoints';
 import { notify } from '../../lib/notify';
 import { countryFlag } from '../../lib/countries';
 import { rateText, statusWords } from '../../lib/bidsWords';
-import type { ShownWeeks } from '../../lib/bidderFilters';
+import type { BidderPeriodRequest, ShownWeeks } from '../../lib/bidderFilters';
 import { usd } from '../../lib/money';
 import ConfirmDialog from '../ConfirmDialog';
 import Tabs from '../Tabs';
 import RejectDialog from '../bids/RejectDialog';
 import { byFirstAt, reasonLabel } from '../bids/util';
 import BidderActions from './BidderActions';
+import BidderPerformanceLine from './BidderPerformanceLine';
 import BidsHelp from './BidsHelp';
 import DayPanel from './DayPanel';
 import DayRow from './DayRow';
@@ -47,6 +48,7 @@ export default function BidderView({
   reviewing,
   tab,
   isCurrent,
+  perfRequest,
   week,
   onBack,
   onParam,
@@ -64,6 +66,8 @@ export default function BidderView({
   reviewing: boolean;
   tab: string | null;
   isCurrent: boolean;
+  /** The period of the performance line under the header: the list's month or range, else Last month. */
+  perfRequest: BidderPeriodRequest;
   /** The header's pay-week nav. The page renders this view once the board has loaded, so `shown` is never null. */
   week: { shown: ShownWeeks; label: string; isCurrent: boolean; onChange: (week: string | null) => void };
   /** ← Bidders: back to the list (the page also drops the browsed `week`, so it doesn't leak into the list). */
@@ -212,6 +216,7 @@ export default function BidderView({
           <WeekNav shown={week.shown} label={week.label} isCurrent={week.isCurrent} onChange={week.onChange} />
           <BidsHelp />
         </div>
+        <BidderPerformanceLine bidderId={row.id} ownerId={row.ownerId} request={perfRequest} />
       </section>
 
       <Tabs

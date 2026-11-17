@@ -20,7 +20,7 @@ import ToReviewBlock from '../components/bidders/ToReviewBlock';
 import SelfBidsPanel, { type SelfScope } from '../components/bidders/SelfBidsPanel';
 import MyBidsTab from '../components/bidders/MyBidsTab';
 import { canManageBidders, isReviewedDataKey } from '../lib/bidderInsights';
-import { isWholePayWeeks, shownWeeksOf } from '../lib/bidderFilters';
+import { bidderPerfRequest, isWholePayWeeks, shownWeeksOf } from '../lib/bidderFilters';
 import {
   lensFromUrl, lensPatch, ownerOptions as ownerOptionsFor, ownerScope, ownerSelectValue, pendingQuery, REVIEW_EXIT, reviewFromUrl, reviewPatch,
   reviewSwitchScope, reviewSwitchValue, sectionFromUrl, sectionPatch, type BidsSection, type ReviewScope, type ReviewSwitch,
@@ -369,15 +369,17 @@ export default function BiddersPage() {
       )}
     </div>
   );
-  const bidderPage = board.error ? (
+  // The performance line's period: the list's month or range, else Last month; it needs the server's clock.
+  const perfRequest = filterState && filters && clock ? bidderPerfRequest(filters, clock).request : null;
+  const bidderPage = board.error || (!perfRequest && reportClock.error) ? (
     <div className="space-y-5">
       {bareHeader}
       <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
-        Couldn&apos;t load the week.{' '}
-        <button type="button" className="underline" onClick={() => board.mutate()}>Retry</button>
+        {board.error ? "Couldn't load the week." : "Couldn't load the pay week."}{' '}
+        <button type="button" className="underline" onClick={() => (board.error ? board.mutate() : reportClock.retry())}>Retry</button>
       </div>
     </div>
-  ) : !data ? (
+  ) : !data || !perfRequest ? (
     <div className="space-y-5">
       {bareHeader}
       <div className="space-y-3" aria-busy="true">
@@ -399,6 +401,7 @@ export default function BiddersPage() {
       reviewing={!!focus}
       tab={params.get('tab')}
       isCurrent={isCurrent}
+      perfRequest={perfRequest}
       week={{ shown: shownWeek, label: data.week.label, isCurrent, onChange: changeWeek }}
       onBack={backToList}
       onParam={(patch) => setParam({ week: weekKey, ...patch })}
