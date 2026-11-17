@@ -10,7 +10,7 @@
  * change can never shift a day.
  *
  * URL keys: `range` (this_pay_week when absent), `date` (the period's anchor day, set by stepping with ‹ ›), `from` /
- * `to` (Custom), `q`, `archived=1`, `owner` (admin: absent = their own team, a user id, or `all`; see bidsUrl.ts). Old links keep working: `week=<a day>` opens that pay week and
+ * `to` (Custom), `q`, `archived=1`, `owner` (admin: absent = the first team member's team, `me`, a user id, or `all`; see bidsUrl.ts). Old links keep working: `week=<a day>` opens that pay week and
  * `period=month|custom` with `date` / `to` open that month or range.
  *
  * A pay week's `date` (and the old `week`) is any report day inside it; the server finds its pay week. Stepping with

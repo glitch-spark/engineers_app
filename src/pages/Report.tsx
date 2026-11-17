@@ -12,6 +12,8 @@ import WeekGoalCard from '../components/report/WeekGoalCard';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
 import { addDays, dateParam, mondayOf, parseWeekParam, weekLabel } from '../lib/reportWeek';
+import { planView } from '../lib/planView';
+import { useTeamLookup } from '../lib/useFirstTeamMember';
 
 function SectionError({ what, onRetry }: { what: string; onRetry: () => void }) {
   return (
@@ -32,9 +34,10 @@ export default function ReportPage() {
   const week = dateParam(monday);
   const currentMonday = mondayOf(new Date());
   const canGoNext = monday < addDays(currentMonday, 7);
-  // Admins read other people's boards; only owners write.
-  const viewUser = isAdmin ? params.get('user') || undefined : undefined;
-  const readOnly = isAdmin;
+  // Everyone reads the team's boards; only owners write (admins have no board of their own and write nothing).
+  const { viewUser, readOnly, teamView } = planView({
+    isAdmin, userId: user?.id, user: params.get('user'), view: params.get('view'),
+  });
   const today = dateParam(new Date());
 
   const setParam = useCallback(
@@ -51,12 +54,15 @@ export default function ReportPage() {
     [setParams],
   );
 
-  const showBoard = !isAdmin || !!viewUser;
+  const showBoard = !teamView;
   const who = viewUser ?? 'me';
   const weekKey = ['week-plan', week, who];
   const daysKey = ['day-plans', week, who];
   const weekQuery = useSWR(showBoard ? weekKey : null, () => api.getWeekPlan(week, viewUser));
   const daysQuery = useSWR(showBoard ? daysKey : null, () => api.getDayPlans(week, viewUser));
+
+  // Admins land on the team table (no `view` needed); staff ask for it with `view=team`.
+  const teamLink = isAdmin ? `/plans?week=${week}` : `/plans?week=${week}&view=team`;
 
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [weekOpen, setWeekOpen] = useState(false);
@@ -66,9 +72,8 @@ export default function ReportPage() {
     mutate(daysKey);
   };
 
-  const { data: usersData } = useSWR(isAdmin ? ['users-lookup', 'no-admin'] : null, () =>
-    api.lookupUsers({ excludeRole: 'admin' }),
-  );
+  // The names for "Viewing <name>", for everyone (staff open teammates' boards too).
+  const { data: usersData } = useTeamLookup();
   const viewedName = usersData?.users.find((u) => u._id === viewUser);
 
   return (
@@ -96,16 +101,35 @@ export default function ReportPage() {
             This week
           </button>
         )}
-        {isAdmin && viewUser && (
+        {viewUser ? (
           <span className="ml-auto flex items-center gap-2 text-sm">
-            <Link to={`/plans?week=${week}`} className="underline">← Team</Link>
+            <Link to={teamLink} className="underline">← Team</Link>
             <span className="text-muted">Viewing {viewedName?.name || viewedName?.email || 'teammate'}</span>
           </span>
+        ) : !isAdmin && (
+          // Staff: their own board or the team table.
+          <nav className="segmented ml-auto" aria-label="Plan view">
+            <Link
+              to={`/plans?week=${week}`}
+              aria-current={teamView ? undefined : 'page'}
+              className={`segmented-btn ${teamView ? '' : 'segmented-btn-active-neutral'}`}
+            >
+              My plan
+            </Link>
+            <Link
+              to={teamLink}
+              aria-current={teamView ? 'page' : undefined}
+              className={`segmented-btn ${teamView ? 'segmented-btn-active-neutral' : ''}`}
+            >
+              Team
+            </Link>
+          </nav>
         )}
       </div>
 
       {!showBoard ? (
-        <TeamTable week={week} onOpenUser={(id) => setParam({ user: id })} />
+        // A row opens that person's board (read-only); the viewer's own row opens their own, editable one.
+        <TeamTable week={week} onOpenUser={(id) => setParam({ user: id === user?.id ? null : id, view: null })} />
       ) : (
         <>
           {weekQuery.error ? (

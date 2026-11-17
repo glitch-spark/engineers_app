@@ -78,7 +78,7 @@ export function BiddersFilterBar({
   /** Search and Show archived belong to the Bidders tab. */
   section: BidsSection;
   ownerOptions: { value: string; label: string }[];
-  /** The select's value (`ownerSelectValue`: '' = Me). */
+  /** The select's value (`ownerSelectValue`: `me` = Me). */
   ownerValue: string;
   serverLabel?: string;
   failed?: boolean;

@@ -12,12 +12,13 @@ import { countryFlag, countryName } from '../lib/countries';
 import { PROFILE_STATUS_OPTIONS } from '../lib/profileArchive';
 import { fmtCount, fmtPerWeek, fmtRate, fmtScore, tailoredText } from '../lib/profileMetrics';
 import {
-  PROFILE_CLEAR_KEYS, PROFILE_PRESETS, PROFILE_REGION_OPTIONS, PROFILE_URL_DEFAULTS, dropLegacyRange, legacyRangePatch,
+  PROFILE_ALL_USERS, PROFILE_CLEAR_KEYS, PROFILE_PRESETS, PROFILE_REGION_OPTIONS, PROFILE_URL_DEFAULTS, dropLegacyRange, legacyRangePatch,
   parseProfileValues, readLegacyRange, profileBenchmarkParams, profileCanClear, profileDays, profileListParams, profileMetricsParams,
   profileRangeError, type ProfileKey,
 } from '../lib/profileFilters';
 import { isoDay } from '../lib/dateRange';
 import { useUrlFilters } from '../lib/useUrlFilters';
+import { useFirstTeamMember } from '../lib/useFirstTeamMember';
 import DateRangeFilter, { type DateRangeValue } from '../components/filters/DateRangeFilter';
 import FilterBar, { FilterField } from '../components/filters/FilterBar';
 import SearchFilter from '../components/filters/SearchFilter';
@@ -92,10 +93,16 @@ export default function AccountsPage() {
   const [archiving, setArchiving] = useState(false);
 
   // Filters live in the URL (defaults left out), so a reload or a shared link keeps them.
+  // Admins open on the first team member (A–Z); All users and any other pick are written to the URL and win.
   const [urlValues, patchUrl] = useUrlFilters(PROFILE_URL_DEFAULTS);
-  const filters = parseProfileValues(urlValues);
+  const firstMember = useFirstTeamMember(isAdmin);
+  const defaultUser = isAdmin ? firstMember.id ?? '' : '';
+  // Nothing is asked for while the default is unknown, so another user's profiles never flash first.
+  const userPending = isAdmin && !urlValues.user && firstMember.loading;
+  const filters = parseProfileValues(urlValues, defaultUser);
   const profileStatus = filters.status;
-  const userId = filters.user;
+  /** The picked owner, or '' for every owner. */
+  const userId = filters.user === PROFILE_ALL_USERS ? '' : filters.user;
   const [searchParams] = useSearchParams();
   const urlHasRange = searchParams.has('range');
   // Local calendar day, as the page has always worked out its periods.
@@ -123,16 +130,16 @@ export default function AccountsPage() {
 
   const listParams = profileListParams(filters, isAdmin);
   const { data, mutate, isLoading: listLoading } = useSWR(
-    legacyDone ? (['accounts', JSON.stringify(listParams)] as const) : null,
+    legacyDone && !userPending ? (['accounts', JSON.stringify(listParams)] as const) : null,
     () => api.listAccounts(listParams)
   );
-  const isLoading = listLoading || !legacyDone;
+  const isLoading = listLoading || !legacyDone || userPending;
 
   // Metrics load on their own key so the list never waits on them. Archived profiles have none: no request then.
   // A partial or invalid Custom range asks for nothing (the bar says why).
   const metricsParams = profileMetricsParams(filters, today, isAdmin);
   const { data: metricsData, error: metricsError, isLoading: metricsLoading, mutate: mutateMetrics } = useSWR(
-    profileStatus === 'archived' || !metricsParams || !legacyDone
+    profileStatus === 'archived' || !metricsParams || !legacyDone || userPending
       ? null
       : (['account-metrics', rangeDates?.from ?? 'all', rangeDates?.to ?? '', isAdmin ? userId : ''] as const),
     () => api.getProfileMetrics(metricsParams ?? {}),
@@ -462,7 +469,7 @@ export default function AccountsPage() {
         />
       )}
 
-      <FilterBar canClear={profileCanClear(filters, isAdmin)} onClear={clearFilters}>
+      <FilterBar canClear={profileCanClear(filters, isAdmin, defaultUser)} onClear={clearFilters}>
         {isAdmin && (
           <FilterField label="User" htmlFor={`${filterId}-user`} width="w-52">
             <Select
@@ -471,7 +478,7 @@ export default function AccountsPage() {
               value={filters.user}
               onChange={(v) => patchUrl({ user: v })}
               options={[
-                { value: '', label: 'All users' },
+                { value: PROFILE_ALL_USERS, label: 'All users' },
                 ...users.map((u) => ({ value: u._id, label: u.name || u.email || u._id })),
               ]}
             />

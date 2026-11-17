@@ -94,7 +94,10 @@ beforeEach(() => {
   auth.user = { id: 'u1', role: 'admin' };
   api.getBidClock.mockResolvedValue(AFTER);
   api.getBidPerformance.mockResolvedValue(perf());
-  api.lookupUsers.mockResolvedValue({ users: [{ _id: 'u1', name: 'Pat', email: null }, { _id: 'u2', name: 'Zed', email: null }] });
+  // Every user for the Owner select; no team members (the staff-only lookup), so an admin's default is Me.
+  api.lookupUsers.mockImplementation(async (p?: { excludeRole?: string }) => (
+    p?.excludeRole === 'admin' ? { users: [] } : { users: [{ _id: 'u1', name: 'Pat', email: null }, { _id: 'u2', name: 'Zed', email: null }] }
+  ));
   api.listBidders.mockResolvedValue({ bidders: [] });
   api.getBidAlerts.mockResolvedValue({ asOf: '2026-11-23', flags: [], archive: [] });
   api.getBidInsights.mockResolvedValue({ mine: null, platform: null });
@@ -200,9 +203,10 @@ describe('the Bids page', () => {
     expect(seen.search).toBe('?owner=all');
     await waitFor(() => expect(lastPerfCall().ownerId).toBeUndefined());
     expect(await screen.findByRole('columnheader', { name: /Owner/ })).toBeTruthy();
-    // Back to Me: the default is never written.
-    fireEvent.change(owner(), { target: { value: '' } });
-    expect(seen.search).toBe('');
+    // Back to Me: written out, since an absent owner is the first team member's team.
+    fireEvent.change(owner(), { target: { value: 'me' } });
+    expect(seen.search).toBe('?owner=me');
+    await waitFor(() => expect(lastPerfCall().ownerId).toBe('u1'));
   });
 
   it("another owner with no bidders offers every owner's", async () => {
@@ -231,6 +235,54 @@ describe('the Bids page', () => {
     expect(api.getBidInsights).not.toHaveBeenCalled();
     expect(api.getBidBacklog).not.toHaveBeenCalled();
     expect(document.querySelector('[aria-busy="true"]')).toBeTruthy();
+  });
+
+  describe("an admin's default owner: the first team member A–Z", () => {
+    beforeEach(() => {
+      api.lookupUsers.mockImplementation(async (p?: { excludeRole?: string }) => (
+        p?.excludeRole === 'admin'
+          ? { users: [{ _id: 'u2', name: 'Zed', email: null }, { _id: 'u5', name: 'amy', email: null }, { _id: 'u6', name: 'Abe', isActive: false }] }
+          : { users: [{ _id: 'u1', name: 'Pat', email: null }, { _id: 'u2', name: 'Zed', email: null }, { _id: 'u5', name: 'amy', email: null }] }
+      ));
+    });
+
+    it("opens on the first team member's team, never asking for another owner first", async () => {
+      renderPage('/bidders');
+      await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
+      expect(api.getBidPerformance.mock.calls.every(([p]) => p.ownerId === 'u5')).toBe(true);
+      expect(api.getBidBacklog.mock.calls.every(([p]) => p.ownerId === 'u5')).toBe(true);
+      await waitFor(() => expect(owner().selectedOptions[0].text).toBe('amy'));
+      expect([...owner().options].map((o) => o.text)).toEqual(['Me', 'amy', 'Zed', 'All owners']);
+      expect(seen.search).toBe('');
+    });
+
+    it('an explicit Me or All owners survives a reload', async () => {
+      renderPage('/bidders?owner=me');
+      await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
+      expect(api.getBidPerformance.mock.calls.every(([p]) => p.ownerId === 'u1')).toBe(true);
+      await waitFor(() => expect(owner().selectedOptions[0].text).toBe('Me'));
+      cleanup();
+      vi.clearAllMocks();
+      renderPage('/bidders?owner=all');
+      await waitFor(() => expect(api.getBidPerformance).toHaveBeenCalled());
+      expect(api.getBidPerformance.mock.calls.every(([p]) => p.ownerId === undefined)).toBe(true);
+      await waitFor(() => expect(owner().selectedOptions[0].text).toBe('All owners'));
+    });
+
+    it("an old link with the admin's own id still means Me", async () => {
+      renderPage('/bidders?owner=u1');
+      await waitFor(() => expect(lastPerfCall()).toMatchObject({ ownerId: 'u1' }));
+      await waitFor(() => expect(owner().selectedOptions[0].text).toBe('Me'));
+    });
+
+    it('Clear goes back to the first team member', async () => {
+      renderPage('/bidders?owner=all');
+      await waitFor(() => expect(owner().selectedOptions[0].text).toBe('All owners'));
+      fireEvent.click(screen.getByRole('button', { name: /Clear/ }));
+      expect(seen.search).toBe('');
+      await waitFor(() => expect(lastPerfCall()).toMatchObject({ ownerId: 'u5' }));
+      await waitFor(() => expect(owner().selectedOptions[0].text).toBe('amy'));
+    });
   });
 
   it('staff see their own team without an owner id', async () => {

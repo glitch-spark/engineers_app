@@ -35,7 +35,7 @@ export default function InterviewsPage(props: { view: View; callers?: boolean; d
  * admins and interview managers assign the caller.
  * `directory`: the Manage callers tab (who the callers are, their load and pass rate) instead of rounds. */
 function InterviewsPageBody({ view, callers = false, directory = false }: { view: View; callers?: boolean; directory?: boolean }) {
-  const { filters, update, sharedQs, canClear, clear } = useInterviewFilters(callers);
+  const { filters, update, sharedQs, canClear, clear, pending } = useInterviewFilters(callers);
   const [params, setParams] = useSearchParams();
   const { mutate } = useSWRConfig();
   const [panel, setPanel] = useState<PanelState | null>(null);
@@ -131,6 +131,11 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
 
       {directory ? (
         <CallersDirectory />
+      ) : pending && !callers ? (
+        // An admin's default user (the first team member) is still loading: nothing is asked for until it is known.
+        <div className="panel space-y-2 p-4" aria-busy="true" data-testid="interviews-pending">
+          {Array.from({ length: 5 }, (_, i) => <div key={i} className="skeleton h-10 w-full" />)}
+        </div>
       ) : callers && view === 'list' ? (
         <CallerRoundsList
           filters={filters}

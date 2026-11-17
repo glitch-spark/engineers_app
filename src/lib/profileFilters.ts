@@ -32,6 +32,12 @@ export function normalizeProfileRange(raw: string): DatePreset {
 
 // ---- the Profiles list -----------------------------------------------------
 
+/**
+ * The User filter's "every owner" value. An absent `user` is the admin default (the first team member, see
+ * useFirstTeamMember), so All users has to be written out to survive a reload.
+ */
+export const PROFILE_ALL_USERS = 'all';
+
 export type ProfileKey = 'user' | 'status' | 'region' | 'q' | 'range' | 'from' | 'to' | 'page' | 'size';
 export type ProfileUrlValues = Record<ProfileKey, string>;
 
@@ -49,7 +55,7 @@ export const PROFILE_URL_DEFAULTS: ProfileUrlValues = {
 };
 
 export type ProfileFilters = {
-  /** Owner id ('' = every owner). Only an admin's request carries it. */
+  /** Owner id, or `all` for every owner. Only an admin's request carries it. */
   user: string;
   status: ProfileStatus;
   /** '' = every region, `none` = profiles without one. */
@@ -63,13 +69,16 @@ export type ProfileFilters = {
   size: number;
 };
 
-/** URL values -> typed filters. Never throws; bad values fall back to the defaults. */
-export function parseProfileValues(values: ProfileUrlValues): ProfileFilters {
+/**
+ * URL values -> typed filters. Never throws; bad values fall back to the defaults. `defaultUser` is what an absent
+ * `user` means (an admin's first team member); without one it is every owner.
+ */
+export function parseProfileValues(values: ProfileUrlValues, defaultUser = ''): ProfileFilters {
   const range = normalizeProfileRange(values.range);
   const page = Number.parseInt(values.page, 10);
   const size = Number.parseInt(values.size, 10);
   return {
-    user: values.user,
+    user: values.user || defaultUser || PROFILE_ALL_USERS,
     status: (KNOWN_STATUSES.includes(values.status) ? values.status : 'active') as ProfileStatus,
     region: KNOWN_REGIONS.includes(values.region) ? values.region : '',
     q: values.q,
@@ -98,6 +107,10 @@ export function profileDays(f: Pick<ProfileFilters, 'range' | 'from' | 'to'>, to
   return rangeFor(f.range, today, { allowFuture: true });
 }
 
+/** The owner a request names: the picked user, or none for every owner (and for staff, whom the server scopes). */
+const ownerParam = (f: Pick<ProfileFilters, 'user'>, isAdmin: boolean) =>
+  isAdmin && f.user && f.user !== PROFILE_ALL_USERS ? { userId: f.user } : {};
+
 /** `GET /accounts` for the table. */
 export function profileListParams(f: ProfileFilters, isAdmin: boolean) {
   return {
@@ -106,7 +119,7 @@ export function profileListParams(f: ProfileFilters, isAdmin: boolean) {
     search: f.q,
     status: f.status,
     ...(f.region ? { region: f.region } : {}),
-    ...(isAdmin && f.user ? { userId: f.user } : {}),
+    ...ownerParam(f, isAdmin),
   };
 }
 
@@ -116,7 +129,7 @@ export function profileMetricsParams(
 ): { from?: string; to?: string; weeks?: 'all'; userId?: string } | null {
   if (profileRangeError(f) !== null) return null;
   const days = profileDays(f, today);
-  return { ...(days ?? { weeks: 'all' as const }), ...(isAdmin && f.user ? { userId: f.user } : {}) };
+  return { ...(days ?? { weeks: 'all' as const }), ...ownerParam(f, isAdmin) };
 }
 
 /** `GET /accounts/metrics/benchmark` ("All profiles" over the same days). Null = nothing to ask for yet. */
@@ -128,9 +141,12 @@ export function profileBenchmarkParams(
   return days ? { period: 'custom', date: days.from, to: days.to } : { period: 'all' };
 }
 
-/** Whether anything the bar shows differs from its default (the Clear button). `user` only counts for admins. */
-export function profileCanClear(f: ProfileFilters, isAdmin: boolean): boolean {
-  return (isAdmin && !!f.user) || f.status !== 'active' || !!f.region || !!f.q || f.range !== PROFILE_DEFAULT_RANGE;
+/**
+ * Whether anything the bar shows differs from its default (the Clear button). `user` only counts for admins, against
+ * the same `defaultUser` the filters were parsed with.
+ */
+export function profileCanClear(f: ProfileFilters, isAdmin: boolean, defaultUser = ''): boolean {
+  return (isAdmin && f.user !== (defaultUser || PROFILE_ALL_USERS)) || f.status !== 'active' || !!f.region || !!f.q || f.range !== PROFILE_DEFAULT_RANGE;
 }
 
 /** What Clear puts back: the bar's own keys (the page and per-page size are not filters). */
