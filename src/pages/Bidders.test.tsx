@@ -166,7 +166,7 @@ describe('the Bids page', () => {
 
   it('a Pay tab Review opens that bidder over that pay week', async () => {
     renderPage('/bidders?section=pay');
-    fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Review 3 pending bids of Ana/ }));
     const q = new URLSearchParams(seen.search);
     expect(q.get('review')).toBe('week');
     expect(q.get('at')).toBe('2026-11-22');
@@ -451,6 +451,25 @@ describe("a bidder's page", () => {
     expect(new URLSearchParams(seen.search).has('tab')).toBe(false);
     fireEvent.click(screen.getAllByRole('button', { name: 'Bidders' })[0]);
     expect(seen.search).toBe('');
+  });
+
+  it('still shows the page, minus the performance line, when the report clock fails', async () => {
+    api.getBidClock.mockRejectedValue(new Error('down'));
+    api.bidsWeek.mockResolvedValue(board());
+    renderPage('/bidders?bidder=b1');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ana' })).toBeTruthy();
+    expect(screen.queryByText("Couldn't load the pay week.")).toBeNull();
+  });
+
+  it("an archived bidder's page finds its record and offers Restore", async () => {
+    api.bidsWeek.mockResolvedValue({ ...board(), bidders: [{ ...board().bidders[0], status: 'archived' }] });
+    api.listBidders.mockImplementation(async (archived?: boolean) => ({
+      bidders: archived ? [{ _id: 'b1', name: 'Ana', status: 'archived', archivedAt: '2026-11-01T00:00:00Z' }] : [],
+    }));
+    renderPage('/bidders?bidder=b1');
+    fireEvent.click(await screen.findByRole('button', { name: 'More actions for Ana' }));
+    expect(await screen.findByRole('menuitem', { name: 'Restore' })).toBeTruthy();
+    expect(api.listBidders).toHaveBeenCalledWith(true);
   });
 
   it('the header steps the pay week with the server days', async () => {

@@ -45,14 +45,20 @@ describe('NeedsAttention', () => {
   it('shows the unused bidders as one line with an Archive chip each', () => {
     const f = setup();
     const line = screen.getByText('Looks unused:').closest('li') as HTMLElement;
-    expect(within(line).getByText(/^Lee · No bids in 2 weeks/)).toBeTruthy();
+    expect(line.textContent).toMatch(/Lee · No bids in 2 weeks/);
     fireEvent.click(within(line).getByRole('button', { name: 'Archive' }));
     expect(f.onArchive).toHaveBeenCalledWith('b3', 'Lee');
   });
 
+  it('the unused bidder name opens that bidder', () => {
+    const f = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Lee' }));
+    expect(f.onOpenBidder).toHaveBeenCalledWith('b3');
+  });
+
   it('has no Archive button when the viewer cannot archive', () => {
     setup(ALERTS, false);
-    expect(screen.getByText(/^Lee · /)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Lee' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
   });
 

@@ -66,8 +66,9 @@ export default function BidderView({
   reviewing: boolean;
   tab: string | null;
   isCurrent: boolean;
-  /** The period of the performance line under the header: the list's month or range, else Last month. */
-  perfRequest: BidderPeriodRequest;
+  /** The period of the performance line under the header: the list's month or range, else Last month. Null (the report
+   *  clock is loading or failed): the page shows without the line. */
+  perfRequest: BidderPeriodRequest | null;
   /** The header's pay-week nav. The page renders this view once the board has loaded, so `shown` is never null. */
   week: { shown: ShownWeeks; label: string; isCurrent: boolean; onChange: (week: string | null) => void };
   /** ← Bidders: back to the list (the page also drops the browsed `week`, so it doesn't leak into the list). */
@@ -216,7 +217,7 @@ export default function BidderView({
           <WeekNav shown={week.shown} label={week.label} isCurrent={week.isCurrent} onChange={week.onChange} />
           <BidsHelp />
         </div>
-        <BidderPerformanceLine bidderId={row.id} ownerId={row.ownerId} request={perfRequest} />
+        {perfRequest && <BidderPerformanceLine bidderId={row.id} ownerId={row.ownerId} request={perfRequest} />}
       </section>
 
       <Tabs

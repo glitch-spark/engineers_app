@@ -33,7 +33,14 @@ function BidderRow({ b, onReview }: { b: api.PayBidderRow; onReview: () => void 
       {pending > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
           <span>{payPendingWarning(pending)}</span>
-          <button type="button" className="btn-outline btn-sm" onClick={onReview}>Review</button>
+          <button
+            type="button"
+            className="btn-outline btn-sm"
+            aria-label={`Review ${pending} pending bids of ${b.name}`}
+            onClick={onReview}
+          >
+            Review
+          </button>
         </div>
       )}
     </li>

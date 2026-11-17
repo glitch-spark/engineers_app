@@ -50,8 +50,10 @@ describe('PayTab', () => {
     const onReview = vi.fn();
     render(<PayTab data={data([week()])} allOwners={false} onReview={onReview} />);
     expect(screen.getByText('⚠ 3 pending — not paid until reviewed')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Review' })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    expect(screen.getAllByRole('button', { name: /^Review / })).toHaveLength(1);
+    const review = screen.getByRole('button', { name: /^Review 3 pending bids of / });
+    expect(review.textContent).toBe('Review');
+    fireEvent.click(review);
     expect(onReview).toHaveBeenCalledWith('2026-11-29', 'b1');
   });
 

@@ -83,7 +83,12 @@ export default function NeedsAttention({ alerts, onOpenBidder, onOpenProfile, on
                     key={a.bidderId}
                     className="inline-flex items-center gap-2 rounded border border-amber-300 bg-white/60 px-2 py-1 dark:border-amber-800 dark:bg-transparent"
                   >
-                    <span>{`${a.name || 'Unnamed'} · ${archiveText(a)}`}</span>
+                    <span>
+                      <button type="button" className="font-medium underline" onClick={() => onOpenBidder(a.bidderId)}>
+                        {a.name || 'Unnamed'}
+                      </button>
+                      {` · ${archiveText(a)}`}
+                    </span>
                     {canArchive && (
                       <button type="button" className="btn-outline btn-sm" onClick={() => onArchive(a.bidderId, a.name)}>
                         Archive

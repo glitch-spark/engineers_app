@@ -40,7 +40,7 @@ export const GLOSSARY: { word: string; means: string }[] = [
 export const OVERLAP_NOTE =
   `A report day closes at ${SCHEDULE_COPY.dayClose} but the pay week at ${SCHEDULE_COPY.weekClose}, so bids made ` +
   `${SCHEDULE_COPY.overlap} show in Monday's day column yet count in the pay week that closes that Sunday. ` +
-  `(Before the schedule change the same happened ${SCHEDULE_COPY.oldOverlap}.)`;
+  `(Before the schedule change it ran the other way: bids made ${SCHEDULE_COPY.oldOverlap} showed in Saturday's column but counted in the next pay week.)`;
 
 /** How to install Bid Track (was the hover text of the Download button). */
 export const BID_TRACK_STEPS =

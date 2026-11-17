@@ -142,7 +142,8 @@ export default function BiddersPage() {
   // Full bidder records (own bidders) for the status details and the ⋯ menu; an admin's view of other owners'
   // bidders has none, so those rows get no management menu.
   const active = useSWR(['bidders', false] as const, () => api.listBidders(false));
-  const archived = useSWR(showArchived ? (['bidders', true] as const) : null, () => api.listBidders(true));
+  // Also loaded for a bidder's page: an archived bidder's record is what offers Restore.
+  const archived = useSWR(showArchived || bidderId ? (['bidders', true] as const) : null, () => api.listBidders(true));
   const byId = useMemo(() => {
     const all = [...(active.data?.bidders ?? []), ...(archived.data?.bidders ?? [])];
     return Object.fromEntries(all.map((b) => [b._id, b])) as Record<string, api.Bidder>;
@@ -393,17 +394,18 @@ export default function BiddersPage() {
       )}
     </div>
   );
-  // The performance line's period: the list's month or range, else Last month; it needs the server's clock.
+  // The performance line's period: the list's month or range, else Last month; it needs the server's clock. Without it
+  // (loading or failed) the page still shows, minus that line.
   const perfRequest = filterState && filters && clock ? bidderPerfRequest(filters, clock).request : null;
-  const bidderPage = board.error || (!perfRequest && reportClock.error) ? (
+  const bidderPage = board.error ? (
     <div className="space-y-5">
       {bareHeader}
       <div className="panel p-4 text-sm text-red-600 dark:text-red-400" role="alert">
-        {board.error ? "Couldn't load the week." : "Couldn't load the pay week."}{' '}
-        <button type="button" className="underline" onClick={() => (board.error ? board.mutate() : reportClock.retry())}>Retry</button>
+        Couldn&apos;t load the week.{' '}
+        <button type="button" className="underline" onClick={() => board.mutate()}>Retry</button>
       </div>
     </div>
-  ) : !data || !perfRequest ? (
+  ) : !data ? (
     <div className="space-y-5">
       {bareHeader}
       <div className="space-y-3" aria-busy="true">

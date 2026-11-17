@@ -233,7 +233,7 @@ export function bidderRangeError(f: BidderFilters): string | null {
 
 /**
  * The period request, or null while a Custom range is partial or invalid (nothing to ask for).
- *  - This pay week: `period=week` (the server's pay week holding now, past the Saturday cutoff too).
+ *  - This pay week: `period=week` (the server's pay week holding now, past the daily cutoff too).
  *  - Last pay week: `period=week&date=<the day before this pay week starts>`; Last 2 pay weeks adds `weeks=2`.
  *  - A pay week reached by stepping: `period=week&date=<a report day of it>` (and `weeks=2` for two pay weeks).
  *  - This / Last month: `period=month` / `period=month&date=<first of last month>`; Custom: `period=custom&date&to`.

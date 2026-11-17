@@ -21,14 +21,14 @@ describe('BidsHelp', () => {
     expect(dialog.textContent).toContain('Download it from More actions › Download Bid Track.');
   });
 
-  it('closes on Escape, an outside click and the button', () => {
+  it('closes on Escape, an outside tap (pointerdown) and the button', () => {
     render(<div><span>outside</span><BidsHelp /></div>);
     const trigger = screen.getByRole('button', { name: 'What do these numbers mean?' });
     fireEvent.click(trigger);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(trigger);
-    fireEvent.mouseDown(screen.getByText('outside'));
+    fireEvent.pointerDown(screen.getByText('outside'));
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(trigger);
     fireEvent.click(trigger);
@@ -38,7 +38,7 @@ describe('BidsHelp', () => {
   it('keeps the popover open when the click is inside it', () => {
     render(<BidsHelp />);
     fireEvent.click(screen.getByRole('button', { name: 'What do these numbers mean?' }));
-    fireEvent.mouseDown(screen.getByText('Approved'));
+    fireEvent.pointerDown(screen.getByText('Approved'));
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
 });

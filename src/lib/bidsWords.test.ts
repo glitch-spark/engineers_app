@@ -36,6 +36,13 @@ describe('bidsWords', () => {
     expect(OVERLAP_NOTE).toContain('Sunday 6–8 pm');
   });
 
+  it('says the old overlap the right way round: Saturday column, next pay week', () => {
+    expect(OVERLAP_NOTE).toContain(
+      "it ran the other way: bids made Saturday 4–6:30 pm showed in Saturday's column but counted in the next pay week.",
+    );
+    expect(OVERLAP_NOTE).not.toContain('the same happened');
+  });
+
   it('keeps the Bid Track install steps', () => {
     expect(BID_TRACK_STEPS).toContain('chrome://extensions');
   });
