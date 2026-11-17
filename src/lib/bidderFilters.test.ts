@@ -76,6 +76,36 @@ function apply(f: BidderFilters, patch: BidderPatch, clock = CLOCK): BidderFilte
 const step = (f: BidderFilters, dir: -1 | 1, clock = CLOCK, shown = shownFor(f, clock)) =>
   apply(f, stepBidderPeriod(f, dir, clock, shown)!, clock);
 
+// Mon Nov 16, 2026 09:00 on the short-week schedule: old Sun..Sat weeks end Nov 14, then the 1-day week Sun Nov 15
+// (Last pay week), then 7-day weeks from Nov 16 (This pay week: Nov 16..22).
+const SHORT: ReportClock = {
+  today: '2026-11-16', payWeekStart: '2026-11-16', payWeekEnd: '2026-11-22', previousPayWeekStart: '2026-11-15',
+  timezone: 'America/Chicago',
+};
+const DAY = 86_400_000;
+/** The server's pay weeks with the short week: Sun..Sat to Nov 14, Nov 15 alone, then 7-day weeks from Nov 16. */
+function shortWeekOf(day: string): ShownWeeks {
+  if (day === '2026-11-15') return { first: day, last: day };
+  if (day >= '2026-11-16') {
+    const n = Math.floor((Date.parse(day) - Date.parse('2026-11-16')) / DAY / 7);
+    const first = addDays('2026-11-16', n * 7);
+    return { first, last: addDays(first, 6) };
+  }
+  const first = addDays(day, -new Date(`${day}T00:00:00Z`).getUTCDay());
+  return { first, last: addDays(first, 6) };
+}
+/** The days the server shows for a filter on the short-week schedule (`weeks=2`: the anchor's week and the one before). */
+function servedShort(f: BidderFilters): ShownWeeks {
+  const req = bidderPeriodRequest(f, SHORT)!;
+  const w = shortWeekOf(req.date ?? SHORT.payWeekStart);
+  return req.weeks === 2 ? { first: shortWeekOf(addDays(w.first, -1)).first, last: w.last } : w;
+}
+const showing = (f: BidderFilters) => {
+  const w = servedShort(f);
+  return `${w.first}..${w.last}`;
+};
+const stepShort = (f: BidderFilters, dir: -1 | 1) => apply(f, stepBidderPeriod(f, dir, SHORT, servedShort(f))!, SHORT);
+
 describe('presets', () => {
   it('offers the Bidders presets in order', () => {
     expect(BIDDER_PRESETS.map((p) => p.value)).toEqual([
@@ -204,6 +234,95 @@ describe('what the server showed', () => {
   });
 });
 
+describe('stepping across a short week', () => {
+  const week = (date: string) => parse({ range: 'pay_week', date }, SHORT);
+  const pair = (date: string) => parse({ range: 'two_pay_weeks', date }, SHORT);
+  it('forward from the week ending Nov 14 lands on Nov 15, then on Nov 16..22 (never skips the short week)', () => {
+    const nov8 = week('2026-11-10');
+    expect(showing(nov8)).toBe('2026-11-08..2026-11-14');
+    const short = stepShort(nov8, 1);
+    expect(short).toMatchObject({ range: 'last_pay_week', date: '' }); // Last pay week on this clock
+    expect(showing(short)).toBe('2026-11-15..2026-11-15');
+    const now = stepShort(short, 1);
+    expect(now).toMatchObject({ range: 'this_pay_week', date: '' });
+    expect(showing(now)).toBe('2026-11-16..2026-11-22');
+    expect(bidderCanStepForward(now, SHORT)).toBe(false);
+  });
+  it('back from Nov 16..22 lands on Nov 15, then on Nov 8..14', () => {
+    const short = stepShort(parse({}, SHORT), -1);
+    expect(short).toMatchObject({ range: 'last_pay_week', date: '' });
+    expect(showing(short)).toBe('2026-11-15..2026-11-15');
+    const before = stepShort(short, -1);
+    expect(before).toMatchObject({ range: 'pay_week', date: '2026-11-14' });
+    expect(showing(before)).toBe('2026-11-08..2026-11-14');
+  });
+  it('the next week is the day after the shown last day, whatever the length', () => {
+    expect(stepBidderPeriod(week('2026-11-10'), 1, SHORT, { first: '2026-11-08', last: '2026-11-14' }))
+      .toMatchObject({ range: 'last_pay_week', date: undefined });
+    expect(stepBidderPeriod(week('2026-11-03'), 1, SHORT, { first: '2026-11-01', last: '2026-11-07' }))
+      .toMatchObject({ range: 'pay_week', date: '2026-11-08' });
+  });
+  it('two pay weeks step to the next two, anchored on the later of them', () => {
+    // Nov 1..14 -> Nov 15 + Nov 16..22: the anchor is this pay week, the later one.
+    expect(showing(pair('2026-11-14'))).toBe('2026-11-01..2026-11-14');
+    const next = stepShort(pair('2026-11-14'), 1);
+    expect(next).toMatchObject({ range: 'two_pay_weeks', date: '2026-11-16' });
+    expect(showing(next)).toBe('2026-11-15..2026-11-22');
+    expect(bidderCanStepForward(next, SHORT)).toBe(false);
+    expect(showing(stepShort(next, -1))).toBe('2026-11-01..2026-11-14'); // back undoes forward
+    // Oct 18..31 -> Nov 1..14.
+    expect(showing(pair('2026-10-31'))).toBe('2026-10-18..2026-10-31');
+    expect(showing(stepShort(pair('2026-10-31'), 1))).toBe('2026-11-01..2026-11-14');
+    // Oct 25..Nov 7 -> Nov 8..14 + Nov 15, which is Last 2 pay weeks on this clock.
+    expect(showing(pair('2026-11-07'))).toBe('2026-10-25..2026-11-07');
+    const last2 = stepShort(pair('2026-11-07'), 1);
+    expect(last2).toMatchObject({ range: 'last_2_pay_weeks', date: '' });
+    expect(showing(last2)).toBe('2026-11-08..2026-11-15');
+    // From there the newest two pay weeks: Nov 15 + this week.
+    expect(showing(stepShort(last2, 1))).toBe('2026-11-15..2026-11-22');
+  });
+  it('the Last 2 pay weeks seed waits for the server: the week before Nov 15 is Nov 8..14, not 7 days back', () => {
+    const f = parse({ range: 'last_2_pay_weeks' }, SHORT);
+    expect(bidderDays(f, SHORT)).toBeNull();
+    expect(bidderDays(f, SHORT, servedShort(f))).toEqual({ from: '2026-11-08', to: '2026-11-15' });
+  });
+  it('Last 2 pay weeks from Nov 23 (Last = Nov 16..22, the week before is the 1-day Nov 15)', () => {
+    const NOV23: ReportClock = {
+      today: '2026-11-23', payWeekStart: '2026-11-23', payWeekEnd: '2026-11-29', previousPayWeekStart: '2026-11-16',
+      timezone: 'America/Chicago',
+    };
+    const f = parse({ range: 'last_2_pay_weeks' }, NOV23);
+    expect(bidderDays(f, NOV23)).toBeNull(); // not Nov 9..22
+    expect(bidderLabel(f, bidderDays(f, NOV23), undefined)).toBe('…');
+    expect(bidderDays(f, NOV23, { first: '2026-11-15', last: '2026-11-22' })).toEqual({ from: '2026-11-15', to: '2026-11-22' });
+    expect(bidderDays(parse({ range: 'last_pay_week' }, NOV23), NOV23)).toEqual({ from: '2026-11-16', to: '2026-11-22' });
+  });
+});
+
+describe('stepping a seven-day schedule', () => {
+  const SEVEN: ReportClock = {
+    today: '2026-12-02', payWeekStart: '2026-11-30', payWeekEnd: '2026-12-06', previousPayWeekStart: '2026-11-23',
+    timezone: 'America/Chicago',
+  };
+  const go = (f: BidderFilters, dir: -1 | 1, shown: ShownWeeks) => apply(f, stepBidderPeriod(f, dir, SEVEN, shown)!, SEVEN);
+  it('one pay week: back to the day before it, forward to the day after it, snapping to Last and This', () => {
+    const w = parse({ range: 'pay_week', date: '2026-11-18' }, SEVEN);
+    const shown = { first: '2026-11-16', last: '2026-11-22' };
+    expect(go(w, -1, shown)).toMatchObject({ range: 'pay_week', date: '2026-11-15' });
+    expect(go(w, 1, shown)).toMatchObject({ range: 'last_pay_week', date: '' }); // Nov 23 is Last
+    const last = parse({ range: 'last_pay_week' }, SEVEN);
+    expect(go(last, 1, { first: '2026-11-23', last: '2026-11-29' })).toMatchObject({ range: 'this_pay_week', date: '' });
+  });
+  it('two pay weeks step by two (the later of them is the anchor)', () => {
+    const p = parse({ range: 'two_pay_weeks', date: '2026-11-15' }, SEVEN); // Nov 2..8 + Nov 9..15
+    const shown = { first: '2026-11-02', last: '2026-11-15' };
+    expect(go(p, 1, shown)).toMatchObject({ range: 'last_2_pay_weeks', date: '' }); // Nov 16..22 + Nov 23..29
+    expect(go(p, -1, shown)).toMatchObject({ range: 'two_pay_weeks', date: '2026-11-01' });
+    const older = parse({ range: 'two_pay_weeks', date: '2026-11-08' }, SEVEN); // Oct 26..Nov 1 + Nov 2..8
+    expect(go(older, 1, { first: '2026-10-26', last: '2026-11-08' })).toMatchObject({ range: 'two_pay_weeks', date: '2026-11-16' });
+  });
+});
+
 describe('stepping', () => {
   it('moves a pay week from the shown days: back to the day before it', () => {
     const last = step(parse(), -1);
@@ -218,7 +337,7 @@ describe('stepping', () => {
   it('steps forward again to Last pay week and This pay week', () => {
     const back2 = step(step(step(parse(), -1), -1), -1);
     expect(back2.date).toBe('2026-10-31');
-    expect(step(back2, 1).date).toBe('2026-11-07');
+    expect(step(back2, 1).date).toBe('2026-11-01'); // the day after Oct 25..31: the first day of the very next week
     expect(step(step(back2, 1), 1)).toMatchObject({ range: 'last_pay_week', date: '' });
     expect(step(step(step(back2, 1), 1), 1)).toMatchObject({ range: 'this_pay_week', date: '' });
   });
@@ -232,7 +351,7 @@ describe('stepping', () => {
     expect(older).toMatchObject({ range: 'pay_week', date: '2026-11-07' });
 
     const fwd = step(older, 1, AFTER, { first: '2026-11-01', last: '2026-11-07' });
-    expect(fwd).toMatchObject({ range: 'pay_week', date: '2026-11-14' });
+    expect(fwd).toMatchObject({ range: 'pay_week', date: '2026-11-08' });
     expect(step(fwd, 1, AFTER, { first: '2026-11-08', last: '2026-11-14' })).toMatchObject({ range: 'last_pay_week', date: '' });
     expect(step(last, 1, AFTER, { first: '2026-11-15', last: '2026-11-22' })).toMatchObject({ range: 'this_pay_week', date: '' });
   });
@@ -402,13 +521,21 @@ describe('picking a preset', () => {
 describe('days and labels', () => {
   it('works out the days of each period', () => {
     expect(bidderDays(parse({ range: 'last_pay_week' }), CLOCK)).toEqual({ from: '2026-11-08', to: '2026-11-14' });
-    expect(bidderDays(parse({ range: 'last_2_pay_weeks' }), CLOCK)).toEqual({ from: '2026-11-01', to: '2026-11-14' });
+    // Last 2 pay weeks has no seed: the clock doesn't say where the week before Last starts (1 to 8 days).
+    expect(bidderDays(parse({ range: 'last_2_pay_weeks' }), CLOCK)).toBeNull();
+    const last2 = parse({ range: 'last_2_pay_weeks' }, SHORT);
+    expect(bidderDays(last2, SHORT)).toBeNull(); // Last = the 1-day Nov 15; the week before it is not 7 days back
+    expect(bidderLabel(last2, bidderDays(last2, SHORT), undefined)).toBe('…');
     expect(bidderDays(parse({ range: 'this_month' }), CLOCK)).toEqual({ from: '2026-11-01', to: '2026-11-30' });
     expect(bidderDays(parse({ range: 'last_month' }), CLOCK)).toEqual({ from: '2026-10-01', to: '2026-10-31' });
     // After the switch Last pay week is the 8-day week: the clock says where it starts.
     expect(bidderDays(parse({ range: 'last_pay_week' }, AFTER), AFTER)).toEqual({ from: '2026-11-15', to: '2026-11-22' });
     // The server's days win once the period has loaded.
     expect(bidderDays(parse(), CLOCK, { first: '2026-11-15', last: '2026-11-22' })).toEqual({ from: '2026-11-15', to: '2026-11-22' });
+    expect(bidderDays(parse({ range: 'last_2_pay_weeks' }, SHORT), SHORT, { first: '2026-11-08', last: '2026-11-15' }))
+      .toEqual({ from: '2026-11-08', to: '2026-11-15' });
+    // This pay week and Last pay week still come from the clock (Last = the 1-day week).
+    expect(bidderDays(parse({ range: 'last_pay_week' }, SHORT), SHORT)).toEqual({ from: '2026-11-15', to: '2026-11-15' });
   });
   it('shows the server label for pay weeks and the dates otherwise', () => {
     const week = parse();

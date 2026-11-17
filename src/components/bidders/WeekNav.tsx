@@ -3,8 +3,8 @@ import { stepPayWeekDay, type ShownWeeks } from '../../lib/bidderFilters';
 
 /**
  * Pay-week navigator: prev / next, "This week" and the label. `shown` is the shown week's first and last report day
- * (the server's days: 7, or 8 across a schedule switch); null while loading. It steps like the Bidders list
- * (`stepPayWeekDay`): back to the day before the first, forward to the last + 7. `isCurrent` disables next and hides
+ * (the server's days: 1 to 8); null while loading. It steps like the Bidders list
+ * (`stepPayWeekDay`): back to the day before the first, forward to the day after the last. `isCurrent` disables next and hides
  * "This week".
  */
 export default function WeekNav({
