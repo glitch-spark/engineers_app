@@ -14,7 +14,7 @@ import BidderFormModal from '../components/bidders/BidderFormModal';
 import InviteDialog from '../components/bidders/InviteDialog';
 import BidsHelp from '../components/bidders/BidsHelp';
 import BiddersOverview from '../components/bidders/BiddersOverview';
-import BidderAlerts from '../components/bidders/BidderAlerts';
+import NeedsAttention from '../components/bidders/NeedsAttention';
 import ToReviewBlock from '../components/bidders/ToReviewBlock';
 import SelfBidsPanel, { type SelfScope } from '../components/bidders/SelfBidsPanel';
 import MyBidsTab from '../components/bidders/MyBidsTab';
@@ -296,7 +296,7 @@ export default function BiddersPage() {
       ) : null}
 
       {section === 'bidders' && ready && alerts.data && (
-        <BidderAlerts
+        <NeedsAttention
           alerts={alerts.data}
           onOpenBidder={(id) => setParam({ bidder: id, week: null, day: null, view: null, tab: null })}
           onOpenProfile={(id) => navigate(`/accounts/${id}`)}
