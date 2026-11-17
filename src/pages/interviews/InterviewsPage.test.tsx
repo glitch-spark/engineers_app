@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   listCallerRounds: vi.fn(),
   getInterview: vi.fn(),
   listCallers: vi.fn(),
+  assignRoundCaller: vi.fn(),
 }));
 
 vi.mock('../../api/endpoints', async () => ({
@@ -16,6 +17,7 @@ vi.mock('../../api/endpoints', async () => ({
   listCallerRounds: mocks.listCallerRounds,
   getInterview: mocks.getInterview,
   listCallers: mocks.listCallers,
+  assignRoundCaller: mocks.assignRoundCaller,
 }));
 
 vi.mock('../../auth/useAuth', () => ({
@@ -96,7 +98,7 @@ describe('InterviewsPage caller rounds open in the pane', () => {
     fireEvent.click(cell);
     const pane = await screen.findByRole('dialog', { name: 'Acme Corp' });
     expect(within(pane).getByRole('button', { name: 'Add next round' })).toBeTruthy();
-    expect(screen.queryByRole('dialog', { name: /Acme Corp · / })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: /Acme Corp Â· / })).toBeNull();
     const focused = pane.querySelector('li[data-focused="true"]');
     expect(focused?.textContent).toContain('Tech round 1');
     expect(pane.querySelectorAll('li[data-focused="true"]')).toHaveLength(1);
@@ -119,7 +121,7 @@ describe('InterviewsPage caller rounds open in the pane', () => {
     expect(pane.querySelector('[data-focused="true"]')).toBeNull();
   });
 
-    it('a manager can assign the caller on another owner interview, which stays view-only', async () => {
+  it('a manager can assign the caller on another owner interview, which stays view-only', async () => {
     mocks.listCallers.mockResolvedValue({ callers: [{ _id: 'ana1', kind: 'user', name: 'Ana', color: 'sky', archived: false }], canManage: true });
     mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 1 } });
     mocks.getInterview.mockResolvedValue({ ...interview, createdBy: { _id: 'other', name: 'Other' }, summaryOnly: true });
@@ -128,5 +130,41 @@ describe('InterviewsPage caller rounds open in the pane', () => {
     await waitFor(() => expect(within(pane).getByRole('button', { name: 'Assign caller' })).toBeTruthy());
     expect(within(pane).queryByRole('button', { name: 'Add next round' })).toBeNull();
     expect(within(pane).getByText(/View only/)).toBeTruthy();
+  });
+
+  it('a manager save on another owner interview keeps the pane view-only', async () => {
+    const other = { ...interview, createdBy: { _id: 'other', name: 'Other' } };
+    mocks.listCallers.mockResolvedValue({ callers: [{ _id: 'ana1', kind: 'user', name: 'Ana', color: 'sky', archived: false }], canManage: true });
+    mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 1 } });
+    mocks.getInterview.mockResolvedValue({ ...other, summaryOnly: true });
+    // The endpoint returns the full interview, with no summaryOnly flag.
+    mocks.assignRoundCaller.mockResolvedValue({
+      ...other,
+      stageHistory: [other.stageHistory[0], { ...round, caller: { enabled: true, callerId: 'ana1', callerName: 'Ana', callerKind: 'user', method: 'video' } }],
+    });
+    renderCallers('/interviews/callers?round=iv1:r1');
+    const pane = await screen.findByRole('dialog', { name: 'Acme Corp' });
+    const assign = await within(pane).findAllByRole('button', { name: 'Assign caller' });
+    fireEvent.click(assign[0]);
+    fireEvent.change(within(pane).getByLabelText('Caller for Tech round 1'), { target: { value: 'ana1' } });
+    await waitFor(() => expect(mocks.assignRoundCaller).toHaveBeenCalledWith('iv1', 'r1', 'ana1'));
+    await waitFor(() => expect(within(pane).getAllByText('Ana').length).toBeGreaterThan(0));
+    expect(within(pane).queryByRole('region', { name: 'Details' })).toBeNull();
+    expect(within(pane).getByText(/View only/)).toBeTruthy();
+  });
+
+  it('Escape in the open caller picker closes only the picker, then Escape closes the pane', async () => {
+    mocks.listCallers.mockResolvedValue({ callers: [{ _id: 'ana1', kind: 'user', name: 'Ana', color: 'sky', archived: false }], canManage: true });
+    mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 1 } });
+    mocks.getInterview.mockResolvedValue(interview);
+    renderCallers('/interviews/callers?round=iv1:r1');
+    const pane = await screen.findByRole('dialog', { name: 'Acme Corp' });
+    const assign = await within(pane).findAllByRole('button', { name: 'Assign caller' });
+    fireEvent.click(assign[0]);
+    fireEvent.keyDown(within(pane).getByLabelText('Caller for Tech round 1'), { key: 'Escape' });
+    expect(within(pane).queryByLabelText('Caller for Tech round 1')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Acme Corp' })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Acme Corp' }), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Acme Corp' })).toBeNull());
   });
 });

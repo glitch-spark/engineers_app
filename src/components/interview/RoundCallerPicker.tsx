@@ -81,7 +81,9 @@ export default function RoundCallerPicker({
         </span>
       </span>
       {canManage && (editing ? (
-        <span className="inline-flex items-center gap-2">
+        // Escape closes only the picker: `data-keep-escape` makes the pane's Escape handler stand down.
+        <span className="inline-flex items-center gap-2" data-keep-escape
+          onKeyDown={(ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); setEditing(false); } }}>
           <span className="w-44">
             <Select
               label={label}

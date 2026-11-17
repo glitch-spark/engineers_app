@@ -62,6 +62,15 @@ describe('RoundCallerPicker', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('Escape in the open picker closes it without saving', () => {
+    const onSaved = vi.fn();
+    render(<RoundCallerPicker interview={iv({ callerId: 'bo1', callerName: 'Bo' })} roundId="r1" onSaved={onSaved} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Change caller' }));
+    fireEvent.keyDown(screen.getByLabelText('Caller for Tech round 1'), { key: 'Escape' });
+    expect(screen.queryByLabelText('Caller for Tech round 1')).toBeNull();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it('Cancel closes the picker without saving', () => {
     const onSaved = vi.fn();
     render(<RoundCallerPicker interview={iv({ callerId: 'bo1', callerName: 'Bo' })} roundId="r1" onSaved={onSaved} />);

@@ -93,8 +93,10 @@ export default function InterviewPanel({
   const account = iv && typeof iv.accountId === 'object' ? iv.accountId : null;
 
   const applySaved = (saved: Interview | null) => {
-    setIv(saved);
-    onChanged?.(saved);
+    // Someone else's interview stays view-only: the save endpoints return the full interview without the flag.
+    const next = saved && iv?.summaryOnly ? { ...saved, summaryOnly: true } : saved;
+    setIv(next);
+    onChanged?.(next);
   };
 
   const setRoundStatus = async (id: string, status: string) => {

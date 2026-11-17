@@ -158,7 +158,7 @@ export default function InterviewFocusPage() {
   // Someone else's interview (view-only here): the caller picker and Mark confirmed still save, then refresh this page.
   const setRoundConfirmed = async (roundId: string, confirmed: boolean) => {
     try {
-      applyUpdate(await api.confirmRound(iv._id, roundId, confirmed));
+      applyUpdate({ ...(await api.confirmRound(iv._id, roundId, confirmed)), summaryOnly: true });
       notify.success(confirmed ? 'Marked confirmed' : 'Confirmation removed');
     } catch (err) {
       notify.error(err, 'Failed to update confirmation');
@@ -238,7 +238,7 @@ export default function InterviewFocusPage() {
 
         {summaryOnly ? (
           <section className="panel-elevated overflow-hidden" aria-label="Read-only summary">
-            <SummaryOnlyView iv={iv} tz={tz} user={user} onCallerSaved={(saved) => applyUpdate(saved as unknown as Record<string, unknown>)} onConfirm={setRoundConfirmed} />
+            <SummaryOnlyView iv={iv} tz={tz} user={user} onCallerSaved={(saved) => applyUpdate({ ...(saved as unknown as Record<string, unknown>), summaryOnly: true })} onConfirm={setRoundConfirmed} />
             <p className="border-t border-zinc-200 px-4 py-2.5 text-xs text-muted dark:border-zinc-800">
               View only{ownerName ? ` · owned by ${ownerName}` : ''}
             </p>

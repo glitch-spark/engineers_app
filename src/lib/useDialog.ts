@@ -40,6 +40,8 @@ export function useDialog(
         // An open combobox inside the dialog closes its own listbox first.
         const target = e.target as HTMLElement | null;
         if (target?.closest?.('[role="combobox"][aria-expanded="true"]')) return;
+        // A widget that handles Escape itself (an inline picker) marks its container.
+        if (target?.closest?.('[data-keep-escape]')) return;
         e.stopPropagation();
         onCloseRef.current();
         return;

@@ -16,7 +16,7 @@ import {
 } from '../../lib/stageBadge';
 import { STATUS_DOT } from '../../pages/interviews/RoundTrail';
 import ActionMenu from '../ActionMenu';
-import ConfirmedBadge, { NoCallerBadge, needsConfirmBadge } from './ConfirmedBadge';
+import ConfirmedBadge, { needsConfirmBadge } from './ConfirmedBadge';
 import { canConfirm, isTbdRound } from '../../lib/canConfirm';
 import { CALLER_METHOD_OPTIONS, type Interview } from './types';
 import RoundCallerPicker from './RoundCallerPicker';
@@ -130,9 +130,7 @@ export function SummaryOnlyView({
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                       <PhoneCall size={12} aria-hidden />
                       <RoundCallerPicker interview={iv} roundId={e.id} onSaved={onCallerSaved} />
-                      {needsConfirmBadge(e.status, e.scheduledAt, now) && (
-                        isTbdRound(e) ? <NoCallerBadge /> : <ConfirmedBadge confirmed={e.confirmed} />
-                      )}
+                      {needsConfirmBadge(e.status, e.scheduledAt, now) && !isTbdRound(e) && <ConfirmedBadge confirmed={e.confirmed} />}
                       {canConfirm(user, iv, e) && !isTbdRound(e) && needsConfirmBadge(e.status, e.scheduledAt, now) && (
                         <button type="button" className="btn-outline btn-sm" onClick={() => onConfirm(e.id, !e.confirmed)}>
                           {e.confirmed ? 'Unconfirm' : 'Mark confirmed'}
@@ -269,8 +267,8 @@ function FullSummary({
               <PhoneCall size={14} className="text-sky-600" aria-hidden />
               <RoundCallerPicker interview={iv} roundId={spotRound.id} onSaved={onCallerSaved} />
               <span className="text-muted">· {methodLabel(spotRound.caller.method)}</span>
-              {needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && (
-                isTbdRound(spotRound) ? <NoCallerBadge /> : <ConfirmedBadge confirmed={spotRound.confirmed} />
+              {needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && !isTbdRound(spotRound) && (
+                <ConfirmedBadge confirmed={spotRound.confirmed} />
               )}
               {canConfirm(user, iv, spotRound) && !isTbdRound(spotRound) && spot.kind === 'next' && needsConfirmBadge(spotRound.status, spotRound.scheduledAt, now) && (
                 <button type="button" className="btn-outline btn-sm"
@@ -406,9 +404,7 @@ function FullSummary({
                     <span className="inline-flex flex-wrap items-center gap-1.5">
                       <PhoneCall size={12} aria-hidden />
                       <RoundCallerPicker interview={iv} roundId={e.id} onSaved={onCallerSaved} />
-                      {needsConfirmBadge(e.status, e.scheduledAt, now) && (
-                        isTbdRound(e) ? <NoCallerBadge /> : <ConfirmedBadge confirmed={e.confirmed} />
-                      )}
+                      {needsConfirmBadge(e.status, e.scheduledAt, now) && !isTbdRound(e) && <ConfirmedBadge confirmed={e.confirmed} />}
                     </span>
                   )}
                 </div>
