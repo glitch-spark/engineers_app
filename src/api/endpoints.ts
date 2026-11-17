@@ -893,8 +893,7 @@ export interface InterviewStageEntry {
   confirmed?: boolean;
 }
 
-/** `confirmed` only on caller rounds (owner or admin). */
-export type InterviewStageInput = Partial<RoundInput> & { confirmed?: boolean };
+export type InterviewStageInput = Partial<RoundInput>;
 
 /** `previousStatusNote`: the caller's feedback on the previous round, saved when it is marked passed. */
 export const addInterviewStage = (
@@ -942,9 +941,6 @@ export const deleteCaller = (id: string) => del<void>(`/callers/${id}`);
 export type CallerOverview = Record<string, { upcoming: number; thisWeek: number; passRate: number | null; rounds: number }>;
 export const getCallerOverview = () => apiFetch<{ overview: CallerOverview }>('/callers/overview').then((r) => r.overview);
 
-/** Confirm or unconfirm a caller round (admin, interview manager, the owner, or the round's assigned user caller). */
-export const confirmRound = (id: string, stageId: string, confirmed: boolean) =>
-  postJSON<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}/confirm`, { confirmed });
 
 // ---------- leaderboard ----------
 

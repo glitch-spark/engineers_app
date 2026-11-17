@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from 'react';
 import useSWR from 'swr';
 import { PhoneCall } from 'lucide-react';
-import ConfirmedBadge, { NoCallerBadge, needsConfirmBadge } from '../../components/interview/ConfirmedBadge';
+import { NoCallerBadge, isUpcomingScheduled } from '../../components/interview/NoCallerBadge';
 import * as api from '../../api/endpoints';
 import { canUpdateRound, isTbdRound } from '../../lib/canConfirm';
 import { useAuth } from '../../auth/useAuth';
@@ -159,9 +159,7 @@ export default function InterviewsList({
           Caller
         </span>
         <span className={!name || name === 'TBD' ? 'text-muted' : ''}>{name && name !== 'TBD' ? name : 'TBD'}</span>
-        {needsConfirmBadge(iv.status, iv.scheduledAt) && (
-          isTbdRound({ caller: iv.caller }) ? <NoCallerBadge /> : <ConfirmedBadge confirmed={iv.confirmed} />
-        )}
+        {isUpcomingScheduled(iv.status, iv.scheduledAt) && isTbdRound({ caller: iv.caller }) && <NoCallerBadge />}
       </span>
     );
   };

@@ -15,7 +15,6 @@ import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
 import Pagination from '../../components/Pagination';
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, callerLabel, isUnassigned } from '../../lib/callerColors';
-import ConfirmedBadge, { needsConfirmBadge } from '../../components/interview/ConfirmedBadge';
 import RoundTrail from './RoundTrail';
 import { ResumeScoreCell } from '../../components/interview/LinkedResumeCard';
 
@@ -65,8 +64,6 @@ export default function CallerRoundsList({
     };
   };
 
-  const confirmedOf = (row: InterviewRoundRow) => (data?.interviews?.[row.interviewId] as unknown as Interview | undefined)
-    ?.stageHistory?.find((e) => e.id === row.roundId)?.confirmed;
   const callerCell = (row: InterviewRoundRow) => {
     const known = row.callerId ? byId.get(row.callerId) : undefined;
     const none = isUnassigned(row);
@@ -74,8 +71,6 @@ export default function CallerRoundsList({
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${none ? `border ${UNASSIGNED_CHIP}` : known ? CALLER_DOT[known.color] : 'bg-zinc-400'}`} aria-hidden />
         <span className={none ? 'text-muted' : 'font-medium'}>{callerLabel(row)}</span>
-        {/* The backend's flattened rows carry no callerKind or confirmed flag: TBD comes from callerId / callerName, confirmed from the interview. */}
-        {!none && needsConfirmBadge(row.status, row.scheduledAt) && <ConfirmedBadge confirmed={confirmedOf(row)} />}
       </span>
     );
   };
