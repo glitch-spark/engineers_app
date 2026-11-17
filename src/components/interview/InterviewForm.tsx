@@ -75,12 +75,12 @@ export default function InterviewForm({
   const idPrefix = useId();
   const { tz } = useInterviewTimezone();
   const { user } = useAuth();
-  // The creator may pick a caller for a new round; afterwards Admin / interview managers assign it.
-  const callerEditable = mode !== 'editRound' || user?.role === 'admin' || user?.role === 'interview_manager';
   // A new interview is owned by whoever creates it.
   const ownerId = interview
     ? (typeof interview.createdBy === 'object' ? interview.createdBy?._id : interview.createdBy)
     : user?.id;
+  // The owner, Admin and interview managers assign the caller.
+  const callerEditable = mode !== 'editRound' || user?.role === 'admin' || user?.role === 'interview_manager' || ownerId === user?.id;
   const history = interview?.stageHistory ?? [];
   const entry = mode === 'editRound' ? history.find((e) => e.id === roundId) : undefined;
   const previous = history[history.length - 1];

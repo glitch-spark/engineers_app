@@ -15,6 +15,8 @@ import {
 import { useStatusNotePrompt } from './StatusNoteDialog';
 import ConfirmDialog from '../ConfirmDialog';
 import InterviewForm, { type RoundPrefill } from './InterviewForm';
+import RescheduleDialog from './RescheduleDialog';
+import { canUpdateRound } from '../../lib/canConfirm';
 import type { Interview } from './types';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 
@@ -67,9 +69,10 @@ export default function InterviewPanel({
   const [mode, setMode] = useState<PanelMode>(interview ? initialMode : 'new');
   const [roundId, setRoundId] = useState<string | undefined>(initialRoundId);
   const [confirm, setConfirm] = useState<{ kind: 'round'; id: string } | { kind: 'interview' } | null>(null);
+  const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { prompt: askStatusNote, dialog: statusNoteDialog, asking } = useStatusNotePrompt();
-  useDialog(open && !confirm && !asking, panelRef, onClose);
+  useDialog(open && !confirm && !asking && !rescheduleId, panelRef, onClose);
 
   // Reset the mode only when the panel opens or switches interview — a refreshed
   // copy of the same interview (after a save) must not reopen the form.
@@ -78,6 +81,7 @@ export default function InterviewPanel({
     setMode(interview ? initialMode : 'new');
     setRoundId(initialRoundId);
     setConfirm(null);
+    setRescheduleId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, interview?._id, initialMode, initialRoundId]);
   useEffect(() => {
@@ -87,6 +91,8 @@ export default function InterviewPanel({
   if (!open) return null;
 
   const canEdit = !iv || (!iv.summaryOnly && (user?.role === 'admin' || creatorId(iv) === user?.id));
+  // Status and time: also interview managers, on any interview (the server allows only those fields for them).
+  const canSetStatus = !!iv && canUpdateRound(user, iv);
   // Read-only for everyone else, whatever mode the caller asked for.
   const shownMode: PanelMode = canEdit ? mode : 'view';
   const rounds = [...(iv?.stageHistory ?? [])].reverse();
@@ -202,12 +208,14 @@ export default function InterviewPanel({
               iv={iv}
               tz={tz}
               canEdit={canEdit}
+              canSetStatus={canSetStatus}
               user={user}
               onStatus={setRoundStatus}
               onConfirm={setRoundConfirmed}
               onEditRound={(id) => openForm('editRound', id)}
               onDeleteRound={(id) => setConfirm({ kind: 'round', id })}
               onEditDetails={() => openForm('editDetails')}
+              onReschedule={setRescheduleId}
               focusRoundId={focusRoundId}
               onCallerSaved={applySaved}
             />
@@ -250,6 +258,20 @@ export default function InterviewPanel({
       </aside>
 
       {statusNoteDialog}
+
+      {iv && rescheduleId && (
+        <RescheduleDialog
+          open
+          interview={iv}
+          roundId={rescheduleId}
+          tz={tz}
+          onClose={() => setRescheduleId(null)}
+          onSaved={(saved) => {
+            applySaved(saved);
+            setRescheduleId(null);
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={!!confirm}

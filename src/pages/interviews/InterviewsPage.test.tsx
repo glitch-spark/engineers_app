@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   getInterview: vi.fn(),
   listCallers: vi.fn(),
   assignRoundCaller: vi.fn(),
+  updateInterviewStage: vi.fn(),
+  role: 'staff',
 }));
 
 vi.mock('../../api/endpoints', async () => ({
@@ -18,13 +20,15 @@ vi.mock('../../api/endpoints', async () => ({
   getInterview: mocks.getInterview,
   listCallers: mocks.listCallers,
   assignRoundCaller: mocks.assignRoundCaller,
+  updateInterviewStage: mocks.updateInterviewStage,
 }));
 
 vi.mock('../../auth/useAuth', () => ({
-  useAuth: () => ({ user: { id: 'me', role: 'staff' } }),
+  useAuth: () => ({ user: { id: 'me', role: mocks.role } }),
 }));
 
 beforeEach(() => {
+  mocks.role = 'staff';
   mocks.listCallers.mockResolvedValue({ callers: [], canManage: false });
 });
 afterEach(() => {
@@ -163,6 +167,60 @@ describe('InterviewsPage caller rounds open in the pane', () => {
     fireEvent.click(assign[0]);
     fireEvent.keyDown(within(pane).getByLabelText('Caller for Tech round 1'), { key: 'Escape' });
     expect(within(pane).queryByLabelText('Caller for Tech round 1')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Acme Corp' })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Acme Corp' }), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Acme Corp' })).toBeNull());
+  });
+
+  it('a manager sets a round status and changes its time on another owner interview, sending only those fields', async () => {
+    mocks.role = 'interview_manager';
+    const other = { ...interview, createdBy: { _id: 'other', name: 'Other' } };
+    mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 1 } });
+    mocks.getInterview.mockResolvedValue(other);
+    mocks.updateInterviewStage.mockResolvedValue(other);
+    renderCallers('/interviews/callers?round=iv1:r1');
+    const pane = await screen.findByRole('dialog', { name: 'Acme Corp' });
+    expect(within(pane).getByLabelText('Status of Tech round 1')).toBeTruthy();
+    expect(within(pane).queryByRole('button', { name: 'Add next round' })).toBeNull();
+    fireEvent.click(within(pane).getByRole('button', { name: 'Actions for Tech round 1 round' }));
+    expect(screen.queryByRole('menuitem', { name: 'Edit round' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Change time' }));
+    const dialog = await screen.findByRole('dialog', { name: /Change time/ });
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2030-01-02' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledTimes(1));
+    const [id, roundId, body] = mocks.updateInterviewStage.mock.calls[0];
+    expect([id, roundId, Object.keys(body)]).toEqual(['iv1', 'r1', ['scheduledAt']]);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Change time/ })).toBeNull());
+
+    fireEvent.change(within(pane).getByLabelText('Status of Tech round 1'), { target: { value: 'completed' } });
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledTimes(2));
+    expect(mocks.updateInterviewStage.mock.calls[1]).toEqual(['iv1', 'r1', { status: 'completed' }]);
+  });
+
+  it('a staff member on another owner interview gets no status select or Change time', async () => {
+    const other = { ...interview, createdBy: { _id: 'other', name: 'Other' } };
+    mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 1 } });
+    mocks.getInterview.mockResolvedValue(other);
+    renderCallers('/interviews/callers?round=iv1:r1');
+    const pane = await screen.findByRole('dialog', { name: 'Acme Corp' });
+    expect(within(pane).queryByLabelText('Status of Tech round 1')).toBeNull();
+    fireEvent.click(within(pane).getByRole('button', { name: 'Actions for Tech round 1 round' }));
+    expect(screen.queryByRole('menuitem', { name: 'Change time' })).toBeNull();
+  });
+
+  it('Escape in the Change time dialog closes only the dialog, then Escape closes the pane', async () => {
+    mocks.role = 'interview_manager';
+    const other = { ...interview, createdBy: { _id: 'other', name: 'Other' } };
+    mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 1 } });
+    mocks.getInterview.mockResolvedValue(other);
+    renderCallers('/interviews/callers?round=iv1:r1');
+    const pane = await screen.findByRole('dialog', { name: 'Acme Corp' });
+    fireEvent.click(within(pane).getByRole('button', { name: 'Actions for Tech round 1 round' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Change time' }));
+    const dialog = await screen.findByRole('dialog', { name: /Change time/ });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Change time/ })).toBeNull());
     expect(screen.getByRole('dialog', { name: 'Acme Corp' })).toBeTruthy();
     fireEvent.keyDown(screen.getByRole('dialog', { name: 'Acme Corp' }), { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Acme Corp' })).toBeNull());
