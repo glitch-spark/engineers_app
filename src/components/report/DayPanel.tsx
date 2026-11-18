@@ -130,7 +130,7 @@ export default function DayPanel({
   );
 
   const items = data?.items.filter((i) => !i.archived) ?? [];
-  const hasGoal = !!data && (data.targets.bidsSelf + data.targets.bidsBidder > 0 || data.items.length > 0);
+  const hasGoal = !!data && (data.targets.bidsSelf + data.targets.bidsBidder > 0 || items.length > 0);
 
   return (
     <SidePanel

@@ -12,7 +12,7 @@ const counts = { bidsSelf: 0, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bi
 const plan = {
   weekStart: '2026-11-16', exists: false, draft: true, userId: 'u', goal: counts, done: counts,
   routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }],
-  weeklyGoals: [], progress: {}, recapNotes: '', stages: { self: {}, caller: {} }, days: [],
+  weeklyGoals: [{ id: 'g0', text: 'Old goal', kind: 'check', target: null, archived: true }], progress: {}, recapNotes: '', stages: { self: {}, caller: {} }, days: [],
 };
 
 describe('WeekPanel', () => {
@@ -32,6 +32,7 @@ describe('WeekPanel', () => {
     const body = vi.mocked(api.putWeekPlan).mock.calls[0][1] as unknown as Record<string, unknown>;
     expect(body.routines).toEqual([{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }]);
     expect(body.weeklyGoals).toEqual([{ text: 'Ship it', kind: 'check', target: null, archived: false }]);
+    expect(JSON.stringify(body)).not.toContain('Old goal');
     expect(body).not.toHaveProperty('goalItems');
     expect(body).not.toHaveProperty('dailyGoal');
   });

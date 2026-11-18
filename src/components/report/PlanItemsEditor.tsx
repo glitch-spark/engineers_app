@@ -106,9 +106,10 @@ export default function PlanItemsEditor({
   );
 }
 
-/** Rows without text are dropped; a check item has no target. Ids stay as they are (new rows have none). */
+/** Archived and empty rows are dropped (the server archives saved ids that are omitted); a check item has no target. */
 export function cleanItems(items: PlanItemIn[]): PlanItemIn[] {
   return items
+    .filter((i) => !i.archived)
     .map((i) => ({ ...i, text: i.text.trim(), target: i.kind === 'check' ? null : i.target }))
     .filter((i) => i.text);
 }
