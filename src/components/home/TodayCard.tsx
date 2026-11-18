@@ -9,9 +9,9 @@ import ItemRow, { kept } from '../report/ItemRow';
 type Result = { done: boolean; value: number | null };
 const DEBOUNCE_MS = 800;
 
-const WEEKDAY = (iso: string) => {
+const parseDay = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short' });
+  return new Date(y, m - 1, d);
 };
 
 export default function TodayCard() {
@@ -19,6 +19,7 @@ export default function TodayCard() {
   const { mutate: globalMutate } = useSWRConfig();
   const { data: plan, error, isLoading, mutate } = useSWR(['home-day', today], () => api.getDayPlan(today), { revalidateOnFocus: false });
   const [local, setLocal] = useState<Record<string, Result>>({}); // optimistic, until saved
+  const [unticking, setUnticking] = useState<Record<string, true>>({}); // goal ids being un-ticked on an earlier day
   const [failedUntick, setFailedUntick] = useState<Record<string, string>>({}); // goal id -> day it was done on
   const [failed, setFailed] = useState<Record<string, Result>>({}); // last attempt per failed item, for Retry
   const timers = useRef<Record<string, { t: ReturnType<typeof setTimeout>; r: Result }>>({});
@@ -72,12 +73,15 @@ export default function TodayCard() {
     timers.current[id] = { t: setTimeout(() => save(id, r), DEBOUNCE_MS), r };
   };
   const untick = async (id: string, doneOn: string) => {
+    setUnticking((u) => ({ ...u, [id]: true }));
     try {
       await api.putDayProgress(doneOn, { results: { [id]: { done: false } } });
       setFailedUntick(({ [id]: _, ...rest }) => rest);
       await Promise.all([mutate(), globalMutate(['home-week', today])]);
     } catch {
       setFailedUntick((f) => ({ ...f, [id]: doneOn }));
+    } finally {
+      setUnticking(({ [id]: _, ...rest }) => rest);
     }
   };
   const retry = (id: string) => {
@@ -87,9 +91,9 @@ export default function TodayCard() {
     save(id, r);
   };
 
-  const [y, m, d] = today.split('-').map(Number);
-  const dow = new Date(y, m - 1, d).getDay(); // 1 = Mon .. 5 = Fri
-  const heading = new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const todayDate = parseDay(today);
+  const dow = todayDate.getDay(); // 1 = Mon .. 5 = Fri
+  const heading = todayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const t = plan.targets;
   const bidsTarget = t.bidsSelf + t.bidsBidder;
   const intTarget = t.interviewsSelf + t.interviewsCaller;
@@ -98,26 +102,35 @@ export default function TodayCard() {
   const daily = plan.items.filter((i) => kept(i) && i.scope === 'routine');
   const weekly = plan.items.filter((i) => kept(i) && i.scope === 'goal');
   const disabled = !plan.weekSaved;
-  const resultOf = (i: DayItem) => local[i.id] ?? { done: i.result?.done ?? false, value: i.result?.value ?? null };
+  // A goal done only by its week total has no done day: it can't be un-ticked from Home.
+  const weekMet = (i: DayItem) => i.scope === 'goal' && !!plan.progress[i.id]?.done && !plan.progress[i.id]?.doneOn;
   const doneEarlier = (i: DayItem) => {
     const on = plan.progress[i.id]?.doneOn;
     return i.scope === 'goal' && on && on !== today ? on : null;
   };
-  const isDone = (i: DayItem) => (i.scope === 'goal' ? local[i.id]?.done ?? plan.progress[i.id]?.done ?? false : resultOf(i).done);
+  const resultOf = (i: DayItem) => {
+    const saved = { done: i.result?.done ?? false, value: i.result?.value ?? null };
+    const r = local[i.id] ?? (i.scope === 'goal' ? { ...saved, done: plan.progress[i.id]?.done ?? saved.done } : saved);
+    return weekMet(i) ? { ...r, done: true } : r;
+  };
+  const isDone = (i: DayItem) => (unticking[i.id] ? false : resultOf(i).done);
   const count = (list: DayItem[]) => `${list.filter(isDone).length} of ${list.length} done`;
 
   const row = (item: DayItem) => {
     const earlier = doneEarlier(item);
+    const met = weekMet(item);
+    const busy = !!unticking[item.id];
     return (
       <Fragment key={item.id}>
         <ItemRow
           item={item}
-          result={earlier ? { done: true, value: item.result?.value ?? null } : resultOf(item)}
+          result={busy ? { done: false, value: item.result?.value ?? null } : earlier ? { done: true, value: item.result?.value ?? null } : resultOf(item)}
           week={item.scope === 'goal' ? plan.progress[item.id] : undefined}
-          disabled={disabled || item.archived}
+          disabled={disabled || item.archived || busy}
           valueLocked={!!earlier}
-          note={earlier ? `done ${WEEKDAY(earlier)}` : undefined}
-          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, r))}
+          doneLocked={met}
+          note={busy ? undefined : earlier ? `done ${parseDay(earlier).toLocaleDateString('en-US', { weekday: 'short' })}` : met ? 'week target met' : undefined}
+          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, met ? { done: item.result?.done ?? false, value: r.value } : r))}
         />
         {(failedUntick[item.id] || (failed[item.id] && !local[item.id])) && (
           <li className="text-xs text-red-600">

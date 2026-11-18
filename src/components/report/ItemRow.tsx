@@ -4,7 +4,7 @@ import type { DayItem } from '../../api/endpoints';
 export const kept = (i: DayItem) => !i.archived || i.result !== null;
 
 export default function ItemRow({
-  item, result, week, disabled, valueLocked, note, onChange,
+  item, result, week, disabled, valueLocked, doneLocked, note, onChange,
 }: {
   item: DayItem;
   result: { done: boolean; value: number | null };
@@ -13,6 +13,8 @@ export default function ItemRow({
   disabled: boolean;
   /** Keep the number box read-only while the checkbox stays usable. */
   valueLocked?: boolean;
+  /** Keep the checkbox read-only while the number box stays usable. */
+  doneLocked?: boolean;
   /** Muted trailing text, e.g. "done Mon". */
   note?: string;
   onChange: (r: { done: boolean; value: number | null }) => void;
@@ -22,7 +24,7 @@ export default function ItemRow({
   const removed = item.archived ? <span className="ml-1 text-xs text-muted">(removed)</span> : null;
   const progress = week && (
     <span className="ml-auto text-xs tabular-nums text-muted">
-      {item.kind === 'check' ? (week.done ? '✓ this week' : 'Not yet this week') : <>{week.value}{week.target ? ` / ${week.target}` : ''} this week</>}
+      {item.kind === 'check' ? (note ? null : week.done ? '✓ this week' : 'Not yet this week') : <>{week.value}{week.target ? ` / ${week.target}` : ''} this week</>}
     </span>
   );
   if (item.kind === 'check') {
@@ -32,7 +34,7 @@ export default function ItemRow({
           <input
             type="checkbox"
             className="h-4 w-4"
-            disabled={disabled}
+            disabled={disabled || doneLocked}
             checked={result.done}
             onChange={(e) => onChange({ done: e.target.checked, value: null })}
           />
@@ -49,7 +51,7 @@ export default function ItemRow({
         type="checkbox"
         className="h-4 w-4"
         aria-label={`${item.text} done`}
-        disabled={disabled}
+        disabled={disabled || doneLocked}
         checked={result.done}
         onChange={(e) => onChange({ done: e.target.checked, value: result.value })}
       />

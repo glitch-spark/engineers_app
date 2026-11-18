@@ -6,8 +6,7 @@ import useSWR, { SWRConfig, unstable_serialize } from 'swr';
 import * as api from '../../api/endpoints';
 import TodayCard from './TodayCard';
 
-vi.mock('../../api/endpoints', () => ({ getDayPlan: vi.fn(), putDayProgress: vi.fn(), listInterviewRounds: vi.fn() }));
-vi.mock('../../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
+vi.mock('../../api/endpoints', () => ({ getDayPlan: vi.fn(), putDayProgress: vi.fn() }));
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
@@ -31,11 +30,10 @@ const plan = (o: object = {}) => ({
 
 let cache = new Map<string, unknown>();
 let unmountCard = () => {};
-function setup(p: object, rounds: object[] = []) {
+function setup(p: object) {
   cache = new Map();
   vi.mocked(api.getDayPlan).mockResolvedValue(p as never);
   vi.mocked(api.putDayProgress).mockResolvedValue(p as never);
-  vi.mocked(api.listInterviewRounds).mockResolvedValue({ rounds, interviews: {} } as never);
   const ui = (card: boolean) => (
     <SWRConfig value={{ provider: () => cache as never }}>
       <MemoryRouter>{card && <TodayCard />}</MemoryRouter>
@@ -123,7 +121,6 @@ describe('TodayCard', () => {
     const Probe = () => { useSWR(['home-week', '2026-11-18'], weekFetch, { revalidateOnFocus: false }); return null; };
     vi.mocked(api.getDayPlan).mockResolvedValue(plan() as never);
     vi.mocked(api.putDayProgress).mockResolvedValue(plan() as never);
-    vi.mocked(api.listInterviewRounds).mockResolvedValue({ rounds: [], interviews: {} } as never);
     cache = new Map();
     render(
       <SWRConfig value={{ provider: () => cache as never }}>
@@ -138,7 +135,6 @@ describe('TodayCard', () => {
 
   it('shows a skeleton while loading and a retry on error', async () => {
     vi.mocked(api.getDayPlan).mockRejectedValue(new Error('boom'));
-    vi.mocked(api.listInterviewRounds).mockResolvedValue({ rounds: [], interviews: {} } as never);
     cache = new Map();
     render(
       <SWRConfig value={{ provider: () => cache as never, shouldRetryOnError: false }}>
@@ -227,6 +223,34 @@ describe('TodayCard', () => {
     setup(p);
     expect(await screen.findByLabelText('Contact')).toBeTruthy();
     expect(screen.getByText('140 / 250 this week')).toBeTruthy();
+  });
+
+  it('goal done by week total shows ticked and locked', async () => {
+    const p = goals() as ReturnType<typeof goals> & { progress: Record<string, unknown>; items: unknown[] };
+    p.items[3] = item({ id: 'g1', text: 'Contact', scope: 'goal', kind: 'count', target: 250 }) as never;
+    p.progress.g1 = { value: 250, done: true, target: 250, doneOn: null };
+    setup(p);
+    const box = (await screen.findByLabelText('Contact done')) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(box.disabled).toBe(true);
+    expect((screen.getByLabelText('Contact') as HTMLInputElement).disabled).toBe(false);
+    expect(screen.getByText('week target met')).toBeTruthy();
+    expect(screen.getByText('1 of 2 done', { exact: false, selector: 'span' })).toBeTruthy();
+  });
+
+  it('shows the un-tick immediately and locks the box while saving', async () => {
+    const p = goals() as ReturnType<typeof goals> & { progress: Record<string, unknown>; items: unknown[] };
+    p.progress.g1 = { value: 0, done: true, target: null, doneOn: '2026-11-16' };
+    setup(p);
+    let release = () => {};
+    vi.mocked(api.putDayProgress).mockReturnValue(new Promise((r) => { release = () => r(p as never); }));
+    const box = (await screen.findByLabelText(/Goal one/)) as HTMLInputElement;
+    fireEvent.click(box);
+    await act(async () => {});
+    expect(box.checked).toBe(false);
+    expect(box.disabled).toBe(true);
+    expect(api.putDayProgress).toHaveBeenCalledTimes(1);
+    await act(async () => { release(); });
   });
 
   it('weekend: no days left', async () => {
