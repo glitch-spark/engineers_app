@@ -19,8 +19,8 @@ interface FollowUp {
 /** Archived items stay on days that have a result for them (the server rebuilds results from the body). */
 const kept = (i: DayItem) => !i.archived || i.result !== null;
 
-/** Done for a count/hours item: reached the target, or anything above 0 when there is none. */
-const reached = (value: number | null, target: number | null) => (value ?? 0) >= (target ?? 0) && (value ?? 0) > 0;
+/** Bid Track counts bidder bids from this day on (backend plan_bidder.RELEASE_DAY); earlier days keep the typed number. */
+const BIDDER_AUTO_FROM = '2026-11-18';
 
 /** Follow up a day: bids done, ticks on the daily goal lines, notes.
  *  The goal comes from the weekly plan and isn't edited here. */
@@ -84,7 +84,7 @@ export default function DayPanel({
 
   const save = async () => {
     if (!form) return;
-    const nothingDone = !form.done.bidsSelf && !data?.bidsBidderAuto && !form.notes.trim()
+    const nothingDone = !form.done.bidsSelf && !bidder && !form.notes.trim()
       && !Object.values(form.results).some((r) => r.done || (r.value ?? 0) > 0);
     if (nothingDone
       && !window.confirm('Post the follow-up with no bids, ticks or notes? It goes to the team Slack channel.')) return;
@@ -94,8 +94,13 @@ export default function DayPanel({
       // Entering a value (or ticking) on a weekly goal today puts it in focus.
       const touched = items.filter((i) => i.scope === 'goal' && !i.archived && (form.results[i.id]?.done || (form.results[i.id]?.value ?? 0) > 0)).map((i) => i.id);
       const { bidsBidder: _auto, ...bids } = bidsOf(form.done, data?.profiles);
+      // Checks send done; counts / hours send their value only (the server decides done at the frozen target).
+      const results = Object.fromEntries(items.map((i) => {
+        const r = form.results[i.id] ?? { done: false, value: null };
+        return [i.id, i.kind === 'check' ? { done: r.done } : { value: r.value }];
+      }));
       await api.putDayPlan(date, {
-        results: form.results,
+        results,
         focus: [...new Set([...(data?.focus ?? []), ...touched])],
         done: bids,
         notes: form.notes,
@@ -142,6 +147,7 @@ export default function DayPanel({
   );
 
   const items = data?.items.filter(kept) ?? [];
+  const bidder = date < BIDDER_AUTO_FROM ? data?.done.bidsBidder : data?.bidsBidderAuto;
   const hasGoal = !!data && (data.targets.bidsSelf + data.targets.bidsBidder > 0 || items.length > 0);
 
   return (
@@ -184,7 +190,7 @@ export default function DayPanel({
           <GoalDoneFields
             goal={form.override ?? data.targets}
             onGoal={editable && form.override ? (override) => setForm({ ...form, override }) : undefined}
-            bidderAuto={data.bidsBidderAuto}
+            bidderAuto={bidder}
             done={{ ...form.done, interviewsSelf: data.interviews.self, interviewsCaller: data.interviews.caller }}
             onDone={editable ? (done) => setForm({ ...form, done }) : undefined}
             stages={data.interviews.stages}
@@ -263,6 +269,8 @@ function ItemRow({
 }) {
   const target = item.result?.target ?? item.target; // a saved day keeps the target it was frozen with
   const removed = item.archived ? <span className="ml-1 text-xs text-muted">(removed)</span> : null;
+  // The saved done (decided by the server), while the number is the saved one; a migrated tick may have no number.
+  const savedDone = !!item.result?.done && result.value === (item.result.value ?? null);
   const progress = week && (
     <span className="ml-auto text-xs tabular-nums text-muted">
       {item.kind === 'check' ? (week.done ? '✓ this week' : 'Not yet this week') : <>This week {week.value}{week.target ? ` / ${week.target}` : ''}</>}
@@ -298,10 +306,11 @@ function ItemRow({
         value={result.value ?? ''}
         onChange={(e) => {
           const value = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
-          onChange({ done: value !== null && reached(value, target), value });
+          onChange({ ...result, value });
         }}
       />
       {target ? <span className="text-xs tabular-nums text-muted">/ {target}</span> : null}
+      {savedDone && <span className="text-xs">{result.value === null ? '✅ done' : '✅'}</span>}
       {progress}
     </li>
   );

@@ -35,7 +35,9 @@ function setup(p: object, date = '2026-11-17') {
 
 describe('DayPanel', () => {
   it('shows items, number vs target, week progress and a read-only bidder', async () => {
-    setup(plan());
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-18T12:00:00'));
+    setup(plan({ date: '2026-11-18' }), '2026-11-18');
     expect(await screen.findByText('Check inbox')).toBeTruthy();
     expect((screen.getByLabelText('Outreach') as HTMLInputElement).value).toBe('31');
     expect(screen.getByText('/ 50')).toBeTruthy();
@@ -43,6 +45,27 @@ describe('DayPanel', () => {
     expect(screen.queryByLabelText(/bids bidder done/i)).toBeNull();
     expect(screen.getByText('7')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Post update' })).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('shows the typed bidder bids on days before Bid Track counted them', async () => {
+    setup(plan({ done: { ...c, bidsBidder: 9 } }));
+    await screen.findByText('Check inbox');
+    expect(screen.getByText('9')).toBeTruthy();
+    expect(screen.queryByText('7')).toBeNull();
+  });
+
+  it('shows a migrated ticked count as done: at its target, or done without a number', async () => {
+    setup(plan({ items: [
+      item({ id: 'm1', text: 'Send 50 emails', kind: 'count', target: 50, result: { done: true, value: 50, target: 50 } }),
+      item({ id: 'm2', text: 'Calls', kind: 'count', target: null, result: { done: true, value: null, target: null } }),
+    ] }));
+    expect((await screen.findByLabelText('Send 50 emails') as HTMLInputElement).value).toBe('50');
+    expect(screen.getByText('/ 50')).toBeTruthy();
+    expect(screen.getAllByText('✅')).toHaveLength(1);
+    expect(screen.getByText('✅ done')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Send 50 emails'), { target: { value: '40' } });
+    expect(screen.queryByText('✅')).toBeNull(); // the saved done no longer applies to an edited number
   });
 
   it('says "Update post" once submitted', async () => {
@@ -59,12 +82,8 @@ describe('DayPanel', () => {
     await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
     const [day, body] = vi.mocked(api.putDayPlan).mock.calls[0] as unknown as [string, Record<string, any>];
     expect(day).toBe('2026-11-17');
-    expect(body.results).toEqual({
-      r1: { done: false, value: null },
-      r2: { done: true, value: 50 },
-      g1: { done: false, value: 12 },
-      g2: { done: false, value: null },
-    });
+    // Counts / hours send their value only: the server decides done (at the frozen target).
+    expect(body.results).toEqual({ r1: { done: false }, r2: { value: 50 }, g1: { value: 12 }, g2: { done: false } });
     expect([...body.focus].sort()).toEqual(['g1', 'g2']);
     expect(body).not.toHaveProperty('targetOverride');
     expect(body.done).not.toHaveProperty('bidsBidder');
@@ -96,7 +115,7 @@ describe('DayPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
     await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
     const body = vi.mocked(api.putDayPlan).mock.calls[0][1] as unknown as Record<string, any>;
-    expect(body.results).toEqual({ a1: { done: true, value: 6 } });
+    expect(body.results).toEqual({ a1: { value: 6 } });
     expect(body.focus).toEqual(['g2']);
   });
 });

@@ -519,7 +519,7 @@ export type PlanItemIn = Omit<PlanItem, 'id'> & { id?: string };
 /** One day's result for an item; `target` is frozen when saved. */
 export interface ItemResult {
   done: boolean;
-  value: number;
+  value: number | null;
   target?: number | null;
 }
 
@@ -557,8 +557,6 @@ export interface DayPlan {
   items: DayItem[];
   progress: Record<string, ItemProgress>;
   focus: string[];
-  /** Set when the day has its own targets instead of the week's. */
-  targetOverride?: Counts | null;
   /** Typed bids + interviews from the Interviews page. */
   done: Counts;
   /** Bidder bids counted by the system (read-only). */
@@ -580,7 +578,8 @@ export interface DayPlan {
 
 /** A day's follow-up: results per item, bids done, notes (posts to Slack). */
 export interface DayPlanInput {
-  results: Record<string, { done: boolean; value: number | null }>;
+  /** Checks send `done`; counts / hours send `value` (the server decides their done). */
+  results: Record<string, { done?: boolean; value?: number | null }>;
   focus: string[];
   /** Bidder bids are counted by the server, never sent. */
   done: Omit<Bids, 'bidsBidder'>;
