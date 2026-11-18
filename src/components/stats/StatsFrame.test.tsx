@@ -252,6 +252,11 @@ describe('StatsFrame profiles', () => {
     expect(screen.getByText('No profile activity in this period.')).toBeTruthy();
   });
 
+  it('callers empty state', () => {
+    render(<StatsFrame view={pv({ tab: 'callers', everyone: { rowKind: 'caller', metric: 'passRate', rows: [] } })} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('No caller rounds in this period.')).toBeTruthy();
+  });
+
   it('lower-is-better headline below median is green', () => {
     const v = view();
     v.headline[0] = { ...v.headline[0], format: 'count', higherIsBetter: false, vsMedian: -0.3 };

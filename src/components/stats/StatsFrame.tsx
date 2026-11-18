@@ -112,6 +112,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
       <div className="panel p-4">
         <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {isProfiles(view) && view.everyone.metric === 'per100' ? 'interviews per 100 bids by profile' : METRIC_LABEL[view.everyone.metric] ?? view.everyone.metric}{anyRanked ? ', ranked' : ''}</span></h3>
         {rows.length === 0 && isProfiles(view) && <p className="mt-2 text-sm text-muted">No profile activity in this period.</p>}
+        {rows.length === 0 && view.everyone.rowKind === 'caller' && <p className="mt-2 text-sm text-muted">No caller rounds in this period.</p>}
         <div className="mt-2 space-y-0.5">
           {rows.map((r) => (
             <div key={r.userId} data-testid={`everyone-${r.userId}`} data-subject={r.isSubject}
