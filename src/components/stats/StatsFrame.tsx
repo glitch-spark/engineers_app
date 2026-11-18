@@ -22,6 +22,7 @@ const withUnit = (v: number | null, format: StatsHeadline['format']) => (
   <>{num(v, format)}{format === 'per100' && v != null && <span className="text-sm font-normal text-muted"> per 100 bids</span>}</>
 );
 const METRIC_LABEL: Record<string, string> = { bids: 'bids', per100: 'interviews per 100 bids' };
+const isProfiles = (v: StatsView) => v.everyone.rowKind === 'profile';
 
 const pctAbs = (v: number) => `${Math.round(Math.abs(v) * 100)}%`;
 const signed = (v: number) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${pctAbs(v)}`;
@@ -107,15 +108,16 @@ export default function StatsFrame({ view, canPick, onPick }: {
       </div>
 
       <div className="panel p-4">
-        <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {METRIC_LABEL[view.everyone.metric] ?? view.everyone.metric}{anyRanked ? ', ranked' : ''}</span></h3>
+        <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {isProfiles(view) && view.everyone.metric === 'per100' ? 'interviews per 100 bids by profile' : METRIC_LABEL[view.everyone.metric] ?? view.everyone.metric}{anyRanked ? ', ranked' : ''}</span></h3>
+        {rows.length === 0 && isProfiles(view) && <p className="mt-2 text-sm text-muted">No profiles yet.</p>}
         <div className="mt-2 space-y-0.5">
           {rows.map((r) => (
             <div key={r.userId} data-testid={`everyone-${r.userId}`} data-subject={r.isSubject}
               className={`grid grid-cols-[28px_120px_1fr_110px_60px] items-center gap-2 rounded px-1 py-0.5 text-sm ${r.isSubject ? 'bg-blue-500/10 font-semibold' : ''}`}>
               <span>{r.rank ?? ''}</span>
-              {canPick
+              {canPick && !isProfiles(view)
                 ? <button type="button" className="truncate text-left hover:underline" onClick={() => onPick(r.userId)}>{r.name}</button>
-                : <span className="truncate">{r.name}</span>}
+                : <span className="truncate">{r.name}{r.region && <span className="ml-1.5 text-xs font-normal text-muted">{r.region}</span>}</span>}
               {r.value == null
                 ? <span />
                 : <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${p}`).join(' · ')}
@@ -132,21 +134,23 @@ export default function StatsFrame({ view, canPick, onPick }: {
         </div>
       </div>
 
-      <div className="panel p-4">
-        <h3 className="font-semibold">Trend <span className="text-xs font-normal text-muted">· {view.trend.unit === 'day' ? 'Daily' : 'Weekly'}, you vs team median</span></h3>
-        <div className="mt-2 h-40">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={view.trend.buckets}>
-              <CartesianGrid stroke={chart.grid} vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: chart.axis, fontSize: 10 }} />
-              <YAxis tick={{ fill: chart.axis, fontSize: 10 }} width={36} />
-              <Tooltip contentStyle={{ background: chart.tooltipBg, borderColor: chart.tooltipBorder, color: chart.tooltipText }} />
-              <Line type="monotone" dataKey="median" name="Team median" stroke={colors.other} strokeWidth={2} strokeDasharray="5 4" dot={false} />
-              <Line type="monotone" dataKey="you" name="You" stroke={colors.me} strokeWidth={2.5} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+      {view.trend && (
+        <div className="panel p-4">
+          <h3 className="font-semibold">Trend <span className="text-xs font-normal text-muted">· {view.trend.unit === 'day' ? 'Daily' : 'Weekly'}, you vs team median</span></h3>
+          <div className="mt-2 h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={view.trend.buckets}>
+                <CartesianGrid stroke={chart.grid} vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: chart.axis, fontSize: 10 }} />
+                <YAxis tick={{ fill: chart.axis, fontSize: 10 }} width={36} />
+                <Tooltip contentStyle={{ background: chart.tooltipBg, borderColor: chart.tooltipBorder, color: chart.tooltipText }} />
+                <Line type="monotone" dataKey="median" name="Team median" stroke={colors.other} strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                <Line type="monotone" dataKey="you" name="You" stroke={colors.me} strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-      </div>
+      )}
 
       <details className="panel p-4 text-sm">
         <summary className="cursor-pointer font-semibold">How these are counted</summary>

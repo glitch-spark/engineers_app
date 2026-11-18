@@ -26,7 +26,7 @@ const view = (o: Partial<StatsView> = {}): StatsView => ({
     { id: 'a', severity: 'bad', text: 'Self bids are low', detail: 'Self 214 vs 370', evidence: {} },
     { id: 'b', severity: 'good', text: 'Bidder bids up', detail: '', evidence: {} },
   ],
-  everyone: { metric: 'bids', rows: [
+  everyone: { rowKind: 'person', metric: 'bids', rows: [
     { userId: 'u1', name: 'Justin', value: 789, vsMedian: 0.22, rank: 1, parts: { self: 400, bidder: 389 }, isSubject: false },
     { userId: 'u7', name: 'Michael', value: 519, vsMedian: -0.2, rank: 7, parts: { self: 214, bidder: 305 }, isSubject: true },
   ] },
@@ -107,7 +107,7 @@ describe('StatsFrame', () => {
 
   it('empty team (n = 0, null stats) renders without crashing', () => {
     const nul = { median: null, p25: null, p75: null, min: null, max: null, n: 0 };
-    const v = view({ tips: [], everyone: { metric: 'bids', rows: [] } });
+    const v = view({ tips: [], everyone: { rowKind: 'person', metric: 'bids', rows: [] } });
     v.headline[0] = { ...v.headline[0], value: 0, team: nul, rank: 1, of: 1, vsMedian: null };
     v.headline[2] = { ...v.headline[2], team: nul };
     render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
@@ -136,7 +136,7 @@ describe('StatsFrame', () => {
 
   it('per100 and pct formats', () => {
     const t = { ...team, median: 2.5 };
-    const v = view({ tab: 'interviews', everyone: { metric: 'per100', rows: [] } });
+    const v = view({ tab: 'interviews', everyone: { rowKind: 'person', metric: 'per100', rows: [] } });
     v.headline = [
       extra({ key: 'per100', label: 'Interviews per 100 bids', value: 3.2, format: 'per100', team: t }),
       extra({ key: 'reach', label: 'Reached tech', value: 0.256, format: 'pct' }),
@@ -149,7 +149,7 @@ describe('StatsFrame', () => {
   });
 
   it('null value shows — and everyone marks unranked rows', () => {
-    const v = view({ everyone: { metric: 'per100', rows: [
+    const v = view({ everyone: { rowKind: 'person', metric: 'per100', rows: [
       { userId: 'a', name: 'Ann', value: 4.1, vsMedian: null, rank: null, parts: {}, isSubject: false },
       { userId: 'b', name: 'Bob', value: null, vsMedian: null, rank: null, parts: {}, isSubject: false },
     ] } });
@@ -166,7 +166,7 @@ describe('StatsFrame', () => {
       { key: 'per100', label: 'Interviews per 100 bids', value: 20, format: 'per100', team: { ...team, median: 4, n: 4 }, rank: null, of: 4, vsMedian: null, higherIsBetter: true, note: '2 interviews from 10 bids' },
       { key: 'rank', label: 'Your rank', value: null, format: 'rank', team: null, rank: null, of: 4, vsMedian: null, higherIsBetter: false, note: 'needs 30 bids' },
     ];
-    v.everyone = { metric: 'per100', rows: [
+    v.everyone = { rowKind: 'person', metric: 'per100', rows: [
       { userId: 'u1', name: 'Ana', value: 4, vsMedian: 0, rank: 1, parts: { self: 4, caller: 0 }, isSubject: false },
       { userId: 'u9', name: 'Low', value: 20, vsMedian: null, rank: null, parts: { self: 2, caller: 0 }, isSubject: true },
     ] };
@@ -209,5 +209,39 @@ describe('StatsFrame', () => {
     render(<StatsFrame view={interviews()} canPick={false} onPick={() => {}} />);
     const cell = screen.getByText('Team median').parentElement!;
     expect(cell.textContent).toContain('4.0 per 100 bids');
+  });
+});
+
+describe('StatsFrame profiles', () => {
+  const pv = (o: Partial<StatsView> = {}): StatsView => view({
+    tab: 'profiles',
+    everyone: { rowKind: 'profile', metric: 'per100', rows: [
+      { userId: 'p1', name: 'Acme Dev', region: 'EU', value: 4.2, vsMedian: 0.1, rank: 1, parts: { self: 20, bidder: 20 }, isSubject: false },
+    ] },
+    ...o,
+  });
+
+  it('profile rows are not clickable for admins and show a region tag', () => {
+    render(<StatsFrame view={pv()} canPick onPick={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Acme Dev' })).toBeNull();
+    expect(screen.getByText('EU')).toBeTruthy();
+    expect(screen.getByText(/interviews per 100 bids by profile/)).toBeTruthy();
+  });
+
+  it('null trend hides the trend card', () => {
+    render(<StatsFrame view={pv({ trend: null })} canPick={false} onPick={() => {}} />);
+    expect(screen.queryByText(/Trend/)).toBeNull();
+  });
+
+  it('profiles empty state', () => {
+    render(<StatsFrame view={pv({ everyone: { rowKind: 'profile', metric: 'per100', rows: [] } })} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('No profiles yet.')).toBeTruthy();
+  });
+
+  it('lower-is-better headline below median is green', () => {
+    const v = view();
+    v.headline[0] = { ...v.headline[0], format: 'count', higherIsBetter: false, vsMedian: -0.3 };
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('▼ 30% below median').className).toContain('text-green-600');
   });
 });

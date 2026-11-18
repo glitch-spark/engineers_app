@@ -7,9 +7,10 @@ import CallersTab from '../components/statistics/CallersTab';
 import BidsTab from '../components/statistics/BidsTab';
 import EarningsTab from '../components/statistics/EarningsTab';
 import InterviewsTab from '../components/statistics/InterviewsTab';
+import ProfilesTab from '../components/statistics/ProfilesTab';
 import ResumeCompareTab from '../components/statistics/ResumeCompareTab';
 
-const TAB_KEYS = ['bids', 'interviews', 'earnings', 'callers', 'resume-compare', 'ai-usage'];
+const TAB_KEYS = ['bids', 'interviews', 'profiles', 'earnings', 'callers', 'resume-compare', 'ai-usage'];
 
 /** Statistics: everyone's bids (self and bidder), interviews (self and caller) and how bids turn into interviews,
  * resumes compared side by side, each caller's pass rate, and AI usage. Every tab has the one sticky filter bar, and
@@ -31,6 +32,7 @@ export default function Statistics() {
   const tabs = [
     { key: 'bids', label: 'Bids' },
     { key: 'interviews', label: 'Interviews' },
+    { key: 'profiles', label: 'Profiles' },
     { key: 'callers', label: 'Callers' },
     { key: 'resume-compare', label: 'Resume compare' },
     { key: 'earnings', label: 'Earnings' },
@@ -42,6 +44,7 @@ export default function Statistics() {
       <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel="Statistics">
         {tab === 'bids' ? <BidsTab />
           : tab === 'interviews' ? <InterviewsTab />
+          : tab === 'profiles' ? <ProfilesTab />
           : tab === 'earnings' ? <EarningsTab />
           : tab === 'resume-compare' ? <ResumeCompareTab />
             : tab === 'callers' ? <CallersTab initialCaller={callerParam} />

@@ -3366,6 +3366,8 @@ export interface StatsTip { id: string; severity: 'bad' | 'watch' | 'good'; text
 export interface StatsEveryoneRow {
   userId: string;
   name: string;
+  /** Profile rows only; null when the profile has no region. */
+  region?: 'EU' | 'US' | 'Latam' | null;
   value: number | null;
   vsMedian: number | null;
   /** null = not ranked (too few bids). */
@@ -3380,13 +3382,13 @@ export interface StatsView {
   subject: { userId: string; name: string };
   headline: StatsHeadline[];
   tips: StatsTip[];
-  everyone: { metric: string; rows: StatsEveryoneRow[] };
-  trend: StatsTrend;
+  everyone: { rowKind: 'person' | 'profile'; metric: string; rows: StatsEveryoneRow[] };
+  trend: StatsTrend | null;
   notEnoughData: boolean;
   definitions: string[];
 }
 
 export const getStatsView = (
-  tab: 'bids' | 'interviews',
+  tab: 'bids' | 'interviews' | 'profiles',
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);

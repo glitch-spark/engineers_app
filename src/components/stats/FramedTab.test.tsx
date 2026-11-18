@@ -31,7 +31,7 @@ const view: StatsView = {
   tab: 'bids', label: 'Bids', subject: { userId: 'u7', name: 'Michael' },
   headline: [{ key: 'bids', label: 'Your bids', value: 519, format: 'count', team, rank: 7, of: 9, vsMedian: -0.2, higherIsBetter: true, note: 'n' }],
   tips: [{ id: 'a', severity: 'bad', text: 'Self bids are low', detail: '', evidence: {} }],
-  everyone: { metric: 'bids', rows: [
+  everyone: { rowKind: 'person', metric: 'bids', rows: [
     { userId: 'u1', name: 'Justin', value: 789, vsMedian: 0.22, rank: 1, parts: {}, isSubject: false },
     { userId: 'u7', name: 'Michael', value: 519, vsMedian: -0.2, rank: 7, parts: {}, isSubject: true },
   ] },
@@ -116,7 +116,7 @@ describe('FramedTab', () => {
 });
 
 describe('InterviewsTab', () => {
-  const iview: StatsView = { ...view, tab: 'interviews', label: 'Interviews', everyone: { metric: 'per100', rows: [] } };
+  const iview: StatsView = { ...view, tab: 'interviews', label: 'Interviews', everyone: { rowKind: 'person', metric: 'per100', rows: [] } };
 
   it('renders the frame from /stats/interviews', async () => {
     getStatsView.mockResolvedValue(iview);
