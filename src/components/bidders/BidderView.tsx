@@ -14,7 +14,6 @@ import RejectDialog from '../bids/RejectDialog';
 import { byFirstAt, reasonLabel } from '../bids/util';
 import BidderActions from './BidderActions';
 import BidderPerformanceLine from './BidderPerformanceLine';
-import BidsHelp from './BidsHelp';
 import DayPanel from './DayPanel';
 import DayRow from './DayRow';
 import HistoryTab from './HistoryTab';
@@ -215,7 +214,6 @@ export default function BidderView({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <WeekNav shown={week.shown} label={week.label} isCurrent={week.isCurrent} onChange={week.onChange} />
-          <BidsHelp />
         </div>
         {perfRequest && <BidderPerformanceLine bidderId={row.id} ownerId={row.ownerId} request={perfRequest} />}
       </section>

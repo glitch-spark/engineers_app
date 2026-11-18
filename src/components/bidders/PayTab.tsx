@@ -8,7 +8,6 @@ import { PAY_EMPTY, PAY_STATE, PAY_UNREADABLE, payPendingWarning, payWeekTitle }
 import { usd } from '../../lib/money';
 import { notify } from '../../lib/notify';
 import { ownerGroups, payCopyText } from '../../lib/payCopy';
-import BidsHelp from './BidsHelp';
 import { timeInZone } from './weekDates';
 
 function heading(week: api.PayWeekBlock, timezone: string): string {
@@ -106,7 +105,6 @@ export default function PayTab({ data, allOwners, onReview }: {
     <section className="space-y-4" aria-label="Pay">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">Pay = approved bids × the bidder&apos;s rate, per pay week.</p>
-        <BidsHelp />
       </div>
       {data.weeks.map((w) => (
         <WeekBlock key={w.weekEnd} week={w} timezone={data.timezone} allOwners={allOwners} onReview={onReview} />

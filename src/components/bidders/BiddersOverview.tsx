@@ -15,7 +15,6 @@ import Segmented from '../Segmented';
 import BiddersBand from './BiddersBand';
 import BiddersPerformanceTable from './BiddersPerformanceTable';
 import BiddersWeekTable from './BiddersWeekTable';
-import BidsHelp from './BidsHelp';
 import { PAY_POINTER } from '../../lib/bidsWords';
 
 const CARD_KEY = 'bidders.card.open';
@@ -94,7 +93,6 @@ export default function BiddersOverview({
     <section className="space-y-4" aria-label="Bidders">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented label="View" value={lens} options={LENS_OPTIONS} onChange={onLensChange} />
-        <BidsHelp />
       </div>
       {!request ? (
         <div className="panel p-4 text-sm text-muted">Pick a valid date range to see bidders.</div>

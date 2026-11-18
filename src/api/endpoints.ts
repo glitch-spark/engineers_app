@@ -254,14 +254,17 @@ export type BenchRegionTops = Partial<Record<TopRegion, {
   mostInterviews: { interviews: number; name: string; ownerName: string } | null;
   bestRate: { interviewsPerBid: number; bids: number; name: string; ownerName: string } | null;
 }>>;
+/** How long a flagged profile has gone without: days since its last interview / apply (else since it was created);
+ *  `capped` when the server's whole lookback is empty. Absent from an older server. */
+export type Idle = { idleDays?: number; capped?: boolean };
 /** A profile with no interview in the last 2 weeks, with its 2-week numbers. */
-export type ProfileAlert = {
+export type ProfileAlert = Idle & {
   accountId: string; name: string; bids: number; tailored: number; tailorScore: { avg: number | null; n: number };
 };
 /** The Profiles list banners (one owner's list): red = no interviews in 14 days, grey = no applies in 21 days. */
 export type ProfileAlerts = {
   asOf: string; noInterviews: ProfileAlert[]; allTailorScore: number | null;
-  noApplies: { accountId: string; name: string }[];
+  noApplies: (Idle & { accountId: string; name: string })[];
 };
 
 /** A from / to range, or `weeks: 'all'` for All time (said explicitly, so older servers don't fall back to 4 weeks). */

@@ -13,7 +13,6 @@ import BidderView from '../components/bidders/BidderView';
 import FocusReview, { type FocusScope } from '../components/bids/FocusReview';
 import BidderFormModal from '../components/bidders/BidderFormModal';
 import InviteDialog from '../components/bidders/InviteDialog';
-import BidsHelp from '../components/bidders/BidsHelp';
 import BiddersOverview from '../components/bidders/BiddersOverview';
 import NeedsAttention from '../components/bidders/NeedsAttention';
 import ToReviewBlock from '../components/bidders/ToReviewBlock';
@@ -459,13 +458,11 @@ export default function BiddersPage() {
           scopeSwitch={scopeSwitch}
         />
       )}
-      {/* On a bidder's page the title (and the tab's) is the bidder's name; its header has the help and the actions. */}
+      {/* On a bidder's page the title (and the tab's) is the bidder's name; its header has the actions. */}
       <PageHeader
         title={bidderId ? row?.name ?? 'Bids' : 'Bids'}
         action={bidderId ? undefined : (
           <div className="flex items-center gap-2">
-            {/* The Bidders and Pay tabs have it in their own header. */}
-            {section === 'mine' && <BidsHelp />}
             <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>
             {/* The Bid Track package the server ships (always the latest). */}
             <ActionMenu

@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ProfileAlerts as Alerts } from '../../api/endpoints';
-import { flagNumbers, flagSuggestion } from '../../lib/profileList';
+import { flagNumbers, flagSuggestion, idleText } from '../../lib/profileList';
 
 const SHOWN = 8;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -37,6 +37,7 @@ export default function ProfileAlerts({ alerts, warningsFor, onArchive }: Props)
               <li key={a.accountId} className="text-sm">
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <Link to={`/accounts/${a.accountId}`} className="font-medium hover:underline">{a.name || 'Unnamed'}</Link>
+                  {idleText(a) && <span className="text-xs font-medium">No interview for {idleText(a)}</span>}
                   <span className="text-xs opacity-80">{flagNumbers(a, alerts.allTailorScore)}</span>
                 </div>
                 <div className="flex flex-wrap items-baseline gap-x-3">
@@ -63,6 +64,7 @@ export default function ProfileAlerts({ alerts, warningsFor, onArchive }: Props)
             {grey.map((a) => (
               <li key={a.accountId} className="inline-flex items-center gap-2 rounded border border-black/10 px-2 py-1 text-sm dark:border-white/15">
                 <Link to={`/accounts/${a.accountId}`} className="hover:underline">{a.name || 'Unnamed'}</Link>
+                {idleText(a) && <span className="text-xs text-muted">no applies for {idleText(a)}</span>}
                 <button type="button" className="btn-outline btn-sm" onClick={() => onArchive(a.accountId, a.name)}>
                   Archive
                 </button>

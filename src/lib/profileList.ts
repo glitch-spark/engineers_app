@@ -2,7 +2,7 @@
 // (spec 2026-11-14-profiles-list-compare-design.md). Value imports carry `.ts`, so Node's test runner loads this
 // file as is (tests/profileList.test.mjs).
 import type {
-  BenchRegionTops, CompareStats, ProfileAlert, ProfileAlerts, RegionTops, ResumePrompt, SetupUnit, TopRegion,
+  BenchRegionTops, CompareStats, Idle, ProfileAlert, ProfileAlerts, RegionTops, ResumePrompt, SetupUnit, TopRegion,
 } from '../api/endpoints';
 import { conversionVerdict, passVerdict, tailorVerdict, type Verdict } from './profileAttention.ts';
 import { setupStrip, tailoringSetUp } from './profileSetup.ts';
@@ -164,6 +164,14 @@ const MIN_FLAG_BIDS = 30;
 /** The red banner's suggestion for a profile with no interview in 2 weeks: the first rule that matches (spec
  *  2026-11-14-profiles-flags-and-top-design.md). `setupWarnings`: the Setup column's, [] when the account isn't loaded;
  *  `allTailorScore`: the platform's 2-week tailor average, null while the server warms it up. */
+/** A flag's gap: "16 days" up to 20 days, then whole weeks; "over N weeks" past the lookback; null from an older server. */
+export function idleText(a: Idle): string | null {
+  if (a.idleDays == null) return null;
+  const weeks = Math.floor(a.idleDays / 7);
+  if (a.capped) return `over ${weeks} weeks`;
+  return a.idleDays < 21 ? `${a.idleDays} days` : `${weeks} weeks`;
+}
+
 export function flagSuggestion(a: ProfileAlert, allTailorScore: number | null, setupWarnings: string[]): string {
   if (a.bids < MIN_FLAG_BIDS) return 'Too few bids to get interviews: add bids or a bidder.';
   if (setupWarnings.length) return `Fix the setup: ${setupWarnings[0]}.`;
