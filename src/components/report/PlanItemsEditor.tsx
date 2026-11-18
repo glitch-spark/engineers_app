@@ -66,7 +66,7 @@ export default function PlanItemsEditor({
             }}
           />
           <select
-            className="input w-24"
+            className="input !w-24 shrink-0"
             value={item.kind}
             aria-label={`${label} item ${n + 1} kind`}
             onChange={(e) => {
@@ -84,7 +84,7 @@ export default function PlanItemsEditor({
                 type="number"
                 min={0}
                 step={item.kind === 'hours' ? 0.5 : 1}
-                className="input w-20"
+                className="input !w-20 shrink-0"
                 value={item.target ?? ''}
                 aria-label={`${label} item ${n + 1} target`}
                 onChange={(e) => update(index, { target: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
