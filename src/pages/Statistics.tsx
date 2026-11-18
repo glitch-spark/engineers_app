@@ -31,9 +31,9 @@ export default function Statistics() {
   const tabs = [
     { key: 'bids', label: 'Bids' },
     { key: 'interviews', label: 'Interviews' },
-    { key: 'earnings', label: 'Earnings' },
     { key: 'callers', label: 'Callers' },
     { key: 'resume-compare', label: 'Resume compare' },
+    { key: 'earnings', label: 'Earnings' },
     { key: 'ai-usage', label: 'AI usage' },
   ];
   return (

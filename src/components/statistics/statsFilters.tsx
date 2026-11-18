@@ -8,6 +8,8 @@ import {
   type DatePreset,
   type DateRange,
 } from '../../lib/dateRange';
+import { useAuth } from '../../auth/useAuth';
+import { teamMembersAZ, useTeamLookup } from '../../lib/useFirstTeamMember';
 import { regionOptions } from '../../lib/regions';
 import { useUrlFilters } from '../../lib/useUrlFilters';
 import DateRangeFilter, { resolveRange, type DateRangeValue } from '../filters/DateRangeFilter';
@@ -18,12 +20,12 @@ import Select from '../Select';
 /**
  * The Statistics filters, kept in the URL so they follow you from tab to tab (and survive a reload or a shared link):
  * `region` (the first four tabs), `range` / `from` / `to`, `q` (Resume compare's company search) and, on AI usage,
- * `users` / `features` / `models` (comma lists). Defaults are left out of the URL.
+ * `users` / `features` / `models` (comma lists) and `user` (an admin's Viewing choice on Bids; never cleared by Clear). Defaults are left out of the URL.
  */
-type StatsKey = 'region' | 'range' | 'from' | 'to' | 'q' | 'users' | 'features' | 'models';
+type StatsKey = 'region' | 'range' | 'from' | 'to' | 'q' | 'users' | 'features' | 'models' | 'user';
 
 const STATS_DEFAULTS: Record<StatsKey, string> = {
-  region: '', range: 'this_month', from: '', to: '', q: '', users: '', features: '', models: '',
+  region: '', range: 'this_month', from: '', to: '', q: '', users: '', features: '', models: '', user: '',
 };
 const DEFAULT_PRESET: DatePreset = 'this_month';
 
@@ -117,7 +119,9 @@ export function useStatsFilters(tab: StatsTab = 'stats'): StatsFilterState {
  * The one sticky bar of every Statistics tab: Region (not on AI usage), `before` (AI usage's Users / Features /
  * Models), the company search (Resume compare), the date range, `children` (a loading spinner), then Clear.
  */
-export function StatsFilterBar({ f, before, children }: { f: StatsFilterState; before?: ReactNode; children?: ReactNode }) {
+export function StatsFilterBar({ f, before, viewing, children }: {
+  f: StatsFilterState; before?: ReactNode; /** Offer admins the Viewing picker (tabs that show one person's view). */ viewing?: boolean; children?: ReactNode;
+}) {
   const regionId = useId();
   return (
     <FilterBar sticky canClear={f.canClear} onClear={f.clear}>
@@ -131,6 +135,7 @@ export function StatsFilterBar({ f, before, children }: { f: StatsFilterState; b
           />
         </FilterField>
       )}
+      {viewing && <ViewingField f={f} />}
       {before}
       {f.tab === 'resume' && (
         <SearchFilter value={f.values.q} onChange={(q) => f.patch({ q })} placeholder="Search companies…" />
@@ -144,5 +149,19 @@ export function StatsFilterBar({ f, before, children }: { f: StatsFilterState; b
       />
       {children}
     </FilterBar>
+  );
+}
+
+/** Admin-only "Viewing" picker: Me ('') or a team member; bound to the `user` URL key. */
+function ViewingField({ f }: { f: StatsFilterState }) {
+  const id = useId();
+  const isAdmin = useAuth().user?.role === 'admin';
+  const { data } = useTeamLookup(isAdmin);
+  if (!isAdmin) return null;
+  const options = [{ value: '', label: 'Me' }, ...teamMembersAZ(data?.users).map((u) => ({ value: u._id, label: u.name || u.email || u._id }))];
+  return (
+    <FilterField label="Viewing" htmlFor={id} width="w-44">
+      <Select id={id} value={f.values.user} onChange={(user) => f.patch({ user })} options={options} />
+    </FilterField>
   );
 }

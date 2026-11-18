@@ -93,6 +93,14 @@ describe('Clear', () => {
     expect(new URLSearchParams(seen.search).toString()).toBe('region=EU');
   });
 
+  it('leaves the Viewing choice (user) alone', () => {
+    const { result } = setup('?region=EU&user=u7');
+    act(() => result.current.clear());
+    expect(seen.search).toBe('?user=u7');
+    expect(setup('?user=u7').result.current.canClear).toBe(false);
+    expect(setup('').result.current.values.user).toBe('');
+  });
+
   it('is only offered when something differs from the default', () => {
     expect(setup('?users=a').result.current.canClear).toBe(false);
     expect(setup('?users=a', 'ai').result.current.canClear).toBe(true);
