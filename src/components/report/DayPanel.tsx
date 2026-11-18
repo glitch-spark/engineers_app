@@ -16,6 +16,9 @@ interface FollowUp {
   override: Counts | null;
 }
 
+/** Archived items stay on days that have a result for them (the server rebuilds results from the body). */
+const kept = (i: DayItem) => !i.archived || i.result !== null;
+
 /** Done for a count/hours item: reached the target, or anything above 0 when there is none. */
 const reached = (value: number | null, target: number | null) => (value ?? 0) >= (target ?? 0) && (value ?? 0) > 0;
 
@@ -62,7 +65,7 @@ export default function DayPanel({
       ? { ...listed, bidsSelfByProfile: formSelfBids(listed.bidsSelfByProfile ?? {}, data.trackedProfiles, data.selfOtherByProfile ?? {}) }
       : listed;
     const results = Object.fromEntries(
-      data.items.filter((i) => !i.archived).map((i) => [i.id, { done: i.result?.done ?? false, value: i.result?.value ?? null }]),
+      data.items.filter(kept).map((i) => [i.id, { done: i.result?.done ?? false, value: i.result?.value ?? null }]),
     );
     const next: FollowUp = { done, results, notes: data.notes, override: null };
     setForm(next);
@@ -89,7 +92,7 @@ export default function DayPanel({
     setSaveError(null);
     try {
       // Entering a value (or ticking) on a weekly goal today puts it in focus.
-      const touched = items.filter((i) => i.scope === 'goal' && (form.results[i.id]?.done || (form.results[i.id]?.value ?? 0) > 0)).map((i) => i.id);
+      const touched = items.filter((i) => i.scope === 'goal' && !i.archived && (form.results[i.id]?.done || (form.results[i.id]?.value ?? 0) > 0)).map((i) => i.id);
       const { bidsBidder: _auto, ...bids } = bidsOf(form.done, data?.profiles);
       await api.putDayPlan(date, {
         results: form.results,
@@ -138,7 +141,7 @@ export default function DayPanel({
     </>
   );
 
-  const items = data?.items.filter((i) => !i.archived) ?? [];
+  const items = data?.items.filter(kept) ?? [];
   const hasGoal = !!data && (data.targets.bidsSelf + data.targets.bidsBidder > 0 || items.length > 0);
 
   return (
@@ -204,7 +207,7 @@ export default function DayPanel({
                       item={item}
                       result={form.results[item.id] ?? { done: false, value: null }}
                       week={scope === 'goal' ? data.progress[item.id] : undefined}
-                      disabled={!editable}
+                      disabled={!editable || item.archived}
                       onChange={(r) => setForm({ ...form, results: { ...form.results, [item.id]: r } })}
                     />
                   ))}
@@ -254,14 +257,15 @@ function ItemRow({
   item: DayItem;
   result: { done: boolean; value: number | null };
   /** A weekly goal's progress so far this week. */
-  week?: { value: number; target: number | null };
+  week?: { value: number; done: boolean; target: number | null };
   disabled: boolean;
   onChange: (r: { done: boolean; value: number | null }) => void;
 }) {
   const target = item.result?.target ?? item.target; // a saved day keeps the target it was frozen with
+  const removed = item.archived ? <span className="ml-1 text-xs text-muted">(removed)</span> : null;
   const progress = week && (
     <span className="ml-auto text-xs tabular-nums text-muted">
-      This week {week.value}{week.target ? ` / ${week.target}` : ''}
+      {item.kind === 'check' ? (week.done ? '✓ this week' : 'Not yet this week') : <>This week {week.value}{week.target ? ` / ${week.target}` : ''}</>}
     </span>
   );
   if (item.kind === 'check') {
@@ -275,7 +279,7 @@ function ItemRow({
             checked={result.done}
             onChange={(e) => onChange({ done: e.target.checked, value: null })}
           />
-          {item.text}
+          {item.text}{removed}
           {progress}
         </label>
       </li>
@@ -283,7 +287,7 @@ function ItemRow({
   }
   return (
     <li className="flex items-center gap-2 text-sm text-body">
-      <span className="min-w-0 flex-1">{item.text}</span>
+      <span className="min-w-0 flex-1">{item.text}{removed}</span>
       <input
         aria-label={item.text}
         type="number"

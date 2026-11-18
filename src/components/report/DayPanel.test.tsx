@@ -87,4 +87,16 @@ describe('DayPanel', () => {
     expect(await screen.findByRole('button', { name: 'Post update' })).toBeTruthy();
     expect(await screen.findByRole('button', { name: /add a note/i })).toBeTruthy();
   });
+
+  it('resends an archived item that has a result, unchanged, read-only', async () => {
+    const old = item({ id: 'a1', text: 'Old routine', kind: 'count', target: 5, archived: true, result: { done: true, value: 6, target: 5 } });
+    setup(plan({ items: [old] }));
+    expect(await screen.findByText('(removed)')).toBeTruthy();
+    expect((screen.getByLabelText('Old routine') as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+    await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+    const body = vi.mocked(api.putDayPlan).mock.calls[0][1] as unknown as Record<string, any>;
+    expect(body.results).toEqual({ a1: { done: true, value: 6 } });
+    expect(body.focus).toEqual(['g2']);
+  });
 });
