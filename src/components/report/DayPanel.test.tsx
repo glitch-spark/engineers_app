@@ -62,10 +62,10 @@ describe('DayPanel', () => {
     ] }));
     expect((await screen.findByLabelText('Send 50 emails') as HTMLInputElement).value).toBe('50');
     expect(screen.getByText('/ 50')).toBeTruthy();
-    expect(screen.getAllByText('✅')).toHaveLength(1);
-    expect(screen.getByText('✅ done')).toBeTruthy();
+    expect((screen.getByLabelText('Send 50 emails done') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Calls done') as HTMLInputElement).checked).toBe(true);
     fireEvent.change(screen.getByLabelText('Send 50 emails'), { target: { value: '40' } });
-    expect(screen.queryByText('✅')).toBeNull(); // the saved done no longer applies to an edited number
+    expect((screen.getByLabelText('Send 50 emails done') as HTMLInputElement).checked).toBe(true); // an edit keeps the tick
   });
 
   it('says "Update post" once submitted', async () => {
@@ -82,8 +82,8 @@ describe('DayPanel', () => {
     await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
     const [day, body] = vi.mocked(api.putDayPlan).mock.calls[0] as unknown as [string, Record<string, any>];
     expect(day).toBe('2026-11-17');
-    // Counts / hours send their value only: the server decides done (at the frozen target).
-    expect(body.results).toEqual({ r1: { done: false }, r2: { value: 50 }, g1: { value: 12 }, g2: { done: false } });
+    // Counts / hours send done + value; typing the target ticks the row.
+    expect(body.results).toEqual({ r1: { done: false }, r2: { done: true, value: 50 }, g1: { done: false, value: 12 }, g2: { done: false } });
     expect([...body.focus].sort()).toEqual(['g1', 'g2']);
     expect(body).not.toHaveProperty('targetOverride');
     expect(body.done).not.toHaveProperty('bidsBidder');
@@ -115,7 +115,7 @@ describe('DayPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
     await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
     const body = vi.mocked(api.putDayPlan).mock.calls[0][1] as unknown as Record<string, any>;
-    expect(body.results).toEqual({ a1: { value: 6 } });
+    expect(body.results).toEqual({ a1: { done: true, value: 6 } });
     expect(body.focus).toEqual(['g2']);
   });
 });

@@ -92,10 +92,10 @@ export default function DayPanel({
       // Entering a value (or ticking) on a weekly goal today puts it in focus.
       const touched = items.filter((i) => i.scope === 'goal' && !i.archived && (form.results[i.id]?.done || (form.results[i.id]?.value ?? 0) > 0)).map((i) => i.id);
       const { bidsBidder: _auto, ...bids } = bidsOf(form.done, data?.profiles);
-      // Checks send done; counts / hours send their value only (the server decides done at the frozen target).
+      // Checks send done; counts / hours send done + value (the server also ticks them at the frozen target).
       const results = Object.fromEntries(items.map((i) => {
         const r = form.results[i.id] ?? { done: false, value: null };
-        return [i.id, i.kind === 'check' ? { done: r.done } : { value: r.value }];
+        return [i.id, i.kind === 'check' ? { done: r.done } : { done: r.done, value: r.value }];
       }));
       await api.putDayPlan(date, {
         results,

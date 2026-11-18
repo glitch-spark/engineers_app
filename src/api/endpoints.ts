@@ -527,6 +527,8 @@ export interface ItemProgress {
   value: number;
   done: boolean;
   target: number | null;
+  /** Day (YYYY-MM-DD) the item was marked done. */
+  doneOn?: string | null;
 }
 
 export type StageCounts = Record<string, number>;
