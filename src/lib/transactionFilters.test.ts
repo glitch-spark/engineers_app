@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALL_USERS,
+  netChartUser,
   TX_CLEAR_KEYS,
   TX_PRESETS,
   normalizeTxRange,
@@ -150,5 +152,21 @@ describe('Clear', () => {
   });
   it('follows the signed-in user as the default', () => {
     expect(txCanClear(parseTxValues(txUrlDefaults(''), ''), '')).toBe(false);
+  });
+});
+
+describe('whose 12-month net income chart', () => {
+  it('admin on All users: everyone', () => {
+    expect(netChartUser(ALL_USERS, 'me', true)).toEqual({ userId: 'all' });
+  });
+  it('admin on a person: that person', () => {
+    expect(netChartUser('u2', 'me', true)).toEqual({ userId: 'u2' });
+  });
+  it('admin on themselves: their own', () => {
+    expect(netChartUser('me', 'me', true)).toEqual({});
+  });
+  it('staff: always their own, whatever the filter', () => {
+    expect(netChartUser(ALL_USERS, 'me', false)).toEqual({});
+    expect(netChartUser('u2', 'me', false)).toEqual({});
   });
 });

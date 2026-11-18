@@ -79,7 +79,7 @@ export const statsList = (s: string): string[] => (s ? s.split(',') : []);
  * Reads the Statistics filters from the URL for one kind of tab. `clear` puts back only what that tab's bar shows
  * (other tabs' keys, like AI usage's multiselects, stay in the URL).
  */
-export function useStatsFilters(tab: StatsTab = 'stats', opts: { noRegion?: boolean } = {}): StatsFilterState {
+export function useStatsFilters(tab: StatsTab = 'stats'): StatsFilterState {
   const [values, patch] = useUrlFilters(STATS_DEFAULTS);
   const presets = tab === 'ai' ? AI_USAGE_PRESETS : STATS_PRESETS;
   const today = isoDay(new Date());
@@ -100,7 +100,7 @@ export function useStatsFilters(tab: StatsTab = 'stats', opts: { noRegion?: bool
 
   const canClear =
     value.preset !== DEFAULT_PRESET ||
-    (tab !== 'ai' && !opts.noRegion && region !== 'all') ||
+    (tab !== 'ai' && region !== 'all') ||
     (tab === 'resume' && values.q !== '') ||
     (tab === 'ai' && (values.users !== '' || values.features !== '' || values.models !== ''));
 
@@ -119,13 +119,13 @@ export function useStatsFilters(tab: StatsTab = 'stats', opts: { noRegion?: bool
  * The one sticky bar of every Statistics tab: Region (not on AI usage), `before` (AI usage's Users / Features /
  * Models), the company search (Resume compare), the date range, `children` (a loading spinner), then Clear.
  */
-export function StatsFilterBar({ f, before, noRegion, viewing, viewingSubject, children }: {
-  f: StatsFilterState; before?: ReactNode; /** Hide Region (Earnings has none; AI usage hides it via its tab). */ noRegion?: boolean; /** Offer admins the Viewing picker (tabs that show one person's view). */ viewing?: boolean; /** The loaded view's subject: keeps the Viewing picker showing someone the team lookup filters out. */ viewingSubject?: { userId: string; name: string }; children?: ReactNode;
+export function StatsFilterBar({ f, before, viewing, viewingSubject, children }: {
+  f: StatsFilterState; before?: ReactNode; /** Offer admins the Viewing picker (tabs that show one person's view). */ viewing?: boolean; /** The loaded view's subject: keeps the Viewing picker showing someone the team lookup filters out. */ viewingSubject?: { userId: string; name: string }; children?: ReactNode;
 }) {
   const regionId = useId();
   return (
     <FilterBar sticky canClear={f.canClear} onClear={f.clear}>
-      {f.tab !== 'ai' && !noRegion && (
+      {f.tab !== 'ai' && (
         <FilterField label="Region" htmlFor={regionId} width="w-36">
           <Select
             id={regionId}

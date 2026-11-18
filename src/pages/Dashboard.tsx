@@ -17,7 +17,7 @@ export default function DashboardPage() {
       <WeekCard />
       <MetricsCard />
       {user?.role === 'admin' && (
-        <TeamOverview onPick={(id) => navigate(`/statistics?tab=earnings&user=${encodeURIComponent(id)}`)} />
+        <TeamOverview onPick={(id) => navigate(`/transactions?user=${encodeURIComponent(id)}`)} />
       )}
     </div>
   );

@@ -135,7 +135,7 @@ describe('StatsFrame', () => {
   });
 
   it('usd format: no cents from $10, two decimals below, negative as -$300', () => {
-    const v = view({ tab: 'earnings', everyone: { rowKind: 'person', metric: 'net', rows: [
+    const v = view({ tab: 'ai-usage', everyone: { rowKind: 'person', metric: 'net', rows: [
       { userId: 'a', name: 'Ann', value: -300, vsMedian: null, rank: 1, parts: {}, isSubject: false },
       { userId: 'b', name: 'Bob', value: 0.42, vsMedian: null, rank: 2, parts: {}, isSubject: false },
     ] } });
@@ -166,7 +166,7 @@ describe('StatsFrame', () => {
       { userId: 'b', name: 'Bob', value: 0.4, vsMedian: null, rank: 1, parts: {}, isSubject: false },
       { userId: 'c', name: 'Cy', value: 0.2, vsMedian: null, rank: 2, parts: {}, isSubject: false },
     ];
-    const v = view({ tab: 'earnings', everyone: { rowKind: 'person', metric: 'net', rows } });
+    const v = view({ tab: 'ai-usage', everyone: { rowKind: 'person', metric: 'net', rows } });
     render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
     const w = (id: string) => (screen.getByTestId(`everyone-${id}`).querySelector('span.h-2\\.5') as HTMLElement).style.width;
     expect(w('a')).toBe('0%');

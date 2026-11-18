@@ -7,17 +7,17 @@ import { StatsFilterBar, useStatsFilters } from '../statistics/statsFilters';
 import StatsFrame from './StatsFrame';
 
 /** A Statistics tab that shows the you-vs-team frame (header, tips, everyone, trend). Admins can view a teammate via `user`. */
-export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'earnings' | 'ai-usage' }) {
+export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'ai-usage' }) {
   const ai = tab === 'ai-usage';
-  const f = useStatsFilters(ai ? 'ai' : 'stats', { noRegion: tab === 'earnings' });
+  const f = useStatsFilters(ai ? 'ai' : 'stats');
   const me = useAuth().user;
   const isAdmin = me?.role === 'admin';
   const user = isAdmin ? f.values.user : '';
   // AI usage's presets (Today, Yesterday, ...) all go to the frame as an explicit day range.
   const params = ai ? (f.range ? { ...toStatsParams('custom', f.range), region: f.region } : null)
-    : tab === 'earnings' && f.params ? { ...f.params, region: 'all' as const } : f.params; // Earnings has no region
+    : f.params;
   const { data, error, isLoading } = useSWR(
-    params ? ['stats', tab, params.period, params.date, params.to, ai || tab === 'earnings' ? '' : params.region, user] : null,
+    params ? ['stats', tab, params.period, params.date, params.to, ai ? '' : params.region, user] : null,
     () => api.getStatsView(tab, { ...params!, ...(user ? { user } : {}) }),
     { keepPreviousData: true },
   );
@@ -25,7 +25,7 @@ export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'earni
   const shown = params ? data : undefined;
   return (
     <div className="space-y-4">
-      <StatsFilterBar f={f} noRegion={tab === 'earnings'} viewing viewingSubject={shown?.subject}>
+      <StatsFilterBar f={f} viewing viewingSubject={shown?.subject}>
         {isLoading && shown && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
       </StatsFilterBar>
       {!params ? (

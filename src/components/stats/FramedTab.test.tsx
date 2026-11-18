@@ -115,36 +115,20 @@ describe('FramedTab', () => {
   });
 });
 
-describe('earnings and ai-usage frames', () => {
-  const showTab = (tab: 'earnings' | 'ai-usage', url: string) => render(
+describe('ai-usage frame', () => {
+  const showTab = (tab: 'ai-usage', url: string) => render(
     <SWRConfig value={{ provider: () => new Map() }}>
       <MemoryRouter initialEntries={[url]}><FramedTab tab={tab} /></MemoryRouter>
     </SWRConfig>,
   );
 
-  it('region hidden on earnings and ai usage, shown on bids', async () => {
-    showTab('earnings', '/statistics');
-    await screen.findByText('Self bids are low');
-    expect(screen.queryByLabelText('Region')).toBeNull();
-    cleanup();
+  it('region hidden on ai usage, shown on bids', async () => {
     showTab('ai-usage', '/statistics');
     await screen.findByText('Self bids are low');
     expect(screen.queryByLabelText('Region')).toBeNull();
     cleanup();
     show();
     expect(await screen.findByLabelText('Region')).toBeTruthy();
-  });
-
-  it('earnings ignores a carried-over region: not requested, no Clear', async () => {
-    showTab('earnings', '/statistics?region=EU');
-    await screen.findByText('Self bids are low');
-    expect(getStatsView).toHaveBeenCalledWith('earnings', expect.objectContaining({ region: 'all' }));
-    expect((screen.queryByRole('button', { name: 'Clear' }) as HTMLButtonElement | null)?.disabled ?? true).toBe(true);
-  });
-
-  it('earnings uses the standard presets (no Today)', async () => {
-    showTab('earnings', '/statistics');
-    await waitFor(() => expect(getStatsView).toHaveBeenCalledWith('earnings', expect.objectContaining({ period: 'month' })));
   });
 
   it('ai usage: today maps to a single-day custom range', async () => {

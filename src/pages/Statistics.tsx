@@ -5,14 +5,13 @@ import Tabs from '../components/Tabs';
 import AiUsageCard from '../components/statistics/AiUsageCard';
 import FramedTab from '../components/stats/FramedTab';
 import BidsTab from '../components/statistics/BidsTab';
-import EarningsTab from '../components/statistics/EarningsTab';
 import InterviewsTab from '../components/statistics/InterviewsTab';
 import ResumeCompareTab from '../components/statistics/ResumeCompareTab';
 
-const TAB_KEYS = ['bids', 'interviews', 'earnings', 'resume-compare', 'ai-usage'];
+const TAB_KEYS = ['bids', 'interviews', 'resume-compare', 'ai-usage'];
 
 /** Statistics: everyone's bids (self and bidder), interviews (self and caller) and how bids turn into interviews,
- * resumes compared side by side, earnings, and AI usage. Every tab has the one sticky filter bar, and
+ * resumes compared side by side, and AI usage. Every tab has the one sticky filter bar, and
  * its values (region, range, from, to, q, users, features, models) live in the URL, so switching tabs keeps them; AI
  * usage adds Today and Yesterday (down to the hour). */
 export default function Statistics() {
@@ -29,7 +28,6 @@ export default function Statistics() {
     { key: 'bids', label: 'Bids' },
     { key: 'interviews', label: 'Interviews' },
     { key: 'resume-compare', label: 'Resume compare' },
-    { key: 'earnings', label: 'Earnings' },
     { key: 'ai-usage', label: 'AI usage' },
   ];
   return (
@@ -38,7 +36,6 @@ export default function Statistics() {
       <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel="Statistics">
         {tab === 'bids' ? <BidsTab />
           : tab === 'interviews' ? <InterviewsTab />
-          : tab === 'earnings' ? <EarningsTab />
           : tab === 'resume-compare' ? <ResumeCompareTab />
             : <><FramedTab tab="ai-usage" /><AiUsageCard embedded /></>}
       </Tabs>

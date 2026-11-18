@@ -3312,6 +3312,6 @@ export interface StatsView {
 }
 
 export const getStatsView = (
-  tab: 'bids' | 'interviews' | 'earnings' | 'ai-usage',
+  tab: 'bids' | 'interviews' | 'ai-usage',
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);

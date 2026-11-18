@@ -20,10 +20,10 @@ function Probe() {
   return null;
 }
 
-function setup(initial: string, tab: StatsTab = 'stats', opts?: { noRegion?: boolean }) {
+function setup(initial: string, tab: StatsTab = 'stats') {
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(MemoryRouter, { initialEntries: [`/statistics${initial}`] }, createElement(Probe), children);
-  return renderHook(() => useStatsFilters(tab, opts), { wrapper });
+  return renderHook(() => useStatsFilters(tab), { wrapper });
 }
 
 describe('useStatsFilters requests', () => {
@@ -73,9 +73,8 @@ describe('useStatsFilters requests', () => {
 });
 
 describe('Clear', () => {
-  it('a carried-over region does not make Clear available on a tab that hides Region', () => {
-    expect(setup('?region=EU', 'stats', { noRegion: true }).result.current.canClear).toBe(false);
-    expect(setup('?region=EU&range=last_week', 'stats', { noRegion: true }).result.current.canClear).toBe(true);
+  it('a carried-over region does not make Clear available on AI usage (it hides Region)', () => {
+    expect(setup('?region=EU', 'ai').result.current.canClear).toBe(false);
   });
 
   it('on a report tab resets region and range but leaves AI usage and search keys alone', () => {
