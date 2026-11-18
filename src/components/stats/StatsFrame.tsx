@@ -90,7 +90,8 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const outside = t0 != null && view.headline[0].of === t0.n + 1;
   const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : view.everyone.metric === 'passRate' ? 'pct' : view.everyone.metric === 'net' || view.everyone.metric === 'cost' ? 'usd' : 'count';
   const mainFormat = view.headline[0]?.format ?? 'count';
-  const fmt = (n: number) => num(n, mainFormat);
+  // trend units differ per tab (pct headline, count trend), so only usd carries over to the trend
+  const fmt = (n: number) => num(n, mainFormat === 'usd' ? 'usd' : 'count');
   // scale to the largest positive value (a negative net draws no bar); epsilon only when nothing is positive
   const max = Math.max(1e-9, ...rows.filter((r) => r.rank != null).map((r) => r.value ?? 0));
   const anyRanked = rows.some((r) => r.rank != null);
