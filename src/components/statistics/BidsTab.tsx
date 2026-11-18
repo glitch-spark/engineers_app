@@ -8,7 +8,8 @@ import { StatsFilterBar, useStatsFilters } from './statsFilters';
 /** Statistics → Bids: you vs the team (header, tips, everyone, trend). Admins can view a teammate via `user`. */
 export default function BidsTab() {
   const f = useStatsFilters();
-  const isAdmin = useAuth().user?.role === 'admin';
+  const me = useAuth().user;
+  const isAdmin = me?.role === 'admin';
   const user = isAdmin ? f.values.user : '';
   const params = f.params;
   const { data, error, isLoading } = useSWR(
@@ -20,7 +21,7 @@ export default function BidsTab() {
   const shown = params ? data : undefined;
   return (
     <div className="space-y-4">
-      <StatsFilterBar f={f} viewing>
+      <StatsFilterBar f={f} viewing viewingSubject={shown?.subject}>
         {isLoading && shown && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
       </StatsFilterBar>
       {!params ? (
@@ -32,7 +33,14 @@ export default function BidsTab() {
           <span className="spinner spinner-sm" aria-hidden /> Loading statistics…
         </p>
       ) : !shown.headline ? <ServerUpdateNote />
-        : <StatsFrame view={shown} canPick={isAdmin} onPick={(id) => f.patch({ user: id })} />}
+        : (
+          <>
+            <p className="text-xs text-muted">
+              {shown.subject.userId !== me?.id ? `Viewing ${shown.subject.name} · ${shown.label}` : shown.label}
+            </p>
+            <StatsFrame view={shown} canPick={isAdmin} onPick={(id) => f.patch({ user: id })} />
+          </>
+        )}
     </div>
   );
 }

@@ -40,7 +40,7 @@ function Header({ headline }: { headline: StatsHeadline[] }) {
     <div className="panel p-4">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Cell label={main.label}><Big>{fmt(main)}</Big><Muted>{main.note}</Muted></Cell>
-        {main.team && <Cell label="Team median"><Big>{main.team.median.toLocaleString()}</Big><Muted>{main.team.n} people</Muted></Cell>}
+        {main.team && <Cell label="Team median"><Big>{main.team.median == null ? '—' : main.team.median.toLocaleString()}</Big><Muted>{main.team.n} people</Muted></Cell>}
         <Cell label={rank?.label ?? 'Your rank'}>
           {outside
             ? <Big><span className="text-base">would rank {main.rank} of {main.of}</span></Big>
@@ -51,7 +51,7 @@ function Header({ headline }: { headline: StatsHeadline[] }) {
         </Cell>
         {perDay && <Cell label={perDay.label}><Big>{fmt(perDay)}</Big><Muted>{perDay.note}</Muted></Cell>}
       </div>
-      {main.team && main.team.n >= 2 && <RangeBar team={main.team} value={main.value} />}
+      {main.team && main.team.n >= 2 && main.team.median != null && <RangeBar team={main.team} value={main.value} />}
     </div>
   );
 }
@@ -64,6 +64,8 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const colors = seriesColors(theme === 'dark');
   const rows = view.everyone.rows;
   const higherIsBetter = view.headline[0]?.higherIsBetter ?? true;
+  const t0 = view.headline[0]?.team;
+  const outside = t0 != null && view.headline[0].of === t0.n + 1;
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <div className="space-y-4">
@@ -74,7 +76,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
         {view.notEnoughData ? (
           <p className="mt-2 text-sm text-muted">Not enough data yet — check back after a few working days.</p>
         ) : view.tips.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">Nothing stands out — you're in line with the team.</p>
+          <p className="mt-2 text-sm text-muted">{outside ? 'No bids in this period.' : "Nothing stands out — you're in line with the team."}</p>
         ) : view.tips.map((t) => (
           <div key={t.id} className="flex gap-2.5 border-t border-zinc-200 py-2 first:border-t-0 dark:border-zinc-800">
             <span className={`mt-1.5 h-2 w-2 flex-none rounded-full ${SEV[t.severity]}`} aria-label={t.severity} />

@@ -3347,7 +3347,8 @@ export const reviewBids = (
 
 // ---------- statistics: you vs team (shared frame) ----------
 
-export interface StatsTeam { median: number; p25: number; p75: number; min: number; max: number; n: number }
+/** Every stat is null when the team is empty (n = 0). */
+export interface StatsTeam { median: number | null; p25: number | null; p75: number | null; min: number | null; max: number | null; n: number }
 export interface StatsHeadline {
   key: string;
   label: string;

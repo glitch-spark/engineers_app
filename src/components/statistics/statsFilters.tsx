@@ -119,8 +119,8 @@ export function useStatsFilters(tab: StatsTab = 'stats'): StatsFilterState {
  * The one sticky bar of every Statistics tab: Region (not on AI usage), `before` (AI usage's Users / Features /
  * Models), the company search (Resume compare), the date range, `children` (a loading spinner), then Clear.
  */
-export function StatsFilterBar({ f, before, viewing, children }: {
-  f: StatsFilterState; before?: ReactNode; /** Offer admins the Viewing picker (tabs that show one person's view). */ viewing?: boolean; children?: ReactNode;
+export function StatsFilterBar({ f, before, viewing, viewingSubject, children }: {
+  f: StatsFilterState; before?: ReactNode; /** Offer admins the Viewing picker (tabs that show one person's view). */ viewing?: boolean; /** The loaded view's subject: keeps the Viewing picker showing someone the team lookup filters out. */ viewingSubject?: { userId: string; name: string }; children?: ReactNode;
 }) {
   const regionId = useId();
   return (
@@ -135,7 +135,7 @@ export function StatsFilterBar({ f, before, viewing, children }: {
           />
         </FilterField>
       )}
-      {viewing && <ViewingField f={f} />}
+      {viewing && <ViewingField f={f} subject={viewingSubject} />}
       {before}
       {f.tab === 'resume' && (
         <SearchFilter value={f.values.q} onChange={(q) => f.patch({ q })} placeholder="Search companies…" />
@@ -153,12 +153,15 @@ export function StatsFilterBar({ f, before, viewing, children }: {
 }
 
 /** Admin-only "Viewing" picker: Me ('') or a team member; bound to the `user` URL key. */
-function ViewingField({ f }: { f: StatsFilterState }) {
+function ViewingField({ f, subject }: { f: StatsFilterState; subject?: { userId: string; name: string } }) {
   const id = useId();
   const isAdmin = useAuth().user?.role === 'admin';
   const { data } = useTeamLookup(isAdmin);
   if (!isAdmin) return null;
   const options = [{ value: '', label: 'Me' }, ...teamMembersAZ(data?.users).map((u) => ({ value: u._id, label: u.name || u.email || u._id }))];
+  if (f.values.user && !options.some((o) => o.value === f.values.user) && subject?.userId === f.values.user) {
+    options.push({ value: subject.userId, label: subject.name });
+  }
   return (
     <FilterField label="Viewing" htmlFor={id} width="w-44">
       <Select id={id} value={f.values.user} onChange={(user) => f.patch({ user })} options={options} />

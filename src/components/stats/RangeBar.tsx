@@ -1,7 +1,9 @@
 import type { StatsTeam } from '../../api/endpoints';
 
 /** Where the subject sits in the team's spread: min-max track, p25-p75 shaded, median tick, subject dot. */
-export default function RangeBar({ team, value }: { team: StatsTeam; value: number }) {
+export default function RangeBar({ team: t, value }: { team: StatsTeam; value: number }) {
+  if (t.median == null || t.p25 == null || t.p75 == null || t.min == null || t.max == null) return null;
+  const team = { median: t.median, p25: t.p25, p75: t.p75, min: t.min, max: t.max };
   const span = team.max - team.min;
   const at = (v: number) => (span > 0 ? Math.min(100, Math.max(0, ((v - team.min) / span) * 100)) : 50);
   // labels centred on their mark but kept inside the track

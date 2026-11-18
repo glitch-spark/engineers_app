@@ -15,7 +15,7 @@ vi.mock('recharts', async () => {
 });
 vi.mock('../../theme/ThemeProvider', () => ({ useTheme: () => ({ theme: 'light' }) }));
 let role = 'staff';
-vi.mock('../../auth/useAuth', () => ({ useAuth: () => ({ user: { role } }) }));
+vi.mock('../../auth/useAuth', () => ({ useAuth: () => ({ user: { role, id: 'me' } }) }));
 vi.mock('../../lib/useFirstTeamMember', async (orig) => ({
   ...(await orig<object>()),
   useTeamLookup: () => ({ data: { users: [{ _id: 'u1', name: 'Justin' }, { _id: 'u7', name: 'Michael' }] } }),
@@ -91,5 +91,24 @@ describe('BidsTab', () => {
     show();
     expect(screen.getByText('Loading statistics…')).toBeTruthy();
     expect(await screen.findByText(/Couldn’t load the statistics/)).toBeTruthy();
+  });
+
+  it('names who and when: Viewing {name} when the subject is not me, else just the label', async () => {
+    show();
+    expect(await screen.findByText('Viewing Michael · Bids')).toBeTruthy();
+    cleanup();
+    getStatsView.mockResolvedValue({ ...view, subject: { userId: 'me', name: 'Me' } });
+    show();
+    expect(await screen.findByText('Bids', { selector: 'p' })).toBeTruthy();
+    expect(screen.queryByText(/Viewing Me/)).toBeNull();
+  });
+
+  it('picker keeps a selected user the lookup filtered out', async () => {
+    role = 'admin';
+    getStatsView.mockResolvedValue({ ...view, subject: { userId: 'u9', name: 'Inactive Ian' } });
+    show('/statistics?user=u9');
+    const sel = (await screen.findByLabelText('Viewing')) as HTMLSelectElement;
+    await waitFor(() => expect([...sel.options].map((o) => o.text)).toContain('Inactive Ian'));
+    expect(sel.value).toBe('u9');
   });
 });

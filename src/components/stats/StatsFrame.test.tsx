@@ -104,4 +104,22 @@ describe('StatsFrame', () => {
     expect(screen.getByText('+12%').className).toContain('text-green');
     expect(screen.queryByText('median', { selector: 'span.text-xs' })).toBeNull();
   });
+
+  it('empty team (n = 0, null stats) renders without crashing', () => {
+    const nul = { median: null, p25: null, p75: null, min: null, max: null, n: 0 };
+    const v = view({ tips: [], everyone: { metric: 'bids', rows: [] } });
+    v.headline[0] = { ...v.headline[0], value: 0, team: nul, rank: 1, of: 1, vsMedian: null };
+    v.headline[2] = { ...v.headline[2], team: nul };
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('—')).toBeTruthy();
+    expect(screen.queryByLabelText('You versus team range')).toBeNull();
+  });
+
+  it('subject outside the team with no tips says no bids, not in line', () => {
+    const v = view({ tips: [] });
+    v.headline[0] = { ...v.headline[0], value: 0, of: 10, rank: 10 };
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('No bids in this period.')).toBeTruthy();
+    expect(screen.queryByText(/in line with the team/)).toBeNull();
+  });
 });
