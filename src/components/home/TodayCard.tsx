@@ -4,7 +4,7 @@ import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { todayInputValue } from '../../lib/week';
-import ItemRow from '../report/ItemRow';
+import ItemRow, { kept } from '../report/ItemRow';
 
 type Result = { done: boolean; value: number | null };
 const DEBOUNCE_MS = 800;
@@ -33,8 +33,15 @@ export default function TodayCard() {
 
   const [local, setLocal] = useState<Record<string, Result>>({}); // optimistic, until saved
   const [failed, setFailed] = useState<Record<string, Result>>({}); // last attempt per failed item, for Retry
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
+  const timers = useRef<Record<string, { t: ReturnType<typeof setTimeout>; r: Result }>>({});
+  // Leaving the page (e.g. to the Daily plan) must not lose a pending edit: send it now.
+  useEffect(() => () => {
+    for (const [id, { t, r }] of Object.entries(timers.current)) {
+      clearTimeout(t);
+      api.putDayProgress(today, { results: { [id]: r } }).catch(() => {});
+    }
+    timers.current = {};
+  }, [today]);
 
   if (!plan) return null;
 
@@ -47,13 +54,13 @@ export default function TodayCard() {
       if (!timers.current[id]) setLocal(({ [id]: _, ...rest }) => rest); // keep newer typing
     } catch {
       setFailed((f) => ({ ...f, [id]: r }));
-      setLocal(({ [id]: _, ...rest }) => rest); // back to the last saved result
+      if (!timers.current[id]) setLocal(({ [id]: _, ...rest }) => rest); // back to the last saved result
     }
   };
   const change = (id: string, r: Result) => {
     setLocal((l) => ({ ...l, [id]: r }));
-    clearTimeout(timers.current[id]);
-    timers.current[id] = setTimeout(() => save(id, r), DEBOUNCE_MS);
+    clearTimeout(timers.current[id]?.t);
+    timers.current[id] = { t: setTimeout(() => save(id, r), DEBOUNCE_MS), r };
   };
   const retry = (id: string) => {
     const r = failed[id];
@@ -71,7 +78,7 @@ export default function TodayCard() {
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
     .map((r) => `${clock(r.scheduledAt)} ${r.companyName ?? ''}`.trim())
     .join(' · ');
-  const rows = plan.items.filter((i) => i.scope === 'routine' || plan.focus.includes(i.id));
+  const rows = plan.items.filter((i) => kept(i) && (i.scope === 'routine' || plan.focus.includes(i.id)));
   const disabled = !plan.weekSaved;
   const late = !plan.submitted && afterSixChicago();
 
@@ -114,7 +121,7 @@ export default function TodayCard() {
               item={item}
               result={local[item.id] ?? { done: item.result?.done ?? false, value: item.result?.value ?? null }}
               week={item.scope === 'goal' ? plan.progress[item.id] : undefined}
-              disabled={disabled}
+              disabled={disabled || item.archived}
               onChange={(r) => change(item.id, r)}
             />
             {failed[item.id] && !local[item.id] && (

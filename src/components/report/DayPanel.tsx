@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import type { Counts, DayItem } from '../../api/endpoints';
+import type { Counts } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
 import { bidsOf, dateParam, dayLabel, isToday, parseDateParam, withListedProfiles } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import GoalDoneFields from './GoalDoneFields';
-import ItemRow from './ItemRow';
+import ItemRow, { kept } from './ItemRow';
 import { formSelfBids } from '../../lib/selfBids';
 
 interface FollowUp {
@@ -16,9 +16,6 @@ interface FollowUp {
   /** Set only by "change for today". */
   override: Counts | null;
 }
-
-/** Archived items stay on days that have a result for them (the server rebuilds results from the body). */
-const kept = (i: DayItem) => !i.archived || i.result !== null;
 
 /** Bid Track counts bidder bids from this day on (backend plan_bidder.RELEASE_DAY); earlier days keep the typed number. */
 const BIDDER_AUTO_FROM = '2026-11-16';

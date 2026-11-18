@@ -1,5 +1,8 @@
 import type { DayItem } from '../../api/endpoints';
 
+/** Archived items stay on days that have a result for them (the server rebuilds results from the body). */
+export const kept = (i: DayItem) => !i.archived || i.result !== null;
+
 export default function ItemRow({
   item, result, week, disabled, onChange,
 }: {

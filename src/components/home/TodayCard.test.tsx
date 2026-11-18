@@ -100,4 +100,21 @@ describe('TodayCard', () => {
     expect(await screen.findByText('✓ Posted')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Edit update' }).getAttribute('href')).toBe('/report?day=2026-11-18');
   });
+
+  it('keeps archived routines only with a result, and disables them', async () => {
+    setup(plan({ items: [
+      item({ id: 'a1', text: 'Old with result', archived: true, result: { done: false, value: null, target: null } }),
+      item({ id: 'a2', text: 'Old without result', archived: true }),
+    ] }));
+    expect(((await screen.findByLabelText(/Old with result/)) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByText('Old without result')).toBeNull();
+  });
+
+  it('flushes a pending edit on unmount', async () => {
+    setup(plan());
+    fireEvent.click(await screen.findByLabelText('Bidder Management'));
+    cleanup();
+    expect(api.putDayProgress).toHaveBeenCalledTimes(1);
+    expect(api.putDayProgress).toHaveBeenCalledWith('2026-11-18', { results: { r1: { done: true, value: null } } });
+  });
 });
