@@ -1,19 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import type { ChecklistItem, Counts } from '../../api/endpoints';
+import type { Counts, DayItem } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
 import { bidsOf, dateParam, dayLabel, isToday, parseDateParam, withListedProfiles } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
-import ChecklistEditor, { cleanItems } from './ChecklistEditor';
 import GoalDoneFields from './GoalDoneFields';
 import { formSelfBids } from '../../lib/selfBids';
 
 interface FollowUp {
   done: Counts;
-  goalItems: ChecklistItem[];
+  results: Record<string, { done: boolean; value: number | null }>;
   notes: string;
+  /** Set only by "change for today". */
+  override: Counts | null;
 }
+
+/** Archived items stay on days that have a result for them (the server rebuilds results from the body). */
+const kept = (i: DayItem) => !i.archived || i.result !== null;
+
+/** Bid Track counts bidder bids from this day on (backend plan_bidder.RELEASE_DAY); earlier days keep the typed number. */
+const BIDDER_AUTO_FROM = '2026-11-18';
 
 /** Follow up a day: bids done, ticks on the daily goal lines, notes.
  *  The goal comes from the weekly plan and isn't edited here. */
@@ -57,7 +64,10 @@ export default function DayPanel({
     const done = data.trackedProfiles?.length
       ? { ...listed, bidsSelfByProfile: formSelfBids(listed.bidsSelfByProfile ?? {}, data.trackedProfiles, data.selfOtherByProfile ?? {}) }
       : listed;
-    const next: FollowUp = { done, goalItems: data.goalItems, notes: data.notes };
+    const results = Object.fromEntries(
+      data.items.filter(kept).map((i) => [i.id, { done: i.result?.done ?? false, value: i.result?.value ?? null }]),
+    );
+    const next: FollowUp = { done, results, notes: data.notes, override: null };
     setForm(next);
     setInitial(JSON.stringify(next));
     setNotesOpen(!!data.notes);
@@ -74,17 +84,27 @@ export default function DayPanel({
 
   const save = async () => {
     if (!form) return;
-    const nothingDone = !form.done.bidsSelf && !form.done.bidsBidder && !form.notes.trim()
-      && !form.goalItems.some((i) => i.done);
+    const nothingDone = !form.done.bidsSelf && !bidder && !form.notes.trim()
+      && !Object.values(form.results).some((r) => r.done || (r.value ?? 0) > 0);
     if (nothingDone
       && !window.confirm('Post the follow-up with no bids, ticks or notes? It goes to the team Slack channel.')) return;
     setSaving(true);
     setSaveError(null);
     try {
+      // Entering a value (or ticking) on a weekly goal today puts it in focus.
+      const touched = items.filter((i) => i.scope === 'goal' && !i.archived && (form.results[i.id]?.done || (form.results[i.id]?.value ?? 0) > 0)).map((i) => i.id);
+      const { bidsBidder: _auto, ...bids } = bidsOf(form.done, data?.profiles);
+      // Checks send done; counts / hours send their value only (the server decides done at the frozen target).
+      const results = Object.fromEntries(items.map((i) => {
+        const r = form.results[i.id] ?? { done: false, value: null };
+        return [i.id, i.kind === 'check' ? { done: r.done } : { value: r.value }];
+      }));
       await api.putDayPlan(date, {
-        goalItems: cleanItems(form.goalItems),
-        done: bidsOf(form.done, data?.profiles),
+        results,
+        focus: [...new Set([...(data?.focus ?? []), ...touched])],
+        done: bids,
         notes: form.notes,
+        ...(form.override ? { targetOverride: form.override } : {}),
       });
       await mutate();
       onSaved();
@@ -121,12 +141,14 @@ export default function DayPanel({
       )}
       <button type="button" className="btn-outline text-sm" onClick={onClose}>Cancel</button>
       <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form}>
-        {saving ? 'Saving…' : 'Save follow-up'}
+        {saving ? 'Saving…' : data?.submitted ? 'Update post' : 'Post update'}
       </button>
     </>
   );
 
-  const hasGoal = !!data && (data.goal.bidsSelf + data.goal.bidsBidder > 0 || data.goalItems.length > 0);
+  const items = data?.items.filter(kept) ?? [];
+  const bidder = date < BIDDER_AUTO_FROM ? data?.done.bidsBidder : data?.bidsBidderAuto;
+  const hasGoal = !!data && (data.targets.bidsSelf + data.targets.bidsBidder > 0 || items.length > 0);
 
   return (
     <SidePanel
@@ -156,8 +178,19 @@ export default function DayPanel({
               No daily goal for this week yet — set it in the week&apos;s goals.
             </p>
           )}
+          {editable && canFollowUp && (
+            <button
+              type="button"
+              className="text-sm font-medium text-accent-700 underline-offset-2 hover:underline dark:text-accent-300"
+              onClick={() => setForm({ ...form, override: form.override ? null : data.targets })}
+            >
+              {form.override ? "Use the week's targets" : 'Change for today'}
+            </button>
+          )}
           <GoalDoneFields
-            goal={data.goal}
+            goal={form.override ?? data.targets}
+            onGoal={editable && form.override ? (override) => setForm({ ...form, override }) : undefined}
+            bidderAuto={bidder}
             done={{ ...form.done, interviewsSelf: data.interviews.self, interviewsCaller: data.interviews.caller }}
             onDone={editable ? (done) => setForm({ ...form, done }) : undefined}
             stages={data.interviews.stages}
@@ -168,35 +201,26 @@ export default function DayPanel({
             readOnly={!editable}
           />
 
-          {form.goalItems.length > 0 && (
-            <section>
-              <h3 className="form-label mb-1">Daily goal lines</h3>
-              {editable ? (
+          {(['routine', 'goal'] as const).map((scope) => {
+            const rows = items.filter((i) => i.scope === scope);
+            return rows.length > 0 && (
+              <section key={scope}>
+                <h3 className="form-label mb-1">{scope === 'routine' ? 'Routines' : 'Weekly goals'}</h3>
                 <ul className="space-y-1.5">
-                  {form.goalItems.map((item, i) => (
-                    <li key={i}>
-                      <label className="flex items-center gap-2 text-sm text-body">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={item.done}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              goalItems: form.goalItems.map((g, j) => (j === i ? { ...g, done: e.target.checked } : g)),
-                            })
-                          }
-                        />
-                        {item.text}
-                      </label>
-                    </li>
+                  {rows.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      result={form.results[item.id] ?? { done: false, value: null }}
+                      week={scope === 'goal' ? data.progress[item.id] : undefined}
+                      disabled={!editable || item.archived}
+                      onChange={(r) => setForm({ ...form, results: { ...form.results, [item.id]: r } })}
+                    />
                   ))}
                 </ul>
-              ) : (
-                <ChecklistEditor items={form.goalItems} readOnly />
-              )}
-            </section>
-          )}
+              </section>
+            );
+          })}
 
           {canFollowUp && editable && !notesOpen && (
             <button
@@ -230,5 +254,64 @@ export default function DayPanel({
         </div>
       ) : null}
     </SidePanel>
+  );
+}
+
+function ItemRow({
+  item, result, week, disabled, onChange,
+}: {
+  item: DayItem;
+  result: { done: boolean; value: number | null };
+  /** A weekly goal's progress so far this week. */
+  week?: { value: number; done: boolean; target: number | null };
+  disabled: boolean;
+  onChange: (r: { done: boolean; value: number | null }) => void;
+}) {
+  const target = item.result?.target ?? item.target; // a saved day keeps the target it was frozen with
+  const removed = item.archived ? <span className="ml-1 text-xs text-muted">(removed)</span> : null;
+  // The saved done (decided by the server), while the number is the saved one; a migrated tick may have no number.
+  const savedDone = !!item.result?.done && result.value === (item.result.value ?? null);
+  const progress = week && (
+    <span className="ml-auto text-xs tabular-nums text-muted">
+      {item.kind === 'check' ? (week.done ? '✓ this week' : 'Not yet this week') : <>This week {week.value}{week.target ? ` / ${week.target}` : ''}</>}
+    </span>
+  );
+  if (item.kind === 'check') {
+    return (
+      <li>
+        <label className="flex items-center gap-2 text-sm text-body">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            disabled={disabled}
+            checked={result.done}
+            onChange={(e) => onChange({ done: e.target.checked, value: null })}
+          />
+          {item.text}{removed}
+          {progress}
+        </label>
+      </li>
+    );
+  }
+  return (
+    <li className="flex items-center gap-2 text-sm text-body">
+      <span className="min-w-0 flex-1">{item.text}{removed}</span>
+      <input
+        aria-label={item.text}
+        type="number"
+        min={0}
+        step={item.kind === 'hours' ? 'any' : 1}
+        className="input w-24 text-right tabular-nums"
+        disabled={disabled}
+        value={result.value ?? ''}
+        onChange={(e) => {
+          const value = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
+          onChange({ ...result, value });
+        }}
+      />
+      {target ? <span className="text-xs tabular-nums text-muted">/ {target}</span> : null}
+      {savedDone && <span className="text-xs">{result.value === null ? '✅ done' : '✅'}</span>}
+      {progress}
+    </li>
   );
 }

@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, Target } from 'lucide-react';
-import type { WeekPlan } from '../../api/endpoints';
+import type { PlanItem, WeekPlan } from '../../api/endpoints';
 import { preSplitSelf, selfRegionsTotal, SELF_REGIONS } from '../../lib/reportWeek';
 import ProgressMetric from './ProgressMetric';
 
@@ -14,10 +14,12 @@ export default function WeekGoalCard({
   onOpen: () => void;
 }) {
   const { goal, done } = week;
-  const ticked = week.goalItems.filter((i) => i.done).length;
+  const routines = week.routines.filter((i) => !i.archived);
+  const goals = week.weeklyGoals.filter((i) => !i.archived);
   const bySelfRegion = selfRegionsTotal(goal) + selfRegionsTotal(done) > 0;
   const hasGoal =
-    goal.bidsSelf + goal.bidsBidder + goal.interviewsSelf + goal.interviewsCaller > 0 || week.goalItems.length > 0;
+    goal.bidsSelf + goal.bidsBidder + goal.interviewsSelf + goal.interviewsCaller > 0 || routines.length > 0 || goals.length > 0;
+  const unit = (i: PlanItem) => (i.kind === 'hours' ? 'h' : '');
 
   return (
     <section className="panel flex h-full flex-col p-4" aria-labelledby="week-goal-card-title">
@@ -27,27 +29,34 @@ export default function WeekGoalCard({
             <Target size={18} aria-hidden />
           </span>
           <div>
-            <h2 id="week-goal-card-title" className="card-title">Week goal</h2>
-            <p className="text-xs text-muted">Set once for the week · Done adds up automatically</p>
+            <h2 id="week-goal-card-title" className="card-title">Week plan</h2>
+            <p className="text-xs text-muted">Targets, routines and goals · Done adds up automatically</p>
           </div>
         </div>
         <button type="button" className="btn-outline shrink-0 text-sm" onClick={onOpen}>
-          {canEdit ? (week.exists ? 'Edit goals' : 'Set goals') : 'View'}
+          {canEdit ? (week.exists ? 'Edit plan' : 'Set plan') : 'View'}
         </button>
       </header>
 
+      {week.draft && (
+        <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200" role="status">
+          Copied from last week — save to keep
+        </p>
+      )}
+
       {!hasGoal ? (
         <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-zinc-200 px-4 py-6 text-center dark:border-zinc-800">
-          <p className="text-sm font-medium text-strong">No week goal yet</p>
+          <p className="text-sm font-medium text-strong">No week plan yet</p>
           <p className="mt-1 text-xs text-muted">
-            {canEdit ? 'Set your bids and interviews for the week to track progress here.' : 'This teammate has not set a week goal.'}
+            {canEdit ? 'Set your bids and interviews for the week to track progress here.' : 'This teammate has not set a week plan.'}
           </p>
           {canEdit && (
-            <button type="button" className="btn mt-3 text-sm" onClick={onOpen}>Set week goal</button>
+            <button type="button" className="btn mt-3 text-sm" onClick={onOpen}>Set week plan</button>
           )}
         </div>
       ) : (
         <>
+          <h3 className="form-label mb-2">Targets</h3>
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             {bySelfRegion ? (
               SELF_REGIONS.map((r) => (
@@ -65,26 +74,47 @@ export default function WeekGoalCard({
             {bySelfRegion && preSplitSelf(done) > 0 && ` Plus ${preSplitSelf(done)} self bids outside US / EU / LATAM (other regions, or saved before the region split).`}
           </p>
 
-          {week.goalItems.length > 0 && (
+          {routines.length > 0 && (
             <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="form-label">Goal lines</h3>
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium tabular-nums text-body dark:bg-zinc-800">
-                  {ticked}/{week.goalItems.length} done
-                </span>
-              </div>
+              <h3 className="form-label mb-2">Routines</h3>
               <ul className="space-y-1">
-                {week.goalItems.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    {item.done ? (
-                      <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success-600" aria-hidden />
-                    ) : (
-                      <Circle size={16} className="mt-0.5 shrink-0 text-zinc-300 dark:text-zinc-600" aria-hidden />
+                {routines.map((item) => (
+                  <li key={item.id} className="flex items-start gap-2 text-sm text-body">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-400" aria-hidden />
+                    <span>{item.text}</span>
+                    {item.kind !== 'check' && item.target != null && (
+                      <span className="text-xs tabular-nums text-muted">{item.target}{unit(item)} per day</span>
                     )}
-                    <span className={item.done ? 'text-muted line-through' : 'text-body'}>{item.text}</span>
-                    <span className="sr-only">{item.done ? '(done)' : '(not done)'}</span>
                   </li>
                 ))}
+              </ul>
+            </div>
+          )}
+
+          {goals.length > 0 && (
+            <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+              <h3 className="form-label mb-2">Weekly goals</h3>
+              <ul className="space-y-3">
+                {goals.map((item) => {
+                  const p = week.progress[item.id];
+                  return (
+                    <li key={item.id}>
+                      {item.kind === 'check' ? (
+                        <div className="flex items-start gap-2 text-sm">
+                          {p?.done ? (
+                            <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success-600" aria-hidden />
+                          ) : (
+                            <Circle size={16} className="mt-0.5 shrink-0 text-zinc-300 dark:text-zinc-600" aria-hidden />
+                          )}
+                          <span className={p?.done ? 'text-muted line-through' : 'text-body'}>{item.text}</span>
+                          <span className="sr-only">{p?.done ? '(done)' : '(not done)'}</span>
+                        </div>
+                      ) : (
+                        <ProgressMetric label={item.text} done={p?.value ?? 0} goal={item.target ?? 0} />
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

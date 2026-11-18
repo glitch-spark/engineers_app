@@ -85,10 +85,11 @@ export default function DayRow({
 }) {
   const date = parseDateParam(day.date) ?? new Date();
   const isToday = day.date === today;
-  const { goal, done } = day;
+  const { targets: goal, done } = day;
   const bidsGoal = goal.bidsSelf + goal.bidsBidder;
-  const ticked = day.goalItems.filter((i) => i.done).length;
-  const hasGoal = bidsGoal > 0 || day.goalItems.length > 0;
+  const items = day.items.filter((i) => !i.archived);
+  const ticked = items.filter((i) => i.result?.done).length;
+  const hasGoal = bidsGoal > 0 || items.length > 0;
   const state = dayState({ date: day.date, today, hasGoal, logged: day.loggedAt !== null });
   const interviews = done.interviewsSelf + done.interviewsCaller;
   const parts = bidParts(goal, done);
@@ -104,7 +105,7 @@ export default function DayRow({
     <span className="text-muted">
       Goal: Bids {bidsGoal}
       <BidSplit parts={parts.filter((p) => p.goal > 0)} showDone={false} />
-      {day.goalItems.length > 0 && ` · ${day.goalItems.length} goal${day.goalItems.length === 1 ? '' : 's'}`}
+      {items.length > 0 && ` · ${items.length} goal${items.length === 1 ? '' : 's'}`}
     </span>
   );
 
@@ -117,7 +118,7 @@ export default function DayRow({
           {typedPerProfile && profiles ? <ProfileSplit done={done} profiles={profiles} /> : <BidSplit parts={parts} showDone />}
         </span>
         {interviewsText}
-        {day.goalItems.length > 0 && <span className="text-muted">Goals {ticked}/{day.goalItems.length}</span>}
+        {items.length > 0 && <span className="text-muted">Goals {ticked}/{items.length}</span>}
       </>
     );
   } else if (state === 'follow-up') {

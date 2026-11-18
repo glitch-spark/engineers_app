@@ -7,11 +7,10 @@ import DayPanel from '../components/report/DayPanel';
 import DayRow from '../components/report/DayRow';
 import TeamTable from '../components/report/TeamTable';
 import WeekPanel from '../components/report/WeekPanel';
-import DailyGoalCard from '../components/report/DailyGoalCard';
 import WeekGoalCard from '../components/report/WeekGoalCard';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
-import { addDays, dateParam, mondayOf, parseWeekParam, weekLabel } from '../lib/reportWeek';
+import { addDays, dateParam, mondayOf, parseDateParam, parseWeekParam, weekLabel } from '../lib/reportWeek';
 import { planView } from '../lib/planView';
 import { useTeamLookup } from '../lib/useFirstTeamMember';
 
@@ -30,7 +29,9 @@ export default function ReportPage() {
   const [params, setParams] = useSearchParams();
   const { mutate } = useSWRConfig();
 
-  const monday = parseWeekParam(params.get('week'));
+  // `?day=` (the Slack post's link) opens that day, on its own week unless `week` says otherwise.
+  const dayParam = parseDateParam(params.get('day')) ? params.get('day') : null;
+  const monday = parseWeekParam(params.get('week') ?? dayParam);
   const week = dateParam(monday);
   const currentMonday = mondayOf(new Date());
   const canGoNext = monday < addDays(currentMonday, 7);
@@ -64,7 +65,7 @@ export default function ReportPage() {
   // Admins land on the team table (no `view` needed); staff ask for it with `view=team`.
   const teamLink = isAdmin ? `/plans?week=${week}` : `/plans?week=${week}&view=team`;
 
-  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [openDay, setOpenDay] = useState<string | null>(dayParam);
   const [weekOpen, setWeekOpen] = useState(false);
 
   const refresh = () => {
@@ -146,21 +147,7 @@ export default function ReportPage() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-              <div className="lg:col-span-3">
-                <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} onOpen={() => setWeekOpen(true)} />
-              </div>
-              <div className="lg:col-span-2">
-                <DailyGoalCard
-                  week={weekQuery.data}
-                  days={daysQuery.data?.days ?? []}
-                  today={today}
-                  canEdit={!readOnly}
-                  onOpenWeek={() => setWeekOpen(true)}
-                  onOpenDay={(date) => setOpenDay(date)}
-                />
-              </div>
-            </div>
+            <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} onOpen={() => setWeekOpen(true)} />
           )}
 
           {daysQuery.error ? (
@@ -194,7 +181,10 @@ export default function ReportPage() {
           userId={viewUser}
           readOnly={readOnly}
           open
-          onClose={() => setOpenDay(null)}
+          onClose={() => {
+            setOpenDay(null);
+            if (dayParam) setParam({ day: null });
+          }}
           onSaved={refresh}
         />
       )}
