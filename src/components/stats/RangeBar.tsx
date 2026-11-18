@@ -1,7 +1,7 @@
 import type { StatsTeam } from '../../api/endpoints';
 
 /** Where the subject sits in the team's spread: min-max track, p25-p75 shaded, median tick, subject dot. */
-export default function RangeBar({ team: t, value }: { team: StatsTeam; value: number }) {
+export default function RangeBar({ team: t, value, fmt = (n) => n.toLocaleString() }: { team: StatsTeam; value: number; fmt?: (n: number) => string }) {
   if (t.median == null || t.p25 == null || t.p75 == null || t.min == null || t.max == null) return null;
   const team = { median: t.median, p25: t.p25, p75: t.p75, min: t.min, max: t.max };
   const span = team.max - team.min;
@@ -19,8 +19,8 @@ export default function RangeBar({ team: t, value }: { team: StatsTeam; value: n
       <div data-testid="range-you" className="absolute top-[7px] h-3.5 w-3.5 -translate-x-1/2 rounded-full border-2 border-white bg-[#2a78d6] dark:border-zinc-950"
         style={{ left: `${at(value)}%` }} />
       <span className={`${lab} top-[34px]`} style={{ left: `${clamp(at(value))}%` }}>you</span>
-      <span className="absolute left-0 top-6 text-[10px] text-muted">{team.min.toLocaleString()}</span>
-      <span className="absolute right-0 top-6 text-[10px] text-muted">{team.max.toLocaleString()}</span>
+      <span className="absolute left-0 top-6 text-[10px] text-muted">{fmt(team.min)}</span>
+      <span className="absolute right-0 top-6 text-[10px] text-muted">{fmt(team.max)}</span>
     </div>
   );
 }

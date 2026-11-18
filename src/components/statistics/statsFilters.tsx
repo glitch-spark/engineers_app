@@ -79,7 +79,7 @@ export const statsList = (s: string): string[] => (s ? s.split(',') : []);
  * Reads the Statistics filters from the URL for one kind of tab. `clear` puts back only what that tab's bar shows
  * (other tabs' keys, like AI usage's multiselects, stay in the URL).
  */
-export function useStatsFilters(tab: StatsTab = 'stats'): StatsFilterState {
+export function useStatsFilters(tab: StatsTab = 'stats', opts: { noRegion?: boolean } = {}): StatsFilterState {
   const [values, patch] = useUrlFilters(STATS_DEFAULTS);
   const presets = tab === 'ai' ? AI_USAGE_PRESETS : STATS_PRESETS;
   const today = isoDay(new Date());
@@ -100,7 +100,7 @@ export function useStatsFilters(tab: StatsTab = 'stats'): StatsFilterState {
 
   const canClear =
     value.preset !== DEFAULT_PRESET ||
-    (tab !== 'ai' && region !== 'all') ||
+    (tab !== 'ai' && !opts.noRegion && region !== 'all') ||
     (tab === 'resume' && values.q !== '') ||
     (tab === 'ai' && (values.users !== '' || values.features !== '' || values.models !== ''));
 

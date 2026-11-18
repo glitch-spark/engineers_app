@@ -135,6 +135,13 @@ describe('earnings and ai-usage frames', () => {
     expect(await screen.findByLabelText('Region')).toBeTruthy();
   });
 
+  it('earnings ignores a carried-over region: not requested, no Clear', async () => {
+    showTab('earnings', '/statistics?region=EU');
+    await screen.findByText('Self bids are low');
+    expect(getStatsView).toHaveBeenCalledWith('earnings', expect.objectContaining({ region: 'all' }));
+    expect((screen.queryByRole('button', { name: 'Clear' }) as HTMLButtonElement | null)?.disabled ?? true).toBe(true);
+  });
+
   it('earnings uses the standard presets (no Today)', async () => {
     showTab('earnings', '/statistics');
     await waitFor(() => expect(getStatsView).toHaveBeenCalledWith('earnings', expect.objectContaining({ period: 'month' })));

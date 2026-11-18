@@ -147,6 +147,33 @@ describe('StatsFrame', () => {
     expect(screen.getByText(/net, ranked/)).toBeTruthy();
   });
 
+  it('usd: sub-cent costs read <$0.01, never -$0.00', () => {
+    const v = view({ tab: 'ai-usage', everyone: { rowKind: 'person', metric: 'cost', rows: [
+      { userId: 'a', name: 'Ann', value: 0.004, vsMedian: null, rank: 1, parts: {}, isSubject: false },
+      { userId: 'b', name: 'Bob', value: -0.001, vsMedian: null, rank: 2, parts: {}, isSubject: false },
+    ] } });
+    v.headline = [extra({ key: 'cost', label: 'Your AI cost', value: 0.1234, format: 'usd', team: { ...team, min: 0.01, max: 0.9, median: 0.2, p25: 0.1, p75: 0.5 } })];
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getAllByText('<$0.01', { selector: 'span.tabular-nums' }).length).toBe(2);
+    expect(screen.queryByText('-$0.00')).toBeNull();
+    expect(screen.queryByText('0.1234')).toBeNull();
+    expect(screen.getByText('$0.90')).toBeTruthy(); // RangeBar max uses the headline format
+  });
+
+  it('everyone bar: a negative net has zero width, sub-dollar values still scale', () => {
+    const rows = [
+      { userId: 'a', name: 'Ann', value: -300, vsMedian: null, rank: 3, parts: {}, isSubject: false },
+      { userId: 'b', name: 'Bob', value: 0.4, vsMedian: null, rank: 1, parts: {}, isSubject: false },
+      { userId: 'c', name: 'Cy', value: 0.2, vsMedian: null, rank: 2, parts: {}, isSubject: false },
+    ];
+    const v = view({ tab: 'earnings', everyone: { rowKind: 'person', metric: 'net', rows } });
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    const w = (id: string) => (screen.getByTestId(`everyone-${id}`).querySelector('span.h-2\\.5') as HTMLElement).style.width;
+    expect(w('a')).toBe('0%');
+    expect(w('b')).toBe('100%');
+    expect(w('c')).toBe('50%');
+  });
+
   it('per100 and pct formats', () => {
     const t = { ...team, median: 2.5 };
     const v = view({ tab: 'interviews', everyone: { rowKind: 'person', metric: 'per100', rows: [] } });

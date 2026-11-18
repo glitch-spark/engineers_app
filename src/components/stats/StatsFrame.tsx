@@ -11,7 +11,8 @@ const SEV = { bad: 'bg-red-600', watch: 'bg-amber-500', good: 'bg-green-600' } a
 const GOOD = 'text-green-600 dark:text-green-400';
 const BAD = 'text-red-600 dark:text-red-400';
 
-const usd = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v) >= 10 ? Math.round(Math.abs(v)).toLocaleString() : Math.abs(v).toFixed(2)}`;
+const usd = (v: number) => (v !== 0 && Math.abs(v) < 0.005 ? '<$0.01'
+  : `${v < 0 ? '-' : ''}$${Math.abs(v) >= 10 ? Math.round(Math.abs(v)).toLocaleString() : Math.abs(v).toFixed(2)}`);
 const num = (v: number | null, format: StatsHeadline['format']) =>
   v == null ? '—'
     : format === 'per100' ? v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -72,7 +73,7 @@ function Header({ headline }: { headline: StatsHeadline[] }) {
         )}
         {rest.map((h) => <Cell key={h.key} label={h.label}><Big>{num(h.value, h.format)}</Big><Muted>{h.note}</Muted></Cell>)}
       </div>
-      {main.team && main.team.n >= 2 && main.team.median != null && main.value != null && <RangeBar team={main.team} value={main.value} />}
+      {main.team && main.team.n >= 2 && main.team.median != null && main.value != null && <RangeBar team={main.team} value={main.value} fmt={(n) => num(n, main.format)} />}
     </div>
   );
 }
@@ -88,7 +89,10 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const t0 = view.headline[0]?.team;
   const outside = t0 != null && view.headline[0].of === t0.n + 1;
   const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : view.everyone.metric === 'passRate' ? 'pct' : view.everyone.metric === 'net' || view.everyone.metric === 'cost' ? 'usd' : 'count';
-  const max = Math.max(1, ...rows.filter((r) => r.rank != null).map((r) => r.value ?? 0));
+  const mainFormat = view.headline[0]?.format ?? 'count';
+  const fmt = (n: number) => num(n, mainFormat);
+  // scale to the largest positive value (a negative net draws no bar); epsilon only when nothing is positive
+  const max = Math.max(1e-9, ...rows.filter((r) => r.rank != null).map((r) => r.value ?? 0));
   const anyRanked = rows.some((r) => r.rank != null);
   return (
     <div className="space-y-4">
@@ -125,8 +129,8 @@ export default function StatsFrame({ view, canPick, onPick }: {
                 : <span className="flex min-w-0 items-baseline"><span className="truncate">{r.name}</span>{r.region && <span className="ml-1.5 flex-none text-xs font-normal text-muted">{r.region}</span>}</span>}
               {r.value == null
                 ? <span />
-                : <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${p}`).join(' · ')}
-                  style={{ width: `${Math.min(100, (r.value / max) * 100)}%`, background: r.isSubject ? colors.me : colors.other, opacity: r.rank === null ? 0.4 : 1 }} />}
+                : <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${mainFormat === 'usd' ? usd(p) : p}`).join(' · ')}
+                  style={{ width: `${Math.max(0, Math.min(100, (r.value / max) * 100))}%`, background: r.isSubject ? colors.me : colors.other, opacity: r.rank === null ? 0.4 : 1 }} />}
               <span className="tabular-nums">
                 {num(r.value, fmtFormat)}
                 {r.rank === null && <span className="ml-1 text-xs font-normal text-muted">not ranked</span>}
@@ -147,8 +151,8 @@ export default function StatsFrame({ view, canPick, onPick }: {
               <LineChart data={view.trend.buckets}>
                 <CartesianGrid stroke={chart.grid} vertical={false} />
                 <XAxis dataKey="label" tick={{ fill: chart.axis, fontSize: 10 }} />
-                <YAxis tick={{ fill: chart.axis, fontSize: 10 }} width={36} />
-                <Tooltip contentStyle={{ background: chart.tooltipBg, borderColor: chart.tooltipBorder, color: chart.tooltipText }} />
+                <YAxis tick={{ fill: chart.axis, fontSize: 10 }} width={mainFormat === 'usd' ? 52 : 36} tickFormatter={fmt} />
+                <Tooltip formatter={(v) => fmt(Number(v))} contentStyle={{ background: chart.tooltipBg, borderColor: chart.tooltipBorder, color: chart.tooltipText }} />
                 <Line type="monotone" dataKey="median" name="Team median" stroke={colors.other} strokeWidth={2} strokeDasharray="5 4" dot={false} />
                 <Line type="monotone" dataKey="you" name="You" stroke={colors.me} strokeWidth={2.5} dot={false} />
               </LineChart>
