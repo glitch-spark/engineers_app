@@ -7,7 +7,7 @@ import { StatsFilterBar, useStatsFilters } from '../statistics/statsFilters';
 import StatsFrame from './StatsFrame';
 
 /** A Statistics tab that shows the you-vs-team frame (header, tips, everyone, trend). Admins can view a teammate via `user`. */
-export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'profiles' | 'callers' | 'earnings' | 'ai-usage' }) {
+export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'earnings' | 'ai-usage' }) {
   const ai = tab === 'ai-usage';
   const f = useStatsFilters(ai ? 'ai' : 'stats', { noRegion: tab === 'earnings' });
   const me = useAuth().user;

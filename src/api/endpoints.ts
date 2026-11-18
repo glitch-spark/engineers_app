@@ -1227,82 +1227,6 @@ export interface ResumeCompare {
 export const getResumeCompare = (params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; q?: string }) =>
   apiFetch<ResumeCompare>(`/metrics/resume-compare${qs(params)}`);
 
-// ---------- statistics: callers ----------
-
-export type CallerRoundResult = 'passed' | 'rejected' | 'canceled' | 'awaiting' | 'scheduled';
-export type CallerRoundGroup = 'intro' | 'tech' | 'hiring' | 'panel' | 'final';
-
-/** One round type's interviews done (passed + rejected + awaiting) and pass rate. */
-export interface CallerStatsGroup {
-  done: number;
-  passed: number;
-  rejected: number;
-  /** passed ÷ (passed + rejected); null when none is decided. */
-  passRate: number | null;
-}
-
-/** A set of rounds (a caller's, every caller round, or self rounds) in the period. */
-export interface CallerStatsTotals {
-  /** canceled and scheduled aren't done; scheduled = still marked scheduled. */
-  counts: Record<CallerRoundResult, number>;
-  /** passed + rejected + awaiting. */
-  done: number;
-  passRate: number | null;
-  byType: Record<CallerRoundGroup, CallerStatsGroup>;
-}
-
-export interface CallerStatsCaller extends CallerStatsTotals {
-  /** null: Unassigned (no caller set on the round). */
-  callerId: string | null;
-  name: string;
-  /** null: Unassigned, or a caller no longer on the list. */
-  color: CallerColor | null;
-  /** At least 5 decided rounds: its pass rate is ranked. */
-  ranked: boolean;
-  /** Pass rate minus the team's caller pass rate (fraction); null when either is null. */
-  vsTeam: number | null;
-}
-
-export interface CallerStatsRound {
-  interviewId: string;
-  roundId: string | null;
-  callerId: string | null;
-  roundDate: string;
-  company: string;
-  stage: string | null;
-  engineer: string;
-  /** A round held in the period: passed, rejected, awaiting or canceled. */
-  result: CallerRoundResult;
-}
-
-export interface CallerStatsWeekly {
-  unit: 'day' | 'week' | 'month';
-  buckets: {
-    label: string; start: string; end: string;
-    all: { done: number; passRate: number | null };
-    /** callerId (or 'unassigned') → that caller's rounds in the bucket. */
-    callers: Record<string, { done: number; passRate: number | null }>;
-  }[];
-}
-
-export interface CallerStats {
-  period: StatsPeriod;
-  region: StatsRegion;
-  start: string;
-  end: string;
-  label: string;
-  callers: CallerStatsCaller[];
-  /** Every caller round (Unassigned included). */
-  team: CallerStatsTotals;
-  /** Rounds without a caller. */
-  self: CallerStatsTotals;
-  weekly: CallerStatsWeekly;
-  rounds: CallerStatsRound[];
-}
-
-export const getCallerStats = (params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion }) =>
-  apiFetch<CallerStats>(`/metrics/caller-stats${qs(params)}`);
-
 /** A held round awaiting its result is marked rejected (caller managers). */
 export const rejectAwaitingRound = (interviewId: string, roundId: string) =>
   apiFetch<Record<string, unknown>>(`/interviews/${interviewId}/stages/${roundId}/reject`, { method: 'POST' });
@@ -3366,8 +3290,6 @@ export interface StatsTip { id: string; severity: 'bad' | 'watch' | 'good'; text
 export interface StatsEveryoneRow {
   userId: string;
   name: string;
-  /** Profile rows only; null when the profile has no region. */
-  region?: string | null;
   value: number | null;
   vsMedian: number | null;
   /** null = not ranked (too few bids). */
@@ -3379,18 +3301,17 @@ export interface StatsTrend { unit: 'week' | 'day'; buckets: { label: string; yo
 export interface StatsView {
   tab: string;
   /** Callers tab only: whether the subject is shown as a caller or as an engineer whose rounds callers took. */
-  mode?: 'caller' | 'engineer';
   label: string;
   subject: { userId: string; name: string };
   headline: StatsHeadline[];
   tips: StatsTip[];
-  everyone: { rowKind: 'person' | 'profile' | 'caller'; metric: string; rows: StatsEveryoneRow[] };
+  everyone: { rowKind: 'person'; metric: string; rows: StatsEveryoneRow[] };
   trend: StatsTrend | null;
   notEnoughData: boolean;
   definitions: string[];
 }
 
 export const getStatsView = (
-  tab: 'bids' | 'interviews' | 'profiles' | 'callers' | 'earnings' | 'ai-usage',
+  tab: 'bids' | 'interviews' | 'earnings' | 'ai-usage',
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);

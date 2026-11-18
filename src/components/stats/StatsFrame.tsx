@@ -24,8 +24,7 @@ const num = (v: number | null, format: StatsHeadline['format']) =>
 const withUnit = (v: number | null, format: StatsHeadline['format']) => (
   <>{num(v, format)}{format === 'per100' && v != null && <span className="text-sm font-normal text-muted"> per 100 bids</span>}</>
 );
-const METRIC_LABEL: Record<string, string> = { bids: 'bids', per100: 'interviews per 100 bids', passRate: 'pass rate', net: 'net', cost: 'AI cost' };
-const isProfiles = (v: StatsView) => v.everyone.rowKind === 'profile';
+const METRIC_LABEL: Record<string, string> = { bids: 'bids', per100: 'interviews per 100 bids', net: 'net', cost: 'AI cost' };
 // Profile and caller rows are not people the admin can switch to.
 const isPickable = (v: StatsView) => v.everyone.rowKind === 'person';
 
@@ -88,7 +87,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const higherIsBetter = view.headline[0]?.higherIsBetter ?? true;
   const t0 = view.headline[0]?.team;
   const outside = t0 != null && view.headline[0].of === t0.n + 1;
-  const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : view.everyone.metric === 'passRate' ? 'pct' : view.everyone.metric === 'net' || view.everyone.metric === 'cost' ? 'usd' : 'count';
+  const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : view.everyone.metric === 'net' || view.everyone.metric === 'cost' ? 'usd' : 'count';
   const mainFormat = view.headline[0]?.format ?? 'count';
   // trend units differ per tab (pct headline, count trend), so only usd carries over to the trend
   const fmt = (n: number) => num(n, mainFormat === 'usd' ? 'usd' : 'count');
@@ -117,9 +116,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
       </div>
 
       <div className="panel p-4">
-        <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {isProfiles(view) && view.everyone.metric === 'per100' ? 'interviews per 100 bids by profile' : METRIC_LABEL[view.everyone.metric] ?? view.everyone.metric}{anyRanked ? ', ranked' : ''}</span></h3>
-        {rows.length === 0 && isProfiles(view) && <p className="mt-2 text-sm text-muted">No profile activity in this period.</p>}
-        {rows.length === 0 && view.everyone.rowKind === 'caller' && <p className="mt-2 text-sm text-muted">No caller rounds in this period.</p>}
+        <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {METRIC_LABEL[view.everyone.metric] ?? view.everyone.metric}{anyRanked ? ', ranked' : ''}</span></h3>
         <div className="mt-2 space-y-0.5">
           {rows.map((r) => (
             <div key={r.userId} data-testid={`everyone-${r.userId}`} data-subject={r.isSubject}
@@ -127,7 +124,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
               <span>{r.rank ?? ''}</span>
               {canPick && isPickable(view)
                 ? <button type="button" className="truncate text-left hover:underline" onClick={() => onPick(r.userId)}>{r.name}</button>
-                : <span className="flex min-w-0 items-baseline"><span className="truncate">{r.name}</span>{r.region && <span className="ml-1.5 flex-none text-xs font-normal text-muted">{r.region}</span>}</span>}
+                : <span className="truncate">{r.name}</span>}
               {r.value == null
                 ? <span />
                 : <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${mainFormat === 'usd' ? usd(p) : p}`).join(' · ')}

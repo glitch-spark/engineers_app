@@ -252,49 +252,19 @@ describe('StatsFrame', () => {
   });
 });
 
-describe('StatsFrame row kinds with canPick', () => {
-  const kv = (rowKind: 'person' | 'caller') => view({
-    everyone: { rowKind, metric: 'passRate', rows: [{ userId: 'c1', name: 'Ann', value: 0.5, vsMedian: 0, rank: 1, parts: {}, isSubject: false }] },
-  });
-  it('caller rows are not buttons even for admins', () => {
-    render(<StatsFrame view={kv('caller')} canPick onPick={() => {}} />);
-    expect(screen.queryByRole('button', { name: 'Ann' })).toBeNull();
-  });
-  it('person rows still are', () => {
-    render(<StatsFrame view={kv('person')} canPick onPick={() => {}} />);
+describe('StatsFrame person rows with canPick', () => {
+  it('are buttons for admins', () => {
+    render(<StatsFrame view={view({ everyone: { rowKind: 'person', metric: 'bids', rows: [{ userId: 'c1', name: 'Ann', value: 5, vsMedian: 0, rank: 1, parts: {}, isSubject: false }] } })} canPick onPick={() => {}} />);
     expect(screen.getByRole('button', { name: 'Ann' })).toBeTruthy();
   });
 });
 
-describe('StatsFrame profiles', () => {
-  const pv = (o: Partial<StatsView> = {}): StatsView => view({
-    tab: 'profiles',
-    everyone: { rowKind: 'profile', metric: 'per100', rows: [
-      { userId: 'p1', name: 'Acme Dev', region: 'EU', value: 4.2, vsMedian: 0.1, rank: 1, parts: { self: 20, bidder: 20 }, isSubject: false },
-    ] },
-    ...o,
-  });
-
-  it('profile rows are not clickable for admins and show a region tag', () => {
-    render(<StatsFrame view={pv()} canPick onPick={() => {}} />);
-    expect(screen.queryByRole('button', { name: 'Acme Dev' })).toBeNull();
-    expect(screen.getByText('EU')).toBeTruthy();
-    expect(screen.getByText(/interviews per 100 bids by profile/)).toBeTruthy();
-  });
+describe('StatsFrame trend and headline', () => {
+  const pv = (o: Partial<StatsView> = {}): StatsView => view({ ...o });
 
   it('null trend hides the trend card', () => {
     render(<StatsFrame view={pv({ trend: null })} canPick={false} onPick={() => {}} />);
     expect(screen.queryByText(/Trend/)).toBeNull();
-  });
-
-  it('profiles empty state', () => {
-    render(<StatsFrame view={pv({ everyone: { rowKind: 'profile', metric: 'per100', rows: [] } })} canPick={false} onPick={() => {}} />);
-    expect(screen.getByText('No profile activity in this period.')).toBeTruthy();
-  });
-
-  it('callers empty state', () => {
-    render(<StatsFrame view={pv({ tab: 'callers', everyone: { rowKind: 'caller', metric: 'passRate', rows: [] } })} canPick={false} onPick={() => {}} />);
-    expect(screen.getByText('No caller rounds in this period.')).toBeTruthy();
   });
 
   it('lower-is-better headline below median is green', () => {
