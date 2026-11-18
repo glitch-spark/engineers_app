@@ -223,6 +223,7 @@ describe('TodayCard', () => {
     setup(p);
     expect(await screen.findByLabelText('Contact')).toBeTruthy();
     expect(screen.getByText('140 / 250 this week')).toBeTruthy();
+    expect(screen.queryByText('/ 250')).toBeNull(); // the week line carries the target
   });
 
   it('goal done by week total shows ticked and locked', async () => {

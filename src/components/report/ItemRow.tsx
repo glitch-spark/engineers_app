@@ -70,7 +70,7 @@ export default function ItemRow({
           onChange({ done: result.done || reaches, value });
         }}
       />
-      {target ? <span className="text-xs tabular-nums text-muted">/ {target}</span> : null}
+      {target && !week ? <span className="text-xs tabular-nums text-muted">/ {target}</span> : null}
       {progress}
       {note && <span className="text-xs text-muted">{note}</span>}
     </li>

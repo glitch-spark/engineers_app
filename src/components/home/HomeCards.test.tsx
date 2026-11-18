@@ -52,6 +52,16 @@ describe('WeekCard', () => {
     expect(screen.queryByText(/vs pace/)).toBeNull();
   });
 
+  it('zero target shows only the count', async () => {
+    const w = week();
+    vi.mocked(api.getDashboardWeek).mockResolvedValue(
+      week({ interviews: { ...w.interviews, done: 3, target: 0, pace: null } }) as never,
+    );
+    wrap(<WeekCard />);
+    await screen.findByText('Interviews');
+    expect(screen.queryByText('3 / 0')).toBeNull();
+  });
+
   it('strip shows bids, interviews, routines', async () => {
     vi.mocked(api.getDashboardWeek).mockResolvedValue(week() as never);
     wrap(<WeekCard />);

@@ -61,7 +61,7 @@ function Stat({ label, total, target, pace, bar }: { label: string; total: numbe
   return (
     <div>
       <div className="text-xs text-muted">{label}</div>
-      <div className="text-xl font-bold tabular-nums">{target != null ? `${total} / ${target}` : total}</div>
+      <div className="text-xl font-bold tabular-nums">{hasTarget ? `${total} / ${target}` : total}</div>
       {hasTarget && pace && (pace.behindBy > 0 ? (
         <div className="text-xs text-muted">▼{pace.behindBy} vs pace</div>
       ) : ahead != null && ahead >= 0 ? (

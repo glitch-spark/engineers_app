@@ -26,6 +26,11 @@ describe('WeekGoalCard', () => {
     expect(screen.getByText('/ 250')).toBeTruthy();
   });
 
+  it('marks a done count goal', () => {
+    render(<WeekGoalCard week={week({ progress: { g1: { value: 140, done: true, target: 250 } } })} canEdit onOpen={() => {}} />);
+    expect(screen.getByText('(done)')).toBeTruthy();
+  });
+
   it('shows the draft banner only for a draft', () => {
     const { unmount } = render(<WeekGoalCard week={week({ exists: false, draft: true })} canEdit onOpen={() => {}} />);
     expect(screen.getByText(/Copied from last week — save to keep/)).toBeTruthy();
