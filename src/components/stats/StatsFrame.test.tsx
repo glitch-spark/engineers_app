@@ -235,7 +235,7 @@ describe('StatsFrame profiles', () => {
 
   it('profiles empty state', () => {
     render(<StatsFrame view={pv({ everyone: { rowKind: 'profile', metric: 'per100', rows: [] } })} canPick={false} onPick={() => {}} />);
-    expect(screen.getByText('No profiles yet.')).toBeTruthy();
+    expect(screen.getByText('No profile activity in this period.')).toBeTruthy();
   });
 
   it('lower-is-better headline below median is green', () => {

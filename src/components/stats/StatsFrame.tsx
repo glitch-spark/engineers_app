@@ -109,7 +109,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
 
       <div className="panel p-4">
         <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {isProfiles(view) && view.everyone.metric === 'per100' ? 'interviews per 100 bids by profile' : METRIC_LABEL[view.everyone.metric] ?? view.everyone.metric}{anyRanked ? ', ranked' : ''}</span></h3>
-        {rows.length === 0 && isProfiles(view) && <p className="mt-2 text-sm text-muted">No profiles yet.</p>}
+        {rows.length === 0 && isProfiles(view) && <p className="mt-2 text-sm text-muted">No profile activity in this period.</p>}
         <div className="mt-2 space-y-0.5">
           {rows.map((r) => (
             <div key={r.userId} data-testid={`everyone-${r.userId}`} data-subject={r.isSubject}
@@ -117,7 +117,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
               <span>{r.rank ?? ''}</span>
               {canPick && !isProfiles(view)
                 ? <button type="button" className="truncate text-left hover:underline" onClick={() => onPick(r.userId)}>{r.name}</button>
-                : <span className="truncate">{r.name}{r.region && <span className="ml-1.5 text-xs font-normal text-muted">{r.region}</span>}</span>}
+                : <span className="flex min-w-0 items-baseline"><span className="truncate">{r.name}</span>{r.region && <span className="ml-1.5 flex-none text-xs font-normal text-muted">{r.region}</span>}</span>}
               {r.value == null
                 ? <span />
                 : <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${p}`).join(' · ')}

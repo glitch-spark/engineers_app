@@ -3367,7 +3367,7 @@ export interface StatsEveryoneRow {
   userId: string;
   name: string;
   /** Profile rows only; null when the profile has no region. */
-  region?: 'EU' | 'US' | 'Latam' | null;
+  region?: string | null;
   value: number | null;
   vsMedian: number | null;
   /** null = not ranked (too few bids). */
