@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import type { StatsView } from '../../api/endpoints';
-import BidsTab from './BidsTab';
+import FramedTab from './FramedTab';
+import InterviewsTab from '../statistics/InterviewsTab';
 
 const getStatsView = vi.fn();
 vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a) }));
@@ -38,14 +40,14 @@ const view: StatsView = {
 
 const show = (url = '/statistics') => render(
   <SWRConfig value={{ provider: () => new Map() }}>
-    <MemoryRouter initialEntries={[url]}><Probe /><BidsTab /></MemoryRouter>
+    <MemoryRouter initialEntries={[url]}><Probe /><FramedTab tab="bids" /></MemoryRouter>
   </SWRConfig>,
 );
 
 beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockResolvedValue(view); });
 afterEach(cleanup);
 
-describe('BidsTab', () => {
+describe('FramedTab', () => {
   it('renders the frame from /stats/bids', async () => {
     show();
     expect(await screen.findByText('Self bids are low')).toBeTruthy();
@@ -110,5 +112,38 @@ describe('BidsTab', () => {
     const sel = (await screen.findByLabelText('Viewing')) as HTMLSelectElement;
     await waitFor(() => expect([...sel.options].map((o) => o.text)).toContain('Inactive Ian'));
     expect(sel.value).toBe('u9');
+  });
+});
+
+describe('InterviewsTab', () => {
+  const iview: StatsView = { ...view, tab: 'interviews', label: 'Interviews', everyone: { metric: 'per100', rows: [] } };
+
+  it('renders the frame from /stats/interviews', async () => {
+    getStatsView.mockResolvedValue(iview);
+    render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <MemoryRouter initialEntries={['/statistics']}><InterviewsTab /></MemoryRouter>
+      </SWRConfig>,
+    );
+    expect(await screen.findByText('Self bids are low')).toBeTruthy();
+    expect(getStatsView).toHaveBeenCalledWith('interviews', expect.objectContaining({ region: 'all', period: 'month' }));
+  });
+
+  it('viewing choice carries from Bids to Interviews (same user param)', async () => {
+    role = 'admin';
+    const Switch = () => {
+      const [t, setT] = React.useState<'bids' | 'interviews'>('bids');
+      return <><button onClick={() => setT('interviews')}>go</button><FramedTab tab={t} /></>;
+    };
+    render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <MemoryRouter initialEntries={['/statistics']}><Probe /><Switch /></MemoryRouter>
+      </SWRConfig>,
+    );
+    fireEvent.change((await screen.findByLabelText('Viewing')) as HTMLSelectElement, { target: { value: 'u7' } });
+    await waitFor(() => expect(getStatsView).toHaveBeenLastCalledWith('bids', expect.objectContaining({ user: 'u7' })));
+    fireEvent.click(screen.getByText('go'));
+    await waitFor(() => expect(getStatsView).toHaveBeenLastCalledWith('interviews', expect.objectContaining({ user: 'u7' })));
+    expect((screen.getByLabelText('Viewing') as HTMLSelectElement).value).toBe('u7');
   });
 });

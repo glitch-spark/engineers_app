@@ -3352,8 +3352,9 @@ export interface StatsTeam { median: number | null; p25: number | null; p75: num
 export interface StatsHeadline {
   key: string;
   label: string;
-  value: number;
-  format: 'count' | 'rank';
+  /** null when undefined (e.g. no bids). per100 is one decimal; pct is a 0–1 fraction. */
+  value: number | null;
+  format: 'count' | 'rank' | 'per100' | 'pct';
   team: StatsTeam | null;
   rank: number;
   of: number;
@@ -3365,9 +3366,10 @@ export interface StatsTip { id: string; severity: 'bad' | 'watch' | 'good'; text
 export interface StatsEveryoneRow {
   userId: string;
   name: string;
-  value: number;
+  value: number | null;
   vsMedian: number | null;
-  rank: number;
+  /** null = not ranked (too few bids). */
+  rank: number | null;
   parts: Record<string, number>;
   isSubject: boolean;
 }
@@ -3385,6 +3387,6 @@ export interface StatsView {
 }
 
 export const getStatsView = (
-  tab: 'bids',
+  tab: 'bids' | 'interviews',
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);

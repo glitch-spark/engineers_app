@@ -122,4 +122,41 @@ describe('StatsFrame', () => {
     expect(screen.getByText('No bids in this period.')).toBeTruthy();
     expect(screen.queryByText(/in line with the team/)).toBeNull();
   });
+
+  const extra = (o: Partial<StatsView['headline'][number]>) => ({ key: 'x', label: 'Extra', value: 5, format: 'count' as const, team: null, rank: 1, of: 1, vsMedian: null, higherIsBetter: true, note: 'extra note', ...o });
+
+  it('header renders any extra entries generically', () => {
+    const v = view();
+    v.headline = [v.headline[0], extra({ key: 'whatever', label: 'Mystery', value: 1234 }), extra({ key: 'other', label: 'Other', note: 'o note' })];
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('Mystery')).toBeTruthy();
+    expect(screen.getByText('1,234')).toBeTruthy();
+    expect(screen.getByText('o note')).toBeTruthy();
+  });
+
+  it('per100 and pct formats', () => {
+    const t = { ...team, median: 2.5 };
+    const v = view({ tab: 'interviews', everyone: { metric: 'per100', rows: [] } });
+    v.headline = [
+      extra({ key: 'per100', label: 'Interviews per 100 bids', value: 3.2, format: 'per100', team: t }),
+      extra({ key: 'reach', label: 'Reached tech', value: 0.256, format: 'pct' }),
+    ];
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('3.2')).toBeTruthy();
+    expect(screen.getByText(/per 100 bids/, { selector: 'span' })).toBeTruthy();
+    expect(screen.getByText('2.5')).toBeTruthy();
+    expect(screen.getByText('26%')).toBeTruthy();
+  });
+
+  it('null value shows — and everyone marks unranked rows', () => {
+    const v = view({ everyone: { metric: 'per100', rows: [
+      { userId: 'a', name: 'Ann', value: 4.1, vsMedian: null, rank: null, parts: {}, isSubject: false },
+      { userId: 'b', name: 'Bob', value: null, vsMedian: null, rank: null, parts: {}, isSubject: false },
+    ] } });
+    v.headline = [extra({ key: 'reach', label: 'Reached tech', value: null, format: 'pct' })];
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getAllByText('not ranked').length).toBe(2);
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('4.1')).toBeTruthy();
+  });
 });

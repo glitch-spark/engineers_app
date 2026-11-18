@@ -11,10 +11,12 @@ const SEV = { bad: 'bg-red-600', watch: 'bg-amber-500', good: 'bg-green-600' } a
 const GOOD = 'text-green-600 dark:text-green-400';
 const BAD = 'text-red-600 dark:text-red-400';
 
-const fmt = (h: StatsHeadline) =>
-  h.format === 'rank' ? String(h.value)
-    : h.key === 'perDay' ? h.value.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : h.value.toLocaleString();
+const num = (v: number | null, format: StatsHeadline['format']) =>
+  v == null ? '—'
+    : format === 'per100' ? v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+      : format === 'pct' ? `${Math.round(v * 100)}%`
+        : format === 'rank' ? String(v)
+          : v.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 const pctAbs = (v: number) => `${Math.round(Math.abs(v) * 100)}%`;
 const signed = (v: number) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${pctAbs(v)}`;
@@ -31,27 +33,34 @@ const Big = ({ children }: { children: React.ReactNode }) => <p className="text-
 const Muted = ({ children }: { children: React.ReactNode }) => <p className="text-xs text-muted">{children}</p>;
 
 function Header({ headline }: { headline: StatsHeadline[] }) {
-  const [main, rank, perDay] = [headline[0], headline.find((h) => h.key === 'rank'), headline.find((h) => h.key === 'perDay')];
+  const main = headline[0];
   if (!main) return null;
+  const rank = headline.find((h) => h.key === 'rank');
+  const rest = headline.slice(1).filter((h) => h !== rank);
   const outside = main.team != null && main.of === main.team.n + 1;
   const v = main.vsMedian;
   const good = v != null && (v > 0) === main.higherIsBetter;
   return (
     <div className="panel p-4">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Cell label={main.label}><Big>{fmt(main)}</Big><Muted>{main.note}</Muted></Cell>
-        {main.team && <Cell label="Team median"><Big>{main.team.median == null ? '—' : main.team.median.toLocaleString()}</Big><Muted>{main.team.n} people</Muted></Cell>}
-        <Cell label={rank?.label ?? 'Your rank'}>
-          {outside
-            ? <Big><span className="text-base">would rank {main.rank} of {main.of}</span></Big>
-            : <Big>{main.rank} <span className="text-sm font-normal text-muted">of {main.of}</span></Big>}
-          {v != null && v !== 0 && (
-            <p className={`text-xs ${good ? GOOD : BAD}`}>{v > 0 ? '▲' : '▼'} {pctAbs(v)} {v > 0 ? 'above' : 'below'} median</p>
-          )}
+        <Cell label={main.label}>
+          <Big>{num(main.value, main.format)}{main.format === 'per100' && main.value != null && <span className="text-sm font-normal text-muted"> per 100 bids</span>}</Big>
+          <Muted>{main.note}</Muted>
         </Cell>
-        {perDay && <Cell label={perDay.label}><Big>{fmt(perDay)}</Big><Muted>{perDay.note}</Muted></Cell>}
+        {main.team && <Cell label="Team median"><Big>{num(main.team.median, main.format)}</Big><Muted>{main.team.n} people</Muted></Cell>}
+        {rank && (
+          <Cell label={rank.label}>
+            {outside
+              ? <Big><span className="text-base">would rank {main.rank} of {main.of}</span></Big>
+              : <Big>{main.rank ?? '—'} <span className="text-sm font-normal text-muted">of {main.of}</span></Big>}
+            {v != null && v !== 0 && (
+              <p className={`text-xs ${good ? GOOD : BAD}`}>{v > 0 ? '▲' : '▼'} {pctAbs(v)} {v > 0 ? 'above' : 'below'} median</p>
+            )}
+          </Cell>
+        )}
+        {rest.map((h) => <Cell key={h.key} label={h.label}><Big>{num(h.value, h.format)}</Big><Muted>{h.note}</Muted></Cell>)}
       </div>
-      {main.team && main.team.n >= 2 && main.team.median != null && <RangeBar team={main.team} value={main.value} />}
+      {main.team && main.team.n >= 2 && main.team.median != null && main.value != null && <RangeBar team={main.team} value={main.value} />}
     </div>
   );
 }
@@ -66,7 +75,8 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const higherIsBetter = view.headline[0]?.higherIsBetter ?? true;
   const t0 = view.headline[0]?.team;
   const outside = t0 != null && view.headline[0].of === t0.n + 1;
-  const max = Math.max(1, ...rows.map((r) => r.value));
+  const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : 'count';
+  const max = Math.max(1, ...rows.map((r) => r.value ?? 0));
   return (
     <div className="space-y-4">
       <Header headline={view.headline} />
@@ -93,14 +103,19 @@ export default function StatsFrame({ view, canPick, onPick }: {
         <div className="mt-2 space-y-0.5">
           {rows.map((r) => (
             <div key={r.userId} data-testid={`everyone-${r.userId}`} data-subject={r.isSubject}
-              className={`grid grid-cols-[28px_120px_1fr_60px_60px] items-center gap-2 rounded px-1 py-0.5 text-sm ${r.isSubject ? 'bg-blue-500/10 font-semibold' : ''}`}>
-              <span>{r.rank}</span>
+              className={`grid grid-cols-[28px_120px_1fr_110px_60px] items-center gap-2 rounded px-1 py-0.5 text-sm ${r.isSubject ? 'bg-blue-500/10 font-semibold' : ''}`}>
+              <span>{r.rank ?? ''}</span>
               {canPick
                 ? <button type="button" className="truncate text-left hover:underline" onClick={() => onPick(r.userId)}>{r.name}</button>
                 : <span className="truncate">{r.name}</span>}
-              <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${p}`).join(' · ')}
-                style={{ width: `${(r.value / max) * 100}%`, background: r.isSubject ? colors.me : colors.other }} />
-              <span className="tabular-nums">{r.value.toLocaleString()}</span>
+              {r.value == null
+                ? <span />
+                : <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${p}`).join(' · ')}
+                  style={{ width: `${(r.value / max) * 100}%`, background: r.isSubject ? colors.me : colors.other, opacity: r.rank === null ? 0.4 : 1 }} />}
+              <span className="tabular-nums">
+                {num(r.value, fmtFormat)}
+                {r.rank === null && <span className="ml-1 text-xs font-normal text-muted">not ranked</span>}
+              </span>
               <span className={`text-xs ${r.vsMedian == null || r.vsMedian === 0 ? '' : (r.vsMedian > 0) === higherIsBetter ? GOOD : BAD}`}>
                 {r.vsMedian == null || r.vsMedian === 0 ? '' : signed(r.vsMedian)}
               </span>
