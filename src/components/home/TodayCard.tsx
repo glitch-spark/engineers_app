@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { todayInputValue } from '../../lib/week';
@@ -24,7 +24,8 @@ const clock = (iso: string) =>
 export default function TodayCard() {
   const { user } = useAuth();
   const today = todayInputValue();
-  const { data: plan, mutate } = useSWR(['home-day', today], () => api.getDayPlan(today), { revalidateOnFocus: false });
+  const { mutate: globalMutate } = useSWRConfig();
+  const { data: plan, error, isLoading, mutate } = useSWR(['home-day', today], () => api.getDayPlan(today), { revalidateOnFocus: false });
   const { data: rounds } = useSWR(
     user ? ['home-rounds', today, user.id] : null,
     () => api.listInterviewRounds({ from: today, to: today, creatorId: user!.id }),
@@ -34,22 +35,43 @@ export default function TodayCard() {
   const [local, setLocal] = useState<Record<string, Result>>({}); // optimistic, until saved
   const [failed, setFailed] = useState<Record<string, Result>>({}); // last attempt per failed item, for Retry
   const timers = useRef<Record<string, { t: ReturnType<typeof setTimeout>; r: Result }>>({});
-  // Leaving the page (e.g. to the Daily plan) must not lose a pending edit: send it now.
+  // Leaving the page (e.g. to the Daily plan) must not lose a pending edit: send it now,
+  // then refresh the Daily plan's cache so it never opens (and re-posts) stale data.
   useEffect(() => () => {
     for (const [id, { t, r }] of Object.entries(timers.current)) {
       clearTimeout(t);
-      api.putDayProgress(today, { results: { [id]: r } }).catch(() => {});
+      api.putDayProgress(today, { results: { [id]: r } })
+        .then((next) => globalMutate(['day-plan', today, 'me'], next, false))
+        .catch((e) => console.error('Today: flush on leave failed', e));
     }
     timers.current = {};
-  }, [today]);
+  }, [today, globalMutate]);
 
-  if (!plan) return null;
+  if (error && !plan) {
+    return (
+      <section className="panel p-4">
+        <h2 className="card-title mb-3">Today</h2>
+        <p className="text-sm text-muted mb-3">Couldn&rsquo;t load today.</p>
+        <button type="button" className="btn-outline" onClick={() => mutate()}>Retry</button>
+      </section>
+    );
+  }
+  if (isLoading || !plan) {
+    return (
+      <section className="panel p-4 space-y-3">
+        <div className="skeleton h-5 w-48" />
+        <div className="skeleton h-10 w-full" />
+        <div className="skeleton h-10 w-full" />
+      </section>
+    );
+  }
 
   const save = async (id: string, r: Result) => {
     delete timers.current[id];
     try {
       const next = await api.putDayProgress(today, { results: { [id]: r } });
       await mutate(next, false);
+      globalMutate(['home-week', today]); // routines / goal progress below
       setFailed(({ [id]: _, ...rest }) => rest);
       if (!timers.current[id]) setLocal(({ [id]: _, ...rest }) => rest); // keep newer typing
     } catch {
@@ -95,12 +117,12 @@ export default function TodayCard() {
       <dl className="space-y-1 text-sm text-body">
         <div className="flex items-center gap-2">
           <dt className="w-24">Self bids</dt>
-          <dd className="tabular-nums">{plan.done.bidsSelf} / {t.bidsSelf}</dd>
+          <dd className="tabular-nums">{t.bidsSelf ? `${plan.done.bidsSelf} / ${t.bidsSelf}` : plan.done.bidsSelf}</dd>
           <Link to={href} className="ml-auto text-xs underline">edit</Link>
         </div>
         <div className="flex items-center gap-2">
           <dt className="w-24">Bidder bids</dt>
-          <dd className="tabular-nums">{plan.bidsBidderAuto} / {t.bidsBidder}</dd>
+          <dd className="tabular-nums">{t.bidsBidder ? `${plan.bidsBidderAuto} / ${t.bidsBidder}` : plan.bidsBidderAuto}</dd>
         </div>
         <div className="flex items-center gap-2">
           <dt className="w-24">Interviews</dt>

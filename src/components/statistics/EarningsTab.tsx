@@ -27,7 +27,7 @@ export default function EarningsTab() {
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
           >
-            <option value="">All users</option>
+            <option value="">Me</option>
             {users.map((u) => (
               <option key={u._id} value={u._id}>
                 {u.name || u.email}
