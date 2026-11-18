@@ -3344,3 +3344,46 @@ export const reviewBids = (
     | { ids: string[]; status: BidStatus; reason?: RejectReason; onlyComplete?: false }
     | { ids: string[]; status: 'approved'; onlyComplete: true },
 ) => postJSON<{ updated: number; skipped: number }>('/bids/review', body);
+
+// ---------- statistics: you vs team (shared frame) ----------
+
+export interface StatsTeam { median: number; p25: number; p75: number; min: number; max: number; n: number }
+export interface StatsHeadline {
+  key: string;
+  label: string;
+  value: number;
+  format: 'count' | 'rank';
+  team: StatsTeam | null;
+  rank: number;
+  of: number;
+  vsMedian: number | null;
+  higherIsBetter: boolean;
+  note: string;
+}
+export interface StatsTip { id: string; severity: 'bad' | 'watch' | 'good'; text: string; detail: string; evidence: Record<string, unknown> }
+export interface StatsEveryoneRow {
+  userId: string;
+  name: string;
+  value: number;
+  vsMedian: number | null;
+  rank: number;
+  parts: Record<string, number>;
+  isSubject: boolean;
+}
+export interface StatsTrend { unit: 'week' | 'day'; buckets: { label: string; you: number; median: number }[] }
+export interface StatsView {
+  tab: string;
+  label: string;
+  subject: { userId: string; name: string };
+  headline: StatsHeadline[];
+  tips: StatsTip[];
+  everyone: { metric: string; rows: StatsEveryoneRow[] };
+  trend: StatsTrend;
+  notEnoughData: boolean;
+  definitions: string[];
+}
+
+export const getStatsView = (
+  tab: 'bids',
+  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);
