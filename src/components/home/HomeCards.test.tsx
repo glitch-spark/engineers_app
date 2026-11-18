@@ -52,17 +52,31 @@ describe('WeekCard', () => {
     expect(screen.queryByText(/vs pace/)).toBeNull();
   });
 
-  it('routines and weekly goals', async () => {
+  it('strip shows bids, interviews, routines', async () => {
+    vi.mocked(api.getDashboardWeek).mockResolvedValue(week() as never);
+    wrap(<WeekCard />);
+    expect(await screen.findByText('Bids')).toBeTruthy();
+    expect(screen.getByText('Interviews')).toBeTruthy();
+    expect(screen.getByText('Routines')).toBeTruthy();
+    expect(screen.getByText('11 / 15')).toBeTruthy();
+    expect(screen.getAllByTestId('pace-tick')).toHaveLength(1);
+  });
+
+  it('hides routines when none expected', async () => {
+    vi.mocked(api.getDashboardWeek).mockResolvedValue(week({ routines: { done: 0, expected: 0 } }) as never);
+    wrap(<WeekCard />);
+    await screen.findByText('Bids');
+    expect(screen.queryByText('Routines')).toBeNull();
+  });
+
+  it('no weekly goals list on the week card', async () => {
     vi.mocked(api.getDashboardWeek).mockResolvedValue(week({
-      weeklyGoals: [
-        { id: 'g1', text: 'Reach outs', kind: 'count', value: 140, target: 250, done: false },
-        { id: 'g2', text: 'Update CV', kind: 'check', value: 1, target: null, done: true },
-      ],
+      weeklyGoals: [{ id: 'g1', text: 'Reach outs', kind: 'count', value: 140, target: 250, done: false }],
     }) as never);
     wrap(<WeekCard />);
-    expect(await screen.findByText('11 / 15')).toBeTruthy();
-    expect(screen.getByText('140 / 250')).toBeTruthy();
-    expect(screen.getByText('✓')).toBeTruthy();
+    await screen.findByText('Bids');
+    expect(screen.queryByText('Reach outs')).toBeNull();
+    expect(screen.queryByText('140 / 250')).toBeNull();
   });
 });
 
