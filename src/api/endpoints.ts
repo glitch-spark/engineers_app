@@ -574,6 +574,8 @@ export interface DayPlan {
   trackedProfiles?: string[];
   /** Those profiles' "other applies" as saved. */
   selfOtherByProfile?: Record<string, number>;
+  /** Whether the day's week has a saved weekly plan (draft saves need one). */
+  weekSaved: boolean;
 }
 
 /** A day's follow-up: results per item, bids done, notes (posts to Slack). */
@@ -642,6 +644,14 @@ export const getDayPlan = (date: string, userId?: string) =>
 
 export const putDayPlan = (date: string, body: DayPlanInput) =>
   putJSON<DayPlan>(`/daily-plans/${date}`, body);
+
+/** Draft save from Home: ticks, counts and focus only; never submits or posts. */
+export interface DayProgressInput {
+  results?: Record<string, { done?: boolean; value?: number | null }>;
+  focus?: string[];
+}
+export const putDayProgress = (date: string, body: DayProgressInput) =>
+  putJSON<DayPlan>(`/daily-plans/${date}?submit=false`, body);
 
 export const deleteDayPlan = (date: string) => del<{ message: string }>(`/daily-plans/${date}`);
 
@@ -1099,6 +1109,15 @@ export interface DashboardWeek {
   stages: { key: string; label: string; count: number }[];
   streak: number;
   hasWeeklyPlan: boolean;
+  routines: { done: number; expected: number };
+  weeklyGoals: {
+    id: string;
+    text: string;
+    kind: PlanItemKind;
+    value: number;
+    target: number | null;
+    done: boolean;
+  }[];
 }
 
 export interface DashboardNetMonthly {

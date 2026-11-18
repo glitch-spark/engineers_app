@@ -460,7 +460,7 @@ export default function BiddersPage() {
       )}
       {/* On a bidder's page the title (and the tab's) is the bidder's name; its header has the actions. */}
       <PageHeader
-        title={bidderId ? row?.name ?? 'Bids' : 'Bids'}
+        title={bidderId ? row?.name ?? 'Bidders' : 'Bidders'}
         action={bidderId ? undefined : (
           <div className="flex items-center gap-2">
             <button type="button" className="btn" onClick={() => setFormOpen(true)}>Add bidder</button>

@@ -119,9 +119,9 @@ afterEach(() => {
 });
 
 describe('the Bids page', () => {
-  it("opens on Bids › Bidders with the admin's own team", async () => {
+  it("opens on Bidders with the admin's own team", async () => {
     renderPage('/bidders');
-    expect(screen.getByRole('heading', { name: 'Bids' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Bidders' })).toBeTruthy();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
     expect(tabs).toEqual(['Bidders', 'My bids', 'Pay']);
     expect(screen.getByRole('tab', { name: 'Bidders' }).getAttribute('aria-selected')).toBe('true');
@@ -135,7 +135,7 @@ describe('the Bids page', () => {
     expect(await screen.findByRole('button', { name: 'Ana' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Self' })).toBeNull();
     expect(screen.queryByRole('columnheader', { name: /Owner/ })).toBeNull();
-    expect(document.title).toContain('Bids');
+    expect(document.title).toContain('Bidders');
   });
 
   it('show=self opens My bids', async () => {

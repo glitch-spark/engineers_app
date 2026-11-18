@@ -1,54 +1,23 @@
-import { useId, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
-import ThisWeekCard from '../components/dashboard/ThisWeekCard';
-import NetIncomeCard from '../components/dashboard/NetIncomeCard';
-import CompareCard from '../components/dashboard/CompareCard';
+import TodayCard from '../components/home/TodayCard';
+import WeekCard from '../components/home/WeekCard';
+import MetricsCard from '../components/home/MetricsCard';
 import TeamOverview from '../components/dashboard/TeamOverview';
 import { useAuth } from '../auth/useAuth';
-import { useTeamLookup } from '../lib/useFirstTeamMember';
 
 export default function DashboardPage() {
-  const formId = useId();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
-  const [selectedUserId, setSelectedUserId] = useState('');
-
-  const { data: lookupData } = useTeamLookup(isAdmin);
-  const users = lookupData?.users ?? [];
-
-  const userId = isAdmin ? (selectedUserId || undefined) : undefined;
+  const navigate = useNavigate();
 
   return (
     <div className="space-y-6">
       <PageHeader title="Home" />
-
-      {isAdmin && (
-        <div className="w-64">
-          <label htmlFor={`${formId}-user`} className="block text-xs text-muted mb-1">User</label>
-          <select
-            id={`${formId}-user`}
-            className="select focus-ring w-full text-sm"
-            value={selectedUserId}
-            onChange={(e) => setSelectedUserId(e.target.value)}
-          >
-            <option value="">All users</option>
-            {users.map((u) => (
-              <option key={u._id} value={u._id}>
-                {u.name || u.email}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {isAdmin && !selectedUserId ? (
-        <TeamOverview onPick={setSelectedUserId} />
-      ) : (
-        <div className="space-y-6">
-          <ThisWeekCard userId={userId} />
-          <CompareCard userId={userId} />
-          <NetIncomeCard userId={userId} />
-        </div>
+      <TodayCard />
+      <WeekCard />
+      <MetricsCard />
+      {user?.role === 'admin' && (
+        <TeamOverview onPick={(id) => navigate(`/statistics?tab=earnings&user=${encodeURIComponent(id)}`)} />
       )}
     </div>
   );

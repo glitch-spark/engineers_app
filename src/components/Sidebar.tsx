@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
-  CalendarCheck2,
+  CalendarRange,
   ChartColumn,
   ChevronsLeft,
   ChevronsRight,
@@ -12,7 +12,7 @@ import {
   Receipt,
   Send,
   UserCog,
-  Users,
+  Handshake,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
@@ -48,7 +48,7 @@ const SECTIONS: Section[] = [
   {
     items: [
       { href: '/dashboard', label: 'Home', icon: House },
-      { href: '/plans', label: 'Daily plan', icon: CalendarCheck2 },
+      { href: '/plans', label: 'Plans', icon: CalendarRange },
     ],
   },
   {
@@ -61,7 +61,7 @@ const SECTIONS: Section[] = [
   {
     label: 'Apply',
     items: [
-      { href: '/bidders', label: 'Bids', icon: Users },
+      { href: '/bidders', label: 'Bidders', icon: Handshake },
       { href: '/job-applies', label: 'Auto apply', icon: Send },
       { href: '/resume', label: 'Tailor resume', icon: FilePenLine, isActive: isTailorSection },
     ],
