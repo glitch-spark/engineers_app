@@ -20,7 +20,7 @@ interface FollowUp {
 const kept = (i: DayItem) => !i.archived || i.result !== null;
 
 /** Bid Track counts bidder bids from this day on (backend plan_bidder.RELEASE_DAY); earlier days keep the typed number. */
-const BIDDER_AUTO_FROM = '2026-11-18';
+const BIDDER_AUTO_FROM = '2026-11-16';
 
 /** Follow up a day: bids done, ticks on the daily goal lines, notes.
  *  The goal comes from the weekly plan and isn't edited here. */
