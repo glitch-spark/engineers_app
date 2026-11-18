@@ -10,7 +10,7 @@ import WeekPanel from '../components/report/WeekPanel';
 import WeekGoalCard from '../components/report/WeekGoalCard';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/endpoints';
-import { addDays, dateParam, mondayOf, parseWeekParam, weekLabel } from '../lib/reportWeek';
+import { addDays, dateParam, mondayOf, parseDateParam, parseWeekParam, weekLabel } from '../lib/reportWeek';
 import { planView } from '../lib/planView';
 import { useTeamLookup } from '../lib/useFirstTeamMember';
 
@@ -29,7 +29,9 @@ export default function ReportPage() {
   const [params, setParams] = useSearchParams();
   const { mutate } = useSWRConfig();
 
-  const monday = parseWeekParam(params.get('week'));
+  // `?day=` (the Slack post's link) opens that day, on its own week unless `week` says otherwise.
+  const dayParam = parseDateParam(params.get('day')) ? params.get('day') : null;
+  const monday = parseWeekParam(params.get('week') ?? dayParam);
   const week = dateParam(monday);
   const currentMonday = mondayOf(new Date());
   const canGoNext = monday < addDays(currentMonday, 7);
@@ -63,7 +65,7 @@ export default function ReportPage() {
   // Admins land on the team table (no `view` needed); staff ask for it with `view=team`.
   const teamLink = isAdmin ? `/plans?week=${week}` : `/plans?week=${week}&view=team`;
 
-  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [openDay, setOpenDay] = useState<string | null>(dayParam);
   const [weekOpen, setWeekOpen] = useState(false);
 
   const refresh = () => {
@@ -179,7 +181,10 @@ export default function ReportPage() {
           userId={viewUser}
           readOnly={readOnly}
           open
-          onClose={() => setOpenDay(null)}
+          onClose={() => {
+            setOpenDay(null);
+            if (dayParam) setParam({ day: null });
+          }}
           onSaved={refresh}
         />
       )}

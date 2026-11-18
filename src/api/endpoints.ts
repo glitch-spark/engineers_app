@@ -557,8 +557,12 @@ export interface DayPlan {
   items: DayItem[];
   progress: Record<string, ItemProgress>;
   focus: string[];
+  /** Set when the day has its own targets instead of the week's. */
+  targetOverride?: Counts | null;
   /** Typed bids + interviews from the Interviews page. */
   done: Counts;
+  /** Bidder bids counted by the system (read-only). */
+  bidsBidderAuto: number;
   interviews: DayInterviews;
   notes: string;
   /** Set once the day has been followed up. */
@@ -576,10 +580,13 @@ export interface DayPlan {
 
 /** A day's follow-up: results per item, bids done, notes (posts to Slack). */
 export interface DayPlanInput {
-  results: Record<string, { done: boolean; value: number }>;
+  results: Record<string, { done: boolean; value: number | null }>;
   focus: string[];
-  done: Bids;
+  /** Bidder bids are counted by the server, never sent. */
+  done: Omit<Bids, 'bidsBidder'>;
   notes: string;
+  /** Only when the person used "change for today". */
+  targetOverride?: Counts;
 }
 
 export interface WeekDaySummary {

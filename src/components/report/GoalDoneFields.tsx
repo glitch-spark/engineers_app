@@ -84,6 +84,7 @@ export default function GoalDoneFields({
   readOnly = false,
   tracked = {},
   trackedProfiles = [],
+  bidderAuto,
 }: {
   goal: Counts;
   onGoal?: (next: Counts) => void;
@@ -97,6 +98,8 @@ export default function GoalDoneFields({
   /** Self bids the extension recorded per profile, and the profiles already on tracked counts. */
   tracked?: Record<string, number>;
   trackedProfiles?: string[];
+  /** Bidder bids counted by the system: shown read-only instead of typed. */
+  bidderAuto?: number;
 }) {
   const row = showDone ? ROW_WITH_DONE : ROW_GOAL_ONLY;
 
@@ -130,6 +133,8 @@ export default function GoalDoneFields({
       {showDone && (
         perProfile && field !== 'bidsBidder' ? (
           <ValueBox value={done[field] ?? 0} title={`Sum of your ${SELF_REGIONS.find((r) => r.field === field)?.label} profiles`} />
+        ) : field === 'bidsBidder' && bidderAuto !== undefined ? (
+          <ValueBox value={bidderAuto} title="Counted from the bidder's work" />
         ) : readOnly || !onDone ? (
           <ValueBox value={done[field] ?? 0} />
         ) : (
