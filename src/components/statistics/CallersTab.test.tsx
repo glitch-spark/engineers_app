@@ -17,7 +17,7 @@ vi.mock('../../api/endpoints', async (orig) => ({
 vi.mock('recharts', async () => {
   const React = await import('react');
   const Stub = ({ children }: { children?: React.ReactNode }) => React.createElement('div', null, children);
-  return { ResponsiveContainer: Stub, LineChart: Stub, Line: Stub, XAxis: Stub, YAxis: Stub, CartesianGrid: Stub, Tooltip: Stub };
+  return { ResponsiveContainer: Stub, XAxis: Stub, YAxis: Stub, CartesianGrid: Stub, Tooltip: Stub };
 });
 vi.mock('../../theme/ThemeProvider', () => ({ useTheme: () => ({ theme: 'light' }) }));
 vi.mock('../../auth/useAuth', () => ({ useAuth: () => ({ user: { role: 'staff', id: 'me' } }) }));
@@ -63,6 +63,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('CallersTab', () => {
+  it('shows a retryable error when the round list fails to load', async () => {
+    getCallerStats.mockRejectedValueOnce(new Error('boom'));
+    show();
+    expect(await screen.findByText('Couldn’t load the round list. Try again.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('AnnCo')).toBeTruthy();
+  });
+
   it('renders the frame from /stats/callers', async () => {
     show();
     expect(await screen.findByText('Callers pass fewer')).toBeTruthy();

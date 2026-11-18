@@ -212,6 +212,20 @@ describe('StatsFrame', () => {
   });
 });
 
+describe('StatsFrame row kinds with canPick', () => {
+  const kv = (rowKind: 'person' | 'caller') => view({
+    everyone: { rowKind, metric: 'passRate', rows: [{ userId: 'c1', name: 'Ann', value: 0.5, vsMedian: 0, rank: 1, parts: {}, isSubject: false }] },
+  });
+  it('caller rows are not buttons even for admins', () => {
+    render(<StatsFrame view={kv('caller')} canPick onPick={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Ann' })).toBeNull();
+  });
+  it('person rows still are', () => {
+    render(<StatsFrame view={kv('person')} canPick onPick={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Ann' })).toBeTruthy();
+  });
+});
+
 describe('StatsFrame profiles', () => {
   const pv = (o: Partial<StatsView> = {}): StatsView => view({
     tab: 'profiles',

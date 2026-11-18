@@ -65,7 +65,7 @@ export default function CallersTab({ initialCaller }: {
 
 function CallersExtras({ initialCaller }: { initialCaller?: string }) {
   const params = useStatsFilters().params;
-  const { data, error } = useSWR(
+  const { data, error, mutate } = useSWR(
     params ? ['caller-stats', params.region, params.period, params.date, params.to] : null,
     () => api.getCallerStats(params!),
     { keepPreviousData: true },
@@ -74,7 +74,15 @@ function CallersExtras({ initialCaller }: { initialCaller?: string }) {
   const [picked, setPicked] = useState<string>(initialCaller || ALL);
   // The frame above already shows loading / error / idle states; the extras just wait for their data.
   // An older server's response has no team totals: the frame shows the update note.
-  if (!shown?.team || error) return null;
+  if (!shown && error) {
+    return (
+      <p className="panel flex items-center gap-3 p-6 text-sm text-red-700 dark:text-red-400">
+        Couldn’t load the round list. Try again.
+        <button type="button" className="btn-outline px-3 py-1 text-sm" onClick={() => mutate()}>Retry</button>
+      </p>
+    );
+  }
+  if (!shown?.team || shown.team.done + shown.team.counts.canceled === 0) return null;
   return <CallersView data={shown} picked={picked} onPick={setPicked} />;
 }
 
@@ -83,7 +91,6 @@ function CallersView({ data, picked, onPick }: { data: CallerStats; picked: stri
   const active = data.callers.filter((c) => c.done + c.counts.canceled > 0);
   const current = active.find((c) => keyOf(c) === picked) ?? all;
   const isAll = current === all;
-  if (data.team.done + data.team.counts.canceled === 0) return null;
 
   return (
     <>
