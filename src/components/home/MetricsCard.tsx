@@ -35,17 +35,17 @@ export default function MetricsCard() {
   const stages = week.data.stages.filter((s) => s.count > 0 && s.key !== 'canceled');
 
   return (
-    <section className="panel p-4 space-y-4">
+    <section className="panel p-4 grid gap-3 sm:grid-cols-2">
       <div>
-        <div className="text-sm font-medium text-strong">Earnings this month</div>
+        <div className="text-xs text-muted">Earnings this month</div>
         <div className="flex items-baseline gap-2">
           <span className="text-xl font-bold tabular-nums">{usd.format(cur?.net ?? 0)}</span>
-          {change != null && <span className="text-sm text-muted">{change >= 0 ? '▲' : '▼'}{Math.abs(change)}%</span>}
+          {change != null && <span className="text-xs text-muted">{change >= 0 ? '▲' : '▼'}{Math.abs(change)}%</span>}
         </div>
         <Link to="/statistics?tab=earnings" className="link-inline text-xs">Statistics</Link>
       </div>
       <div>
-        <div className="text-sm font-medium text-strong">Pipeline</div>
+        <div className="text-xs text-muted">Pipeline</div>
         <div className="text-sm">
           {stages.length ? stages.map((s) => `${s.count} ${s.label}`).join(' · ') : 'No interviews in progress'}
         </div>

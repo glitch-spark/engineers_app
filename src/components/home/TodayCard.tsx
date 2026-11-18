@@ -2,37 +2,25 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
-import { useAuth } from '../../auth/useAuth';
 import { todayInputValue } from '../../lib/week';
+import type { DayItem } from '../../api/endpoints';
 import ItemRow, { kept } from '../report/ItemRow';
 
 type Result = { done: boolean; value: number | null };
 const DEBOUNCE_MS = 800;
 
-/** True on Mon-Fri from 18:00 Chicago time. */
-function afterSixChicago() {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23', weekday: 'short',
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-  return !['Sat', 'Sun'].includes(get('weekday')) && Number(get('hour')) >= 18;
-}
-
-const clock = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/ /g, ' ');
+const parseDay = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
 
 export default function TodayCard() {
-  const { user } = useAuth();
   const today = todayInputValue();
   const { mutate: globalMutate } = useSWRConfig();
   const { data: plan, error, isLoading, mutate } = useSWR(['home-day', today], () => api.getDayPlan(today), { revalidateOnFocus: false });
-  const { data: rounds } = useSWR(
-    user ? ['home-rounds', today, user.id] : null,
-    () => api.listInterviewRounds({ from: today, to: today, creatorId: user!.id }),
-    { revalidateOnFocus: false },
-  );
-
   const [local, setLocal] = useState<Record<string, Result>>({}); // optimistic, until saved
+  const [unticking, setUnticking] = useState<Record<string, true>>({}); // goal ids being un-ticked on an earlier day
+  const [failedUntick, setFailedUntick] = useState<Record<string, string>>({}); // goal id -> day it was done on
   const [failed, setFailed] = useState<Record<string, Result>>({}); // last attempt per failed item, for Retry
   const timers = useRef<Record<string, { t: ReturnType<typeof setTimeout>; r: Result }>>({});
   // Leaving the page (e.g. to the Daily plan) must not lose a pending edit: send it now,
@@ -84,76 +72,99 @@ export default function TodayCard() {
     clearTimeout(timers.current[id]?.t);
     timers.current[id] = { t: setTimeout(() => save(id, r), DEBOUNCE_MS), r };
   };
+  const untick = async (id: string, doneOn: string) => {
+    setUnticking((u) => ({ ...u, [id]: true }));
+    try {
+      await api.putDayProgress(doneOn, { results: { [id]: { done: false } } });
+      setFailedUntick(({ [id]: _, ...rest }) => rest);
+      await Promise.all([mutate(), globalMutate(['home-week', today])]);
+    } catch {
+      setFailedUntick((f) => ({ ...f, [id]: doneOn }));
+    } finally {
+      setUnticking(({ [id]: _, ...rest }) => rest);
+    }
+  };
   const retry = (id: string) => {
+    if (failedUntick[id]) return untick(id, failedUntick[id]);
     const r = failed[id];
     setLocal((l) => ({ ...l, [id]: r }));
     save(id, r);
   };
 
-  const href = `/report?day=${today}`;
-  const [y, m, d] = today.split('-').map(Number);
-  const heading = new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const todayDate = parseDay(today);
+  const dow = todayDate.getDay(); // 1 = Mon .. 5 = Fri
+  const heading = todayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const t = plan.targets;
+  const bidsTarget = t.bidsSelf + t.bidsBidder;
   const intTarget = t.interviewsSelf + t.interviewsCaller;
-  const intDone = plan.interviews.self + plan.interviews.caller;
-  const roundsText = [...(rounds?.rounds ?? [])]
-    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
-    .map((r) => `${clock(r.scheduledAt)} ${r.companyName ?? ''}`.trim())
-    .join(' · ');
-  const rows = plan.items.filter((i) => kept(i) && (i.scope === 'routine' || plan.focus.includes(i.id)));
+  const chip = (label: string, done: number, target: number) => `${label} ${done}${target > 0 ? ` / ${target}` : ''} · auto`;
+  const daysLeft = dow >= 1 && dow <= 4 ? `${6 - dow} days left · ` : dow === 5 ? 'last day · ' : '';
+  const daily = plan.items.filter((i) => kept(i) && i.scope === 'routine');
+  const weekly = plan.items.filter((i) => kept(i) && i.scope === 'goal');
   const disabled = !plan.weekSaved;
-  const late = !plan.submitted && afterSixChicago();
+  // A goal done only by its week total has no done day: it can't be un-ticked from Home.
+  const weekMet = (i: DayItem) => i.scope === 'goal' && !!plan.progress[i.id]?.done && !plan.progress[i.id]?.doneOn;
+  const doneEarlier = (i: DayItem) => {
+    const on = plan.progress[i.id]?.doneOn;
+    return i.scope === 'goal' && on && on !== today ? on : null;
+  };
+  const resultOf = (i: DayItem) => {
+    const saved = { done: i.result?.done ?? false, value: i.result?.value ?? null };
+    const r = local[i.id] ?? (i.scope === 'goal' ? { ...saved, done: plan.progress[i.id]?.done ?? saved.done } : saved);
+    return weekMet(i) ? { ...r, done: true } : r;
+  };
+  const isDone = (i: DayItem) => (unticking[i.id] ? false : resultOf(i).done);
+  const count = (list: DayItem[]) => `${list.filter(isDone).length} of ${list.length} done`;
+
+  const row = (item: DayItem) => {
+    const earlier = doneEarlier(item);
+    const met = weekMet(item);
+    const busy = !!unticking[item.id];
+    return (
+      <Fragment key={item.id}>
+        <ItemRow
+          item={item}
+          result={busy ? { done: false, value: item.result?.value ?? null } : earlier ? { done: true, value: item.result?.value ?? null } : resultOf(item)}
+          week={item.scope === 'goal' ? plan.progress[item.id] : undefined}
+          disabled={disabled || item.archived || busy}
+          valueLocked={!!earlier}
+          doneLocked={met}
+          note={busy ? undefined : earlier ? `done ${parseDay(earlier).toLocaleDateString('en-US', { weekday: 'short' })}` : met ? 'week target met' : undefined}
+          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, met ? { done: item.result?.done ?? false, value: r.value } : r))}
+        />
+        {(failedUntick[item.id] || (failed[item.id] && !local[item.id])) && (
+          <li className="text-xs text-red-600">
+            Couldn't save — <button type="button" className="underline" onClick={() => retry(item.id)}>Retry</button>
+          </li>
+        )}
+      </Fragment>
+    );
+  };
+  const section = (label: string, list: DayItem[], prefix = '') => (
+    <>
+      <div className="mt-3 flex justify-between text-[11px] font-medium uppercase tracking-wider text-muted">
+        <span>{label}</span><span className="normal-case tracking-normal">{prefix}{count(list)}</span>
+      </div>
+      <ul className="space-y-0.5">{list.map(row)}</ul>
+    </>
+  );
 
   return (
-    <section className="card space-y-3 p-4">
-      <header className="flex items-center gap-3">
+    <section className="card p-4">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold text-heading">Today · {heading}</h2>
-        <span className={`text-sm ${plan.submitted ? 'text-muted' : late ? 'text-amber-700 dark:text-amber-400' : 'text-muted'}`}>
-          {plan.submitted ? '✓ Posted' : 'Update not posted yet'}
-        </span>
-        <Link to={href} className="ml-auto text-sm underline">{plan.submitted ? 'Edit update' : 'Write my update'}</Link>
+        <div className="flex gap-2 text-xs text-body">
+          <span className="rounded-full border border-zinc-200 dark:border-zinc-700 px-2.5 py-0.5">{chip('Bids', plan.done.bidsSelf + plan.bidsBidderAuto, bidsTarget)}</span>
+          <span className="rounded-full border border-zinc-200 dark:border-zinc-700 px-2.5 py-0.5">{chip('Interviews', plan.interviews.self + plan.interviews.caller, intTarget)}</span>
+        </div>
       </header>
-
-      <dl className="space-y-1 text-sm text-body">
-        <div className="flex items-center gap-2">
-          <dt className="w-24">Self bids</dt>
-          <dd className="tabular-nums">{t.bidsSelf ? `${plan.done.bidsSelf} / ${t.bidsSelf}` : plan.done.bidsSelf}</dd>
-          <Link to={href} className="ml-auto text-xs underline">edit</Link>
-        </div>
-        <div className="flex items-center gap-2">
-          <dt className="w-24">Bidder bids</dt>
-          <dd className="tabular-nums">{t.bidsBidder ? `${plan.bidsBidderAuto} / ${t.bidsBidder}` : plan.bidsBidderAuto}</dd>
-        </div>
-        <div className="flex items-center gap-2">
-          <dt className="w-24">Interviews</dt>
-          <dd className="tabular-nums">{intTarget ? `${intDone} / ${intTarget}` : intDone}</dd>
-          {roundsText && <dd className="text-muted">{roundsText}</dd>}
-        </div>
-      </dl>
-
       {disabled && (
-        <p className="text-sm text-muted">
+        <p className="mt-2 text-sm text-muted">
           No plan for this week yet — <Link to="/plans" className="underline">Set this week's plan</Link>
         </p>
       )}
-      <ul className="space-y-2">
-        {rows.map((item) => (
-          <Fragment key={item.id}>
-            <ItemRow
-              item={item}
-              result={local[item.id] ?? { done: item.result?.done ?? false, value: item.result?.value ?? null }}
-              week={item.scope === 'goal' ? plan.progress[item.id] : undefined}
-              disabled={disabled || item.archived}
-              onChange={(r) => change(item.id, r)}
-            />
-            {failed[item.id] && !local[item.id] && (
-              <li className="text-xs text-red-600">
-                Couldn't save — <button type="button" className="underline" onClick={() => retry(item.id)}>Retry</button>
-              </li>
-            )}
-          </Fragment>
-        ))}
-      </ul>
+      {section('Daily', daily)}
+      {section('This week', weekly, daysLeft)}
     </section>
   );
 }

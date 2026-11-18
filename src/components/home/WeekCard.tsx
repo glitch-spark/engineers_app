@@ -41,66 +41,46 @@ export default function WeekCard() {
         <h2 className="card-title">This week · {shortLabel(start)} – {shortLabel(friday)}</h2>
         {dow >= 1 && dow <= 5 && <span className="text-sm text-muted">day {dow} of 5</span>}
       </header>
-      <div className="space-y-4">
-        <Row label="Bids" total={data.bids.total} target={data.bids.target} pace={data.bids.pace} />
-        <Row label="Interviews" total={data.interviews.done} target={data.interviews.target} pace={data.interviews.pace} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Stat label="Bids" total={data.bids.total} target={data.bids.target} pace={data.bids.pace} bar />
+        <Stat label="Interviews" total={data.interviews.done} target={data.interviews.target} pace={data.interviews.pace} />
         {data.routines.expected > 0 && (
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-sm font-medium text-strong">Routines</span>
-            <span className="text-sm tabular-nums">{data.routines.done} / {data.routines.expected}</span>
+          <div>
+            <div className="text-xs text-muted">Routines</div>
+            <div className="text-xl font-bold tabular-nums">{data.routines.done} / {data.routines.expected}</div>
           </div>
         )}
       </div>
-      {data.weeklyGoals.length > 0 && (
-        <ul className="mt-4 space-y-1">
-          {data.weeklyGoals.map((g) => (
-            <li key={g.id} className="flex items-baseline justify-between gap-2 text-sm">
-              <span>{g.text}</span>
-              {g.kind === 'check' ? (
-                <span>{g.done ? '✓' : '☐'}</span>
-              ) : (
-                <span className="tabular-nums">
-                  {g.target != null ? `${g.value} / ${g.target}` : g.value}
-                  {(g.done || (g.target != null && g.value >= g.target)) && <span> ✓</span>}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   );
 }
 
-function Row({ label, total, target, pace }: { label: string; total: number; target: number | null; pace: api.DashboardPace | null }) {
+function Stat({ label, total, target, pace, bar }: { label: string; total: number; target: number | null; pace: api.DashboardPace | null; bar?: boolean }) {
   const ahead = pace ? total - pace.expected : null;
+  const hasTarget = target != null && target > 0;
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-sm font-medium text-strong">{label}</span>
-        <span className="text-sm tabular-nums">{target != null ? `${total} / ${target}` : total}</span>
-      </div>
-      {target != null && target > 0 && (
-        <>
-          <div className="progress-track mt-1.5 relative">
+      <div className="text-xs text-muted">{label}</div>
+      <div className="text-xl font-bold tabular-nums">{hasTarget ? `${total} / ${target}` : total}</div>
+      {hasTarget && pace && (pace.behindBy > 0 ? (
+        <div className="text-xs text-muted">▼{pace.behindBy} vs pace</div>
+      ) : ahead != null && ahead >= 0 ? (
+        <div className="text-xs text-muted">▲{ahead} vs pace</div>
+      ) : null)}
+      {bar && hasTarget && (
+        <div className="progress-track mt-1.5 relative">
+          <div
+            className={'h-full transition-all ' + (total >= target ? 'bg-success-500' : 'bg-accent-500')}
+            style={{ width: `${Math.min(100, (total / target) * 100)}%` }}
+          />
+          {pace && (
             <div
-              className={'h-full transition-all ' + (total >= target ? 'bg-success-500' : 'bg-accent-500')}
-              style={{ width: `${Math.min(100, (total / target) * 100)}%` }}
+              data-testid="pace-tick"
+              className="absolute top-0 h-full w-0.5 bg-strong"
+              style={{ left: `${Math.min(100, (pace.expected / target) * 100)}%` }}
             />
-            {pace && (
-              <div
-                data-testid="pace-tick"
-                className="absolute top-0 h-full w-0.5 bg-strong"
-                style={{ left: `${Math.min(100, (pace.expected / target) * 100)}%` }}
-              />
-            )}
-          </div>
-          {pace && (pace.behindBy > 0 ? (
-            <div className="mt-1 text-xs text-muted">▼{pace.behindBy} vs pace</div>
-          ) : ahead != null && ahead >= 0 ? (
-            <div className="mt-1 text-xs text-muted">▲{ahead} vs pace</div>
-          ) : null)}
-        </>
+          )}
+        </div>
       )}
     </div>
   );

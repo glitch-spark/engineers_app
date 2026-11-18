@@ -110,7 +110,10 @@ export default function WeekGoalCard({
                           <span className="sr-only">{p?.done ? '(done)' : '(not done)'}</span>
                         </div>
                       ) : (
-                        <ProgressMetric label={item.text} done={p?.value ?? 0} goal={item.target ?? 0} />
+                        <>
+                          <ProgressMetric label={item.text} done={p?.value ?? 0} goal={item.target ?? 0} />
+                          {p?.done && <span className="text-xs text-success-600">✓ <span className="sr-only">(done)</span></span>}
+                        </>
                       )}
                     </li>
                   );
