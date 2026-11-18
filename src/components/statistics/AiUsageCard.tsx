@@ -72,7 +72,7 @@ function sortValue(row: Row, key: SortKey): number | string {
 }
 
 /** AI spend, for every user: who, which feature, which model, over a period in the viewer's time zone. */
-export default function AiUsageCard() {
+export default function AiUsageCard({ embedded = false }: { embedded?: boolean }) {
   const chart = useChartTheme();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -145,10 +145,7 @@ export default function AiUsageCard() {
   const colorOf = (key: string, i: number) => (key === OTHER_KEY ? (isDark ? OTHER_DARK : OTHER_LIGHT) : palette[i]);
   const totals = data?.totals;
 
-  const bar = (
-    <StatsFilterBar
-      f={f}
-      before={
+  const selects = (
         <>
           <FilterField label="Users" htmlFor="ai-usage-users" width="w-56">
             <MultiSelect
@@ -178,17 +175,18 @@ export default function AiUsageCard() {
             />
           </FilterField>
         </>
-      }
-    />
   );
 
   return (
     <div className="space-y-4">
-      {bar}
+      {!embedded && <StatsFilterBar f={f} before={selects} />}
       <section className="panel p-4 space-y-4">
-        <div>
-          <h2 className="card-title">AI usage</h2>
-          <p className="text-xs text-muted">Times in {tz}</p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="card-title">AI usage</h2>
+            <p className="text-xs text-muted">Times in {tz}</p>
+          </div>
+          {embedded && <div className="flex flex-wrap gap-3">{selects}</div>}
         </div>
 
         {customError ? (

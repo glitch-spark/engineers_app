@@ -11,17 +11,19 @@ const SEV = { bad: 'bg-red-600', watch: 'bg-amber-500', good: 'bg-green-600' } a
 const GOOD = 'text-green-600 dark:text-green-400';
 const BAD = 'text-red-600 dark:text-red-400';
 
+const usd = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v) >= 10 ? Math.round(Math.abs(v)).toLocaleString() : Math.abs(v).toFixed(2)}`;
 const num = (v: number | null, format: StatsHeadline['format']) =>
   v == null ? '—'
     : format === 'per100' ? v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
       : format === 'pct' ? `${Math.round(v * 100)}%`
         : format === 'rank' ? String(v)
+          : format === 'usd' ? usd(v)
           : v.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 const withUnit = (v: number | null, format: StatsHeadline['format']) => (
   <>{num(v, format)}{format === 'per100' && v != null && <span className="text-sm font-normal text-muted"> per 100 bids</span>}</>
 );
-const METRIC_LABEL: Record<string, string> = { bids: 'bids', per100: 'interviews per 100 bids', passRate: 'pass rate' };
+const METRIC_LABEL: Record<string, string> = { bids: 'bids', per100: 'interviews per 100 bids', passRate: 'pass rate', net: 'net', cost: 'AI cost' };
 const isProfiles = (v: StatsView) => v.everyone.rowKind === 'profile';
 // Profile and caller rows are not people the admin can switch to.
 const isPickable = (v: StatsView) => v.everyone.rowKind === 'person';
@@ -85,7 +87,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const higherIsBetter = view.headline[0]?.higherIsBetter ?? true;
   const t0 = view.headline[0]?.team;
   const outside = t0 != null && view.headline[0].of === t0.n + 1;
-  const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : view.everyone.metric === 'passRate' ? 'pct' : 'count';
+  const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : view.everyone.metric === 'passRate' ? 'pct' : view.everyone.metric === 'net' || view.everyone.metric === 'cost' ? 'usd' : 'count';
   const max = Math.max(1, ...rows.filter((r) => r.rank != null).map((r) => r.value ?? 0));
   const anyRanked = rows.some((r) => r.rank != null);
   return (

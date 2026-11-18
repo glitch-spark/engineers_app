@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Tabs from '../components/Tabs';
 import AiUsageCard from '../components/statistics/AiUsageCard';
+import FramedTab from '../components/stats/FramedTab';
 import CallersTab from '../components/statistics/CallersTab';
 import BidsTab from '../components/statistics/BidsTab';
 import EarningsTab from '../components/statistics/EarningsTab';
@@ -48,7 +49,7 @@ export default function Statistics() {
           : tab === 'earnings' ? <EarningsTab />
           : tab === 'resume-compare' ? <ResumeCompareTab />
             : tab === 'callers' ? <CallersTab initialCaller={callerParam} />
-              : <AiUsageCard />}
+              : <><FramedTab tab="ai-usage" /><AiUsageCard embedded /></>}
       </Tabs>
     </div>
   );

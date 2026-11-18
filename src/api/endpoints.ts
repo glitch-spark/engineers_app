@@ -3354,7 +3354,7 @@ export interface StatsHeadline {
   label: string;
   /** null when undefined (e.g. no bids). per100 is one decimal; pct is a 0–1 fraction. */
   value: number | null;
-  format: 'count' | 'rank' | 'per100' | 'pct';
+  format: 'count' | 'rank' | 'per100' | 'pct' | 'usd';
   team: StatsTeam | null;
   rank: number | null;
   of: number;
@@ -3391,6 +3391,6 @@ export interface StatsView {
 }
 
 export const getStatsView = (
-  tab: 'bids' | 'interviews' | 'profiles' | 'callers',
+  tab: 'bids' | 'interviews' | 'profiles' | 'callers' | 'earnings' | 'ai-usage',
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);

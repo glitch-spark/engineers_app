@@ -115,6 +115,50 @@ describe('FramedTab', () => {
   });
 });
 
+describe('earnings and ai-usage frames', () => {
+  const showTab = (tab: 'earnings' | 'ai-usage', url: string) => render(
+    <SWRConfig value={{ provider: () => new Map() }}>
+      <MemoryRouter initialEntries={[url]}><FramedTab tab={tab} /></MemoryRouter>
+    </SWRConfig>,
+  );
+
+  it('region hidden on earnings and ai usage, shown on bids', async () => {
+    showTab('earnings', '/statistics');
+    await screen.findByText('Self bids are low');
+    expect(screen.queryByLabelText('Region')).toBeNull();
+    cleanup();
+    showTab('ai-usage', '/statistics');
+    await screen.findByText('Self bids are low');
+    expect(screen.queryByLabelText('Region')).toBeNull();
+    cleanup();
+    show();
+    expect(await screen.findByLabelText('Region')).toBeTruthy();
+  });
+
+  it('earnings uses the standard presets (no Today)', async () => {
+    showTab('earnings', '/statistics');
+    await waitFor(() => expect(getStatsView).toHaveBeenCalledWith('earnings', expect.objectContaining({ period: 'month' })));
+  });
+
+  it('ai usage: today maps to a single-day custom range', async () => {
+    showTab('ai-usage', '/statistics?range=today');
+    await waitFor(() => expect(getStatsView).toHaveBeenCalled());
+    const [tab, p] = getStatsView.mock.calls[0];
+    expect(tab).toBe('ai-usage');
+    expect(p.period).toBe('custom');
+    expect(p.date).toBe(p.to);
+    expect(p.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('ai usage: a preset like this month also goes as a custom range', async () => {
+    showTab('ai-usage', '/statistics');
+    await waitFor(() => expect(getStatsView).toHaveBeenCalled());
+    const p = getStatsView.mock.calls[0][1];
+    expect(p.period).toBe('custom');
+    expect(p.date < p.to || p.date === p.to).toBe(true);
+  });
+});
+
 describe('InterviewsTab', () => {
   const iview: StatsView = { ...view, tab: 'interviews', label: 'Interviews', everyone: { rowKind: 'person', metric: 'per100', rows: [] } };
 

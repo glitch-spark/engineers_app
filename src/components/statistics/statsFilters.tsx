@@ -119,13 +119,13 @@ export function useStatsFilters(tab: StatsTab = 'stats'): StatsFilterState {
  * The one sticky bar of every Statistics tab: Region (not on AI usage), `before` (AI usage's Users / Features /
  * Models), the company search (Resume compare), the date range, `children` (a loading spinner), then Clear.
  */
-export function StatsFilterBar({ f, before, viewing, viewingSubject, children }: {
-  f: StatsFilterState; before?: ReactNode; /** Offer admins the Viewing picker (tabs that show one person's view). */ viewing?: boolean; /** The loaded view's subject: keeps the Viewing picker showing someone the team lookup filters out. */ viewingSubject?: { userId: string; name: string }; children?: ReactNode;
+export function StatsFilterBar({ f, before, noRegion, viewing, viewingSubject, children }: {
+  f: StatsFilterState; before?: ReactNode; /** Hide Region (Earnings has none; AI usage hides it via its tab). */ noRegion?: boolean; /** Offer admins the Viewing picker (tabs that show one person's view). */ viewing?: boolean; /** The loaded view's subject: keeps the Viewing picker showing someone the team lookup filters out. */ viewingSubject?: { userId: string; name: string }; children?: ReactNode;
 }) {
   const regionId = useId();
   return (
     <FilterBar sticky canClear={f.canClear} onClear={f.clear}>
-      {f.tab !== 'ai' && (
+      {f.tab !== 'ai' && !noRegion && (
         <FilterField label="Region" htmlFor={regionId} width="w-36">
           <Select
             id={regionId}

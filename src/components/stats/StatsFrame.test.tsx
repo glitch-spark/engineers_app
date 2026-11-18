@@ -134,6 +134,19 @@ describe('StatsFrame', () => {
     expect(screen.getByText('o note')).toBeTruthy();
   });
 
+  it('usd format: no cents from $10, two decimals below, negative as -$300', () => {
+    const v = view({ tab: 'earnings', everyone: { rowKind: 'person', metric: 'net', rows: [
+      { userId: 'a', name: 'Ann', value: -300, vsMedian: null, rank: 1, parts: {}, isSubject: false },
+      { userId: 'b', name: 'Bob', value: 0.42, vsMedian: null, rank: 2, parts: {}, isSubject: false },
+    ] } });
+    v.headline = [extra({ key: 'net', label: 'Net income', value: 1234.4, format: 'usd', team: null })];
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('$1,234')).toBeTruthy();
+    expect(screen.getByText('-$300')).toBeTruthy();
+    expect(screen.getByText('$0.42')).toBeTruthy();
+    expect(screen.getByText(/net, ranked/)).toBeTruthy();
+  });
+
   it('per100 and pct formats', () => {
     const t = { ...team, median: 2.5 };
     const v = view({ tab: 'interviews', everyone: { rowKind: 'person', metric: 'per100', rows: [] } });
