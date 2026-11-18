@@ -104,9 +104,8 @@ describe('PayTab', () => {
     expect(screen.getByRole('heading', { level: 4, name: 'Maria' })).toBeTruthy();
   });
 
-  it('has the help popover and no payment actions', () => {
+  it('has no payment actions', () => {
     render(<PayTab data={data([week()])} allOwners={false} onReview={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /What do these numbers mean/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /paid/i })).toBeNull();
   });
 });

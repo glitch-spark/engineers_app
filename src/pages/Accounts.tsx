@@ -24,7 +24,7 @@ import FilterBar, { FilterField } from '../components/filters/FilterBar';
 import SearchFilter from '../components/filters/SearchFilter';
 import Pagination from '../components/Pagination';
 import Select from '../components/Select';
-import { bidsBreakdown, interviewsAppliedBy, interviewsBreakdown, keptAlerts, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
+import { bidsBreakdown, idleText, interviewsAppliedBy, interviewsBreakdown, keptAlerts, passDetail, rateDetail, rowArrow, setupText, shortDay, sinceDay, windowsMatch } from '../lib/profileList';
 import ProfilesBand, { Arrow } from '../components/profiles/ProfilesBand';
 import ProfileAlerts from '../components/profiles/ProfileAlerts';
 
@@ -155,7 +155,7 @@ export default function AccountsPage() {
   lastAlerts.current = keptAlerts(lastAlerts.current, isAdmin ? userId : '',
     metricsData ? metricsData.alerts ?? null : undefined);
   const alerts = profileStatus !== 'archived' && !metricsError && !rangeError ? lastAlerts.current?.alerts ?? null : null;
-  const noInterviewIds = useMemo(() => new Set((alerts?.noInterviews ?? []).map((a) => a.accountId)), [alerts]);
+  const noInterviewIds = useMemo(() => new Map((alerts?.noInterviews ?? []).map((a) => [a.accountId, a])), [alerts]);
 
   // "All profiles" over the same days (cached on the server for 15 minutes); a failure only hides the comparison.
   const benchParams = profileBenchmarkParams(filters, today);
@@ -290,7 +290,7 @@ export default function AccountsPage() {
             {fmtCount(m.interviews)}
             {noInterviewIds.has(a._id) && (
               <span className="ml-1 rounded bg-red-100 px-1 text-[10px] text-red-700 dark:bg-red-900/50 dark:text-red-200">
-                No interviews in 14 days
+                No interviews for {idleText(noInterviewIds.get(a._id)!) ?? '14 days'}
               </span>
             )}
           </div>

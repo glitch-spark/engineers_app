@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARCHIVE_CONFIRM, BID_TRACK_STEPS, GLOSSARY, OVERLAP_NOTE, formatInviteDate, rateText, statusWords } from './bidsWords';
+import { ARCHIVE_CONFIRM, formatInviteDate, rateText, statusWords } from './bidsWords';
 
 const now = Date.parse('2026-11-20T12:00:00Z');
 
@@ -23,28 +23,6 @@ describe('bidsWords', () => {
     expect(past.text).toBe(`Invited · expires ${formatInviteDate('2026-11-18T12:00:00Z')}`);
     const future = statusWords('invited', { username: null, inviteExpiresAt: '2026-11-25T12:00:00Z' }, now);
     expect(future.expired).toBe(false);
-  });
-
-  it('has the glossary words in order', () => {
-    expect(GLOSSARY.map((g) => g.word)).toEqual(['Approved', 'Pending', 'Bids', 'Pay', 'Pay week', 'My bids']);
-  });
-
-  it('never names the switch date and says both schedules', () => {
-    const text = GLOSSARY.map((g) => g.means).join(' ') + OVERLAP_NOTE;
-    expect(text).not.toMatch(/Nov(ember)? 22|2026-11-22/);
-    expect(GLOSSARY.find((g) => g.word === 'Pay week')!.means).toMatch(/Sunday 8 pm.*Saturday 4 pm/);
-    expect(OVERLAP_NOTE).toContain('Sunday 6–8 pm');
-  });
-
-  it('says the old overlap the right way round: Saturday column, next pay week', () => {
-    expect(OVERLAP_NOTE).toContain(
-      "it ran the other way: bids made Saturday 4–6:30 pm showed in Saturday's column but counted in the next pay week.",
-    );
-    expect(OVERLAP_NOTE).not.toContain('the same happened');
-  });
-
-  it('keeps the Bid Track install steps', () => {
-    expect(BID_TRACK_STEPS).toContain('chrome://extensions');
   });
 
   it('has one archive confirmation', () => {

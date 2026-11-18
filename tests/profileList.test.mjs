@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  bandCells, bandHeading, bidsBreakdown, flagNumbers, flagSuggestion, fmtListRate, interviewsBreakdown, keptAlerts, regionTopLines, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
+  bandCells, bandHeading, bidsBreakdown, flagNumbers, flagSuggestion, fmtListRate, idleText, interviewsBreakdown, keptAlerts, regionTopLines, interviewsAppliedBy, passDetail, rateDetail, rowArrow, setupText, sinceDay,
   windowsMatch,
 } from '../src/lib/profileList.ts';
 
@@ -217,4 +217,13 @@ test('banners stay while the next date range loads, for the same owner only', ()
   assert.equal(keptAlerts(kept, '', a2).alerts, a2);       // loaded: the fresh ones
   assert.equal(keptAlerts(kept, '', null).alerts, null);   // loaded, none (admin viewing everyone / older server)
   assert.equal(keptAlerts(kept, 'other-user', undefined), null); // admin switched user: never the previous owner's
+});
+
+test('a flag says how long: days up to 20, then whole weeks, "over" past the lookback', () => {
+  assert.equal(idleText({ idleDays: 15 }), '15 days');
+  assert.equal(idleText({ idleDays: 20 }), '20 days');
+  assert.equal(idleText({ idleDays: 21 }), '3 weeks');
+  assert.equal(idleText({ idleDays: 44 }), '6 weeks');
+  assert.equal(idleText({ idleDays: 181, capped: true }), 'over 25 weeks');
+  assert.equal(idleText({}), null);   // older server
 });

@@ -1,7 +1,6 @@
 // The Bidders table's Week view (the default; spec 2026-11-16-bidders-page-redesign-design.md, "Bidders tab table"):
 // one row per bidder with the period's time columns (a pay week's report days, or the pay weeks of a month / range),
-// Approved, Pending and, for whole pay weeks only, Pay. The words are the glossary's (lib/bidsWords.ts); the click
-// help is BidsHelp beside the View switch, so no header carries a hover tip.
+// Approved, Pending and, for whole pay weeks only, Pay. No header carries a hover tip.
 import { useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import type { BidPerformance, BidPerformanceRow } from '../../api/endpoints';
