@@ -3378,17 +3378,19 @@ export interface StatsEveryoneRow {
 export interface StatsTrend { unit: 'week' | 'day'; buckets: { label: string; you: number; median: number }[] }
 export interface StatsView {
   tab: string;
+  /** Callers tab only: whether the subject is shown as a caller or as an engineer whose rounds callers took. */
+  mode?: 'caller' | 'engineer';
   label: string;
   subject: { userId: string; name: string };
   headline: StatsHeadline[];
   tips: StatsTip[];
-  everyone: { rowKind: 'person' | 'profile'; metric: string; rows: StatsEveryoneRow[] };
+  everyone: { rowKind: 'person' | 'profile' | 'caller'; metric: string; rows: StatsEveryoneRow[] };
   trend: StatsTrend | null;
   notEnoughData: boolean;
   definitions: string[];
 }
 
 export const getStatsView = (
-  tab: 'bids' | 'interviews' | 'profiles',
+  tab: 'bids' | 'interviews' | 'profiles' | 'callers',
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);

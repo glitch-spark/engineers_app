@@ -6,7 +6,7 @@ import { StatsFilterBar, useStatsFilters } from '../statistics/statsFilters';
 import StatsFrame from './StatsFrame';
 
 /** A Statistics tab that shows the you-vs-team frame (header, tips, everyone, trend). Admins can view a teammate via `user`. */
-export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'profiles' }) {
+export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'profiles' | 'callers' }) {
   const f = useStatsFilters();
   const me = useAuth().user;
   const isAdmin = me?.role === 'admin';

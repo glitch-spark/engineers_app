@@ -21,8 +21,10 @@ const num = (v: number | null, format: StatsHeadline['format']) =>
 const withUnit = (v: number | null, format: StatsHeadline['format']) => (
   <>{num(v, format)}{format === 'per100' && v != null && <span className="text-sm font-normal text-muted"> per 100 bids</span>}</>
 );
-const METRIC_LABEL: Record<string, string> = { bids: 'bids', per100: 'interviews per 100 bids' };
+const METRIC_LABEL: Record<string, string> = { bids: 'bids', per100: 'interviews per 100 bids', passRate: 'pass rate' };
 const isProfiles = (v: StatsView) => v.everyone.rowKind === 'profile';
+// Profile and caller rows are not people the admin can switch to.
+const isPickable = (v: StatsView) => v.everyone.rowKind === 'person';
 
 const pctAbs = (v: number) => `${Math.round(Math.abs(v) * 100)}%`;
 const signed = (v: number) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${pctAbs(v)}`;
@@ -83,7 +85,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const higherIsBetter = view.headline[0]?.higherIsBetter ?? true;
   const t0 = view.headline[0]?.team;
   const outside = t0 != null && view.headline[0].of === t0.n + 1;
-  const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : 'count';
+  const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : view.everyone.metric === 'passRate' ? 'pct' : 'count';
   const max = Math.max(1, ...rows.filter((r) => r.rank != null).map((r) => r.value ?? 0));
   const anyRanked = rows.some((r) => r.rank != null);
   return (
@@ -115,7 +117,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
             <div key={r.userId} data-testid={`everyone-${r.userId}`} data-subject={r.isSubject}
               className={`grid grid-cols-[28px_120px_1fr_110px_60px] items-center gap-2 rounded px-1 py-0.5 text-sm ${r.isSubject ? 'bg-blue-500/10 font-semibold' : ''}`}>
               <span>{r.rank ?? ''}</span>
-              {canPick && !isProfiles(view)
+              {canPick && isPickable(view)
                 ? <button type="button" className="truncate text-left hover:underline" onClick={() => onPick(r.userId)}>{r.name}</button>
                 : <span className="flex min-w-0 items-baseline"><span className="truncate">{r.name}</span>{r.region && <span className="ml-1.5 flex-none text-xs font-normal text-muted">{r.region}</span>}</span>}
               {r.value == null
