@@ -47,7 +47,7 @@ export default function ItemRow({
         type="number"
         min={0}
         step={item.kind === 'hours' ? 'any' : 1}
-        className="input w-24 text-right tabular-nums"
+        className="input !w-24 shrink-0 text-right tabular-nums"
         disabled={disabled}
         value={result.value ?? ''}
         onChange={(e) => {
