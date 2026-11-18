@@ -143,7 +143,7 @@ describe('StatsFrame', () => {
     ];
     render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
     expect(screen.getByText('3.2')).toBeTruthy();
-    expect(screen.getByText(/per 100 bids/, { selector: 'span' })).toBeTruthy();
+    expect(screen.getByText('Team median').parentElement!.textContent).toContain('2.5 per 100 bids');
     expect(screen.getByText('2.5')).toBeTruthy();
     expect(screen.getByText('26%')).toBeTruthy();
   });
@@ -158,5 +158,56 @@ describe('StatsFrame', () => {
     expect(screen.getAllByText('not ranked').length).toBe(2);
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('4.1')).toBeTruthy();
+  });
+
+  const interviews = () => {
+    const v = view({ tab: 'interviews', tips: [] });
+    v.headline = [
+      { key: 'per100', label: 'Interviews per 100 bids', value: 20, format: 'per100', team: { ...team, median: 4, n: 4 }, rank: null, of: 4, vsMedian: null, higherIsBetter: true, note: '2 interviews from 10 bids' },
+      { key: 'rank', label: 'Your rank', value: null, format: 'rank', team: null, rank: null, of: 4, vsMedian: null, higherIsBetter: false, note: 'needs 30 bids' },
+    ];
+    v.everyone = { metric: 'per100', rows: [
+      { userId: 'u1', name: 'Ana', value: 4, vsMedian: 0, rank: 1, parts: { self: 4, caller: 0 }, isSubject: false },
+      { userId: 'u9', name: 'Low', value: 20, vsMedian: null, rank: null, parts: { self: 2, caller: 0 }, isSubject: true },
+    ] };
+    return v;
+  };
+
+  it('rank cell shows the note when not ranked', () => {
+    render(<StatsFrame view={interviews()} canPick={false} onPick={() => {}} />);
+    const cell = screen.getByText('Your rank').parentElement!;
+    expect(cell.textContent).toContain('needs 30 bids');
+    expect(cell.textContent).not.toContain('— of');
+  });
+
+  it('everyone bars scale to ranked rows only and cap at 100%', () => {
+    render(<StatsFrame view={interviews()} canPick={false} onPick={() => {}} />);
+    const bar = (id: string) => screen.getByTestId(`everyone-${id}`).querySelector('span.h-2\\.5') as HTMLElement;
+    expect(bar('u1').style.width).toBe('100%');
+    expect(bar('u9').style.width).toBe('100%');
+  });
+
+  it('everyone heading is human', () => {
+    const { unmount } = render(<StatsFrame view={interviews()} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText(/interviews per 100 bids, ranked/)).toBeTruthy();
+    expect(screen.queryByText(/per100/)).toBeNull();
+    unmount();
+    const v = interviews();
+    v.everyone.rows.forEach((r) => { r.rank = null; });
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.queryByText(', ranked', { exact: false, selector: 'h3 span' })).toBeNull();
+  });
+
+  it('empty-tips text outside the team fits the tab', () => {
+    const v = interviews();
+    v.headline[0] = { ...v.headline[0], of: 5, rank: 5 };
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText('No activity in this period.')).toBeTruthy();
+  });
+
+  it('team median uses the per-100 unit too', () => {
+    render(<StatsFrame view={interviews()} canPick={false} onPick={() => {}} />);
+    const cell = screen.getByText('Team median').parentElement!;
+    expect(cell.textContent).toContain('4.0 per 100 bids');
   });
 });

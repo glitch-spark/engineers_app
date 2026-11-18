@@ -3356,7 +3356,7 @@ export interface StatsHeadline {
   value: number | null;
   format: 'count' | 'rank' | 'per100' | 'pct';
   team: StatsTeam | null;
-  rank: number;
+  rank: number | null;
   of: number;
   vsMedian: number | null;
   higherIsBetter: boolean;

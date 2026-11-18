@@ -18,6 +18,11 @@ const num = (v: number | null, format: StatsHeadline['format']) =>
         : format === 'rank' ? String(v)
           : v.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
+const withUnit = (v: number | null, format: StatsHeadline['format']) => (
+  <>{num(v, format)}{format === 'per100' && v != null && <span className="text-sm font-normal text-muted"> per 100 bids</span>}</>
+);
+const METRIC_LABEL: Record<string, string> = { bids: 'bids', per100: 'interviews per 100 bids' };
+
 const pctAbs = (v: number) => `${Math.round(Math.abs(v) * 100)}%`;
 const signed = (v: number) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${pctAbs(v)}`;
 
@@ -44,15 +49,17 @@ function Header({ headline }: { headline: StatsHeadline[] }) {
     <div className="panel p-4">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Cell label={main.label}>
-          <Big>{num(main.value, main.format)}{main.format === 'per100' && main.value != null && <span className="text-sm font-normal text-muted"> per 100 bids</span>}</Big>
+          <Big>{withUnit(main.value, main.format)}</Big>
           <Muted>{main.note}</Muted>
         </Cell>
-        {main.team && <Cell label="Team median"><Big>{num(main.team.median, main.format)}</Big><Muted>{main.team.n} people</Muted></Cell>}
+        {main.team && <Cell label="Team median"><Big>{withUnit(main.team.median, main.format)}</Big><Muted>{main.team.n} people</Muted></Cell>}
         {rank && (
           <Cell label={rank.label}>
             {outside
               ? <Big><span className="text-base">would rank {main.rank} of {main.of}</span></Big>
-              : <Big>{main.rank ?? '—'} <span className="text-sm font-normal text-muted">of {main.of}</span></Big>}
+              : main.rank == null
+                ? <Big><span className="text-base">{rank.note}</span></Big>
+                : <Big>{main.rank} <span className="text-sm font-normal text-muted">of {main.of}</span></Big>}
             {v != null && v !== 0 && (
               <p className={`text-xs ${good ? GOOD : BAD}`}>{v > 0 ? '▲' : '▼'} {pctAbs(v)} {v > 0 ? 'above' : 'below'} median</p>
             )}
@@ -76,7 +83,8 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const t0 = view.headline[0]?.team;
   const outside = t0 != null && view.headline[0].of === t0.n + 1;
   const fmtFormat = view.everyone.metric === 'per100' ? 'per100' : 'count';
-  const max = Math.max(1, ...rows.map((r) => r.value ?? 0));
+  const max = Math.max(1, ...rows.filter((r) => r.rank != null).map((r) => r.value ?? 0));
+  const anyRanked = rows.some((r) => r.rank != null);
   return (
     <div className="space-y-4">
       <Header headline={view.headline} />
@@ -86,7 +94,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
         {view.notEnoughData ? (
           <p className="mt-2 text-sm text-muted">Not enough data yet — check back after a few working days.</p>
         ) : view.tips.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">{outside ? 'No bids in this period.' : "Nothing stands out — you're in line with the team."}</p>
+          <p className="mt-2 text-sm text-muted">{outside ? (view.tab === 'bids' ? 'No bids in this period.' : 'No activity in this period.') : "Nothing stands out — you're in line with the team."}</p>
         ) : view.tips.map((t) => (
           <div key={t.id} className="flex gap-2.5 border-t border-zinc-200 py-2 first:border-t-0 dark:border-zinc-800">
             <span className={`mt-1.5 h-2 w-2 flex-none rounded-full ${SEV[t.severity]}`} aria-label={t.severity} />
@@ -99,7 +107,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
       </div>
 
       <div className="panel p-4">
-        <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {view.everyone.metric}, ranked</span></h3>
+        <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {METRIC_LABEL[view.everyone.metric] ?? view.everyone.metric}{anyRanked ? ', ranked' : ''}</span></h3>
         <div className="mt-2 space-y-0.5">
           {rows.map((r) => (
             <div key={r.userId} data-testid={`everyone-${r.userId}`} data-subject={r.isSubject}
@@ -111,7 +119,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
               {r.value == null
                 ? <span />
                 : <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${p}`).join(' · ')}
-                  style={{ width: `${(r.value / max) * 100}%`, background: r.isSubject ? colors.me : colors.other, opacity: r.rank === null ? 0.4 : 1 }} />}
+                  style={{ width: `${Math.min(100, (r.value / max) * 100)}%`, background: r.isSubject ? colors.me : colors.other, opacity: r.rank === null ? 0.4 : 1 }} />}
               <span className="tabular-nums">
                 {num(r.value, fmtFormat)}
                 {r.rank === null && <span className="ml-1 text-xs font-normal text-muted">not ranked</span>}
