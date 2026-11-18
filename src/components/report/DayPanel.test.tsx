@@ -49,7 +49,7 @@ describe('DayPanel', () => {
   });
 
   it('shows the typed bidder bids on days before Bid Track counted them', async () => {
-    setup(plan({ done: { ...c, bidsBidder: 9 } }));
+    setup(plan({ date: '2026-11-13', done: { ...c, bidsBidder: 9 } }), '2026-11-13');
     await screen.findByText('Check inbox');
     expect(screen.getByText('9')).toBeTruthy();
     expect(screen.queryByText('7')).toBeNull();
