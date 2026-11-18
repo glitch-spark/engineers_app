@@ -94,7 +94,7 @@ export default function TodayCard() {
   const bidsTarget = t.bidsSelf + t.bidsBidder;
   const intTarget = t.interviewsSelf + t.interviewsCaller;
   const chip = (label: string, done: number, target: number) => `${label} ${done}${target > 0 ? ` / ${target}` : ''} · auto`;
-  const daysLeft = dow >= 1 && dow <= 4 ? `${5 - dow} days left · ` : dow === 5 ? 'last day · ' : '';
+  const daysLeft = dow >= 1 && dow <= 4 ? `${6 - dow} days left · ` : dow === 5 ? 'last day · ' : '';
   const daily = plan.items.filter((i) => kept(i) && i.scope === 'routine');
   const weekly = plan.items.filter((i) => kept(i) && i.scope === 'goal');
   const disabled = !plan.weekSaved;

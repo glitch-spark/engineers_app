@@ -190,7 +190,7 @@ describe('TodayCard', () => {
   it('section counts', async () => {
     setup(goals());
     expect(await screen.findByText('1 of 3 done')).toBeTruthy();
-    expect(screen.getByText('2 days left · 0 of 2 done')).toBeTruthy();
+    expect(screen.getByText('3 days left · 0 of 2 done')).toBeTruthy();
   });
 
   it('unticks a goal done on an earlier day on that day', async () => {
