@@ -63,6 +63,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
   const { theme } = useTheme();
   const colors = seriesColors(theme === 'dark');
   const rows = view.everyone.rows;
+  const higherIsBetter = view.headline[0]?.higherIsBetter ?? true;
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <div className="space-y-4">
@@ -98,8 +99,8 @@ export default function StatsFrame({ view, canPick, onPick }: {
               <span className="h-2.5 rounded" title={Object.entries(r.parts).map(([k, p]) => `${k} ${p}`).join(' · ')}
                 style={{ width: `${(r.value / max) * 100}%`, background: r.isSubject ? colors.me : colors.other }} />
               <span className="tabular-nums">{r.value.toLocaleString()}</span>
-              <span className={`text-xs ${r.vsMedian == null || r.vsMedian === 0 ? 'text-muted' : r.vsMedian > 0 ? GOOD : BAD}`}>
-                {r.vsMedian == null ? '' : r.vsMedian === 0 ? 'median' : signed(r.vsMedian)}
+              <span className={`text-xs ${r.vsMedian == null || r.vsMedian === 0 ? '' : (r.vsMedian > 0) === higherIsBetter ? GOOD : BAD}`}>
+                {r.vsMedian == null || r.vsMedian === 0 ? '' : signed(r.vsMedian)}
               </span>
             </div>
           ))}
@@ -107,7 +108,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
       </div>
 
       <div className="panel p-4">
-        <h3 className="font-semibold">Trend <span className="text-xs font-normal text-muted">· {view.trend.unit}ly, you vs team median</span></h3>
+        <h3 className="font-semibold">Trend <span className="text-xs font-normal text-muted">· {view.trend.unit === 'day' ? 'Daily' : 'Weekly'}, you vs team median</span></h3>
         <div className="mt-2 h-40">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={view.trend.buckets}>
@@ -125,7 +126,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
       <details className="panel p-4 text-sm">
         <summary className="cursor-pointer font-semibold">How these are counted</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
-          {view.definitions.map((d) => <li key={d}>{d}</li>)}
+          {view.definitions.map((d, i) => <li key={i}>{d}</li>)}
         </ul>
       </details>
     </div>

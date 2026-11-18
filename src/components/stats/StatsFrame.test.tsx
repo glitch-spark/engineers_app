@@ -87,4 +87,21 @@ describe('StatsFrame', () => {
     expect(d.open).toBe(false);
     expect(screen.getByText('Bids = self + bidder')).toBeTruthy();
   });
+
+  it('trend heading names the unit', () => {
+    render(<StatsFrame view={view({ trend: { unit: 'day', buckets: [] } })} canPick={false} onPick={() => {}} />);
+    expect(screen.getByText(/Daily, you vs team median/)).toBeTruthy();
+  });
+
+  it('above median is green, below is red, zero is empty in everyone', () => {
+    const v = view();
+    v.headline[0] = { ...v.headline[0], vsMedian: 0.12 };
+    v.everyone.rows[0].vsMedian = 0;
+    v.everyone.rows[1].vsMedian = 0.12;
+    render(<StatsFrame view={v} canPick={false} onPick={() => {}} />);
+    const up = screen.getByText('▲ 12% above median');
+    expect(up.className).toContain('text-green');
+    expect(screen.getByText('+12%').className).toContain('text-green');
+    expect(screen.queryByText('median', { selector: 'span.text-xs' })).toBeNull();
+  });
 });
