@@ -28,7 +28,6 @@ const plan = (o: object = {}) => ({
   interviews: { self: 1, caller: 1, stages: { self: {}, caller: {} } },
   notes: '', loggedAt: null, submitted: false, profiles: [], ...o,
 });
-const at = (h: number, m: number) => new Date(2026, 10, 18, h, m).toISOString();
 
 let cache = new Map<string, unknown>();
 let unmountCard = () => {};
@@ -47,23 +46,6 @@ function setup(p: object, rounds: object[] = []) {
 }
 
 describe('TodayCard', () => {
-  it("shows targets, bidder auto count and today's interviews", async () => {
-    setup(plan({ targets: { ...c, bidsSelf: 80, bidsBidder: 120, interviewsSelf: 1, interviewsCaller: 1 } }), [
-      { roundId: 'b', scheduledAt: at(16, 30), companyName: 'Globex' },
-      { roundId: 'a', scheduledAt: at(14, 0), companyName: 'Acme' },
-    ]);
-    expect(await screen.findByText('52 / 80')).toBeTruthy();
-    expect(screen.getByText('86 / 120')).toBeTruthy();
-    expect(screen.getByText('2 / 2')).toBeTruthy();
-    expect(await screen.findByText('2:00 PM Acme · 4:30 PM Globex')).toBeTruthy();
-  });
-
-  it('shows just the interview count when the target is 0', async () => {
-    setup(plan({ targets: { ...c, bidsSelf: 80, bidsBidder: 120 } }));
-    expect(await screen.findByText('2')).toBeTruthy();
-    expect(screen.queryByText(/^2 \/ 0/)).toBeNull();
-  });
-
   it('ticking a routine saves a draft once after the pause', async () => {
     setup(plan());
     fireEvent.click(await screen.findByLabelText('Bidder Management'));
@@ -95,15 +77,6 @@ describe('TodayCard', () => {
     setup(plan({ weekSaved: false }));
     expect(((await screen.findByLabelText('Bidder Management')) as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByRole('link', { name: "Set this week's plan" }).getAttribute('href')).toBe('/plans');
-  });
-
-  it('amber after 6 PM when not posted; posted state links Edit update', async () => {
-    setup(plan());
-    expect((await screen.findByText('Update not posted yet')).className).toContain('amber');
-    cleanup();
-    setup(plan({ submitted: true }));
-    expect(await screen.findByText('✓ Posted')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Edit update' }).getAttribute('href')).toBe('/report?day=2026-11-18');
   });
 
   it('keeps archived routines only with a result, and disables them', async () => {
@@ -176,13 +149,96 @@ describe('TodayCard', () => {
     expect(await screen.findByText(/Couldn.t load today/)).toBeTruthy();
     vi.mocked(api.getDayPlan).mockResolvedValue(plan() as never);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(await screen.findByText('52 / 80')).toBeTruthy();
+    expect(await screen.findByText(/Bids 138 \/ 200 · auto/)).toBeTruthy();
   });
 
-  it('shows just the count for bids when the day target is 0', async () => {
-    setup(plan({ targets: { ...c } }));
-    expect(await screen.findByText('52')).toBeTruthy();
-    expect(screen.getByText('86')).toBeTruthy();
-    expect(screen.queryByText(/ \/ 0$/)).toBeNull();
+  it('shows auto chips and no update links', async () => {
+    setup(plan({ targets: { ...c, bidsSelf: 80, bidsBidder: 195, interviewsSelf: 1 }, done: { ...c, bidsSelf: 20 }, bidsBidderAuto: 46 }));
+    expect(await screen.findByText('Bids 66 / 275 · auto')).toBeTruthy();
+    expect(screen.getByText('Interviews 2 / 1 · auto')).toBeTruthy();
+    expect(screen.queryByText('Write my update')).toBeNull();
+    expect(screen.queryByText('edit')).toBeNull();
+  });
+
+  it('omits chip targets when 0', async () => {
+    setup(plan({ targets: { ...c }, interviews: { self: 0, caller: 0, stages: { self: {}, caller: {} } } }));
+    expect(await screen.findByText('Bids 138 · auto')).toBeTruthy();
+    expect(screen.getByText('Interviews 0 · auto')).toBeTruthy();
+  });
+
+  const goals = () => plan({
+    items: [
+      item({ id: 'r1', text: 'Routine A', result: { done: true, value: null, target: null } }),
+      item({ id: 'r2', text: 'Routine B' }),
+      item({ id: 'r3', text: 'Routine C' }),
+      item({ id: 'g1', text: 'Goal one', scope: 'goal' }),
+      item({ id: 'g2', text: 'Goal two', scope: 'goal' }),
+    ],
+    focus: ['g1'],
+    progress: {
+      g1: { value: 0, done: false, target: null, doneOn: null },
+      g2: { value: 0, done: false, target: null, doneOn: null },
+    },
+  });
+
+  it('lists every weekly goal, not only focus', async () => {
+    setup(goals());
+    expect(await screen.findByLabelText(/Goal one/)).toBeTruthy();
+    expect(screen.getByLabelText(/Goal two/)).toBeTruthy();
+  });
+
+  it('section counts', async () => {
+    setup(goals());
+    expect(await screen.findByText('1 of 3 done')).toBeTruthy();
+    expect(screen.getByText('2 days left · 0 of 2 done')).toBeTruthy();
+  });
+
+  it('unticks a goal done on an earlier day on that day', async () => {
+    const p = goals() as ReturnType<typeof goals> & { progress: Record<string, unknown>; items: unknown[] };
+    p.progress.g1 = { value: 0, done: true, target: null, doneOn: '2026-11-16' };
+    setup(p);
+    expect(await screen.findByText('1 of 2 done', { exact: false })).toBeTruthy();
+    expect(screen.getByText('done Mon')).toBeTruthy();
+    const box = screen.getByLabelText(/Goal one/) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    await act(async () => {});
+    expect(api.putDayProgress).toHaveBeenCalledTimes(1);
+    expect(api.putDayProgress).toHaveBeenCalledWith('2026-11-16', { results: { g1: { done: false } } });
+  });
+
+  it('retries a failed untick', async () => {
+    const p = goals() as ReturnType<typeof goals> & { progress: Record<string, unknown>; items: unknown[] };
+    p.progress.g1 = { value: 0, done: true, target: null, doneOn: '2026-11-16' };
+    setup(p);
+    vi.mocked(api.putDayProgress).mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(await screen.findByLabelText(/Goal one/));
+    await act(async () => {});
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await act(async () => {});
+    expect(api.putDayProgress).toHaveBeenCalledTimes(2);
+    expect(api.putDayProgress).toHaveBeenLastCalledWith('2026-11-16', { results: { g1: { done: false } } });
+  });
+
+  it("weekly count goal shows today's box and week total", async () => {
+    const p = goals() as ReturnType<typeof goals> & { progress: Record<string, unknown>; items: unknown[] };
+    p.items[3] = item({ id: 'g1', text: 'Contact', scope: 'goal', kind: 'count', target: 250 }) as never;
+    p.progress.g1 = { value: 140, done: false, target: 250, doneOn: null };
+    setup(p);
+    expect(await screen.findByLabelText('Contact')).toBeTruthy();
+    expect(screen.getByText('140 / 250 this week')).toBeTruthy();
+  });
+
+  it('weekend: no days left', async () => {
+    vi.setSystemTime(new Date('2026-11-21T10:00:00-06:00'));
+    setup(goals());
+    expect(await screen.findByText('0 of 2 done')).toBeTruthy();
+    expect(screen.queryByText(/days left|last day/)).toBeNull();
+  });
+
+  it('friday: last day', async () => {
+    vi.setSystemTime(new Date('2026-11-20T10:00:00-06:00'));
+    setup(goals());
+    expect(await screen.findByText('last day · 0 of 2 done')).toBeTruthy();
   });
 });

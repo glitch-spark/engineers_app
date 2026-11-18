@@ -4,13 +4,17 @@ import type { DayItem } from '../../api/endpoints';
 export const kept = (i: DayItem) => !i.archived || i.result !== null;
 
 export default function ItemRow({
-  item, result, week, disabled, onChange,
+  item, result, week, disabled, valueLocked, note, onChange,
 }: {
   item: DayItem;
   result: { done: boolean; value: number | null };
   /** A weekly goal's progress so far this week. */
   week?: { value: number; done: boolean; target: number | null };
   disabled: boolean;
+  /** Keep the number box read-only while the checkbox stays usable. */
+  valueLocked?: boolean;
+  /** Muted trailing text, e.g. "done Mon". */
+  note?: string;
   onChange: (r: { done: boolean; value: number | null }) => void;
 }) {
   const target = item.result?.target ?? item.target; // a saved day keeps the target it was frozen with
@@ -18,12 +22,12 @@ export default function ItemRow({
   const removed = item.archived ? <span className="ml-1 text-xs text-muted">(removed)</span> : null;
   const progress = week && (
     <span className="ml-auto text-xs tabular-nums text-muted">
-      {item.kind === 'check' ? (week.done ? '✓ this week' : 'Not yet this week') : <>This week {week.value}{week.target ? ` / ${week.target}` : ''}</>}
+      {item.kind === 'check' ? (week.done ? '✓ this week' : 'Not yet this week') : <>{week.value}{week.target ? ` / ${week.target}` : ''} this week</>}
     </span>
   );
   if (item.kind === 'check') {
     return (
-      <li>
+      <li className="rounded-lg px-1 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
         <label className="flex items-center gap-2 text-sm text-body">
           <input
             type="checkbox"
@@ -34,12 +38,13 @@ export default function ItemRow({
           />
           <span className={cls}>{item.text}</span>{removed}
           {progress}
+          {note && <span className="ml-auto text-xs text-muted">{note}</span>}
         </label>
       </li>
     );
   }
   return (
-    <li className="flex items-center gap-2 text-sm text-body">
+    <li className="flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm text-body hover:bg-black/5 dark:hover:bg-white/5">
       <input
         type="checkbox"
         className="h-4 w-4"
@@ -55,7 +60,7 @@ export default function ItemRow({
         min={0}
         step={item.kind === 'hours' ? 'any' : 1}
         className="input !w-16 shrink-0 text-right tabular-nums"
-        disabled={disabled}
+        disabled={disabled || valueLocked}
         value={result.value ?? ''}
         onChange={(e) => {
           const value = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
@@ -65,6 +70,7 @@ export default function ItemRow({
       />
       {target ? <span className="text-xs tabular-nums text-muted">/ {target}</span> : null}
       {progress}
+      {note && <span className="text-xs text-muted">{note}</span>}
     </li>
   );
 }
