@@ -502,9 +502,31 @@ export interface Counts extends Bids {
   interviewsCaller: number;
 }
 
-export interface ChecklistItem {
+export type PlanItemKind = 'check' | 'count' | 'hours';
+
+/** A routine (every working day) or weekly goal. `target` is per day for routines, per week for goals. */
+export interface PlanItem {
+  id: string;
   text: string;
+  kind: PlanItemKind;
+  target: number | null;
+  archived: boolean;
+}
+
+/** A plan item as sent: new items have no id (the server assigns one). */
+export type PlanItemIn = Omit<PlanItem, 'id'> & { id?: string };
+
+/** One day's result for an item; `target` is frozen when saved. */
+export interface ItemResult {
   done: boolean;
+  value: number;
+  target?: number | null;
+}
+
+export interface ItemProgress {
+  value: number;
+  done: boolean;
+  target: number | null;
 }
 
 export type StageCounts = Record<string, number>;
@@ -521,18 +543,27 @@ export interface DayInterviews {
   stages: InterviewStages;
 }
 
+export interface DayItem extends PlanItem {
+  scope: 'routine' | 'goal';
+  result: ItemResult | null;
+}
+
 export interface DayPlan {
   date: string;
   exists: boolean;
   userId: string;
-  goal: Counts;
-  goalItems: ChecklistItem[];
+  /** The day's targets (derived from the week, or overridden). */
+  targets: Counts;
+  items: DayItem[];
+  progress: Record<string, ItemProgress>;
+  focus: string[];
   /** Typed bids + interviews from the Interviews page. */
   done: Counts;
   interviews: DayInterviews;
   notes: string;
   /** Set once the day has been followed up. */
   loggedAt: string | null;
+  submitted: boolean;
   /** The plan owner's profiles (archived included), by name. */
   profiles?: PlanProfile[];
   /** Self bids recorded by the Bid Track extension this day, per profile (shown next to typed in the pilot). */
@@ -543,9 +574,10 @@ export interface DayPlan {
   selfOtherByProfile?: Record<string, number>;
 }
 
-/** A day's follow-up: bids done, the daily goal lines with ticks, and notes (posts to Slack). */
+/** A day's follow-up: results per item, bids done, notes (posts to Slack). */
 export interface DayPlanInput {
-  goalItems: ChecklistItem[];
+  results: Record<string, { done: boolean; value: number }>;
+  focus: string[];
   done: Bids;
   notes: string;
 }
@@ -553,6 +585,7 @@ export interface DayPlanInput {
 export interface WeekDaySummary {
   date: string;
   logged: boolean;
+  submitted: boolean;
   goal: Counts;
   done: Counts;
   itemsDone: number;
@@ -561,13 +594,15 @@ export interface WeekDaySummary {
 
 export interface WeekPlan {
   weekStart: string;
+  /** A saved plan exists. */
   exists: boolean;
+  /** No saved plan: the goal and items are copied from last week until saved. */
+  draft: boolean;
   userId: string;
   goal: Counts;
-  goalItems: ChecklistItem[];
-  /** The goal for every working day of the week (bids + goal lines). */
-  dailyGoal: Counts;
-  dailyGoalItems: ChecklistItem[];
+  routines: PlanItem[];
+  weeklyGoals: PlanItem[];
+  progress: Record<string, ItemProgress>;
   recapNotes: string;
   done: Counts;
   stages: InterviewStages;
@@ -576,9 +611,8 @@ export interface WeekPlan {
 
 export interface WeekPlanInput {
   goal: Counts;
-  goalItems: ChecklistItem[];
-  dailyGoal: Bids;
-  dailyGoalItems: ChecklistItem[];
+  routines: PlanItemIn[];
+  weeklyGoals: PlanItemIn[];
   recapNotes: string;
 }
 
@@ -612,14 +646,6 @@ export const putWeekPlan = (weekStart: string, body: WeekPlanInput) =>
   putJSON<WeekPlan>(`/weekly-plans/${weekStart}`, body);
 
 export const deleteWeekPlan = (weekStart: string) => del<{ message: string }>(`/weekly-plans/${weekStart}`);
-
-export const getPreviousWeekGoals = (weekStart: string) =>
-  apiFetch<{
-    goal: Counts | null;
-    goalItems: ChecklistItem[];
-    dailyGoal: Counts | null;
-    dailyGoalItems: ChecklistItem[];
-  }>(`/weekly-plans/${weekStart}/previous-goals`);
 
 export const getTeamReport = (weekStart: string) =>
   apiFetch<{ weekStart: string; users: TeamRow[] }>(`/reports/team${qs({ weekStart })}`);
