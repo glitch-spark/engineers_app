@@ -3335,3 +3335,15 @@ export interface ProfileReport {
 export const getProfileReport = (
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<ProfileReport>(`/stats/applications/profiles${qs(params)}`);
+
+export interface RateCell { bids: number; matured: number; interviews: number; per100: number | null; tooFew: boolean }
+export interface RateGroup { key: string | null; label: string; you: RateCell; team: RateCell }
+export interface JobFitReport {
+  label: string; subject: { userId: string; name: string };
+  window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
+  bySite: RateGroup[]; byScore: RateGroup[]; byArea: RateGroup[]; byAge: RateGroup[];
+  known: { score: number | null; area: number | null };
+}
+export const getJobFit = (
+  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+) => apiFetch<JobFitReport>(`/stats/applications/jobs${qs(params)}`);

@@ -10,7 +10,8 @@ import InterviewsTab from '../statistics/InterviewsTab';
 
 const getStatsView = vi.fn();
 const getProfileReport = vi.fn();
-vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a) }));
+const getJobFit = vi.fn();
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a), getJobFit: (...a: unknown[]) => getJobFit(...a) }));
 vi.mock('recharts', async () => {
   const React = await import('react');
   const Stub = ({ children }: { children?: React.ReactNode }) => React.createElement('div', null, children);
@@ -46,6 +47,7 @@ const show = (url = '/statistics') => render(
 );
 
 beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockResolvedValue(view);
+  getJobFit.mockReset(); getJobFit.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, bySite: [], byScore: [], byArea: [], byAge: [], known: { score: null, area: null } });
   getProfileReport.mockReset(); getProfileReport.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, coverage: { rows: 0, headerBids: 0, noLink: 0, unmatchedInterviews: 0 }, team: { per100: null, medianDays: null, profiles: 0 }, profiles: [] });
 });
 afterEach(cleanup);
@@ -56,13 +58,15 @@ describe('FramedTab', () => {
       <SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><FramedTab tab={t} /></MemoryRouter></SWRConfig>);
     for (const t of ['bids', 'interviews'] as const) {
       tabs(t);
-      expect(await screen.findByText('No job-level bids in this period yet.')).toBeTruthy();
+      expect(await screen.findAllByText('No job-level bids in this period yet.')).toHaveLength(2);
+      expect(screen.getByText('What kind of job works')).toBeTruthy();
       cleanup();
     }
-    getProfileReport.mockClear();
+    getProfileReport.mockClear(); getJobFit.mockClear();
     tabs('ai-usage');
     await screen.findByText('Self bids are low');
     expect(getProfileReport).not.toHaveBeenCalled();
+    expect(getJobFit).not.toHaveBeenCalled();
     expect(screen.queryByText('Your profiles')).toBeNull();
   });
 
