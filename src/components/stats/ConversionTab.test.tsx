@@ -26,7 +26,7 @@ let role = 'staff';
 vi.mock('../../auth/useAuth', () => ({ useAuth: () => ({ user: { role, id: 'me' } }) }));
 vi.mock('../../lib/useFirstTeamMember', async (orig) => ({
   ...(await orig<object>()),
-  useTeamLookup: () => ({ data: { users: [] } }),
+  useTeamLookup: () => ({ data: { users: [{ _id: 'u7', name: 'Michael' }] } }),
 }));
 
 let search = '';
@@ -91,8 +91,42 @@ describe('ConversionTab', () => {
     const bidder = await screen.findByRole('table', { name: 'By bidder' });
     const warn = within(bidder).getByRole('button', { name: /Only 12 matured bids — this rate can swing a lot\./ });
     expect(warn.textContent).toContain('⚠');
-    expect(warn.tagName).toBe('BUTTON'); // focusable: the tooltip shows on focus / tap too
-    expect(within(bidder).getByRole('tooltip').textContent).toBe('Only 12 matured bids — this rate can swing a lot.');
+    fireEvent.click(warn);
+    expect(within(bidder).getByRole('note').textContent).toBe('Only 12 matured bids — this rate can swing a lot.');
+  });
+
+  it('changing region or the viewed user drops a chosen profile back to My profiles', async () => {
+    role = 'admin';
+    show('/statistics?region=US&scope=profile&profile=a1');
+    await waitFor(() => expect(getConversion).toHaveBeenCalledWith(expect.objectContaining({ scope: 'profile', profile: 'a1' })));
+    fireEvent.change(screen.getByLabelText('Region'), { target: { value: 'EU' } });
+    expect(search).toContain('region=EU');
+    expect(search).not.toContain('scope=');
+    expect(search).not.toContain('profile=');
+    await waitFor(() => expect(getConversion).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'me', region: 'EU' })));
+    cleanup();
+    show('/statistics?scope=profile&profile=a1');
+    await screen.findByLabelText('Viewing');
+    fireEvent.change(screen.getByLabelText('Viewing'), { target: { value: 'u7' } });
+    await waitFor(() => expect(search).toContain('user=u7'));
+    expect(search).not.toContain('scope=');
+    expect(search).not.toContain('profile=');
+  });
+
+  it('a URL profile missing from the picker list falls back to My profiles', async () => {
+    show('/statistics?scope=profile&profile=gone');
+    await waitFor(() => expect(search).not.toContain('profile='));
+    expect(search).not.toContain('scope=');
+    await waitFor(() => expect(getConversion).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'me' })));
+    expect(screen.getByRole('button', { name: 'My profiles' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('choosing the empty profile option goes back to My profiles and leaves the URL clean', async () => {
+    show('/statistics?scope=profile&profile=a1');
+    const picker = (await screen.findByLabelText('Profile')) as HTMLSelectElement;
+    await waitFor(() => expect(picker.value).toBe('a1'));
+    fireEvent.change(picker, { target: { value: '' } });
+    expect(search).toBe('');
   });
 
   it('team total hides bidder table and per-person cards', async () => {

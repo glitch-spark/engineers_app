@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { ConversionParams, ConversionReport } from '../../api/endpoints';
@@ -22,14 +23,21 @@ function ScopeSwitch({ f, scope, subject }: { f: StatsFilterState; scope: api.Co
   const { data } = useSWR(['conversion-profiles', region, subject], () => api.listAccounts({ limit: 1000, region, userId: subject }));
   const options = ((data?.accounts ?? []) as { _id: string; name?: string; region?: string }[])
     .map((a) => ({ value: a._id, label: a.region ? `${a.name ?? a._id} · ${a.region}` : (a.name ?? a._id) }));
+  const listed = options.some((o) => o.value === f.values.profile);
+  // A profile the list doesn't hold (another region / user, archived, or none at all) would only give empty tables.
+  const stale = data !== undefined && f.values.scope === 'profile' && !listed;
+  const { patch } = f;
+  useEffect(() => {
+    if (stale) patch({ scope: undefined, profile: undefined });
+  }, [stale, patch]);
   return (
-    <div className="flex items-center gap-0.5 rounded-xl border border-zinc-200 bg-zinc-100/70 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/60">
+    <div className="flex max-w-full flex-wrap items-center gap-0.5 rounded-xl border border-zinc-200 bg-zinc-100/70 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/60">
       <button type="button" aria-pressed={scope === 'me'} className={scopeBtn(scope === 'me')}
         onClick={() => f.patch({ scope: undefined, profile: undefined })}>My profiles</button>
       <div className="w-44">
-        <Select ariaLabel="Profile" placeholder="Profile…" options={options}
-          value={scope === 'profile' && options.some((o) => o.value === f.values.profile) ? f.values.profile : ''}
-          onChange={(profile) => f.patch({ scope: 'profile', profile })} />
+        <Select ariaLabel="Profile" options={[{ value: '', label: 'Profile…' }, ...options]}
+          value={scope === 'profile' && listed ? f.values.profile : ''}
+          onChange={(profile) => f.patch(profile ? { scope: 'profile', profile } : { scope: undefined, profile: undefined })} />
       </div>
       <button type="button" aria-pressed={scope === 'team'} className={scopeBtn(scope === 'team')}
         onClick={() => f.patch({ scope: 'team', profile: undefined })}>Team total</button>
@@ -59,10 +67,22 @@ function Breakdown({ d, onShowLastMonth }: { d: ConversionReport; onShowLastMont
   );
 }
 
+/** The Statistics filters, except that a new region or viewed user drops a chosen profile (it belongs to the old
+ * one) back to My profiles, in the same URL patch. */
+function useConversionFilters(): StatsFilterState {
+  const f = useStatsFilters('conversion');
+  const { patch, values } = f;
+  const guarded = useMemo(() => (c: Parameters<typeof patch>[0]) => {
+    const moved = (c.region !== undefined && c.region !== values.region) || (c.user !== undefined && c.user !== values.user);
+    patch(moved && values.scope === 'profile' ? { ...c, scope: undefined, profile: undefined } : c);
+  }, [patch, values]);
+  return { ...f, patch: guarded };
+}
+
 /** Statistics → Conversion: the you-vs-team bids strip, then how the scope's bids turn into interviews (totals and
  * five breakdowns), then the per-profile cards. Team total drops the bidder table and the per-person cards. */
 export default function ConversionTab() {
-  const f = useStatsFilters('conversion');
+  const f = useConversionFilters();
   const me = useAuth().user;
   const isAdmin = me?.role === 'admin';
   const user = isAdmin ? f.values.user : '';
