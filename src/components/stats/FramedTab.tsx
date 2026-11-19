@@ -9,6 +9,7 @@ import ProfilesCard from './ProfilesCard';
 import JobFitCard from './JobFitCard';
 import ChangesCard from './ChangesCard';
 import LeadersCard from './LeadersCard';
+import TimingSection from './TimingSection';
 
 /** A Statistics tab that shows the you-vs-team frame (header, tips, everyone, trend). Admins can view a teammate via `user`. */
 export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'ai-usage' }) {
@@ -51,6 +52,7 @@ export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'ai-us
             {!ai && <JobFitCard params={params} user={user} />}
             {!ai && <ChangesCard params={params} user={user} />}
             {!ai && <LeadersCard params={params} user={user} />}
+            {!ai && <TimingSection params={params} user={user} />}
           </>
         )}
     </div>

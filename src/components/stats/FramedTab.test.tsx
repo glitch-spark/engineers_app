@@ -13,7 +13,8 @@ const getProfileReport = vi.fn();
 const getJobFit = vi.fn();
 const getChanges = vi.fn();
 const getLeaders = vi.fn();
-vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a), getJobFit: (...a: unknown[]) => getJobFit(...a), getChanges: (...a: unknown[]) => getChanges(...a), getLeaders: (...a: unknown[]) => getLeaders(...a) }));
+const getTiming = vi.fn();
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a), getJobFit: (...a: unknown[]) => getJobFit(...a), getChanges: (...a: unknown[]) => getChanges(...a), getLeaders: (...a: unknown[]) => getLeaders(...a), getTiming: (...a: unknown[]) => getTiming(...a) }));
 vi.mock('recharts', async () => {
   const React = await import('react');
   const Stub = ({ children }: { children?: React.ReactNode }) => React.createElement('div', null, children);
@@ -52,6 +53,7 @@ beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockRe
   getJobFit.mockReset(); getJobFit.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, bySite: [], byScore: [], byArea: [], byAge: [], known: { score: null, area: null } });
   getChanges.mockReset(); getChanges.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, profiles: [] });
   getLeaders.mockReset(); getLeaders.mockResolvedValue({ label: 'L', window: {}, best: [], weakest: [], groups: {}, note: '' });
+  getTiming.mockReset(); getTiming.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'UTC', weekday: [], hours: [], bidders: [{ bidderId: 'b', name: 'Bo', bids: 5, matured: 4, interviews: 1, per100: null, tooFew: true, rejectedShare: 0 }], teamBidderPer100: null });
   getProfileReport.mockReset(); getProfileReport.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, coverage: { rows: 0, headerBids: 0, noLink: 0, unmatchedInterviews: 0 }, team: { per100: null, medianDays: null, profiles: 0 }, profiles: [] });
 });
 afterEach(cleanup);
@@ -71,16 +73,21 @@ describe('FramedTab', () => {
       const order = Array.from(document.querySelectorAll('h3')).map((h) => h.textContent);
       expect(order.indexOf('What kind of job works')).toBeLessThan(order.indexOf('What to change'));
       expect(order.indexOf('What to change')).toBeLessThan(order.indexOf('Winning vs weakest profiles'));
+      expect(await screen.findByText('Bidder quality')).toBeTruthy();
+      const order2 = Array.from(document.querySelectorAll('h3')).map((h) => h.textContent);
+      expect(order2.indexOf('Winning vs weakest profiles')).toBeLessThan(order2.indexOf('When to bid'));
+      expect(order2.indexOf('When to bid')).toBeLessThan(order2.indexOf('Bidder quality'));
       expect(heads.length).toBeGreaterThan(0);
       cleanup();
     }
-    getProfileReport.mockClear(); getJobFit.mockClear(); getChanges.mockClear(); getLeaders.mockClear();
+    getProfileReport.mockClear(); getJobFit.mockClear(); getChanges.mockClear(); getLeaders.mockClear(); getTiming.mockClear();
     tabs('ai-usage');
     await screen.findByText('Self bids are low');
     expect(getProfileReport).not.toHaveBeenCalled();
     expect(getJobFit).not.toHaveBeenCalled();
     expect(getChanges).not.toHaveBeenCalled();
     expect(getLeaders).not.toHaveBeenCalled();
+    expect(getTiming).not.toHaveBeenCalled();
     expect(screen.queryByText('Your profiles')).toBeNull();
   });
 

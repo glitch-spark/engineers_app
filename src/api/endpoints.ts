@@ -3372,3 +3372,12 @@ export interface LeadersReport {
 export const getLeaders = (
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<LeadersReport>(`/stats/applications/leaders${qs(params)}`);
+
+export interface TimingBidder extends RateCell { bidderId: string; name: string | null; rejectedShare: number }
+export interface TimingReport {
+  label: string; subject: { userId: string; name: string }; timezone: string;
+  weekday: RateGroup[]; hours: RateGroup[]; bidders: TimingBidder[]; teamBidderPer100: number | null;
+}
+export const getTiming = (
+  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+) => apiFetch<TimingReport>(`/stats/applications/timing${qs(params)}`);

@@ -1,0 +1,76 @@
+import useSWR from 'swr';
+import * as api from '../../api/endpoints';
+import RateTable from './RateTable';
+
+const tzLabel = (tz: string) => `${(tz.split('/').pop() ?? tz).replace(/_/g, ' ')} time`;
+const one = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function TimingCard({ d }: { d: api.TimingReport }) {
+  return (
+    <div className="panel p-4">
+      <h3 className="font-semibold">When to bid</h3>
+      <p className="text-xs text-muted">{`Interviews per 100 matured bids by when the bid went out (${tzLabel(d.timezone)}).`}</p>
+      <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <RateTable title="Day of week" rows={d.weekday} />
+        <RateTable title="Time of day" rows={d.hours} />
+      </div>
+    </div>
+  );
+}
+
+function BiddersCard({ d }: { d: api.TimingReport }) {
+  return (
+    <div className="panel p-4">
+      <h3 className="font-semibold">Bidder quality</h3>
+      <p className="text-xs text-muted">Your bidders' bids in this period: how many, how they convert, and how many Bid Track rejected.</p>
+      <div className="mt-2 overflow-x-auto">
+        <table aria-label="Bidders" className="w-full text-left text-sm">
+          <thead>
+            <tr className="text-xs text-muted">
+              {['Bidder', 'Bids', 'Matured', 'Interviews', 'Per 100', 'Rejected'].map((h) => <th key={h} className="pb-1 pr-3 font-normal">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {d.bidders.map((b) => (
+              <tr key={b.bidderId} className="border-t border-zinc-200 dark:border-zinc-800">
+                <td className="py-1 pr-3">{b.name ?? 'Unnamed bidder'}</td>
+                <td className="py-1 pr-3 tabular-nums">{b.bids}</td>
+                <td className="py-1 pr-3 tabular-nums">{b.matured}</td>
+                <td className="py-1 pr-3 tabular-nums">{b.interviews}</td>
+                <td className="whitespace-nowrap py-1 pr-3 tabular-nums">{b.tooFew || b.per100 == null ? 'too few' : one(b.per100)}</td>
+                <td className={`py-1 tabular-nums ${b.rejectedShare >= 20 ? 'font-medium text-red-700 dark:text-red-400' : ''}`}>{`${b.rejectedShare}%`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-xs text-muted">
+        {d.teamBidderPer100 == null ? 'Team bidder median: not enough data yet.' : `Team bidder median: ${one(d.teamBidderPer100)} per 100.`}
+      </p>
+    </div>
+  );
+}
+
+/** One request feeding the "When to bid" and "Bidder quality" cards. */
+export default function TimingSection({ params, user }: { params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string }) {
+  const { data, error, isLoading } = useSWR(
+    params ? ['stats-timing', params.period, params.date, params.to, params.region, user] : null,
+    () => api.getTiming({ ...params!, ...(user ? { user } : {}) }),
+    { keepPreviousData: true },
+  );
+  if (!params) return null;
+  if (error) return <p className="panel p-6 text-sm text-red-700 dark:text-red-400">Couldn’t load the timing report. Try again.</p>;
+  if (!data) {
+    return isLoading ? (
+      <p className="panel flex items-center gap-2 p-6 text-sm text-muted" role="status">
+        <span className="spinner spinner-sm" aria-hidden /> Loading timing…
+      </p>
+    ) : null;
+  }
+  return (
+    <>
+      <TimingCard d={data} />
+      {data.bidders.length > 0 && <BiddersCard d={data} />}
+    </>
+  );
+}
