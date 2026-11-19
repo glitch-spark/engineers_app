@@ -6,7 +6,10 @@ import { SWRConfig } from 'swr';
 import ConversionTab from '../stats/ConversionTab';
 import ResumeCompareTab from './ResumeCompareTab';
 
-afterEach(cleanup);
+const fetchSpy = vi.spyOn(globalThis, 'fetch');
+afterEach(() => { cleanup(); fetchSpy.mockClear(); });
+// the profile picker asks for accounts even on an invalid range: keep it off the network
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), listAccounts: () => Promise.resolve({ accounts: [], pagination: {} }) }));
 vi.mock('../../auth/useAuth', () => ({ useAuth: () => ({ user: { role: 'staff' } }) }));
 
 const BACKWARDS = '/statistics?range=custom&from=2026-10-09&to=2026-10-01';
@@ -28,5 +31,6 @@ describe('statistics tabs with an invalid date range', () => {
     show(tab);
     expect(screen.getByText(IDLE)).toBeTruthy();
     expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled(); // no real request (it used to fail after teardown: flaky CI)
   });
 });

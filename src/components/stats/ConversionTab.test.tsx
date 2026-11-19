@@ -70,7 +70,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); });
 describe('ConversionTab', () => {
   it('renders totals and five tables', async () => {
     show();
-    expect(await screen.findByText('Oct 6 – Nov 19, 2026 · 9,840 bids · 6,120 matured · 41 interviews · 0.7% · 3,720 in play')).toBeTruthy();
+    expect(await screen.findByText('Oct 6 – Nov 19, 2026 · 9,840 bids · 6,120 matured · 41 interviews from matured bids (44 in all) · 0.7% · 3,720 in play')).toBeTruthy();
     for (const t of ['By bidder', 'By job site', 'By resume score', 'By job area', 'By profile age']) {
       expect(screen.getByRole('table', { name: t })).toBeTruthy();
     }

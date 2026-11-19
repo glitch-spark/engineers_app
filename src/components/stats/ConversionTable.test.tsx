@@ -20,4 +20,16 @@ describe('ConversionTable', () => {
     fireEvent.click(warn);
     expect(screen.queryByRole('note')).toBeNull();
   });
+
+  it('few by expected interviews at the team rate says so; few by matured keeps the bids copy', () => {
+    render(<ConversionTable title="By job site" teamRate={0.5} rows={[
+      { key: 'g', label: 'Greenhouse', bids: 400, matured: 300, interviews: 2, rate: 0.7, few: true, fewReason: 'expected' },
+      { key: 'l', label: 'Lever', bids: 40, matured: 29, interviews: 1, rate: 3.4, few: true, fewReason: 'matured' },
+    ]} />);
+    const exp = 'Only about 1.5 interviews expected from 300 matured bids at the team rate — this rate can swing a lot.';
+    fireEvent.click(screen.getByRole('button', { name: /about 1\.5 interviews/ }));
+    expect(screen.getByRole('note').textContent).toBe(exp);
+    expect(screen.getByRole('button', { name: /Only 29 matured bids/ }).getAttribute('title')).toBe(
+      'Only 29 matured bids — this rate can swing a lot.');
+  });
 });

@@ -56,12 +56,12 @@ function Breakdown({ d, onShowLastMonth }: { d: ConversionReport; onShowLastMont
   return (
     <div className="panel p-4">
       <p className="font-medium tabular-nums">
-        {`${d.label} · ${n(t.bids)} bids · ${n(t.matured)} matured · ${n(t.interviews)} interviews · ${pct(t.rate)} · ${n(t.inPlay)} in play`}
+        {`${d.label} · ${n(t.bids)} bids · ${n(t.matured)} matured · ${n(t.interviews)} interviews from matured bids (${n(t.interviewsAll)} in all) · ${pct(t.rate)} · ${n(t.inPlay)} in play`}
       </p>
       <p className="text-xs text-muted">{`Rate = interviews per 100 bids that had ${d.window.matured_days}+ days to work ("matured").`}</p>
       {t.matured === 0 && t.bids > 0 && <NoMaturedNote days={d.window.matured_days} onShowLastMonth={onShowLastMonth} />}
       <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-        {tables.map(([title, rows]) => rows && <ConversionTable key={title} title={title} rows={rows} />)}
+        {tables.map(([title, rows]) => rows && <ConversionTable key={title} title={title} rows={rows} teamRate={d.teamRate} />)}
       </div>
     </div>
   );

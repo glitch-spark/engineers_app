@@ -1,15 +1,16 @@
 import { Fragment, useId, useState } from 'react';
 import type { ConversionGroup } from '../../api/endpoints';
 
-const tipFor = (n: number) => `Only ${n} matured bids — this rate can swing a lot.`;
+const tipFor = (g: ConversionGroup, teamRate?: number | null) => (g.fewReason === 'expected' && teamRate
+  ? `Only about ${((g.matured * teamRate) / 100).toFixed(1)} interviews expected from ${g.matured.toLocaleString()} matured bids at the team rate — this rate can swing a lot.`
+  : `Only ${g.matured.toLocaleString()} matured bids — this rate can swing a lot.`);
 
-/** ⚠ on a rate from under 30 matured bids: `title` on hover, the text for screen readers, and a click / tap toggles
- * the explanation as a line under the row (no popover, so the table's scroll box can't clip it). */
-function FewWarning({ n, open, onToggle }: { n: number; open: boolean; onToggle: () => void }) {
+/** ⚠ on a `few` rate: `title` on hover, the text for screen readers, and a click / tap toggles the explanation as a
+ * line under the row (no popover, so the table's scroll box can't clip it). */
+function FewWarning({ tip, open, onToggle }: { tip: string; open: boolean; onToggle: () => void }) {
   const id = useId();
-  const tip = tipFor(n);
   return (
-    <button type="button" title={tip} aria-label={`Few matured bids: ${tip}`} aria-describedby={id} aria-expanded={open}
+    <button type="button" title={tip} aria-label={`Thin evidence: ${tip}`} aria-describedby={id} aria-expanded={open}
       onClick={onToggle} className="ml-1 cursor-help text-amber-600 dark:text-amber-400">
       ⚠<span id={id} className="sr-only">{tip}</span>
     </button>
@@ -19,7 +20,7 @@ function FewWarning({ n, open, onToggle }: { n: number; open: boolean; onToggle:
 const HEAD = ['Group', 'Bids', 'Matured', 'Interviews', 'Rate'];
 
 /** One Conversion breakdown: per group, bids, matured bids, interviews and the rate (interviews per 100 matured). */
-export default function ConversionTable({ title, rows }: { title: string; rows: ConversionGroup[] }) {
+export default function ConversionTable({ title, rows, teamRate }: { title: string; rows: ConversionGroup[]; teamRate?: number | null }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div>
@@ -40,12 +41,12 @@ export default function ConversionTable({ title, rows }: { title: string; rows: 
                   <td className="whitespace-nowrap py-1 tabular-nums">
                     {g.rate == null ? '—' : `${g.rate}%`}
                     {g.few && g.rate != null && (
-                      <FewWarning n={g.matured} open={open === g.key} onToggle={() => setOpen(open === g.key ? null : g.key)} />
+                      <FewWarning tip={tipFor(g, teamRate)} open={open === g.key} onToggle={() => setOpen(open === g.key ? null : g.key)} />
                     )}
                   </td>
                 </tr>
                 {open === g.key && (
-                  <tr><td colSpan={5} role="note" className="pb-1 text-xs text-amber-700 dark:text-amber-400">{tipFor(g.matured)}</td></tr>
+                  <tr><td colSpan={5} role="note" className="pb-1 text-xs text-amber-700 dark:text-amber-400">{tipFor(g, teamRate)}</td></tr>
                 )}
               </Fragment>
             ))}

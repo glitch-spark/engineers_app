@@ -3323,11 +3323,17 @@ export interface ConversionParams {
   scope?: ConversionScope; profile?: string;
 }
 /** rate: interviews per 100 matured bids (one decimal), null when none matured; few: under 30 matured. */
-export interface ConversionGroup { key: string; label: string; bids: number; matured: number; interviews: number; rate: number | null; few: boolean }
+/** `few`: under 30 matured bids (`fewReason` "matured") or under 3 interviews expected at the team rate ("expected"). */
+export interface ConversionGroup {
+  key: string; label: string; bids: number; matured: number; interviews: number; rate: number | null; few: boolean;
+  fewReason?: 'matured' | 'expected' | null;
+}
 export interface ConversionReport {
   label: string; startClamped: boolean; scope: ConversionScope;
   window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
   totals: { bids: number; matured: number; interviews: number; interviewsAll: number; inPlay: number; rate: number | null };
+  /** The team's interviews per 100 matured bids (one decimal); null with no team baseline. */
+  teamRate?: number | null;
   /** Absent for scope=team. */
   byBidder?: ConversionGroup[];
   bySite: ConversionGroup[]; byScore: ConversionGroup[]; byArea: ConversionGroup[]; byAge: ConversionGroup[];

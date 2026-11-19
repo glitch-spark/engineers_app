@@ -68,6 +68,23 @@ describe('TimingSection', () => {
   });
 });
 
+describe('TimingSection team scope', () => {
+  it('labels the columns Team bids / Team, one rate column (you == team)', async () => {
+    getTiming.mockResolvedValue(report());
+    render(<SWRConfig value={{ provider: () => new Map() }}><TimingSection params={{ ...params, scope: 'team' }} user="" /></SWRConfig>);
+    const t = (await screen.findByText('Day of week')).parentElement!.querySelector('table')!;
+    expect(within(t).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Group', 'Team bids', 'Team']);
+    expect(within(t).getAllByRole('row')[1].querySelectorAll('td')).toHaveLength(3);
+  });
+
+  it('me scope keeps Your bids / You / Team', async () => {
+    getTiming.mockResolvedValue(report());
+    show();
+    const t = (await screen.findByText('Day of week')).parentElement!.querySelector('table')!;
+    expect(within(t).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Group', 'Your bids', 'You', 'Team']);
+  });
+});
+
 describe('TimingSection immature period', () => {
   const imm = (o: Partial<TimingReport> = {}) => report({
     window: { median: null, p90: 14, matured_days: 27, n: 0, thin: true },

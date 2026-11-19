@@ -35,8 +35,9 @@ function tone(you: RateCell, team: RateCell) {
   return '';
 }
 
-/** One small table of interviews per 100 matured bids by group, you vs the team. */
-export default function RateTable({ title, caption, rows }: { title: string; caption?: string; rows: RateGroup[] }) {
+/** One small table of interviews per 100 matured bids by group, you vs the team. `team`: the scope is the team, so
+ * "you" equals "team" and one Team column shows it. */
+export default function RateTable({ title, caption, rows, team }: { title: string; caption?: string; rows: RateGroup[]; team?: boolean }) {
   return (
     <div>
       <h4 className="text-sm font-medium">{title}</h4>
@@ -46,8 +47,8 @@ export default function RateTable({ title, caption, rows }: { title: string; cap
           <thead>
             <tr className="text-xs text-muted">
               <th className="pb-1 pr-3 font-normal">Group</th>
-              <th className="pb-1 pr-3 font-normal">Your bids</th>
-              <th className="pb-1 pr-3 font-normal">You</th>
+              <th className="pb-1 pr-3 font-normal">{team ? 'Team bids' : 'Your bids'}</th>
+              {!team && <th className="pb-1 pr-3 font-normal">You</th>}
               <th className="pb-1 font-normal">Team</th>
             </tr>
           </thead>
@@ -56,7 +57,7 @@ export default function RateTable({ title, caption, rows }: { title: string; cap
               <tr key={g.label} className="border-t border-zinc-200 dark:border-zinc-800">
                 <td className="py-1 pr-3">{g.label}</td>
                 <td className="py-1 pr-3 tabular-nums">{g.you.bids}</td>
-                <td className={`whitespace-nowrap py-1 pr-3 tabular-nums ${tone(g.you, g.team)}`}><RateText c={g.you} /></td>
+                {!team && <td className={`whitespace-nowrap py-1 pr-3 tabular-nums ${tone(g.you, g.team)}`}><RateText c={g.you} /></td>}
                 <td className="whitespace-nowrap py-1 tabular-nums"><RateText c={g.team} /></td>
               </tr>
             ))}

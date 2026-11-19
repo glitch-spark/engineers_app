@@ -5,15 +5,15 @@ import RateTable, { NoMaturedNote, noneMatured, RateText } from './RateTable';
 const tzLabel = (tz: string) => `${(tz.split('/').pop() ?? tz).replace(/_/g, ' ')} time`;
 const one = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-function TimingCard({ d, onShowLastMonth }: { d: api.TimingReport; onShowLastMonth?: () => void }) {
+function TimingCard({ d, team, onShowLastMonth }: { d: api.TimingReport; team: boolean; onShowLastMonth?: () => void }) {
   return (
     <div className="panel p-4">
       <h3 className="font-semibold">When to bid</h3>
       <p className="text-xs text-muted">{`Interviews per 100 matured bids by when the bid went out (${tzLabel(d.timezone)}).`}</p>
       {noneMatured([...d.weekday, ...d.hours]) && <NoMaturedNote days={d.window.matured_days} onShowLastMonth={onShowLastMonth} />}
       <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <RateTable title="Day of week" rows={d.weekday} />
-        <RateTable title="Time of day" rows={d.hours} />
+        <RateTable title="Day of week" rows={d.weekday} team={team} />
+        <RateTable title="Time of day" rows={d.hours} team={team} />
       </div>
     </div>
   );
@@ -75,7 +75,7 @@ export default function TimingSection({ params, user, onShowLastMonth }: { onSho
   }
   return (
     <>
-      <TimingCard d={data} onShowLastMonth={onShowLastMonth} />
+      <TimingCard d={data} team={params.scope === 'team'} onShowLastMonth={onShowLastMonth} />
       {params.scope !== 'team' && data.bidders.length > 0 && <BiddersCard d={data} />}
     </>
   );
