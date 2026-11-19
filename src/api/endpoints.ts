@@ -3315,3 +3315,23 @@ export const getStatsView = (
   tab: 'bids' | 'interviews' | 'ai-usage',
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);
+
+export type ProfileGrade = 'strong' | 'watch' | 'dead' | 'early';
+export interface ProfileRow {
+  accountId: string; name: string; region: string; archived: boolean;
+  bidsSelf: number; bidsBidder: number; matured: number; maturedInterviews: number; interviews: number;
+  reach: { intro: number; tech: number; final: number };
+  stillInPlay: number; per100: number | null;
+  days: { first: number; median: number; slowest: number } | null;
+  grade: ProfileGrade; reasons: string[];
+}
+export interface ProfileReport {
+  label: string; subject: { userId: string; name: string };
+  window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
+  coverage: { rows: number; headerBids: number; noLink: number; unmatchedInterviews: number };
+  team: { per100: number | null; medianDays: number | null; profiles: number };
+  profiles: ProfileRow[];
+}
+export const getProfileReport = (
+  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+) => apiFetch<ProfileReport>(`/stats/applications/profiles${qs(params)}`);

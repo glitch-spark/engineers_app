@@ -9,7 +9,8 @@ import FramedTab from './FramedTab';
 import InterviewsTab from '../statistics/InterviewsTab';
 
 const getStatsView = vi.fn();
-vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a) }));
+const getProfileReport = vi.fn();
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a) }));
 vi.mock('recharts', async () => {
   const React = await import('react');
   const Stub = ({ children }: { children?: React.ReactNode }) => React.createElement('div', null, children);
@@ -44,10 +45,27 @@ const show = (url = '/statistics') => render(
   </SWRConfig>,
 );
 
-beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockResolvedValue(view); });
+beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockResolvedValue(view);
+  getProfileReport.mockReset(); getProfileReport.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, coverage: { rows: 0, headerBids: 0, noLink: 0, unmatchedInterviews: 0 }, team: { per100: null, medianDays: null, profiles: 0 }, profiles: [] });
+});
 afterEach(cleanup);
 
 describe('FramedTab', () => {
+  it('renders ProfilesCard on bids and interviews but not ai-usage', async () => {
+    const tabs = (t: 'bids' | 'interviews' | 'ai-usage') => render(
+      <SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><FramedTab tab={t} /></MemoryRouter></SWRConfig>);
+    for (const t of ['bids', 'interviews'] as const) {
+      tabs(t);
+      expect(await screen.findByText('No job-level bids in this period yet.')).toBeTruthy();
+      cleanup();
+    }
+    getProfileReport.mockClear();
+    tabs('ai-usage');
+    await screen.findByText('Self bids are low');
+    expect(getProfileReport).not.toHaveBeenCalled();
+    expect(screen.queryByText('Your profiles')).toBeNull();
+  });
+
   it('renders the frame from /stats/bids', async () => {
     show();
     expect(await screen.findByText('Self bids are low')).toBeTruthy();

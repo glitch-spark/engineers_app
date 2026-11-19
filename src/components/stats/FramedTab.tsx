@@ -5,6 +5,7 @@ import { ServerUpdateNote } from '../statistics/rateShared';
 import { toStatsParams } from '../../lib/dateRange';
 import { StatsFilterBar, useStatsFilters } from '../statistics/statsFilters';
 import StatsFrame from './StatsFrame';
+import ProfilesCard from './ProfilesCard';
 
 /** A Statistics tab that shows the you-vs-team frame (header, tips, everyone, trend). Admins can view a teammate via `user`. */
 export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'ai-usage' }) {
@@ -43,6 +44,7 @@ export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'ai-us
               {shown.subject.userId !== me?.id ? `Viewing ${shown.subject.name} · ${shown.label}` : shown.label}
             </p>
             <StatsFrame view={shown} canPick={isAdmin} onPick={(id) => f.patch({ user: id })} />
+            {!ai && <ProfilesCard params={params} user={user} />}
           </>
         )}
     </div>
