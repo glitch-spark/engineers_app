@@ -62,11 +62,22 @@ describe('JobFitCard', () => {
     expect((await you('Thin')).className).not.toMatch(/font-medium/);
   });
 
+  it('does not highlight when team rate is 0 or team is too few', async () => {
+    getJobFit.mockResolvedValue(report({ bySite: [
+      grp('ZeroZero', { per100: 0 }, { per100: 0 }), grp('ZeroTwo', { per100: 2 }, { per100: 0 }),
+      grp('TeamThin', { per100: 20 }, { per100: 10, tooFew: true }),
+    ] }));
+    show();
+    for (const l of ['ZeroZero', 'ZeroTwo', 'TeamThin']) {
+      expect((await screen.findByText(l)).closest('tr')!.querySelectorAll('td')[2].className).not.toMatch(/font-medium|text-green|text-red/);
+    }
+  });
+
   it('empty state', async () => {
     const z = (l: string) => grp(l, { bids: 0, matured: 0, per100: null });
     getJobFit.mockResolvedValue(report({ bySite: [z('a')], byScore: [z('b')], byArea: [z('c')], byAge: [z('d')] }));
     show();
-    expect(await screen.findByText('No job-level bids in this period yet.')).toBeTruthy();
+    expect(await screen.findByText('Nothing to break down yet — no job-level bids in this period.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
   });
 });

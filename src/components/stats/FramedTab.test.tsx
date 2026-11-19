@@ -58,7 +58,8 @@ describe('FramedTab', () => {
       <SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><FramedTab tab={t} /></MemoryRouter></SWRConfig>);
     for (const t of ['bids', 'interviews'] as const) {
       tabs(t);
-      expect(await screen.findAllByText('No job-level bids in this period yet.')).toHaveLength(2);
+      expect(await screen.findByText('No job-level bids in this period yet.')).toBeTruthy();
+      expect(await screen.findByText('Nothing to break down yet — no job-level bids in this period.')).toBeTruthy();
       expect(screen.getByText('What kind of job works')).toBeTruthy();
       cleanup();
     }

@@ -26,7 +26,7 @@ export default function JobFitCard({ params, user }: { params: { period: api.Sta
       <h3 className="font-semibold">What kind of job works</h3>
       <p className="text-xs text-muted">Interviews per 100 matured bids — yours vs the team, in four ways. Groups with fewer than 30 matured bids show "too few".</p>
       {empty ? (
-        <p className="mt-2 text-sm text-muted">No job-level bids in this period yet.</p>
+        <p className="mt-2 text-sm text-muted">Nothing to break down yet — no job-level bids in this period.</p>
       ) : (
         <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
           <RateTable title="By job site" rows={bySite} />

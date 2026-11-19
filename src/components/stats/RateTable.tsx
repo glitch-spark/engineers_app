@@ -5,7 +5,7 @@ const show = (c: RateCell) => (c.tooFew || c.per100 == null ? 'too few' : one(c.
 
 /** Green/red when "You" is >= 1.5x / <= 0.5x the team rate and both sides have enough bids. */
 function tone(you: RateCell, team: RateCell) {
-  if (you.tooFew || team.tooFew || you.per100 == null || team.per100 == null) return '';
+  if (you.tooFew || team.tooFew || you.per100 == null || !team.per100) return '';
   if (you.per100 >= 1.5 * team.per100) return 'font-medium text-green-700 dark:text-green-400';
   if (you.per100 <= 0.5 * team.per100) return 'font-medium text-red-700 dark:text-red-400';
   return '';
