@@ -3357,7 +3357,7 @@ export const getChanges = (
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<ChangesReport>(`/stats/applications/changes${qs(params)}`);
 
-export interface LeaderRow { accountId: string; name: string; owner: string; region: string | null; matured: number; interviews: number; per100: number | null }
+export interface LeaderRow { accountId: string; name: string | null; owner: string | null; region: string | null; matured: number; interviews: number; per100: number | null }
 export interface LeaderShare { label: string; share: number }
 export interface LeaderGroup {
   matured: number; interviews: number; regions: Record<string, number>; avgScore: number | null; scored: number;

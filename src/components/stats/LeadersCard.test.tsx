@@ -56,4 +56,31 @@ describe('LeadersCard', () => {
     show();
     expect(await screen.findByText('No profile has 150+ matured bids in this period yet.')).toBeTruthy();
   });
+
+  it('falls back for null name, owner and region (incl. "null" key)', async () => {
+    getLeaders.mockResolvedValue(report({
+      best: [lrow({ name: null, owner: null, region: null })],
+      groups: { best: group({ regions: { null: 2, EU: 1 } }), weakest: group() },
+    }));
+    show();
+    const win = within(await screen.findByRole('region', { name: 'Winning' }));
+    expect(win.getByText(/Unnamed profile · unknown owner · no region · 200 matured/)).toBeTruthy();
+    expect(win.getByText('no region 2 · EU 1')).toBeTruthy();
+  });
+
+  it('weakest empty: one muted line instead of empty summary rows', async () => {
+    getLeaders.mockResolvedValue(report({ weakest: [] }));
+    show();
+    const weak = within(await screen.findByRole('region', { name: 'Weakest' }));
+    expect(weak.getByText('Not enough profiles with 150+ matured bids to compare.')).toBeTruthy();
+    expect(weak.queryByText('Region mix')).toBeNull();
+  });
+
+  it('uses singular for 1 day and 1 week', async () => {
+    getLeaders.mockResolvedValue(report({ groups: { best: group({ medianProfileAge: 1, medianDays: 1, interviewCount: 1 }), weakest: group({ medianProfileAge: 7 * 1, medianDays: 2 }) } }));
+    show();
+    const win = within(await screen.findByRole('region', { name: 'Winning' }));
+    expect(win.getByText('1 day')).toBeTruthy();
+    expect(win.getByText('1 day (1 interview)')).toBeTruthy();
+  });
 });

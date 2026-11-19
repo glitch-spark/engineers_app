@@ -4,10 +4,12 @@ import type { LeaderGroup, LeaderRow, LeaderShare } from '../../api/endpoints';
 
 /** "Winning vs weakest profiles" card: the team's best and weakest profiles and what their bids have in common. */
 const shares = (l: LeaderShare[]) => l.slice(0, 3).map((s) => `${s.label} ${s.share}%`).join(' · ') || '—';
-const age = (d: number | null) => (d == null ? '—' : d < 14 ? `${d} days` : `${Math.round(d / 7)} weeks`);
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const age = (d: number | null) => (d == null ? '—' : d < 14 ? plural(d, 'day') : plural(Math.round(d / 7), 'week'));
+const regionName = (r: string | null) => (r == null || r === 'null' ? 'no region' : r);
 
 function Column({ title, rows, g }: { title: string; rows: LeaderRow[]; g: LeaderGroup }) {
-  const regions = Object.entries(g.regions).map(([r, n]) => `${r} ${n}`).join(' · ') || '—';
+  const regions = Object.entries(g.regions).map(([r, n]) => `${regionName(r)} ${n}`).join(' · ') || '—';
   const facts: [string, string][] = [
     ['Matured bids · interviews', `${g.matured} matured bids · ${g.interviews} interviews`],
     ['Region mix', regions],
@@ -15,7 +17,7 @@ function Column({ title, rows, g }: { title: string; rows: LeaderRow[]; g: Leade
     ['Job areas', `${shares(g.areas)}${g.areaKnown == null ? '' : ` · area known for ${g.areaKnown}%`}`],
     ['Profile age when bidding', age(g.medianProfileAge)],
     ['Job sites', shares(g.sites)],
-    ['Median days to interview', g.daysTooFew || g.medianDays == null ? 'too few' : `${g.medianDays} days (${g.interviewCount} interviews)`],
+    ['Median days to interview', g.daysTooFew || g.medianDays == null ? 'too few' : `${plural(g.medianDays, 'day')} (${plural(g.interviewCount, 'interview')})`],
     ['Self / bidder mix', g.selfShare == null ? '—' : `${g.selfShare}% self`],
   ];
   return (
@@ -24,10 +26,13 @@ function Column({ title, rows, g }: { title: string; rows: LeaderRow[]; g: Leade
       <ul className="mt-1 space-y-0.5 text-sm">
         {rows.map((r) => (
           <li key={r.accountId}>
-            {`${r.name} · ${r.owner} · ${r.region ?? 'no region'} · ${r.matured} matured · ${r.interviews} interviews · ${r.per100 == null ? '—' : r.per100.toFixed(1)} per 100`}
+            {`${r.name ?? 'Unnamed profile'} · ${r.owner ?? 'unknown owner'} · ${regionName(r.region)} · ${r.matured} matured · ${r.interviews} interviews · ${r.per100 == null ? '—' : r.per100.toFixed(1)} per 100`}
           </li>
         ))}
       </ul>
+      {rows.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">Not enough profiles with 150+ matured bids to compare.</p>
+      ) : (
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-left text-sm">
           <tbody>
@@ -40,6 +45,7 @@ function Column({ title, rows, g }: { title: string; rows: LeaderRow[]; g: Leade
           </tbody>
         </table>
       </div>
+      )}
     </section>
   );
 }
