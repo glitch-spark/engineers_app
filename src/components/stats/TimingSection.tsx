@@ -18,6 +18,11 @@ function TimingCard({ d }: { d: api.TimingReport }) {
   );
 }
 
+function teamLine(t: api.TimingReport['teamBidder'] | undefined) { // undefined: an older API during a deploy
+  if (t?.per100 == null || !t.matured) return 'Team bidders overall: not enough data yet.';
+  return `Team bidders overall: ${one(t.per100)} per 100 (${t.interviews.toLocaleString()} interviews from ${t.matured.toLocaleString()} matured bids).`;
+}
+
 function BiddersCard({ d }: { d: api.TimingReport }) {
   return (
     <div className="panel p-4">
@@ -45,7 +50,7 @@ function BiddersCard({ d }: { d: api.TimingReport }) {
         </table>
       </div>
       <p className="mt-2 text-xs text-muted">
-        {d.teamBidderPer100 == null ? 'Team bidder median: not enough data yet.' : `Team bidder median: ${one(d.teamBidderPer100)} per 100.`}
+        {teamLine(d.teamBidder)}
       </p>
     </div>
   );

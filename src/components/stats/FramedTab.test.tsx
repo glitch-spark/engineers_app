@@ -53,7 +53,7 @@ beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockRe
   getJobFit.mockReset(); getJobFit.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, bySite: [], byScore: [], byArea: [], byAge: [], known: { score: null, area: null } });
   getChanges.mockReset(); getChanges.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, profiles: [] });
   getLeaders.mockReset(); getLeaders.mockResolvedValue({ label: 'L', window: {}, best: [], weakest: [], groups: {}, note: '' });
-  getTiming.mockReset(); getTiming.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'UTC', weekday: [], hours: [], bidders: [{ bidderId: 'b', name: 'Bo', bids: 5, matured: 4, interviews: 1, per100: null, tooFew: true, rejectedShare: 0 }], teamBidderPer100: null });
+  getTiming.mockReset(); getTiming.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'UTC', weekday: [], hours: [], bidders: [{ bidderId: 'b', name: 'Bo', bids: 5, matured: 4, interviews: 1, per100: null, tooFew: true, rejectedShare: 0 }], teamBidder: { per100: null, matured: 0, interviews: 0 } });
   getProfileReport.mockReset(); getProfileReport.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, coverage: { rows: 0, headerBids: 0, noLink: 0, unmatchedInterviews: 0 }, team: { per100: null, medianDays: null, profiles: 0 }, profiles: [] });
 });
 afterEach(cleanup);

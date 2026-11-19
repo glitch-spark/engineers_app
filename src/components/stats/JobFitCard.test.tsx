@@ -62,6 +62,19 @@ describe('JobFitCard', () => {
     expect((await you('Thin')).className).not.toMatch(/font-medium/);
   });
 
+  it('highlights only when the team rate would give 3+ interviews on your matured bids', async () => {
+    getJobFit.mockResolvedValue(report({ bySite: [
+      grp('Chance', { matured: 40, interviews: 0, per100: 0 }, { per100: 1 }),
+      grp('RealBad', { matured: 600, interviews: 0, per100: 0 }, { per100: 1 }),
+      grp('RealGood', { matured: 600, interviews: 12, per100: 2 }, { per100: 1 }),
+    ] }));
+    show();
+    const you = async (l: string) => (await screen.findByText(l)).closest('tr')!.querySelectorAll('td')[2];
+    expect((await you('Chance')).className).not.toMatch(/font-medium|text-green|text-red/);
+    expect((await you('RealBad')).className).toMatch(/font-medium.*text-red/);
+    expect((await you('RealGood')).className).toMatch(/font-medium.*text-green/);
+  });
+
   it('does not highlight when team rate is 0 or team is too few', async () => {
     getJobFit.mockResolvedValue(report({ bySite: [
       grp('ZeroZero', { per100: 0 }, { per100: 0 }), grp('ZeroTwo', { per100: 2 }, { per100: 0 }),

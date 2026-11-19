@@ -3,9 +3,13 @@ import type { RateCell, RateGroup } from '../../api/endpoints';
 const one = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const show = (c: RateCell) => (c.tooFew || c.per100 == null ? 'too few' : one(c.per100));
 
-/** Green/red when "You" is >= 1.5x / <= 0.5x the team rate and both sides have enough bids. */
+const EXPECTED_MIN = 3; // as the backend grades: below 3 expected interviews, a gap is chance
+
+/** Green/red when "You" is >= 1.5x / <= 0.5x the team rate, both sides have enough bids and the team rate would
+ * give 3+ interviews on your matured bids. */
 function tone(you: RateCell, team: RateCell) {
   if (you.tooFew || team.tooFew || you.per100 == null || !team.per100) return '';
+  if ((you.matured * team.per100) / 100 < EXPECTED_MIN) return '';
   if (you.per100 >= 1.5 * team.per100) return 'font-medium text-green-700 dark:text-green-400';
   if (you.per100 <= 0.5 * team.per100) return 'font-medium text-red-700 dark:text-red-400';
   return '';

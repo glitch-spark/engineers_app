@@ -16,7 +16,7 @@ const bidder = (o = {}) => ({ bidderId: 'b1', name: 'Bo' as string | null, bids:
 const report = (o: Partial<TimingReport> = {}): TimingReport => ({
   label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'America/New_York',
   weekday: [grp('Mon'), grp('Tue', { tooFew: true, per100: 3 })], hours: [grp('00–03'), grp('21–24')],
-  bidders: [bidder(), bidder({ bidderId: 'b2', name: null, tooFew: true, rejectedShare: 25 })], teamBidderPer100: 9.5, ...o,
+  bidders: [bidder(), bidder({ bidderId: 'b2', name: null, tooFew: true, rejectedShare: 25 })], teamBidder: { per100: 0.4, matured: 3000, interviews: 12 }, ...o,
 });
 
 beforeEach(() => { getTiming.mockReset(); });
@@ -36,7 +36,7 @@ describe('TimingSection', () => {
     expect(getTiming).toHaveBeenCalledWith({ ...params, user: 'u7' });
   });
 
-  it('renders bidders, unnamed fallback, red rejected >= 20% and the team median', async () => {
+  it('renders bidders, unnamed fallback, red rejected >= 20% and the pooled team bidder rate', async () => {
     getTiming.mockResolvedValue(report());
     show();
     expect(await screen.findByText('Your bidders\' bids in this period: how many, how they convert, and how many Bid Track rejected.')).toBeTruthy();
@@ -45,13 +45,13 @@ describe('TimingSection', () => {
     expect(t.getByText('Unnamed bidder')).toBeTruthy();
     expect(t.getByText('5%').className).not.toMatch(/text-red/);
     expect(t.getByText('25%').className).toMatch(/text-red/);
-    expect(screen.getByText('Team bidder median: 9.5 per 100.')).toBeTruthy();
+    expect(screen.getByText('Team bidders overall: 0.4 per 100 (12 interviews from 3,000 matured bids).')).toBeTruthy();
   });
 
-  it('says not enough data when the team median is null', async () => {
-    getTiming.mockResolvedValue(report({ teamBidderPer100: null }));
+  it('says not enough data when the team bidders have no matured bids', async () => {
+    getTiming.mockResolvedValue(report({ teamBidder: { per100: null, matured: 0, interviews: 0 } }));
     show();
-    expect(await screen.findByText('Team bidder median: not enough data yet.')).toBeTruthy();
+    expect(await screen.findByText('Team bidders overall: not enough data yet.')).toBeTruthy();
   });
 
   it('hides Bidder quality when there are no bidders', async () => {

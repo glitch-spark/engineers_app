@@ -3376,7 +3376,9 @@ export const getLeaders = (
 export interface TimingBidder extends RateCell { bidderId: string; name: string | null; rejectedShare: number }
 export interface TimingReport {
   label: string; subject: { userId: string; name: string }; timezone: string;
-  weekday: RateGroup[]; hours: RateGroup[]; bidders: TimingBidder[]; teamBidderPer100: number | null;
+  weekday: RateGroup[]; hours: RateGroup[]; bidders: TimingBidder[];
+  /** Pooled over every team bidder bid (not rejected): interviews / matured x 100. */
+  teamBidder: { per100: number | null; matured: number; interviews: number };
 }
 export const getTiming = (
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
