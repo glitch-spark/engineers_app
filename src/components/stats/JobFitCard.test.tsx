@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import type { JobFitReport, RateCell, RateGroup } from '../../api/endpoints';
 import JobFitCard from './JobFitCard';
@@ -36,7 +36,7 @@ describe('JobFitCard', () => {
   });
 
   it('shows too few', async () => {
-    getJobFit.mockResolvedValue(report({ bySite: [grp('Lever', { tooFew: true, per100: 50 }, { tooFew: true })] }));
+    getJobFit.mockResolvedValue(report({ bySite: [grp('Lever', { tooFew: true, per100: 50, bids: 10 }, { tooFew: true, bids: 10 })] }));
     show();
     const row = (await screen.findByText('Lever')).closest('tr')!;
     expect(within(row).getAllByText('too few')).toHaveLength(2);
@@ -92,5 +92,37 @@ describe('JobFitCard', () => {
     show();
     expect(await screen.findByText('Nothing to break down yet — no job-level bids in this period.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
+  });
+});
+
+describe('JobFitCard cells and note', () => {
+  it('shows in play when enough bids but not matured, too few when under 30 bids', async () => {
+    getJobFit.mockResolvedValue(report({ bySite: [
+      grp('Lever', { bids: 40, matured: 0, per100: null, tooFew: true }, { bids: 900, matured: 0, per100: null, tooFew: true }),
+      grp('Tiny', { bids: 5, matured: 0, per100: null, tooFew: true }, { bids: 5, matured: 0, per100: null, tooFew: true }),
+    ] }));
+    show();
+    const lever = (await screen.findByText('Lever')).closest('tr')!;
+    expect(within(lever).getAllByText('in play')).toHaveLength(2);
+    expect(within(lever).queryByText('too few')).toBeNull();
+    expect(within(screen.getByText('Tiny').closest('tr')!).getAllByText('too few')).toHaveLength(2);
+  });
+
+  const none = () => report({ bySite: [grp('Lever', { matured: 0, per100: null, tooFew: true }, { matured: 0, per100: null, tooFew: true })],
+    byScore: [], byArea: [], byAge: [] });
+  it('shows the note and Show last month calls onShowLastMonth', async () => {
+    getJobFit.mockResolvedValue(none());
+    const fn = vi.fn();
+    render(<SWRConfig value={{ provider: () => new Map() }}><JobFitCard params={params} user="" onShowLastMonth={fn} /></SWRConfig>);
+    expect(await screen.findByText(/None of these bids have had 14 days to get an interview yet, so there's nothing to compare\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show last month' }));
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the note when something matured', async () => {
+    getJobFit.mockResolvedValue(report());
+    show();
+    await screen.findByText('Lever');
+    expect(screen.queryByText(/None of these bids/)).toBeNull();
   });
 });

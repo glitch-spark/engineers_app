@@ -225,3 +225,14 @@ describe('InterviewsTab', () => {
     expect((screen.getByLabelText('Viewing') as HTMLSelectElement).value).toBe('u7');
   });
 });
+
+describe('FramedTab show last month', () => {
+  it('the note button switches the range to last_month', async () => {
+    getJobFit.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true },
+      bySite: [{ key: 'x', label: 'Lever', you: { bids: 40, matured: 0, interviews: 0, per100: null, tooFew: true }, team: { bids: 90, matured: 0, interviews: 0, per100: null, tooFew: true } }],
+      byScore: [], byArea: [], byAge: [], known: { score: null, area: null } });
+    show('/statistics');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show last month' }));
+    await waitFor(() => expect(search).toContain('range=last_month'));
+  });
+});

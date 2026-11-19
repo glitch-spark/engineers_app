@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import type { ProfileReport, ProfileRow } from '../../api/endpoints';
 import ProfilesCard from './ProfilesCard';
@@ -130,5 +130,21 @@ describe('ProfilesCard', () => {
     const { container } = show(null);
     expect(container.innerHTML).toBe('');
     expect(getProfileReport).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProfilesCard immature note', () => {
+  it('shows the note + button when every profile matured 0, hides otherwise', async () => {
+    load(report({ profiles: [row({ matured: 0, per100: null })] }));
+    const fn = vi.fn();
+    render(<SWRConfig value={{ provider: () => new Map() }}><ProfilesCard params={params} user="" onShowLastMonth={fn} /></SWRConfig>);
+    expect(await screen.findByText(/None of these bids have had 14 days to get an interview yet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show last month' }));
+    expect(fn).toHaveBeenCalledTimes(1);
+    cleanup();
+    load(report());
+    show();
+    await screen.findByText('Your profiles');
+    expect(screen.queryByText(/None of these bids/)).toBeNull();
   });
 });

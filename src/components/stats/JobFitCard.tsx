@@ -1,9 +1,9 @@
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import RateTable from './RateTable';
+import RateTable, { NoMaturedNote, noneMatured } from './RateTable';
 
 /** "What kind of job works" card: interviews per 100 matured bids by job site, score, area and profile age. */
-export default function JobFitCard({ params, user }: { params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string }) {
+export default function JobFitCard({ params, user, onShowLastMonth }: { params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string; onShowLastMonth?: () => void }) {
   const { data, error, isLoading } = useSWR(
     params ? ['stats-jobs', params.period, params.date, params.to, params.region, user] : null,
     () => api.getJobFit({ ...params!, ...(user ? { user } : {}) }),
@@ -25,6 +25,7 @@ export default function JobFitCard({ params, user }: { params: { period: api.Sta
     <div className="panel p-4">
       <h3 className="font-semibold">What kind of job works</h3>
       <p className="text-xs text-muted">Interviews per 100 matured bids — yours vs the team, in four ways. Groups with fewer than 30 matured bids show "too few".</p>
+      {!empty && noneMatured([...bySite, ...byScore, ...byArea, ...byAge]) && <NoMaturedNote days={data.window.matured_days} onShowLastMonth={onShowLastMonth} />}
       {empty ? (
         <p className="mt-2 text-sm text-muted">Nothing to break down yet — no job-level bids in this period.</p>
       ) : (

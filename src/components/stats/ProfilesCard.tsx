@@ -1,4 +1,5 @@
 import useSWR from 'swr';
+import { NoMaturedNote } from './RateTable';
 import * as api from '../../api/endpoints';
 import type { ProfileReport, ProfileRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
@@ -60,7 +61,7 @@ function Row({ p, max, team }: { p: ProfileRow; max: number; team: number | null
 
 const HEAD = ['Profile', 'Grade', 'Bids self / bidder', 'Matured', 'Interviews', 'Per 100 bids', 'Days first · median · slowest', 'How far', 'Still in play'];
 
-export default function ProfilesCard({ params, user }: { params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string }) {
+export default function ProfilesCard({ params, user, onShowLastMonth }: { params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string; onShowLastMonth?: () => void }) {
   const me = useAuth().user;
   const { data, error, isLoading } = useSWR(
     params ? ['stats-profiles', params.period, params.date, params.to, params.region, user] : null,
@@ -88,6 +89,9 @@ export default function ProfilesCard({ params, user }: { params: { period: api.S
           {`Bids made in ${data.label} that had ${w.matured_days}+ days to work ("matured"), what became of them, and how fast.`}
           {w.thin && ` Not enough interviews yet to measure the team's response time, so ${w.matured_days} days is used.`}
         </p>
+        {profiles.some((p) => p.bidsSelf + p.bidsBidder > 0) && profiles.every((p) => p.matured === 0) && (
+          <NoMaturedNote days={w.matured_days} onShowLastMonth={onShowLastMonth} />
+        )}
         {profiles.length === 0 ? (
           <p className="mt-2 text-sm text-muted">No job-level bids in this period yet.</p>
         ) : (

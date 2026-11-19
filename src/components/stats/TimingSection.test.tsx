@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import type { RateCell, TimingReport } from '../../api/endpoints';
 import TimingSection from './TimingSection';
@@ -11,11 +11,11 @@ const params = { period: 'month' as const, date: '2026-11-01', region: 'all' as 
 const show = (user = '') => render(<SWRConfig value={{ provider: () => new Map() }}><TimingSection params={params} user={user} /></SWRConfig>);
 
 const cell = (o: Partial<RateCell> = {}): RateCell => ({ bids: 100, matured: 80, interviews: 8, per100: 10, tooFew: false, ...o });
-const grp = (label: string, you: Partial<RateCell> = {}) => ({ key: label, label, you: cell(you), team: cell() });
+const grp = (label: string, you: Partial<RateCell> = {}, team: Partial<RateCell> = {}) => ({ key: label, label, you: cell(you), team: cell(team) });
 const bidder = (o = {}) => ({ bidderId: 'b1', name: 'Bo' as string | null, bids: 50, matured: 40, interviews: 4, per100: 10 as number | null, tooFew: false, rejectedShare: 5, ...o });
 const report = (o: Partial<TimingReport> = {}): TimingReport => ({
-  label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'America/New_York',
-  weekday: [grp('Mon'), grp('Tue', { tooFew: true, per100: 3 })], hours: [grp('00–03'), grp('21–24')],
+  label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'America/New_York', window: { median: null, p90: 14, matured_days: 14, n: 14, thin: false },
+  weekday: [grp('Mon'), grp('Tue', { tooFew: true, per100: 3, bids: 10 })], hours: [grp('00–03'), grp('21–24')],
   bidders: [bidder(), bidder({ bidderId: 'b2', name: null, tooFew: true, rejectedShare: 25 })], teamBidder: { per100: 0.4, matured: 3000, interviews: 12 }, ...o,
 });
 
@@ -65,5 +65,32 @@ describe('TimingSection', () => {
     getTiming.mockRejectedValue(new Error('x'));
     show();
     expect(await screen.findByText(/Couldn’t load the timing report/)).toBeTruthy();
+  });
+});
+
+describe('TimingSection immature period', () => {
+  const imm = (o: Partial<TimingReport> = {}) => report({
+    window: { median: null, p90: 14, matured_days: 27, n: 0, thin: true },
+    weekday: [grp('Mon', { matured: 0, per100: null, tooFew: true }, { matured: 0, per100: null, tooFew: true })], hours: [grp('00–03', { matured: 0, per100: null, tooFew: true }, { matured: 0, per100: null, tooFew: true })],
+    bidders: [bidder({ bids: 300, matured: 0, interviews: 0, per100: null, tooFew: true }), bidder({ bidderId: 'b2', name: 'Cy', bids: 5, matured: 0, per100: null, tooFew: true })], ...o });
+  const showWith = (fn?: () => void) => render(<SWRConfig value={{ provider: () => new Map() }}><TimingSection params={params} user="" onShowLastMonth={fn} /></SWRConfig>);
+
+  it('note + button, and bidder Per 100 is in play at 30+ bids, too few under', async () => {
+    getTiming.mockResolvedValue(imm());
+    const fn = vi.fn();
+    showWith(fn);
+    expect(await screen.findByText(/None of these bids have had 27 days to get an interview yet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show last month' }));
+    expect(fn).toHaveBeenCalledTimes(1);
+    const t = screen.getByRole('table', { name: 'Bidders' });
+    expect(within(within(t).getByText('Bo').closest('tr')!).getByText('in play')).toBeTruthy();
+    expect(within(within(t).getByText('Cy').closest('tr')!).getByText('too few')).toBeTruthy();
+  });
+
+  it('no note when something matured', async () => {
+    getTiming.mockResolvedValue(report());
+    showWith(vi.fn());
+    await screen.findByText('When to bid');
+    expect(screen.queryByText(/None of these bids/)).toBeNull();
   });
 });

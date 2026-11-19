@@ -1,15 +1,16 @@
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import RateTable from './RateTable';
+import RateTable, { NoMaturedNote, noneMatured, RateText } from './RateTable';
 
 const tzLabel = (tz: string) => `${(tz.split('/').pop() ?? tz).replace(/_/g, ' ')} time`;
 const one = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-function TimingCard({ d }: { d: api.TimingReport }) {
+function TimingCard({ d, onShowLastMonth }: { d: api.TimingReport; onShowLastMonth?: () => void }) {
   return (
     <div className="panel p-4">
       <h3 className="font-semibold">When to bid</h3>
       <p className="text-xs text-muted">{`Interviews per 100 matured bids by when the bid went out (${tzLabel(d.timezone)}).`}</p>
+      {noneMatured([...d.weekday, ...d.hours]) && <NoMaturedNote days={d.window.matured_days} onShowLastMonth={onShowLastMonth} />}
       <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
         <RateTable title="Day of week" rows={d.weekday} />
         <RateTable title="Time of day" rows={d.hours} />
@@ -42,7 +43,7 @@ function BiddersCard({ d }: { d: api.TimingReport }) {
                 <td className="py-1 pr-3 tabular-nums">{b.bids}</td>
                 <td className="py-1 pr-3 tabular-nums">{b.matured}</td>
                 <td className="py-1 pr-3 tabular-nums">{b.interviews}</td>
-                <td className="whitespace-nowrap py-1 pr-3 tabular-nums">{b.tooFew || b.per100 == null ? 'too few' : one(b.per100)}</td>
+                <td className="whitespace-nowrap py-1 pr-3 tabular-nums"><RateText c={b} /></td>
                 <td className={`py-1 tabular-nums ${b.rejectedShare >= 20 ? 'font-medium text-red-700 dark:text-red-400' : ''}`}>{`${b.rejectedShare}%`}</td>
               </tr>
             ))}
@@ -57,7 +58,7 @@ function BiddersCard({ d }: { d: api.TimingReport }) {
 }
 
 /** One request feeding the "When to bid" and "Bidder quality" cards. */
-export default function TimingSection({ params, user }: { params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string }) {
+export default function TimingSection({ params, user, onShowLastMonth }: { onShowLastMonth?: () => void; params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string }) {
   const { data, error, isLoading } = useSWR(
     params ? ['stats-timing', params.period, params.date, params.to, params.region, user] : null,
     () => api.getTiming({ ...params!, ...(user ? { user } : {}) }),
@@ -74,7 +75,7 @@ export default function TimingSection({ params, user }: { params: { period: api.
   }
   return (
     <>
-      <TimingCard d={data} />
+      <TimingCard d={data} onShowLastMonth={onShowLastMonth} />
       {data.bidders.length > 0 && <BiddersCard d={data} />}
     </>
   );

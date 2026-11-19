@@ -1,7 +1,27 @@
 import type { RateCell, RateGroup } from '../../api/endpoints';
 
 const one = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const show = (c: RateCell) => (c.tooFew || c.per100 == null ? 'too few' : one(c.per100));
+const ENOUGH_BIDS = 30; // as the backend's MIN_MATURED: this many bids is enough, they just haven't matured yet
+
+/** A rate cell's text: the rate, "in play" (enough bids, none matured enough yet) or "too few". */
+export function RateText({ c }: { c: RateCell }) {
+  if (!c.tooFew && c.per100 != null) return <>{one(c.per100)}</>;
+  return c.bids >= ENOUGH_BIDS ? <span className="text-muted">in play</span> : <>too few</>;
+}
+
+/** Above a card's tables when the whole period is too young to compare: offer last month instead. */
+export function NoMaturedNote({ days, onShowLastMonth }: { days: number; onShowLastMonth?: () => void }) {
+  return (
+    <p className="mt-2 text-sm text-muted">
+      {`None of these bids have had ${days} days to get an interview yet, so there's nothing to compare. `}
+      {onShowLastMonth && <button type="button" className="text-blue-600 underline dark:text-blue-400" onClick={onShowLastMonth}>Show last month</button>}
+    </p>
+  );
+}
+
+/** True when some bids exist but none has matured, you or team. */
+export const noneMatured = (groups: RateGroup[]) =>
+  groups.some((g) => g.you.bids + g.team.bids > 0) && groups.every((g) => g.you.matured + g.team.matured === 0);
 
 const EXPECTED_MIN = 3; // as the backend grades: below 3 expected interviews, a gap is chance
 
@@ -36,8 +56,8 @@ export default function RateTable({ title, caption, rows }: { title: string; cap
               <tr key={g.label} className="border-t border-zinc-200 dark:border-zinc-800">
                 <td className="py-1 pr-3">{g.label}</td>
                 <td className="py-1 pr-3 tabular-nums">{g.you.bids}</td>
-                <td className={`whitespace-nowrap py-1 pr-3 tabular-nums ${tone(g.you, g.team)}`}>{show(g.you)}</td>
-                <td className="whitespace-nowrap py-1 tabular-nums">{show(g.team)}</td>
+                <td className={`whitespace-nowrap py-1 pr-3 tabular-nums ${tone(g.you, g.team)}`}><RateText c={g.you} /></td>
+                <td className="whitespace-nowrap py-1 tabular-nums"><RateText c={g.team} /></td>
               </tr>
             ))}
           </tbody>

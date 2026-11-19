@@ -21,6 +21,7 @@ export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'ai-us
   // AI usage's presets (Today, Yesterday, ...) all go to the frame as an explicit day range.
   const params = ai ? (f.range ? { ...toStatsParams('custom', f.range), region: f.region } : null)
     : f.params;
+  const showLast = () => f.patch({ range: 'last_month', from: '', to: '' });
   const { data, error, isLoading } = useSWR(
     params ? ['stats', tab, params.period, params.date, params.to, ai ? '' : params.region, user] : null,
     () => api.getStatsView(tab, { ...params!, ...(user ? { user } : {}) }),
@@ -48,11 +49,11 @@ export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'ai-us
               {shown.subject.userId !== me?.id ? `Viewing ${shown.subject.name} · ${shown.label}` : shown.label}
             </p>
             <StatsFrame view={shown} canPick={isAdmin} onPick={(id) => f.patch({ user: id })} />
-            {!ai && <ProfilesCard params={params} user={user} />}
-            {!ai && <JobFitCard params={params} user={user} />}
+            {!ai && <ProfilesCard params={params} user={user} onShowLastMonth={showLast} />}
+            {!ai && <JobFitCard params={params} user={user} onShowLastMonth={showLast} />}
             {!ai && <ChangesCard params={params} user={user} />}
             {!ai && <LeadersCard params={params} user={user} />}
-            {!ai && <TimingSection params={params} user={user} />}
+            {!ai && <TimingSection params={params} user={user} onShowLastMonth={showLast} />}
           </>
         )}
     </div>
