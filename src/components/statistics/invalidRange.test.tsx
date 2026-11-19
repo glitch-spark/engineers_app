@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
-import BidsTab from './BidsTab';
+import ConversionTab from '../stats/ConversionTab';
 import ResumeCompareTab from './ResumeCompareTab';
 
 afterEach(cleanup);
@@ -22,7 +22,7 @@ function show(tab: JSX.Element, url = BACKWARDS) {
 
 describe('statistics tabs with an invalid date range', () => {
   it.each([
-    ['Bids and Interviews', <BidsTab key="b" />],
+    ['Conversion', <ConversionTab key="c" />],
     ['Resume compare', <ResumeCompareTab key="r" />],
   ])('%s shows the idle message, not a spinner', (_name, tab) => {
     show(tab);

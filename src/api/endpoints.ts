@@ -3316,6 +3316,24 @@ export const getStatsView = (
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);
 
+export type ConversionScope = 'me' | 'profile' | 'team';
+/** The Conversion tab's request: `profile` (an Account id) goes with scope=profile. */
+export interface ConversionParams {
+  period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string;
+  scope?: ConversionScope; profile?: string;
+}
+/** rate: interviews per 100 matured bids (one decimal), null when none matured; few: under 30 matured. */
+export interface ConversionGroup { key: string; label: string; bids: number; matured: number; interviews: number; rate: number | null; few: boolean }
+export interface ConversionReport {
+  label: string; startClamped: boolean; scope: ConversionScope;
+  window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
+  totals: { bids: number; matured: number; interviews: number; interviewsAll: number; inPlay: number; rate: number | null };
+  /** Absent for scope=team. */
+  byBidder?: ConversionGroup[];
+  bySite: ConversionGroup[]; byScore: ConversionGroup[]; byArea: ConversionGroup[]; byAge: ConversionGroup[];
+}
+export const getConversion = (params: ConversionParams) => apiFetch<ConversionReport>(`/stats/conversion${qs(params)}`);
+
 export type ProfileGrade = 'strong' | 'watch' | 'dead' | 'early';
 export interface ProfileRow {
   accountId: string; name: string; region: string | null; archived: boolean;
@@ -3328,50 +3346,25 @@ export interface ProfileRow {
 export interface ProfileReport {
   label: string; subject: { userId: string; name: string };
   window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
-  coverage: { rows: number; headerBids: number; noLink: number; unmatchedInterviews: number };
+  /** headerBids / unmatchedInterviews: null unless scope=me. */
+  coverage: { rows: number; headerBids: number | null; noLink: number; unmatchedInterviews: number | null };
   team: { per100: number | null; medianDays: number | null; profiles: number };
   profiles: ProfileRow[];
 }
 export const getProfileReport = (
-  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+  params: ConversionParams,
 ) => apiFetch<ProfileReport>(`/stats/applications/profiles${qs(params)}`);
 
 export interface RateCell { bids: number; matured: number; interviews: number; per100: number | null; tooFew: boolean }
 export interface RateGroup { key: string | null; label: string; you: RateCell; team: RateCell }
-export interface JobFitReport {
-  label: string; subject: { userId: string; name: string };
-  window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
-  bySite: RateGroup[]; byScore: RateGroup[]; byArea: RateGroup[]; byAge: RateGroup[];
-  known: { score: number | null; area: number | null };
-}
-export const getJobFit = (
-  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
-) => apiFetch<JobFitReport>(`/stats/applications/jobs${qs(params)}`);
-
 export interface ChangeSuggestion { pattern: string; text: string; evidence: Record<string, unknown> }
 export interface ChangesReport {
   label: string; subject: { userId: string; name: string };
   profiles: { accountId: string; name: string; grade: ProfileGrade; suggestions: ChangeSuggestion[] }[];
 }
 export const getChanges = (
-  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+  params: ConversionParams,
 ) => apiFetch<ChangesReport>(`/stats/applications/changes${qs(params)}`);
-
-export interface LeaderRow { accountId: string; name: string | null; owner: string | null; region: string | null; matured: number; interviews: number; per100: number | null }
-export interface LeaderShare { label: string; share: number }
-export interface LeaderGroup {
-  matured: number; interviews: number; regions: Record<string, number>; avgScore: number | null; scored: number;
-  areas: LeaderShare[]; areaKnown: number | null; medianProfileAge: number | null; sites: LeaderShare[];
-  medianDays: number | null; interviewCount: number; daysTooFew: boolean; selfShare: number | null;
-}
-export interface LeadersReport {
-  label: string; window: JobFitReport['window'];
-  best: LeaderRow[]; weakest: LeaderRow[];
-  groups: { best: LeaderGroup; weakest: LeaderGroup }; note: string;
-}
-export const getLeaders = (
-  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
-) => apiFetch<LeadersReport>(`/stats/applications/leaders${qs(params)}`);
 
 export interface TimingBidder extends RateCell { bidderId: string; name: string | null; rejectedShare: number }
 export interface TimingReport {
@@ -3382,5 +3375,5 @@ export interface TimingReport {
   teamBidder: { per100: number | null; matured: number; interviews: number };
 }
 export const getTiming = (
-  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+  params: ConversionParams,
 ) => apiFetch<TimingReport>(`/stats/applications/timing${qs(params)}`);

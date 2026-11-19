@@ -42,6 +42,19 @@ describe('ProfilesCard', () => {
     expect(await screen.findByText(/cover 0 of 0 bids \(—\).* 1 interview couldn't be tied to a job\./)).toBeTruthy();
   });
 
+  it('drops the bids share and unmatched sentence when the server leaves them null (one profile / team)', async () => {
+    load(report({ coverage: { rows: 32, headerBids: null, noLink: 0, unmatchedInterviews: null } }));
+    show();
+    expect(await screen.findByText('Job-level numbers cover 32 applications.')).toBeTruthy();
+  });
+
+  it('sends scope and profile', async () => {
+    load(report());
+    render(<SWRConfig value={{ provider: () => new Map() }}><ProfilesCard params={{ ...params, scope: 'profile', profile: 'a1' }} user="" /></SWRConfig>);
+    await screen.findByText('Alpha');
+    expect(getProfileReport).toHaveBeenCalledWith(expect.objectContaining({ scope: 'profile', profile: 'a1' }));
+  });
+
   it('says job-level rows exceed typed bids instead of a share over 100%', async () => {
     load(report({ coverage: { rows: 50, headerBids: 40, noLink: 0, unmatchedInterviews: 0 } }));
     show();

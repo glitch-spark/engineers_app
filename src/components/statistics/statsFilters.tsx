@@ -19,18 +19,22 @@ import Select from '../Select';
 
 /**
  * The Statistics filters, kept in the URL so they follow you from tab to tab (and survive a reload or a shared link):
- * `region` (the first four tabs), `range` / `from` / `to`, `q` (Resume compare's company search) and, on AI usage,
- * `users` / `features` / `models` (comma lists) and `user` (an admin's Viewing choice on Bids; never cleared by Clear). Defaults are left out of the URL.
+ * `region` (not on AI usage), `range` / `from` / `to`, `q` (Resume compare's company search) and, on AI usage,
+ * `users` / `features` / `models` (comma lists) and `user` (an admin's Viewing choice; never cleared by Clear) and, on Conversion, `scope` (`profile` / `team`;
+ * '' = my profiles) and `profile` (an Account id). Defaults are left out of the URL; Conversion's range default is
+ * Since Oct 6, the others' This month.
  */
-type StatsKey = 'region' | 'range' | 'from' | 'to' | 'q' | 'users' | 'features' | 'models' | 'user';
+type StatsKey = 'region' | 'range' | 'from' | 'to' | 'q' | 'users' | 'features' | 'models' | 'user' | 'scope' | 'profile';
 
 const STATS_DEFAULTS: Record<StatsKey, string> = {
-  region: '', range: 'this_month', from: '', to: '', q: '', users: '', features: '', models: '', user: '',
+  region: '', range: 'this_month', from: '', to: '', q: '', users: '', features: '', models: '', user: '', scope: '', profile: '',
 };
-const DEFAULT_PRESET: DatePreset = 'this_month';
+const CONVERSION_DEFAULTS: Record<StatsKey, string> = { ...STATS_DEFAULTS, range: 'since_oct6' };
 
-/** Bids, Interviews, Callers and Resume compare: the standard presets. */
+/** Resume compare: the standard presets. */
 export const STATS_PRESETS = presetOptions();
+/** Conversion adds Since Oct 6 (its default: the data start). */
+export const CONVERSION_PRESETS = presetOptions({ after: ['since_oct6'] });
 /** AI usage adds Today and Yesterday (hourly). */
 export const AI_USAGE_PRESETS = presetOptions({ after: ['today', 'yesterday'] });
 /** The regions the Statistics endpoints take ('' = All, sent as `all`). */
@@ -41,7 +45,7 @@ export function regionLabel(region: StatsRegion): string {
   return STATS_REGIONS.find((o) => o.value === (region === 'all' ? '' : region))?.label ?? region;
 }
 
-export type StatsTab = 'stats' | 'resume' | 'ai';
+export type StatsTab = 'stats' | 'conversion' | 'resume' | 'ai';
 
 export interface StatsParams {
   period: 'week' | 'month' | 'custom';
@@ -80,8 +84,9 @@ export const statsList = (s: string): string[] => (s ? s.split(',') : []);
  * (other tabs' keys, like AI usage's multiselects, stay in the URL).
  */
 export function useStatsFilters(tab: StatsTab = 'stats'): StatsFilterState {
-  const [values, patch] = useUrlFilters(STATS_DEFAULTS);
-  const presets = tab === 'ai' ? AI_USAGE_PRESETS : STATS_PRESETS;
+  const DEFAULT_PRESET: DatePreset = tab === 'conversion' ? 'since_oct6' : 'this_month';
+  const [values, patch] = useUrlFilters(tab === 'conversion' ? CONVERSION_DEFAULTS : STATS_DEFAULTS);
+  const presets = tab === 'ai' ? AI_USAGE_PRESETS : tab === 'conversion' ? CONVERSION_PRESETS : STATS_PRESETS;
   const today = isoDay(new Date());
 
   const known = presets.some((p) => p.value === values.range);
@@ -102,12 +107,14 @@ export function useStatsFilters(tab: StatsTab = 'stats'): StatsFilterState {
     value.preset !== DEFAULT_PRESET ||
     (tab !== 'ai' && region !== 'all') ||
     (tab === 'resume' && values.q !== '') ||
+    (tab === 'conversion' && values.scope !== '') ||
     (tab === 'ai' && (values.users !== '' || values.features !== '' || values.models !== ''));
 
   const clear = () => {
     const keys: StatsKey[] =
       tab === 'ai' ? ['users', 'features', 'models', 'range', 'from', 'to']
         : tab === 'resume' ? ['region', 'q', 'range', 'from', 'to']
+          : tab === 'conversion' ? ['region', 'range', 'from', 'to', 'scope', 'profile']
           : ['region', 'range', 'from', 'to'];
     patch(Object.fromEntries(keys.map((k) => [k, undefined])) as Partial<Record<StatsKey, string>>);
   };

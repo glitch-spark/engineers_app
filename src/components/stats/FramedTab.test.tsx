@@ -1,20 +1,14 @@
 // @vitest-environment jsdom
-import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import type { StatsView } from '../../api/endpoints';
 import FramedTab from './FramedTab';
-import InterviewsTab from '../statistics/InterviewsTab';
 
 const getStatsView = vi.fn();
 const getProfileReport = vi.fn();
-const getJobFit = vi.fn();
-const getChanges = vi.fn();
-const getLeaders = vi.fn();
-const getTiming = vi.fn();
-vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a), getJobFit: (...a: unknown[]) => getJobFit(...a), getChanges: (...a: unknown[]) => getChanges(...a), getLeaders: (...a: unknown[]) => getLeaders(...a), getTiming: (...a: unknown[]) => getTiming(...a) }));
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a) }));
 vi.mock('recharts', async () => {
   const React = await import('react');
   const Stub = ({ children }: { children?: React.ReactNode }) => React.createElement('div', null, children);
@@ -45,61 +39,38 @@ const view: StatsView = {
 
 const show = (url = '/statistics') => render(
   <SWRConfig value={{ provider: () => new Map() }}>
-    <MemoryRouter initialEntries={[url]}><Probe /><FramedTab tab="bids" /></MemoryRouter>
+    <MemoryRouter initialEntries={[url]}><Probe /><FramedTab /></MemoryRouter>
   </SWRConfig>,
 );
 
-beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockResolvedValue(view);
-  getJobFit.mockReset(); getJobFit.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, bySite: [], byScore: [], byArea: [], byAge: [], known: { score: null, area: null } });
-  getChanges.mockReset(); getChanges.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, profiles: [] });
-  getLeaders.mockReset(); getLeaders.mockResolvedValue({ label: 'L', window: {}, best: [], weakest: [], groups: {}, note: '' });
-  getTiming.mockReset(); getTiming.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'UTC', weekday: [], hours: [], bidders: [{ bidderId: 'b', name: 'Bo', bids: 5, matured: 4, interviews: 1, per100: null, tooFew: true, rejectedShare: 0 }], teamBidder: { per100: null, matured: 0, interviews: 0 } });
-  getProfileReport.mockReset(); getProfileReport.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, coverage: { rows: 0, headerBids: 0, noLink: 0, unmatchedInterviews: 0 }, team: { per100: null, medianDays: null, profiles: 0 }, profiles: [] });
-});
+beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockResolvedValue(view); getProfileReport.mockReset(); });
 afterEach(cleanup);
 
-describe('FramedTab', () => {
-  it('renders ProfilesCard on bids and interviews but not ai-usage', async () => {
-    const tabs = (t: 'bids' | 'interviews' | 'ai-usage') => render(
-      <SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><FramedTab tab={t} /></MemoryRouter></SWRConfig>);
-    for (const t of ['bids', 'interviews'] as const) {
-      tabs(t);
-      expect(await screen.findByText('No job-level bids in this period yet.')).toBeTruthy();
-      expect(await screen.findByText('Nothing to break down yet — no job-level bids in this period.')).toBeTruthy();
-      expect(screen.getByText('What kind of job works')).toBeTruthy();
-      const heads = (await screen.findAllByRole('heading', { level: 3 })).map((h) => h.textContent);
-      expect(await screen.findByText('Winning vs weakest profiles')).toBeTruthy();
-      expect(screen.getByText('What to change')).toBeTruthy();
-      const order = Array.from(document.querySelectorAll('h3')).map((h) => h.textContent);
-      expect(order.indexOf('What kind of job works')).toBeLessThan(order.indexOf('What to change'));
-      expect(order.indexOf('What to change')).toBeLessThan(order.indexOf('Winning vs weakest profiles'));
-      expect(await screen.findByText('Bidder quality')).toBeTruthy();
-      const order2 = Array.from(document.querySelectorAll('h3')).map((h) => h.textContent);
-      expect(order2.indexOf('Winning vs weakest profiles')).toBeLessThan(order2.indexOf('When to bid'));
-      expect(order2.indexOf('When to bid')).toBeLessThan(order2.indexOf('Bidder quality'));
-      expect(heads.length).toBeGreaterThan(0);
-      cleanup();
-    }
-    getProfileReport.mockClear(); getJobFit.mockClear(); getChanges.mockClear(); getLeaders.mockClear(); getTiming.mockClear();
-    tabs('ai-usage');
-    await screen.findByText('Self bids are low');
+describe('FramedTab (AI usage)', () => {
+  it('renders tips, no Region and no per-profile cards', async () => {
+    show();
+    expect(await screen.findByText('Self bids are low')).toBeTruthy();
+    expect(screen.queryByLabelText('Region')).toBeNull();
     expect(getProfileReport).not.toHaveBeenCalled();
-    expect(getJobFit).not.toHaveBeenCalled();
-    expect(getChanges).not.toHaveBeenCalled();
-    expect(getLeaders).not.toHaveBeenCalled();
-    expect(getTiming).not.toHaveBeenCalled();
     expect(screen.queryByText('Your profiles')).toBeNull();
   });
 
-  it('renders the frame from /stats/bids without tips, trend or definitions', async () => {
+  it('today maps to a single-day custom range', async () => {
+    show('/statistics?range=today');
+    await waitFor(() => expect(getStatsView).toHaveBeenCalled());
+    const [tab, p] = getStatsView.mock.calls[0];
+    expect(tab).toBe('ai-usage');
+    expect(p.period).toBe('custom');
+    expect(p.date).toBe(p.to);
+    expect(p.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('a preset like this month also goes as a custom range', async () => {
     show();
-    expect(await screen.findByText('Justin')).toBeTruthy();
-    expect(screen.queryByText('What to work on')).toBeNull();
-    expect(screen.queryByText('Self bids are low')).toBeNull();
-    expect(screen.queryByText(/^Trend/)).toBeNull();
-    expect(screen.queryByText('How these are counted')).toBeNull();
-    expect(getStatsView).toHaveBeenCalledWith('bids', expect.objectContaining({ region: 'all', period: 'month' }));
-    expect(getStatsView.mock.calls[0][1]).not.toHaveProperty('user');
+    await waitFor(() => expect(getStatsView).toHaveBeenCalled());
+    const p = getStatsView.mock.calls[0][1];
+    expect(p.period).toBe('custom');
+    expect(p.date < p.to || p.date === p.to).toBe(true);
   });
 
   it('admin sees Viewing picker and picking sets user in the URL', async () => {
@@ -109,7 +80,7 @@ describe('FramedTab', () => {
     expect([...sel.options].map((o) => o.text)).toEqual(['Me', 'Justin', 'Michael']);
     fireEvent.change(sel, { target: { value: 'u7' } });
     expect(search).toBe('?user=u7');
-    await waitFor(() => expect(getStatsView).toHaveBeenLastCalledWith('bids', expect.objectContaining({ user: 'u7' })));
+    await waitFor(() => expect(getStatsView).toHaveBeenLastCalledWith('ai-usage', expect.objectContaining({ user: 'u7' })));
   });
 
   it('staff has no Viewing picker and never sends user', async () => {
@@ -117,22 +88,6 @@ describe('FramedTab', () => {
     await screen.findByText('Justin');
     expect(screen.queryByLabelText('Viewing')).toBeNull();
     expect(getStatsView.mock.calls.every((c) => !('user' in c[1]))).toBe(true);
-    expect(screen.queryByRole('button', { name: 'Justin' })).toBeNull();
-  });
-
-  it('clicking a name in Everyone (admin) switches the viewed person', async () => {
-    role = 'admin';
-    show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Justin' }));
-    expect(search).toBe('?user=u1');
-    await waitFor(() => expect(getStatsView).toHaveBeenLastCalledWith('bids', expect.objectContaining({ user: 'u1' })));
-  });
-
-  it('Clear keeps the viewed person', async () => {
-    role = 'admin';
-    show('/statistics?user=u7&region=EU');
-    fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
-    expect(search).toBe('?user=u7');
   });
 
   it('shows loading then error states', async () => {
@@ -142,16 +97,6 @@ describe('FramedTab', () => {
     expect(await screen.findByText(/Couldn’t load the statistics/)).toBeTruthy();
   });
 
-  it('names who and when: Viewing {name} when the subject is not me, else just the label', async () => {
-    show();
-    expect(await screen.findByText('Viewing Michael · Bids')).toBeTruthy();
-    cleanup();
-    getStatsView.mockResolvedValue({ ...view, subject: { userId: 'me', name: 'Me' } });
-    show();
-    expect(await screen.findByText('Bids', { selector: 'p' })).toBeTruthy();
-    expect(screen.queryByText(/Viewing Me/)).toBeNull();
-  });
-
   it('picker keeps a selected user the lookup filtered out', async () => {
     role = 'admin';
     getStatsView.mockResolvedValue({ ...view, subject: { userId: 'u9', name: 'Inactive Ian' } });
@@ -159,85 +104,5 @@ describe('FramedTab', () => {
     const sel = (await screen.findByLabelText('Viewing')) as HTMLSelectElement;
     await waitFor(() => expect([...sel.options].map((o) => o.text)).toContain('Inactive Ian'));
     expect(sel.value).toBe('u9');
-  });
-});
-
-describe('ai-usage frame', () => {
-  const showTab = (tab: 'ai-usage', url: string) => render(
-    <SWRConfig value={{ provider: () => new Map() }}>
-      <MemoryRouter initialEntries={[url]}><FramedTab tab={tab} /></MemoryRouter>
-    </SWRConfig>,
-  );
-
-  it('region hidden on ai usage, shown on bids', async () => {
-    showTab('ai-usage', '/statistics');
-    await screen.findByText('Self bids are low');
-    expect(screen.queryByLabelText('Region')).toBeNull();
-    cleanup();
-    show();
-    expect(await screen.findByLabelText('Region')).toBeTruthy();
-  });
-
-  it('ai usage: today maps to a single-day custom range', async () => {
-    showTab('ai-usage', '/statistics?range=today');
-    await waitFor(() => expect(getStatsView).toHaveBeenCalled());
-    const [tab, p] = getStatsView.mock.calls[0];
-    expect(tab).toBe('ai-usage');
-    expect(p.period).toBe('custom');
-    expect(p.date).toBe(p.to);
-    expect(p.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  it('ai usage: a preset like this month also goes as a custom range', async () => {
-    showTab('ai-usage', '/statistics');
-    await waitFor(() => expect(getStatsView).toHaveBeenCalled());
-    const p = getStatsView.mock.calls[0][1];
-    expect(p.period).toBe('custom');
-    expect(p.date < p.to || p.date === p.to).toBe(true);
-  });
-});
-
-describe('InterviewsTab', () => {
-  const iview: StatsView = { ...view, tab: 'interviews', label: 'Interviews', everyone: { rowKind: 'person', metric: 'per100', rows: [] } };
-
-  it('renders the frame from /stats/interviews', async () => {
-    getStatsView.mockResolvedValue(iview);
-    render(
-      <SWRConfig value={{ provider: () => new Map() }}>
-        <MemoryRouter initialEntries={['/statistics']}><InterviewsTab /></MemoryRouter>
-      </SWRConfig>,
-    );
-    expect(await screen.findByText('Everyone')).toBeTruthy();
-    expect(screen.queryByText('What to work on')).toBeNull();
-    expect(getStatsView).toHaveBeenCalledWith('interviews', expect.objectContaining({ region: 'all', period: 'month' }));
-  });
-
-  it('viewing choice carries from Bids to Interviews (same user param)', async () => {
-    role = 'admin';
-    const Switch = () => {
-      const [t, setT] = React.useState<'bids' | 'interviews'>('bids');
-      return <><button onClick={() => setT('interviews')}>go</button><FramedTab tab={t} /></>;
-    };
-    render(
-      <SWRConfig value={{ provider: () => new Map() }}>
-        <MemoryRouter initialEntries={['/statistics']}><Probe /><Switch /></MemoryRouter>
-      </SWRConfig>,
-    );
-    fireEvent.change((await screen.findByLabelText('Viewing')) as HTMLSelectElement, { target: { value: 'u7' } });
-    await waitFor(() => expect(getStatsView).toHaveBeenLastCalledWith('bids', expect.objectContaining({ user: 'u7' })));
-    fireEvent.click(screen.getByText('go'));
-    await waitFor(() => expect(getStatsView).toHaveBeenLastCalledWith('interviews', expect.objectContaining({ user: 'u7' })));
-    expect((screen.getByLabelText('Viewing') as HTMLSelectElement).value).toBe('u7');
-  });
-});
-
-describe('FramedTab show last month', () => {
-  it('the note button switches the range to last_month', async () => {
-    getJobFit.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true },
-      bySite: [{ key: 'x', label: 'Lever', you: { bids: 40, matured: 0, interviews: 0, per100: null, tooFew: true }, team: { bids: 90, matured: 0, interviews: 0, per100: null, tooFew: true } }],
-      byScore: [], byArea: [], byAge: [], known: { score: null, area: null } });
-    show('/statistics');
-    fireEvent.click(await screen.findByRole('button', { name: 'Show last month' }));
-    await waitFor(() => expect(search).toContain('range=last_month'));
   });
 });

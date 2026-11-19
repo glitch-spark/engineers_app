@@ -3,9 +3,9 @@ import * as api from '../../api/endpoints';
 import GradeBadge from './GradeBadge';
 
 /** "What to change" card: plain-language suggestions per profile, as the server words them. */
-export default function ChangesCard({ params, user }: { params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string }) {
+export default function ChangesCard({ params, user }: { params: api.ConversionParams | null; user: string }) {
   const { data, error, isLoading } = useSWR(
-    params ? ['stats-changes', params.period, params.date, params.to, params.region, user] : null,
+    params ? ['stats-changes', params.period, params.date, params.to, params.region, params.scope, params.profile, user] : null,
     () => api.getChanges({ ...params!, ...(user ? { user } : {}) }),
     { keepPreviousData: true },
   );

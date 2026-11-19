@@ -10,10 +10,12 @@ import GradeBadge from './GradeBadge';
 const one = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function coverageLine(c: ProfileReport['coverage']) {
-  const base = c.rows > c.headerBids
-    ? `Job-level numbers cover ${c.rows} applications; you counted ${c.headerBids} bids this period.`
-    : `Job-level numbers cover ${c.rows} of ${c.headerBids} bids (${c.headerBids ? `${Math.round((100 * c.rows) / c.headerBids)}%` : '—'}); typed self bids aren't tied to jobs.`;
-  const n = c.unmatchedInterviews;
+  // headerBids / unmatchedInterviews are only known for "My profiles" (null for one profile or the team).
+  const base = c.headerBids == null ? `Job-level numbers cover ${c.rows} applications.`
+    : c.rows > c.headerBids
+      ? `Job-level numbers cover ${c.rows} applications; you counted ${c.headerBids} bids this period.`
+      : `Job-level numbers cover ${c.rows} of ${c.headerBids} bids (${c.headerBids ? `${Math.round((100 * c.rows) / c.headerBids)}%` : '—'}); typed self bids aren't tied to jobs.`;
+  const n = c.unmatchedInterviews ?? 0;
   return n > 0 ? `${base} ${n} interview${n === 1 ? '' : 's'} couldn't be tied to a job.` : base;
 }
 
@@ -61,10 +63,10 @@ function Row({ p, max, team }: { p: ProfileRow; max: number; team: number | null
 
 const HEAD = ['Profile', 'Grade', 'Bids self / bidder', 'Matured', 'Interviews', 'Per 100 bids', 'Days first · median · slowest', 'How far', 'Still in play'];
 
-export default function ProfilesCard({ params, user, onShowLastMonth }: { params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string; onShowLastMonth?: () => void }) {
+export default function ProfilesCard({ params, user, onShowLastMonth }: { params: api.ConversionParams | null; user: string; onShowLastMonth?: () => void }) {
   const me = useAuth().user;
   const { data, error, isLoading } = useSWR(
-    params ? ['stats-profiles', params.period, params.date, params.to, params.region, user] : null,
+    params ? ['stats-profiles', params.period, params.date, params.to, params.region, params.scope, params.profile, user] : null,
     () => api.getProfileReport({ ...params!, ...(user ? { user } : {}) }),
     { keepPreviousData: true },
   );

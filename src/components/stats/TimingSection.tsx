@@ -58,9 +58,9 @@ function BiddersCard({ d }: { d: api.TimingReport }) {
 }
 
 /** One request feeding the "When to bid" and "Bidder quality" cards. */
-export default function TimingSection({ params, user, onShowLastMonth }: { onShowLastMonth?: () => void; params: { period: api.StatsPeriod; date: string; to?: string; region: api.StatsRegion } | null; user: string }) {
+export default function TimingSection({ params, user, onShowLastMonth }: { onShowLastMonth?: () => void; params: api.ConversionParams | null; user: string }) {
   const { data, error, isLoading } = useSWR(
-    params ? ['stats-timing', params.period, params.date, params.to, params.region, user] : null,
+    params ? ['stats-timing', params.period, params.date, params.to, params.region, params.scope, params.profile, user] : null,
     () => api.getTiming({ ...params!, ...(user ? { user } : {}) }),
     { keepPreviousData: true },
   );
@@ -76,7 +76,7 @@ export default function TimingSection({ params, user, onShowLastMonth }: { onSho
   return (
     <>
       <TimingCard d={data} onShowLastMonth={onShowLastMonth} />
-      {data.bidders.length > 0 && <BiddersCard d={data} />}
+      {params.scope !== 'team' && data.bidders.length > 0 && <BiddersCard d={data} />}
     </>
   );
 }

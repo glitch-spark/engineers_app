@@ -18,12 +18,15 @@ export type DatePreset =
   | 'today'
   | 'yesterday'
   | 'all_time'
+  | 'since_oct6'
   | 'custom';
 
 /** Inclusive YYYY-MM-DD bounds. `null` stands for `all_time`. */
 export type DateRange = { from: string; to: string };
 
 const DAY_MS = 86_400_000;
+/** First day of the Conversion tab's data (the backend's DATA_START). */
+const SINCE_OCT6 = '2026-10-06';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -38,6 +41,7 @@ const PRESET_LABELS: Record<DatePreset, string> = {
   today: 'Today',
   yesterday: 'Yesterday',
   all_time: 'All time',
+  since_oct6: 'Since Oct 6',
   custom: 'Custom',
 };
 
@@ -163,6 +167,8 @@ export function rangeFor(
       const yesterday = addDays(today, -1);
       return { from: yesterday, to: yesterday };
     }
+    case 'since_oct6': // the Conversion tab's data start (bids before it are incomplete)
+      return { from: SINCE_OCT6, to: today };
     case 'all_time':
     case 'custom':
       return null;

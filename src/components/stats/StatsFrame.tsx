@@ -77,7 +77,7 @@ function Header({ headline }: { headline: StatsHeadline[] }) {
   );
 }
 
-/** `extras` = the tips, trend and definitions sections (AI usage keeps them; Bids / Interviews show header + Everyone only). */
+/** `extras` = the tips, trend and definitions sections (AI usage keeps them; Conversion shows header + Everyone only). */
 export default function StatsFrame({ view, canPick, onPick, extras = true }: {
   view: StatsView; canPick: boolean; onPick: (userId: string) => void; extras?: boolean;
 }) {
