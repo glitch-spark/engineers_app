@@ -99,6 +99,13 @@ describe('ProfilesCard', () => {
     expect(screen.getByText('no interviews')).toBeTruthy();
   });
 
+  it('legend calls the line the team rate', async () => {
+    load(report());
+    show();
+    expect(await screen.findByText(/line = team rate \(10\.0 per 100\)/)).toBeTruthy();
+    expect(screen.queryByText(/team median/)).toBeNull();
+  });
+
   it('shows the thin-window note', async () => {
     load(report({ window: { median: null, p90: 14, matured_days: 14, n: 14, thin: true } }));
     show();

@@ -101,7 +101,7 @@ export default function ProfilesCard({ params, user }: { params: { period: api.S
               </table>
             </div>
             <p className="mt-2 text-xs text-muted">
-              Bar = profile · line = team median ({team.per100 == null ? '—' : one(team.per100)} per 100). Grade: ✅ at/above team and reaches tech · ⚠ below team, slow, or stuck at intro · ⛔ no interview where the team rate would have given 3+ · ⏳ fewer than 30 matured bids, or too few to tell yet.
+              Bar = profile · line = team rate ({team.per100 == null ? '—' : one(team.per100)} per 100). Grade: ✅ at/above team and reaches tech · ⚠ below team, slow, or stuck at intro · ⛔ no interview where the team rate would have given 3+ · ⏳ fewer than 30 matured bids, or too few to tell yet.
             </p>
           </>
         )}
