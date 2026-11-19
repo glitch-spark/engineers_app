@@ -91,9 +91,13 @@ describe('FramedTab', () => {
     expect(screen.queryByText('Your profiles')).toBeNull();
   });
 
-  it('renders the frame from /stats/bids', async () => {
+  it('renders the frame from /stats/bids without tips, trend or definitions', async () => {
     show();
-    expect(await screen.findByText('Self bids are low')).toBeTruthy();
+    expect(await screen.findByText('Justin')).toBeTruthy();
+    expect(screen.queryByText('What to work on')).toBeNull();
+    expect(screen.queryByText('Self bids are low')).toBeNull();
+    expect(screen.queryByText(/^Trend/)).toBeNull();
+    expect(screen.queryByText('How these are counted')).toBeNull();
     expect(getStatsView).toHaveBeenCalledWith('bids', expect.objectContaining({ region: 'all', period: 'month' }));
     expect(getStatsView.mock.calls[0][1]).not.toHaveProperty('user');
   });
@@ -110,7 +114,7 @@ describe('FramedTab', () => {
 
   it('staff has no Viewing picker and never sends user', async () => {
     show('/statistics?user=u1');
-    await screen.findByText('Self bids are low');
+    await screen.findByText('Justin');
     expect(screen.queryByLabelText('Viewing')).toBeNull();
     expect(getStatsView.mock.calls.every((c) => !('user' in c[1]))).toBe(true);
     expect(screen.queryByRole('button', { name: 'Justin' })).toBeNull();
@@ -203,7 +207,8 @@ describe('InterviewsTab', () => {
         <MemoryRouter initialEntries={['/statistics']}><InterviewsTab /></MemoryRouter>
       </SWRConfig>,
     );
-    expect(await screen.findByText('Self bids are low')).toBeTruthy();
+    expect(await screen.findByText('Everyone')).toBeTruthy();
+    expect(screen.queryByText('What to work on')).toBeNull();
     expect(getStatsView).toHaveBeenCalledWith('interviews', expect.objectContaining({ region: 'all', period: 'month' }));
   });
 

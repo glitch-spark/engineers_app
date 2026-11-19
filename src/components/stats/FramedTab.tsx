@@ -48,7 +48,7 @@ export default function FramedTab({ tab }: { tab: 'bids' | 'interviews' | 'ai-us
             <p className="text-xs text-muted">
               {shown.subject.userId !== me?.id ? `Viewing ${shown.subject.name} · ${shown.label}` : shown.label}
             </p>
-            <StatsFrame view={shown} canPick={isAdmin} onPick={(id) => f.patch({ user: id })} />
+            <StatsFrame view={shown} canPick={isAdmin} onPick={(id) => f.patch({ user: id })} extras={ai} />
             {!ai && <ProfilesCard params={params} user={user} onShowLastMonth={showLast} />}
             {!ai && <JobFitCard params={params} user={user} onShowLastMonth={showLast} />}
             {!ai && <ChangesCard params={params} user={user} />}

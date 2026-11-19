@@ -77,8 +77,9 @@ function Header({ headline }: { headline: StatsHeadline[] }) {
   );
 }
 
-export default function StatsFrame({ view, canPick, onPick }: {
-  view: StatsView; canPick: boolean; onPick: (userId: string) => void;
+/** `extras` = the tips, trend and definitions sections (AI usage keeps them; Bids / Interviews show header + Everyone only). */
+export default function StatsFrame({ view, canPick, onPick, extras = true }: {
+  view: StatsView; canPick: boolean; onPick: (userId: string) => void; extras?: boolean;
 }) {
   const chart = useChartTheme();
   const { theme } = useTheme();
@@ -98,7 +99,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
     <div className="space-y-4">
       <Header headline={view.headline} />
 
-      <div className="panel p-4">
+      {extras && <div className="panel p-4">
         <h3 className="font-semibold">What to work on</h3>
         {view.notEnoughData ? (
           <p className="mt-2 text-sm text-muted">Not enough data yet — check back after a few working days.</p>
@@ -113,7 +114,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
 
       <div className="panel p-4">
         <h3 className="font-semibold">Everyone <span className="text-xs font-normal text-muted">· {METRIC_LABEL[view.everyone.metric] ?? view.everyone.metric}{anyRanked ? ', ranked' : ''}</span></h3>
@@ -141,7 +142,7 @@ export default function StatsFrame({ view, canPick, onPick }: {
         </div>
       </div>
 
-      {view.trend && (
+      {extras && view.trend && (
         <div className="panel p-4">
           <h3 className="font-semibold">Trend <span className="text-xs font-normal text-muted">· {view.trend.unit === 'day' ? 'Daily' : 'Weekly'}, you vs team median</span></h3>
           <div className="mt-2 h-40">
@@ -159,12 +160,12 @@ export default function StatsFrame({ view, canPick, onPick }: {
         </div>
       )}
 
-      <details className="panel p-4 text-sm">
+      {extras && <details className="panel p-4 text-sm">
         <summary className="cursor-pointer font-semibold">How these are counted</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
           {view.definitions.map((d, i) => <li key={i}>{d}</li>)}
         </ul>
-      </details>
+      </details>}
     </div>
   );
 }
