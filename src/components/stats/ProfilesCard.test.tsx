@@ -63,6 +63,34 @@ describe('ProfilesCard', () => {
     expect(screen.getByText('archived')).toBeTruthy();
   });
 
+  it('shows matured interviews with a muted count of recent ones', async () => {
+    load(report({ profiles: [row({ interviews: 5, maturedInterviews: 3, reach: { intro: 5, tech: 1, final: 0 } })] }));
+    show();
+    expect(await screen.findByText('3')).toBeTruthy();
+    expect(screen.getByText('+2 recent')).toBeTruthy();
+    expect(screen.getByText('5 intro · 1 tech · 0 final')).toBeTruthy();
+  });
+
+  it('shows no recent note when every interview is matured', async () => {
+    load(report());
+    show();
+    await screen.findByText('Alpha');
+    expect(screen.queryByText(/recent/)).toBeNull();
+  });
+
+  it('explains the grades in the legend', async () => {
+    load(report());
+    show();
+    expect(await screen.findByText(/Grade: ✅ at\/above team and reaches tech · ⚠ below team, slow, or stuck at intro · ⛔ no interview where the team rate would have given 3\+ · ⏳ fewer than 30 matured bids, or too few to tell yet\./)).toBeTruthy();
+  });
+
+  it('renders no region chip when the profile has no region', async () => {
+    load(report({ profiles: [row({ region: null })] }));
+    const { container } = show();
+    await screen.findByText('Alpha');
+    expect(container.querySelectorAll('tbody td:first-child .rounded').length).toBe(0);
+  });
+
   it('shows dashes for missing per-100 and days', async () => {
     load(report({ profiles: [row({ per100: null, days: null, grade: 'early', reach: { intro: 0, tech: 0, final: 0 }, interviews: 0 })] }));
     show();

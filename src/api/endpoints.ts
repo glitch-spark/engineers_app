@@ -3318,7 +3318,7 @@ export const getStatsView = (
 
 export type ProfileGrade = 'strong' | 'watch' | 'dead' | 'early';
 export interface ProfileRow {
-  accountId: string; name: string; region: string; archived: boolean;
+  accountId: string; name: string; region: string | null; archived: boolean;
   bidsSelf: number; bidsBidder: number; matured: number; maturedInterviews: number; interviews: number;
   reach: { intro: number; tech: number; final: number };
   stillInPlay: number; per100: number | null;

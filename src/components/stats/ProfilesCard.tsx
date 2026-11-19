@@ -38,11 +38,12 @@ function Row({ p, max, team }: { p: ProfileRow; max: number; team: number | null
   const g = GRADE[p.grade];
   const why = p.reasons.join('; ');
   const { intro, tech, final } = p.reach;
+  const recent = p.interviews - p.maturedInterviews;
   return (
     <tr className="border-t border-zinc-200 align-top dark:border-zinc-800">
       <td className="py-2 pr-3">
         <span className="font-medium">{p.name}</span>{' '}
-        <span className="rounded bg-zinc-200 px-1 text-xs dark:bg-zinc-800">{p.region}</span>
+        {p.region && <span className="rounded bg-zinc-200 px-1 text-xs dark:bg-zinc-800">{p.region}</span>}
         {p.archived && <span className="ml-1 text-xs text-muted">archived</span>}
       </td>
       <td className="py-2 pr-3" title={why}>
@@ -51,7 +52,10 @@ function Row({ p, max, team }: { p: ProfileRow; max: number; team: number | null
       </td>
       <td className="py-2 pr-3 tabular-nums">{p.bidsSelf} / {p.bidsBidder}</td>
       <td className="py-2 pr-3 tabular-nums">{p.matured}</td>
-      <td className="py-2 pr-3 tabular-nums">{p.interviews}</td>
+      <td className="py-2 pr-3 tabular-nums">
+        {p.maturedInterviews}
+        {recent > 0 && <span className="ml-1 whitespace-nowrap text-xs text-muted">+{recent} recent</span>}
+      </td>
       <td className="py-2 pr-3"><Per100 v={p.per100} max={max} team={team} /></td>
       <td className="whitespace-nowrap py-2 pr-3 tabular-nums">{p.days ? `${p.days.first} · ${p.days.median} · ${p.days.slowest}` : '—'}</td>
       <td className="whitespace-nowrap py-2 pr-3">{p.interviews ? `${intro} intro · ${tech} tech · ${final} final` : 'no interviews'}</td>
@@ -103,7 +107,7 @@ export default function ProfilesCard({ params, user }: { params: { period: api.S
               </table>
             </div>
             <p className="mt-2 text-xs text-muted">
-              Bar = profile · line = team median ({team.per100 == null ? '—' : one(team.per100)} per 100). Grade: ✅ at/above team and reaches tech · ⚠ below team, slow, or stuck at intro · ⛔ 150+ matured bids and no interview, or none for 21 days while still bidding · ⏳ fewer than 30 matured bids.
+              Bar = profile · line = team median ({team.per100 == null ? '—' : one(team.per100)} per 100). Grade: ✅ at/above team and reaches tech · ⚠ below team, slow, or stuck at intro · ⛔ no interview where the team rate would have given 3+ · ⏳ fewer than 30 matured bids, or too few to tell yet.
             </p>
           </>
         )}
