@@ -3347,3 +3347,28 @@ export interface JobFitReport {
 export const getJobFit = (
   params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
 ) => apiFetch<JobFitReport>(`/stats/applications/jobs${qs(params)}`);
+
+export interface ChangeSuggestion { pattern: string; text: string; evidence: Record<string, unknown> }
+export interface ChangesReport {
+  label: string; subject: { userId: string; name: string };
+  profiles: { accountId: string; name: string; grade: ProfileGrade; suggestions: ChangeSuggestion[] }[];
+}
+export const getChanges = (
+  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+) => apiFetch<ChangesReport>(`/stats/applications/changes${qs(params)}`);
+
+export interface LeaderRow { accountId: string; name: string; owner: string; region: string | null; matured: number; interviews: number; per100: number | null }
+export interface LeaderShare { label: string; share: number }
+export interface LeaderGroup {
+  matured: number; interviews: number; regions: Record<string, number>; avgScore: number | null; scored: number;
+  areas: LeaderShare[]; areaKnown: number | null; medianProfileAge: number | null; sites: LeaderShare[];
+  medianDays: number | null; interviewCount: number; daysTooFew: boolean; selfShare: number | null;
+}
+export interface LeadersReport {
+  label: string; window: JobFitReport['window'];
+  best: LeaderRow[]; weakest: LeaderRow[];
+  groups: { best: LeaderGroup; weakest: LeaderGroup }; note: string;
+}
+export const getLeaders = (
+  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+) => apiFetch<LeadersReport>(`/stats/applications/leaders${qs(params)}`);

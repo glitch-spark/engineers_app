@@ -11,7 +11,9 @@ import InterviewsTab from '../statistics/InterviewsTab';
 const getStatsView = vi.fn();
 const getProfileReport = vi.fn();
 const getJobFit = vi.fn();
-vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a), getJobFit: (...a: unknown[]) => getJobFit(...a) }));
+const getChanges = vi.fn();
+const getLeaders = vi.fn();
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getStatsView: (...a: unknown[]) => getStatsView(...a), getProfileReport: (...a: unknown[]) => getProfileReport(...a), getJobFit: (...a: unknown[]) => getJobFit(...a), getChanges: (...a: unknown[]) => getChanges(...a), getLeaders: (...a: unknown[]) => getLeaders(...a) }));
 vi.mock('recharts', async () => {
   const React = await import('react');
   const Stub = ({ children }: { children?: React.ReactNode }) => React.createElement('div', null, children);
@@ -48,6 +50,8 @@ const show = (url = '/statistics') => render(
 
 beforeEach(() => { role = 'staff'; getStatsView.mockReset(); getStatsView.mockResolvedValue(view);
   getJobFit.mockReset(); getJobFit.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, bySite: [], byScore: [], byArea: [], byAge: [], known: { score: null, area: null } });
+  getChanges.mockReset(); getChanges.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, profiles: [] });
+  getLeaders.mockReset(); getLeaders.mockResolvedValue({ label: 'L', window: {}, best: [], weakest: [], groups: {}, note: '' });
   getProfileReport.mockReset(); getProfileReport.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, coverage: { rows: 0, headerBids: 0, noLink: 0, unmatchedInterviews: 0 }, team: { per100: null, medianDays: null, profiles: 0 }, profiles: [] });
 });
 afterEach(cleanup);
@@ -61,13 +65,22 @@ describe('FramedTab', () => {
       expect(await screen.findByText('No job-level bids in this period yet.')).toBeTruthy();
       expect(await screen.findByText('Nothing to break down yet — no job-level bids in this period.')).toBeTruthy();
       expect(screen.getByText('What kind of job works')).toBeTruthy();
+      const heads = (await screen.findAllByRole('heading', { level: 3 })).map((h) => h.textContent);
+      expect(await screen.findByText('Winning vs weakest profiles')).toBeTruthy();
+      expect(screen.getByText('What to change')).toBeTruthy();
+      const order = Array.from(document.querySelectorAll('h3')).map((h) => h.textContent);
+      expect(order.indexOf('What kind of job works')).toBeLessThan(order.indexOf('What to change'));
+      expect(order.indexOf('What to change')).toBeLessThan(order.indexOf('Winning vs weakest profiles'));
+      expect(heads.length).toBeGreaterThan(0);
       cleanup();
     }
-    getProfileReport.mockClear(); getJobFit.mockClear();
+    getProfileReport.mockClear(); getJobFit.mockClear(); getChanges.mockClear(); getLeaders.mockClear();
     tabs('ai-usage');
     await screen.findByText('Self bids are low');
     expect(getProfileReport).not.toHaveBeenCalled();
     expect(getJobFit).not.toHaveBeenCalled();
+    expect(getChanges).not.toHaveBeenCalled();
+    expect(getLeaders).not.toHaveBeenCalled();
     expect(screen.queryByText('Your profiles')).toBeNull();
   });
 

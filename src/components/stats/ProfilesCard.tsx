@@ -1,16 +1,11 @@
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import type { ProfileGrade, ProfileReport, ProfileRow } from '../../api/endpoints';
+import type { ProfileReport, ProfileRow } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
+import GradeBadge from './GradeBadge';
 
 /** "Your profiles" report card under the you-vs-team frame: per-profile bids, interviews, speed and a grade. */
 
-const GRADE: Record<ProfileGrade, { text: string; cls: string }> = {
-  strong: { text: '✅ Strong', cls: 'text-green-700 dark:text-green-400' },
-  watch: { text: '⚠ Watch', cls: 'text-amber-700 dark:text-amber-400' },
-  dead: { text: '⛔ Dead', cls: 'text-red-700 dark:text-red-400' },
-  early: { text: '⏳ Too early', cls: 'text-muted' },
-};
 const one = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function coverageLine(c: ProfileReport['coverage']) {
@@ -35,7 +30,6 @@ function Per100({ v, max, team }: { v: number | null; max: number; team: number 
 }
 
 function Row({ p, max, team }: { p: ProfileRow; max: number; team: number | null }) {
-  const g = GRADE[p.grade];
   const why = p.reasons.join('; ');
   const { intro, tech, final } = p.reach;
   const recent = p.interviews - p.maturedInterviews;
@@ -47,7 +41,7 @@ function Row({ p, max, team }: { p: ProfileRow; max: number; team: number | null
         {p.archived && <span className="ml-1 text-xs text-muted">archived</span>}
       </td>
       <td className="py-2 pr-3" title={why}>
-        <span className={`whitespace-nowrap font-medium ${g.cls}`}>{g.text}</span>
+        <GradeBadge grade={p.grade} />
         {why && <p className="text-xs text-muted">{why}</p>}
       </td>
       <td className="py-2 pr-3 tabular-nums">{p.bidsSelf} / {p.bidsBidder}</td>
