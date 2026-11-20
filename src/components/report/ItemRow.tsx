@@ -4,7 +4,7 @@ import type { DayItem } from '../../api/endpoints';
 export const kept = (i: DayItem) => !i.archived || i.result !== null;
 
 export default function ItemRow({
-  item, result, week, disabled, valueLocked, doneLocked, note, onChange,
+  item, result, week, disabled, valueLocked, doneLocked, note, compact, onChange,
 }: {
   item: DayItem;
   result: { done: boolean; value: number | null };
@@ -17,6 +17,8 @@ export default function ItemRow({
   doneLocked?: boolean;
   /** Muted trailing text, e.g. "done Mon". */
   note?: string;
+  /** A number box as low as the small buttons beside it (Home). */
+  compact?: boolean;
   onChange: (r: { done: boolean; value: number | null }) => void;
 }) {
   const target = item.result?.target ?? item.target; // a saved day keeps the target it was frozen with
@@ -61,7 +63,7 @@ export default function ItemRow({
         type="number"
         min={0}
         step={item.kind === 'hours' ? 'any' : 1}
-        className="input !w-16 shrink-0 text-right tabular-nums"
+        className={`input !w-16 shrink-0 text-right tabular-nums ${compact ? '!rounded-lg !px-2 !py-1' : ''}`}
         disabled={disabled || valueLocked}
         value={result.value ?? ''}
         onChange={(e) => {

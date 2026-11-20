@@ -583,6 +583,30 @@ export interface DayPlan {
    * how many rounds still wait for a follow-up or its answer. Missing from an older server.
    */
   followUps?: { doneToday: string[]; toDo: number };
+  /** The day's rounds, in time order (AI interviews and home assessments left out). Missing from an older server. */
+  todayInterviews?: TodayInterview[];
+  /** How many of the day's rounds have an answer. Missing from an older server. */
+  interviewsMarked?: { marked: number; total: number };
+}
+
+/**
+ * One round of the day on Home. `state`: where the round stands (`unmarked` = ended with no answer yet;
+ * `rescheduled` = moved to another day, see `rescheduledTo`). `steps`: the interview's rounds so far, ending with
+ * this one as `today`.
+ */
+export interface TodayInterview {
+  interviewId: string;
+  roundId: string;
+  companyName: string | null;
+  profileName: string | null;
+  stage: string;
+  scheduledAt: string;
+  endsAt: string | null;
+  status: string;
+  state: 'upcoming' | 'now' | 'unmarked' | 'completed' | 'passed' | 'rejected' | 'canceled' | 'rescheduled';
+  rescheduledTo: string | null;
+  who: { kind: 'self' | 'caller'; name: string | null; assigned: boolean; confirmed: boolean };
+  steps: { stage: string; state: 'passed' | 'rejected' | 'canceled' | 'held' | 'today' }[];
 }
 
 /** A day's follow-up: results per item, bids done, notes (posts to Slack). */
@@ -1161,6 +1185,8 @@ export interface DashboardWeek {
     target: number | null;
     pace: DashboardPace | null;
     percentile: DashboardPercentile | null;
+    /** Mon–Fri, each day's bids and daily target. Missing from an older server. */
+    byDay?: { date: string; done: number; target: number | null }[];
   };
   interviews: {
     /** Rounds held this week: `self` the owner took, `caller` a caller took. */
@@ -1170,11 +1196,16 @@ export interface DashboardWeek {
     target: number | null;
     pace: DashboardPace | null;
     percentile: DashboardPercentile | null;
+    /** This week's rounds by how they ended; `scheduled` = still to come. Missing from an older server. */
+    outcomes?: {
+      held: number; passed: number; rejected: number; noAnswer: number; waiting: number; canceled: number; scheduled: number;
+    };
   };
   stages: { key: string; label: string; count: number }[];
   streak: number;
   hasWeeklyPlan: boolean;
-  routines: { done: number; expected: number };
+  /** `rows`: one line per routine with its Mon–Fri days. Missing from an older server. */
+  routines: { done: number; expected: number; rows?: DashboardRoutineRow[] };
   weeklyGoals: {
     id: string;
     text: string;
@@ -1185,13 +1216,42 @@ export interface DashboardWeek {
   }[];
 }
 
+/**
+ * A routine's week. A day is `done`, `missed` (a past day not done), `short` (a counted routine under its target:
+ * `value` / `target`), `today` (not done yet), `future`, or `off` (the routine was not shown that day).
+ */
+export interface DashboardRoutineRow {
+  id: string;
+  text: string;
+  days: {
+    date: string;
+    state: 'done' | 'missed' | 'short' | 'today' | 'future' | 'off';
+    value: number | null;
+    target: number | null;
+  }[];
+  doneDays: number;
+  totalDays: number;
+}
+
 export interface DashboardNetMonthly {
-  months: { period: string; income: number; outcome: number; net: number }[];
+  /** `in` / `out`: money in and out as positive numbers. Missing from an older server. */
+  months: { period: string; income: number; outcome: number; net: number; in?: number; out?: number }[];
   total: number;
+}
+
+/** The person's interviews this month. `passRate.value` / `teamRate` are percentages; `few` = too few decided rounds to tell. */
+export interface DashboardMonthInterviews {
+  pipeline: { stage: string; label: string; count: number }[];
+  waitingForResult: number;
+  followUpsDue: number;
+  passRate: { value: number | null; passed: number; decided: number; few: boolean; teamRate: number | null };
 }
 
 export const getDashboardWeek = (params: { userId?: string; today?: string }) =>
   apiFetch<DashboardWeek>(`/dashboard/week${qs(params)}`);
+
+export const getDashboardMonthInterviews = (params: { userId?: string; today?: string }) =>
+  apiFetch<DashboardMonthInterviews>(`/dashboard/month-interviews${qs(params)}`);
 
 export const getDashboardNetMonthly = (params: { userId?: string; today?: string }) =>
   apiFetch<DashboardNetMonthly>(`/dashboard/net-monthly${qs(params)}`);

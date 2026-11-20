@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import { todayInputValue } from '../../lib/week';
-import type { DayItem, NeedsInputItem } from '../../api/endpoints';
+import type { DayItem, NeedsInputItem, TodayInterview } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
+import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
 import { stageLabel } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { daysWithoutResult, needsInputKey, shortDay, useNeedsInputActions } from '../interview/useNeedsInputActions';
@@ -13,6 +14,32 @@ import ItemRow, { kept } from '../report/ItemRow';
 type Result = { done: boolean; value: number | null };
 const DEBOUNCE_MS = 800;
 
+const MINUTE_MS = 60000;
+const num = (n: number) => n.toLocaleString('en-US');
+const roundKey = (r: { interviewId: string; roundId: string }) => `${r.interviewId}:${r.roundId}`;
+
+/** The current time, refreshed once a minute, so "In 2 hours" does not go stale between fetches. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setTimeout(() => setNow(Date.now()), MINUTE_MS);
+    return () => clearTimeout(t);
+  }, [now]);
+  return now;
+}
+
+/**
+ * Where a round of today stands right now. A round nobody marked moves from upcoming to happening to ended with
+ * the clock, so those three are read from its times; an answered round keeps the state the server gave.
+ */
+function roundState(iv: TodayInterview, now: number): TodayInterview['state'] {
+  if (iv.state !== 'upcoming' && iv.state !== 'now' && iv.state !== 'unmarked') return iv.state;
+  const start = parseServerTime(iv.scheduledAt).getTime();
+  const end = iv.endsAt ? parseServerTime(iv.endsAt).getTime() : NaN;
+  if (isNaN(start) || isNaN(end)) return iv.state;
+  return now < start ? 'upcoming' : now < end ? 'now' : 'unmarked';
+}
+
 const parseDay = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -20,6 +47,7 @@ const parseDay = (iso: string) => {
 
 export default function TodayCard() {
   const today = todayInputValue();
+  const now = useNow();
   const { mutate: globalMutate } = useSWRConfig();
   const { data: plan, error, isLoading, mutate } = useSWR(['home-day', today], () => api.getDayPlan(today), { revalidateOnFocus: false });
   const [local, setLocal] = useState<Record<string, Result>>({}); // optimistic, until saved
@@ -100,8 +128,21 @@ export default function TodayCard() {
   const heading = todayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const t = plan.targets;
   const bidsTarget = t.bidsSelf + t.bidsBidder;
+  const bidsDone = plan.done.bidsSelf + plan.bidsBidderAuto;
   const intTarget = t.interviewsSelf + t.interviewsCaller;
-  const chip = (label: string, done: number, target: number) => `${label} ${done}${target > 0 ? ` / ${target}` : ''} · auto`;
+  const rounds = plan.todayInterviews ?? [];
+  const marked = plan.interviewsMarked; // missing from an older server: the row then shows the plain count
+  const toCome = rounds.some((r) => ['upcoming', 'now'].includes(roundState(r, now)));
+  // The auto rows that have a box (they tick themselves), with whether it is ticked.
+  const auto = [
+    ...(bidsTarget > 0 ? [bidsDone >= bidsTarget] : []),
+    ...(marked && marked.total > 0 ? [marked.marked >= marked.total && !toCome] : []),
+  ];
+  // After anything done to a round: the day, plus the week and month cards and the waiting list.
+  const refresh = () => Promise.all([
+    mutate(),
+    globalMutate((key) => Array.isArray(key) && ['home-week', 'home-month-interviews', 'interviews-needs-input'].includes(key[0])),
+  ]);
   const daysLeft = dow >= 1 && dow <= 4 ? `${6 - dow} days left · ` : dow === 5 ? 'last day · ' : '';
   const daily = plan.items.filter((i) => kept(i) && i.scope === 'routine');
   const weekly = plan.items.filter((i) => kept(i) && i.scope === 'goal');
@@ -131,6 +172,7 @@ export default function TodayCard() {
           result={busy ? { done: false, value: item.result?.value ?? null } : earlier ? { done: true, value: item.result?.value ?? null } : resultOf(item)}
           week={item.scope === 'goal' ? plan.progress[item.id] : undefined}
           disabled={disabled || item.archived || busy}
+          compact
           valueLocked={!!earlier}
           doneLocked={met}
           note={busy ? undefined : earlier ? `done ${parseDay(earlier).toLocaleDateString('en-US', { weekday: 'short' })}` : met ? 'week target met' : undefined}
@@ -144,73 +186,204 @@ export default function TodayCard() {
       </Fragment>
     );
   };
-  const section = (label: string, list: DayItem[], prefix = '') => (
-    <>
-      <div className="mt-3 flex justify-between text-[11px] font-medium uppercase tracking-wider text-muted">
-        <span>{label}</span><span className="normal-case tracking-normal">{prefix}{count(list)}</span>
-      </div>
-      <ul className="space-y-0.5">{list.map(row)}</ul>
-    </>
+  const label = (text: string, right?: string) => (
+    <div className="mt-3 flex justify-between gap-2 text-[11px] font-medium uppercase tracking-wider text-muted">
+      <span>{text}</span>{right && <span className="normal-case tracking-normal">{right}</span>}
+    </div>
   );
+  const autoLine = 'flex flex-wrap items-center gap-2 px-1 py-1.5 text-sm text-body';
+  const autoBox = (name: string, checked: boolean) => (
+    <input
+      type="checkbox"
+      disabled
+      checked={checked}
+      readOnly
+      aria-label={`${name} — ticks itself`}
+      className={checked ? 'h-4 w-4 shrink-0' : 'h-4 w-4 shrink-0 appearance-none rounded border border-dashed border-zinc-400 dark:border-zinc-500'}
+    />
+  );
+  const autoTag = <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-muted dark:border-zinc-700">ticks itself</span>;
+  const bidsLeft = bidsTarget - bidsDone;
+  const interviewsDone = plan.interviews.self + plan.interviews.caller;
 
   return (
     <section className="card p-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold text-heading">Today · {heading}</h2>
-        <div className="flex gap-2 text-xs text-body">
-          <span className="rounded-full border border-zinc-200 dark:border-zinc-700 px-2.5 py-0.5">{chip('Bids', plan.done.bidsSelf + plan.bidsBidderAuto, bidsTarget)}</span>
-          <span className="rounded-full border border-zinc-200 dark:border-zinc-700 px-2.5 py-0.5">{chip('Interviews', plan.interviews.self + plan.interviews.caller, intTarget)}</span>
-        </div>
+        {daily.length + auto.length > 0 && (
+          <span className="text-xs text-muted">{daily.filter(isDone).length + auto.filter(Boolean).length} of {daily.length + auto.length} done</span>
+        )}
       </header>
       {disabled && (
         <p className="mt-2 text-sm text-muted">
           No plan for this week yet — <Link to="/plans" className="underline">Set this week's plan</Link>
         </p>
       )}
-      {section('Daily', daily)}
-      {section('This week', weekly, daysLeft)}
-      <WaitingInterviews onSaved={() => mutate()} />
+      {label('Daily')}
+      <ul aria-label="Daily" className="space-y-0.5">
+        <li className={autoLine}>
+          {bidsTarget > 0 ? autoBox('Bids target reached', bidsDone >= bidsTarget) : <span className="w-4 shrink-0" />}
+          <div className="min-w-0 flex-1 basis-52">
+            <span className="font-medium text-strong">Bids</span>
+            <span className="text-xs text-muted">
+              {' · '}{num(bidsDone)}{bidsTarget > 0 && ` of ${num(bidsTarget)}`}{bidsTarget > 0 && bidsLeft > 0 && ` · ${num(bidsLeft)} to go`}
+            </span>
+            {bidsTarget > 0 && (
+              <div
+                role="progressbar"
+                aria-label="Bids today"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.min(100, Math.round((bidsDone / bidsTarget) * 100))}
+                className="mt-1 h-2 max-w-md overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800"
+              >
+                <div className="h-full bg-accent-500" style={{ width: `${Math.min(100, (bidsDone / bidsTarget) * 100)}%` }} />
+              </div>
+            )}
+          </div>
+          {bidsTarget > 0 && autoTag}
+        </li>
+        <li className={autoLine}>
+          {marked && marked.total > 0
+            ? autoBox("Today's interviews all marked", marked.marked >= marked.total && !toCome)
+            : <span className="w-4 shrink-0" />}
+          <div className="min-w-0 flex-1 basis-52">
+            <span className="font-medium text-strong">Interviews</span>
+            <span className="text-xs text-muted">
+              {' · '}
+              {!marked
+                ? `${interviewsDone}${intTarget > 0 ? ` of ${intTarget}` : ''}`
+                : marked.total > 0 ? `${marked.marked} of ${marked.total} marked` : 'none today'}
+            </span>
+          </div>
+          {marked && marked.total > 0 && autoTag}
+        </li>
+        {rounds.length > 0 && <li><TodayInterviews rounds={rounds} now={now} onSaved={refresh} /></li>}
+        {daily.map(row)}
+      </ul>
+      {label('This week', `${daysLeft}${count(weekly)}`)}
+      <ul className="space-y-0.5">{weekly.map(row)}</ul>
+      <WaitingInterviews today={rounds} onSaved={refresh} />
     </section>
+  );
+}
+
+const STEP_ENDED: Record<string, string> = { passed: ' ✓ passed', rejected: ' ✗ rejected', canceled: ' canceled', held: '' };
+
+/** Today's rounds under the Interviews row: who takes each, the steps so far, and where it stands right now. */
+function TodayInterviews({ rounds, now, onSaved }: { rounds: TodayInterview[]; now: number; onSaved: () => unknown }) {
+  const { tz } = useInterviewTimezone();
+  const { dialog, outcomeButtons } = useNeedsInputActions(onSaved);
+  const clock = (iso: string) => formatInZone(parseServerTime(iso), tz, { hour: 'numeric', minute: '2-digit' });
+  const ok = 'font-semibold text-emerald-600 dark:text-emerald-400';
+
+  const status = (iv: TodayInterview, state: TodayInterview['state']) => {
+    switch (state) {
+      case 'upcoming': {
+        const minutes = Math.max(1, Math.ceil((parseServerTime(iv.scheduledAt).getTime() - now) / MINUTE_MS));
+        const hours = Math.round(minutes / 60);
+        const left = minutes < 60 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'}`;
+        return <span className="text-muted">In {left}</span>;
+      }
+      case 'now': return <span className="font-semibold text-accent-700 dark:text-accent-300">Happening now</span>;
+      case 'unmarked':
+        return <span className="font-semibold text-amber-700 dark:text-amber-400">Ended {iv.endsAt ? `${clock(iv.endsAt)} ` : ''}· not marked</span>;
+      case 'completed': return <span className={ok}>Completed ✓</span>;
+      case 'passed': return <span className={ok}>Passed ✓</span>;
+      case 'rejected': return <span className="font-semibold text-red-600 dark:text-red-400">Rejected</span>;
+      case 'canceled': return <span className="text-muted">Canceled</span>;
+      default: {
+        const day = shortDay(iv.rescheduledTo, tz);
+        return <span className="text-muted">Rescheduled{day ? ` to ${day}` : ''}</span>;
+      }
+    }
+  };
+
+  return (
+    <>
+      {dialog}
+      <ul aria-label="Today's interviews" className="mb-1 ml-6 border-l-2 border-zinc-200 dark:border-zinc-700">
+        {rounds.map((iv) => {
+          const state = roundState(iv, now);
+          const who = iv.who.kind === 'self'
+            ? 'Self'
+            : !iv.who.assigned ? 'Caller: not assigned yet' : `Caller: ${iv.who.name || 'assigned'}${iv.who.confirmed ? ' ✓ confirmed' : ''}`;
+          return (
+            <li key={roundKey(iv)} className="py-2 pl-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
+                <span className="min-w-0">
+                  <span className="font-medium text-strong">{clock(iv.scheduledAt)} · {iv.companyName || 'Untitled company'}</span>
+                  <span className="text-xs text-muted">{iv.profileName ? ` · ${iv.profileName}` : ''} · {who}</span>
+                </span>
+                <span className="text-xs">{status(iv, state)}</span>
+              </div>
+              <div className="mt-0.5 text-xs text-muted">
+                {iv.steps.map((step, i) => (
+                  <Fragment key={i}>
+                    {i > 0 && ' → '}
+                    {step.state === 'today'
+                      ? <span className="rounded bg-sky-50 px-1 font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-400">{stageLabel(step.stage)} · today</span>
+                      : `${stageLabel(step.stage)}${STEP_ENDED[step.state] ?? ''}`}
+                  </Fragment>
+                ))}
+              </div>
+              {state === 'unmarked' && (
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {outcomeButtons({
+                    interviewId: iv.interviewId, roundId: iv.roundId, companyName: iv.companyName, profileName: iv.profileName,
+                    ownerId: '', ownerName: null, stage: iv.stage, status: iv.status, scheduledAt: iv.scheduledAt, endsAt: iv.endsAt,
+                    need: 'outcome',
+                  })}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
 const WAITING_ROWS = 5;
 
 /**
- * The signed-in person's rounds that wait on them. Follow-ups and their answers are handled here; rounds that need
- * their outcome or a reason are only counted, with a link to the Interviews page. Hidden when nothing waits.
- * `onSaved` refetches the day (its standup line counts the follow-ups).
+ * The signed-in person's follow-ups: rounds held a week ago with no result (tick once followed up) and follow-ups
+ * that got no answer. Older rounds that need their outcome or a reason are only counted, with a link to the
+ * Interviews page; `today`'s rounds are answered in the list above, so they are not counted again. Hidden when
+ * nothing waits. `onSaved` refetches the day, the other cards and this list.
  */
-function WaitingInterviews({ onSaved }: { onSaved: () => unknown }) {
+function WaitingInterviews({ today, onSaved }: { today: TodayInterview[]; onSaved: () => unknown }) {
   const { user } = useAuth();
   const { tz } = useInterviewTimezone();
   // An admin asks for their own rounds by id (without it the server returns the whole team's). Same key shape as
   // the Interviews page's list, so a save on either refreshes both.
   const own = user?.role === 'admin' ? user.id : undefined;
-  const { data, mutate } = useSWR(['interviews-needs-input', own ?? ''], () => api.getNeedsInput(own));
-  const { dialog, isSaving, followUp, resultButtons } = useNeedsInputActions(() => Promise.all([mutate(), onSaved()]));
+  const { data } = useSWR(['interviews-needs-input', own ?? ''], () => api.getNeedsInput(own));
+  const { dialog, isSaving, followUp, resultButtons } = useNeedsInputActions(onSaved);
   // Guard: never show an admin someone else's round here, whatever the server returned.
   const items = (data?.items ?? []).filter((row) => user?.role !== 'admin' || row.ownerId === user.id);
-  if (!items.length) return dialog;
-
-  const count = (need: NeedsInputItem['need']) => items.filter((row) => row.need === need).length;
+  const todayKeys = new Set(today.map(roundKey));
+  const count = (need: NeedsInputItem['need']) => items.filter((row) => row.need === need && !todayKeys.has(roundKey(row))).length;
   const outcomes = count('outcome');
   const reasons = count('reason');
+  const older = (n: number) => `${n} older ${n === 1 ? 'round needs' : 'rounds need'}`;
   const others = [
-    outcomes > 0 && `${outcomes} ${outcomes === 1 ? 'round needs' : 'rounds need'} "How did it go?"`,
-    reasons > 0 && `${reasons} ${reasons === 1 ? 'needs' : 'need'} a reason`,
+    outcomes > 0 && `${older(outcomes)} "How did it go?"`,
+    reasons > 0 && (outcomes > 0 ? `${reasons} ${reasons === 1 ? 'needs' : 'need'} a reason` : `${older(reasons)} a reason`),
   ].filter(Boolean).join(' · ');
   const rows = items
     .filter((row) => row.need === 'follow_up' || row.need === 'heard_back')
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)); // oldest first
   const more = rows.length - WAITING_ROWS;
+  if (!rows.length && !others) return dialog;
   const line = 'flex flex-wrap items-center gap-x-2 gap-y-1.5 px-1 py-1.5 text-sm text-body';
 
   return (
     <div role="group" aria-labelledby="waiting-interviews-title">
       {dialog}
-      <div id="waiting-interviews-title" className="mt-3 text-[11px] font-medium uppercase tracking-wider text-muted">
-        Interviews waiting on you ({items.length})
+      <div className="mt-3 flex flex-wrap justify-between gap-x-2 text-[11px] font-medium uppercase tracking-wider text-muted">
+        <span id="waiting-interviews-title">Follow-ups ({rows.length})</span>
+        <span className="normal-case tracking-normal">tick when you've followed up with the company</span>
       </div>
       <ul className="space-y-0.5">
         {rows.slice(0, WAITING_ROWS).map((row) => {
@@ -236,7 +409,7 @@ function WaitingInterviews({ onSaved }: { onSaved: () => unknown }) {
               ) : <span className="w-4 shrink-0" />}
               <span className="min-w-0 flex-1 basis-52">
                 <span className="font-medium text-strong">
-                  {row.need === 'follow_up' ? `Follow up with ${company}` : `Did you hear back? ${row.companyName || ''}`.trim()}
+                  {row.need === 'follow_up' ? (row.companyName || 'Untitled company') : `Did you hear back? ${row.companyName || ''}`.trim()}
                 </span>
                 <span className="text-xs text-muted"> · {round} · {waiting}</span>
               </span>
