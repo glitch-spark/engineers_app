@@ -117,6 +117,12 @@ describe('InterviewStatsTab', () => {
         .toBe('Data starts Oct 6, 2026. Pick a month or more (Since Oct 6 is best) for reliable numbers.');
     });
 
+    it('hides By region when one region is picked: it would be a single row', async () => {
+      show('/statistics?region=EU');
+      await screen.findByRole('table', { name: 'By profile' });
+      expect(screen.queryByRole('table', { name: 'By region' })).toBeNull();
+    });
+
     it('carries region, scope and the custom dates from the URL', async () => {
       show('/statistics?region=EU&scope=me&range=custom&from=2026-10-10&to=2026-11-10');
       await waitFor(() => expect(getInterviewsReport).toHaveBeenCalled());

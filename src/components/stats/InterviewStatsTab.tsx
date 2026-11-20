@@ -206,7 +206,7 @@ export function FollowUps({ rows = [] }: { rows?: InterviewStatsReport['followUp
   );
 }
 
-function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; onPick?: (userId: string) => void }) {
+function Report({ d, team, allRegions, onPick }: { d: InterviewStatsReport; team: boolean; allRegions: boolean; onPick?: (userId: string) => void }) {
   const s = d.summary;
   const teamRate = s.cards.passRate.teamRate ?? d.totals.rate;
   // the bar colour legend is said once, under By stage (the first table with bars), not under every table
@@ -241,7 +241,8 @@ function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; o
         {table('By resume score', d.byScore)}
         {table('By job area', d.byArea)}
         {table('By profile', d.byProfile)}
-        {table('By region', d.byRegion)}
+        {/* one region picked = a single row: hidden (user, 2026-11-20) */}
+        {allRegions && table('By region', d.byRegion)}
       </div>
       {SHOW_FOLLOW_UPS && <FollowUps rows={d.followUps} />}
     </>
@@ -283,7 +284,7 @@ export default function InterviewStatsTab() {
           <p className="panel p-6 text-sm text-muted">
             {d.window?.startClamped ? 'No data before Oct 6, 2026 — pick a later period.' : 'No interview rounds in this period.'}
           </p>
-        ) : <Report d={d} team={scope === 'team'} onPick={isAdmin ? (id) => f.patch({ user: id }) : undefined} />}
+        ) : <Report d={d} team={scope === 'team'} allRegions={params.region === 'all'} onPick={isAdmin ? (id) => f.patch({ user: id }) : undefined} />}
     </div>
   );
 }
