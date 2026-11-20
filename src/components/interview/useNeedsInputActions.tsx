@@ -4,6 +4,8 @@ import type { NeedsInputItem } from '../../api/endpoints';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
 import { notify } from '../../lib/notify';
 import { stageLabel } from '../../lib/stageBadge';
+import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
+import RescheduleDialog from './RescheduleDialog';
 import { useStatusNotePrompt } from './StatusNoteDialog';
 
 const DAY_MS = 86400000;
@@ -23,12 +25,14 @@ export function shortDay(iso: string | null | undefined, tz: string): string {
 
 /**
  * What a round waiting on its owner can be answered with, shared by the Interviews page's "Needs your input" and
- * Home's "Interviews waiting on you": the saves, the feedback / reason dialog (render `dialog`) and the buttons.
+ * Home's "Interviews waiting on you": the saves, the feedback / reason and Change time dialogs (render `dialog`) and the buttons.
  * `onSaved` refetches the list the row is in; the row's controls stay disabled (`isSaving`) until it settles.
  */
 export function useNeedsInputActions(onSaved: () => unknown) {
-  const { prompt, dialog } = useStatusNotePrompt();
+  const { tz } = useInterviewTimezone();
+  const { prompt, dialog: statusDialog } = useStatusNotePrompt();
   const [saving, setSaving] = useState<string[]>([]);
+  const [moving, setMoving] = useState<NeedsInputItem | null>(null); // the round in the Change time dialog
   const isSaving = (row: NeedsInputItem) => saving.includes(needsInputKey(row));
 
   const run = async (row: NeedsInputItem, send: () => Promise<unknown>) => {
@@ -78,5 +82,37 @@ export function useNeedsInputActions(onSaved: () => unknown) {
     button(row, 'Rejected', () => ask(row, 'rejected')),
   ];
 
-  return { dialog, isSaving, setStatus, followUp, ask, button, resultButtons };
+  /** The answers to "How did it go?" for a round whose time has passed. */
+  const outcomeButtons = (row: NeedsInputItem): ReactNode[] => [
+    button(row, 'Completed', () => setStatus(row, { status: 'completed' })),
+    button(row, 'Passed', () => ask(row, 'passed')),
+    button(row, 'Rejected', () => ask(row, 'rejected')),
+    button(row, 'Rescheduled', () => setMoving(row)),
+    button(row, 'Canceled', () => ask(row, 'canceled')),
+  ];
+
+  const dialog = (
+    <>
+      {statusDialog}
+      {moving && (
+        <RescheduleDialog
+          open
+          // The dialog reads only the round's id, stage, status and time, all of which the row carries.
+          interview={{
+            _id: moving.interviewId,
+            stageHistory: [{ id: moving.roundId, stage: moving.stage, status: moving.status, scheduledAt: moving.scheduledAt }],
+          }}
+          roundId={moving.roundId}
+          tz={tz}
+          onClose={() => setMoving(null)}
+          onSaved={() => {
+            setMoving(null);
+            void onSaved();
+          }}
+        />
+      )}
+    </>
+  );
+
+  return { dialog, isSaving, followUp, ask, button, resultButtons, outcomeButtons };
 }

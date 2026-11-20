@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { NeedsInputItem } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
-import RescheduleDialog from '../../components/interview/RescheduleDialog';
 import { daysWithoutResult, needsInputKey, shortDay, useNeedsInputActions } from '../../components/interview/useNeedsInputActions';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
 import { interviewStatusLabel, stageBadgeClass, stageLabel } from '../../lib/stageBadge';
@@ -29,47 +27,15 @@ export default function NeedsInput({ filterUser, onSaved }: { filterUser: string
   const isAdmin = user?.role === 'admin';
   const userId = isAdmin && filterUser && filterUser !== 'all' ? filterUser : undefined;
   const { data } = useSWR(['interviews-needs-input', userId ?? ''], () => api.getNeedsInput(userId));
-  const { dialog, setStatus, followUp, ask, button, resultButtons } = useNeedsInputActions(onSaved);
-  const [moving, setMoving] = useState<NeedsInputItem | null>(null);
+  const { dialog, followUp, ask, button, resultButtons, outcomeButtons } = useNeedsInputActions(onSaved);
   const items = data?.items ?? [];
 
-  const overlays = (
-    <>
-      {dialog}
-      {moving && (
-        <RescheduleDialog
-          open
-          // The dialog reads only the round's id, stage, status and time, all of which the row carries.
-          interview={{
-            _id: moving.interviewId,
-            stageHistory: [{ id: moving.roundId, stage: moving.stage, status: moving.status, scheduledAt: moving.scheduledAt }],
-          }}
-          roundId={moving.roundId}
-          tz={tz}
-          onClose={() => setMoving(null)}
-          onSaved={() => {
-            setMoving(null);
-            void onSaved();
-          }}
-        />
-      )}
-    </>
-  );
-
-  if (!items.length) return overlays;
+  if (!items.length) return dialog;
 
   const buttons = (row: NeedsInputItem) => {
     switch (row.need) {
-      case 'outcome': {
-        const [passed, rejected] = resultButtons(row);
-        return [
-          button(row, 'Completed', () => setStatus(row, { status: 'completed' })),
-          passed,
-          rejected,
-          button(row, 'Rescheduled', () => setMoving(row)),
-          button(row, 'Canceled', () => ask(row, 'canceled')),
-        ];
-      }
+      case 'outcome':
+        return outcomeButtons(row);
       case 'follow_up':
         return [button(row, 'I followed up', () => followUp(row)), ...resultButtons(row)];
       case 'heard_back':
@@ -81,7 +47,7 @@ export default function NeedsInput({ filterUser, onSaved }: { filterUser: string
 
   return (
     <section className="panel p-3" aria-labelledby="needs-input-title">
-      {overlays}
+      {dialog}
       <h2 id="needs-input-title" className="text-sm font-semibold text-strong">Needs your input ({items.length})</h2>
       <p className="mt-0.5 text-xs text-muted">Rounds waiting for an answer from you.</p>
       <div className="max-h-96 overflow-y-auto">
