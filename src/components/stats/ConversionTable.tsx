@@ -23,14 +23,22 @@ const MARK = {
 };
 const pctOf = (v: number, max: number) => `${+((v / max) * 100).toFixed(2)}%`;
 
-/** Rate bar: width relative to the table's max rate, a thin tick at the team rate. */
-function RateBar({ rate, max, teamRate }: { rate: number; max: number; teamRate?: number | null }) {
+type Tone = 'good' | 'bad' | 'same';
+const TONE_CLASS: Record<Tone, string> = {
+  good: 'bg-green-500 dark:bg-green-400', bad: 'bg-red-500 dark:bg-red-400', same: 'bg-zinc-400 dark:bg-zinc-500',
+};
+/** Clearly above / below the team rate (1.5x / 0.5x, and not too few to tell), else about the same. */
+function toneOf(g: ConversionGroup, teamRate?: number | null): Tone {
+  if (g.few || g.rate == null || !teamRate) return 'same';
+  return g.rate >= 1.5 * teamRate ? 'good' : g.rate <= 0.5 * teamRate ? 'bad' : 'same';
+}
+
+/** Rate bar: width relative to the table's highest rate, coloured by the gap to the team rate (user, 2026-11-19). */
+function RateBar({ rate, max, tone }: { rate: number; max: number; tone: Tone }) {
   return (
     <span aria-hidden className="relative inline-block h-2 w-16 shrink-0 rounded bg-zinc-100 sm:w-24 dark:bg-zinc-800">
-      <span data-bar="fill" className="absolute inset-y-0 left-0 rounded bg-blue-500 dark:bg-blue-400" style={{ width: pctOf(Math.min(rate, max), max) }} />
-      {teamRate != null && (
-        <span data-bar="team" className="absolute -top-[3px] h-3.5 w-0.5 bg-zinc-900 dark:bg-zinc-100" style={{ left: pctOf(teamRate, max) }} />
-      )}
+      <span data-bar="fill" data-tone={tone} className={`absolute inset-y-0 left-0 rounded ${TONE_CLASS[tone]}`}
+        style={{ width: pctOf(Math.min(rate, max), max) }} />
     </span>
   );
 }
@@ -64,7 +72,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
           <td className="whitespace-nowrap py-1 tabular-nums">
             {!rated(g) ? <span className="text-xs text-muted">known only from interviews</span> : (
             <span className="flex items-center gap-2">
-              {g.rate != null && <RateBar rate={g.rate} max={max} teamRate={teamRate} />}
+              {g.rate != null && <RateBar rate={g.rate} max={max} tone={toneOf(g, teamRate)} />}
               <span>
                 {g.rate == null ? '—' : `${g.rate}%`}
                 {g.few && g.rate != null && (
@@ -107,7 +115,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
           </tbody>
         </table>
       </div>
-      {teamRate != null && rows.length > 0 && <p className="mt-1 text-xs text-muted">{`Bar = rate · line = team rate (${teamRate}%)`}</p>}
+      {teamRate != null && rows.length > 0 && <p className="mt-1 text-xs text-muted">{`Green = clearly above the team rate (${teamRate}%), red = clearly below, grey = about the same or too few to tell.`}</p>}
       {note && <p className="mt-1 text-xs text-muted">{note}</p>}
     </div>
   );

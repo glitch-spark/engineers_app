@@ -72,7 +72,7 @@ describe('ConversionTable', () => {
       expect(screen.queryByText(/more sites/)).toBeNull();
     });
   });
-  it('rate bar per row relative to the max rate, team tick, ★ / ⚠ from mark, few rows muted', () => {
+  it('rate bar per row relative to the max rate, ★ / ⚠ from mark, few rows muted', () => {
     render(<ConversionTable title="By resume score" teamRate={0.6} rows={[
       { key: '80', label: '80+', bids: 1185, matured: 900, interviews: 9, rate: 1.5, few: false, mark: 'best' },
       { key: '65', label: '65–79', bids: 812, matured: 600, interviews: 3, rate: 0.5, few: false, mark: null },
@@ -84,7 +84,7 @@ describe('ConversionTable', () => {
     expect(fill('80+')).toBe('100%');
     expect(fill('65–79')).toBe('33.33%');
     expect(fill('50–64')).toBe('0%');
-    expect((row('80+').querySelector('[data-bar="team"]') as HTMLElement).style.left).toBe('40%');
+    expect(row('80+').querySelector('[data-bar="team"]')).toBeNull(); // the team line was replaced by bar colour
     expect(screen.getByRole('img', { name: 'Best group' }).textContent).toBe('★');
     expect(row('80+').contains(screen.getByRole('img', { name: 'Best group' }))).toBe(true);
     expect(row('Tiny').contains(screen.getByRole('img', { name: 'Weakest group' }))).toBe(true);
@@ -117,9 +117,17 @@ describe('ConversionTable rate bars', () => {
     expect(self.style.width).toBe('100%'); // scaled to the highest real rate, not 78.8
   });
 
-  it('plain Rate header and a legend naming the team rate', () => {
-    render(<ConversionTable title="By job site" teamRate={0.9} rows={[grp('a', 'Ashby', 0.5)]} />);
+  it('plain Rate header, no team line, bars coloured by a clear gap to the team rate', () => {
+    render(<ConversionTable title="By job site" teamRate={1.0} rows={[
+      grp('a', 'Ashby', 2.0), grp('b', 'Lever', 0.4), grp('c', 'Workday', 1.1), grp('d', 'Tiny', 3.0, { few: true }),
+    ]} />);
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Group', 'Bids', 'Matured', 'Interviews', 'Rate']);
-    expect(screen.getByText('Bar = rate · line = team rate (0.9%)')).toBeTruthy();
+    expect(document.querySelector('[data-bar="team"]')).toBeNull();
+    const fill = (label: string) => screen.getByText(label).closest('tr')!.querySelector('[data-bar="fill"]')!.getAttribute('data-tone');
+    expect(fill('Ashby')).toBe('good');   // >= 1.5x team
+    expect(fill('Lever')).toBe('bad');    // <= 0.5x team
+    expect(fill('Workday')).toBe('same');
+    expect(fill('Tiny')).toBe('same');    // too few to call
+    expect(screen.getByText('Green = clearly above the team rate (1%), red = clearly below, grey = about the same or too few to tell.')).toBeTruthy();
   });
 });
