@@ -15,13 +15,13 @@ const show = (url: string) => render(<MemoryRouter initialEntries={[url]}><Stati
 describe('Statistics', () => {
   it('has Conversion, Resume compare and AI usage tabs', () => {
     show('/statistics');
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Conversion', 'Resume compare', 'AI usage']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Bids → Interviews', 'Resume compare', 'AI usage']);
     expect(screen.getByText('conversion tab')).toBeTruthy();
   });
 
   it.each(['bids', 'interviews'])('old %s tab URLs open Conversion', (tab) => {
     show(`/statistics?tab=${tab}`);
-    expect(screen.getByRole('tab', { name: 'Conversion' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Bids → Interviews' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('conversion tab')).toBeTruthy();
   });
 });
