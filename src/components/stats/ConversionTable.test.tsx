@@ -99,3 +99,27 @@ describe('ConversionTable', () => {
     expect(document.querySelector('[data-bar]')).toBeNull();
   });
 });
+
+describe('ConversionTable rate bars', () => {
+  afterEach(cleanup);
+  const grp = (key: string, label: string, rate: number | null, o = {}) =>
+    ({ key, label, bids: 100, matured: 100, interviews: 1, rate, few: false, ...o });
+
+  it('No tracked bid shows no rate or bar, and does not stretch the scale', () => {
+    render(<ConversionTable title="Self vs bidder" teamRate={0.9} rows={[
+      grp('self', 'Self', 2.3), grp('bidder', 'Bidder', 0.2), grp('unknown', 'No tracked bid', 78.8),
+    ]} />);
+    const unknown = screen.getByText('No tracked bid').closest('tr')!;
+    expect(unknown.querySelector('[data-bar="fill"]')).toBeNull();
+    expect(unknown.textContent).toContain('known only from interviews');
+    expect(unknown.textContent).not.toContain('78.8%');
+    const self = screen.getByText('Self').closest('tr')!.querySelector('[data-bar="fill"]') as HTMLElement;
+    expect(self.style.width).toBe('100%'); // scaled to the highest real rate, not 78.8
+  });
+
+  it('plain Rate header and a legend naming the team rate', () => {
+    render(<ConversionTable title="By job site" teamRate={0.9} rows={[grp('a', 'Ashby', 0.5)]} />);
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Group', 'Bids', 'Matured', 'Interviews', 'Rate']);
+    expect(screen.getByText('Bar = rate · line = team rate (0.9%)')).toBeTruthy();
+  });
+});

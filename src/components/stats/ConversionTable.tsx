@@ -40,8 +40,11 @@ function RateBar({ rate, max, teamRate }: { rate: number; max: number; teamRate?
 export default function ConversionTable({ title, rows, teamRate, note }: { title: string; rows: ConversionGroup[]; teamRate?: number | null; note?: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const head = ['Group', 'Bids', 'Matured', 'Interviews', teamRate != null ? 'Rate (│ = team)' : 'Rate'];
-  const max = Math.max(teamRate ?? 0, ...rows.map((g) => g.rate ?? 0)) || 1;
+  const head = ['Group', 'Bids', 'Matured', 'Interviews', 'Rate'];
+  // "No tracked bid" rows exist only because they got an interview: their rate is meaningless, so it is not shown
+  // and doesn't set the bar scale.
+  const rated = (g: ConversionGroup) => g.key !== 'unknown';
+  const max = Math.max(teamRate ?? 0, ...rows.filter(rated).map((g) => g.rate ?? 0)) || 1;
   const dataRow = (g: ConversionGroup, member = false) => {
     const id = member ? `m:${g.key}` : g.label;
     return (
@@ -59,6 +62,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
           <td className="py-1 pr-3 tabular-nums">{g.matured.toLocaleString()}</td>
           <td className="py-1 pr-3 tabular-nums">{g.interviews.toLocaleString()}</td>
           <td className="whitespace-nowrap py-1 tabular-nums">
+            {!rated(g) ? <span className="text-xs text-muted">known only from interviews</span> : (
             <span className="flex items-center gap-2">
               {g.rate != null && <RateBar rate={g.rate} max={max} teamRate={teamRate} />}
               <span>
@@ -68,6 +72,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
                 )}
               </span>
             </span>
+            )}
           </td>
         </tr>
         {g.few && open === id && (
@@ -102,6 +107,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
           </tbody>
         </table>
       </div>
+      {teamRate != null && rows.length > 0 && <p className="mt-1 text-xs text-muted">{`Bar = rate · line = team rate (${teamRate}%)`}</p>}
       {note && <p className="mt-1 text-xs text-muted">{note}</p>}
     </div>
   );

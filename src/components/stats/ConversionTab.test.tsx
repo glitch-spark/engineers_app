@@ -118,7 +118,7 @@ describe('ConversionTab', () => {
       expect(screen.getByRole('table', { name: t })).toBeTruthy();
     }
     const site = screen.getByRole('table', { name: 'By job site' });
-    expect(within(site).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Group', 'Bids', 'Matured', 'Interviews', 'Rate (│ = team)']);
+    expect(within(site).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Group', 'Bids', 'Matured', 'Interviews', 'Rate']);
     expect(within(site).getByText('1.7%')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'By resume score' })).getByText('—')).toBeTruthy();
     expect(getStatsView).not.toHaveBeenCalled(); // the old StatsFrame bids strip is gone
@@ -134,7 +134,7 @@ describe('ConversionTab', () => {
     const note = 'Interviews are easier to match to bids with a tailored resume, so "No score" is undercounted.';
     const el = await screen.findByText(note);
     expect(screen.getAllByText(note)).toHaveLength(1);
-    expect(el.previousElementSibling?.querySelector('table')?.getAttribute('aria-label')).toBe('By resume score');
+    expect(el.parentElement?.querySelector('table')?.getAttribute('aria-label')).toBe('By resume score');
   });
 
   it('few rate shows warning tooltip', async () => {
