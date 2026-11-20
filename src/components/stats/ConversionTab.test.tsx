@@ -62,7 +62,7 @@ beforeEach(() => {
   getConversion.mockReset(); getConversion.mockImplementation((p: { scope: string }) => Promise.resolve(
     p.scope === 'team' ? { ...report, scope: 'team', byBidder: undefined } : { ...report, scope: p.scope }));
   getChanges.mockReset(); getChanges.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, profiles: [] });
-  getTiming.mockReset(); getTiming.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'UTC', window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, weekday: [], hours: [], bidders: [{ bidderId: 'b', name: 'Bo', bids: 5, matured: 4, interviews: 1, per100: null, tooFew: true, rejectedShare: 0 }], teamBidder: { per100: null, matured: 0, interviews: 0 } });
+  getTiming.mockReset(); getTiming.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'UTC', window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, weekday: [], hours: [] });
   getProfileReport.mockReset(); getProfileReport.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, coverage: { rows: 0, headerBids: null, noLink: 0, unmatchedInterviews: null }, team: { per100: null, medianDays: null, profiles: 0 }, profiles: [] });
   listAccounts.mockReset(); listAccounts.mockResolvedValue({ accounts: [{ _id: 'a1', name: 'Pedro', region: 'US' }, { _id: 'a2', name: 'Maria', region: 'EU' }], pagination: {} });
 });

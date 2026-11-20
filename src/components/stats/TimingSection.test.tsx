@@ -12,11 +12,10 @@ const show = (user = '') => render(<SWRConfig value={{ provider: () => new Map()
 
 const cell = (o: Partial<RateCell> = {}): RateCell => ({ bids: 100, matured: 80, interviews: 8, per100: 10, tooFew: false, ...o });
 const grp = (label: string, you: Partial<RateCell> = {}, team: Partial<RateCell> = {}) => ({ key: label, label, you: cell(you), team: cell(team) });
-const bidder = (o = {}) => ({ bidderId: 'b1', name: 'Bo' as string | null, bids: 50, matured: 40, interviews: 4, per100: 10 as number | null, tooFew: false, rejectedShare: 5, ...o });
 const report = (o: Partial<TimingReport> = {}): TimingReport => ({
   label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'America/New_York', window: { median: null, p90: 14, matured_days: 14, n: 14, thin: false },
   weekday: [grp('Mon'), grp('Tue', { tooFew: true, per100: 3, bids: 10 })], hours: [grp('00–03'), grp('21–24')],
-  bidders: [bidder(), bidder({ bidderId: 'b2', name: null, tooFew: true, rejectedShare: 25 })], teamBidder: { per100: 0.4, matured: 3000, interviews: 12 }, ...o,
+  ...o,
 });
 
 beforeEach(() => { getTiming.mockReset(); });
@@ -63,8 +62,7 @@ describe('TimingSection team scope', () => {
 describe('TimingSection immature period', () => {
   const imm = (o: Partial<TimingReport> = {}) => report({
     window: { median: null, p90: 14, matured_days: 27, n: 0, thin: true },
-    weekday: [grp('Mon', { matured: 0, per100: null, tooFew: true }, { matured: 0, per100: null, tooFew: true })], hours: [grp('00–03', { matured: 0, per100: null, tooFew: true }, { matured: 0, per100: null, tooFew: true })],
-    bidders: [bidder({ bids: 300, matured: 0, interviews: 0, per100: null, tooFew: true }), bidder({ bidderId: 'b2', name: 'Cy', bids: 5, matured: 0, per100: null, tooFew: true })], ...o });
+    weekday: [grp('Mon', { matured: 0, per100: null, tooFew: true }, { matured: 0, per100: null, tooFew: true })], hours: [grp('00–03', { matured: 0, per100: null, tooFew: true }, { matured: 0, per100: null, tooFew: true })], ...o });
   const showWith = (fn?: () => void) => render(<SWRConfig value={{ provider: () => new Map() }}><TimingSection params={params} user="" onShowLastMonth={fn} /></SWRConfig>);
 
   it('note + button', async () => {
