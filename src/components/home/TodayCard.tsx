@@ -327,7 +327,8 @@ function TodayInterviews({ rounds, now, onSaved }: { rounds: TodayInterview[]; n
                   </Fragment>
                 ))}
               </div>
-              {state === 'unmarked' && (
+              {/* an old round with no id of its own can't be answered from here: the Interviews page handles it */}
+              {state === 'unmarked' && !!iv.roundId && (
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {outcomeButtons({
                     interviewId: iv.interviewId, roundId: iv.roundId, companyName: iv.companyName, profileName: iv.profileName,
