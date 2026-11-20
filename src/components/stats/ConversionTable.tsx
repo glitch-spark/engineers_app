@@ -72,7 +72,7 @@ function RateBar({ rate, max, tone }: { rate: number; max: number; tone: Tone })
 // "No tracked bid" rows exist only because they got an interview: their rate is meaningless, so it is not shown
 // and doesn't set the bar scale.
 const tracked = (g: ConversionGroup) => g.key !== 'unknown';
-/** Bids → Interviews: bids, matured bids, interviews and the rate (interviews per 100 matured). */
+/** Job applies: bids, matured bids, interviews and the rate (interviews per 100 matured). */
 export const CONVERSION_SPEC: RateTableSpec<ConversionGroup> = {
   groupHead: 'Group',
   columns: [
@@ -91,7 +91,7 @@ export const CONVERSION_SPEC: RateTableSpec<ConversionGroup> = {
 
 interface Props<T> {
   title: string; rows: T[]; teamRate?: number | null; note?: string;
-  /** Columns and wording; the Bids → Interviews ones by default. */
+  /** Columns and wording; the Job applies ones by default. */
   spec?: RateTableSpec<T>;
   /** The bar colour legend under the table (needs a team rate). */
   legend?: boolean;

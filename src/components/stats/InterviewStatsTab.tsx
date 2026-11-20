@@ -283,7 +283,7 @@ function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; o
 }
 
 /** Statistics → Interviews (spec 2026-11-20): what happens to interview rounds after they are scheduled. The same
- * filters (and URL keys) as Bids → Interviews, then cards, Everyone, key findings, By stage, self vs caller, the
+ * filters (and URL keys) as Job applies, then cards, Everyone, key findings, By stage, self vs caller, the
  * reasons, depth and speed, the pass-rate breakdowns and follow-ups. */
 export default function InterviewStatsTab() {
   const f = useConversionFilters();

@@ -76,7 +76,7 @@ const CONVERSION_METRICS: EveryoneMetric<ConversionPerson>[] = [
 ];
 
 /** Everyone, ranked by the switched metric (nulls last); every row shows all the numbers, the subject highlighted;
- * an admin can click a name to view that person. The Bids → Interviews numbers by default. */
+ * an admin can click a name to view that person. The Job applies numbers by default. */
 export function EveryoneList<R extends PersonRow = ConversionPerson>({ rows, onPick, metrics: given, initial = 'interviews', note }: {
   rows: R[]; onPick?: (userId: string) => void; metrics?: EveryoneMetric<R>[]; /** The metric ranked by at first. */ initial?: string; note?: string;
 }) {

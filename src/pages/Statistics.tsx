@@ -27,7 +27,7 @@ export default function Statistics() {
     setParams(next, { replace: true });
   };
   const tabs = [
-    { key: 'conversion', label: 'Bids → Interviews' },
+    { key: 'conversion', label: 'Job applies' },
     { key: 'interviews', label: 'Interviews' },
     { key: 'resume-compare', label: 'Resume compare' },
     { key: 'ai-usage', label: 'AI usage' },

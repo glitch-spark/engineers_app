@@ -14,15 +14,15 @@ afterEach(cleanup);
 const show = (url: string) => render(<MemoryRouter initialEntries={[url]}><Statistics /></MemoryRouter>);
 
 describe('Statistics', () => {
-  it('has Bids → Interviews, Interviews, Resume compare and AI usage tabs', () => {
+  it('has Job applies, Interviews, Resume compare and AI usage tabs', () => {
     show('/statistics');
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Bids → Interviews', 'Interviews', 'Resume compare', 'AI usage']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Job applies', 'Interviews', 'Resume compare', 'AI usage']);
     expect(screen.getByText('conversion tab')).toBeTruthy();
   });
 
-  it('old bids tab URLs still open Bids → Interviews', () => {
+  it('old bids tab URLs still open Job applies', () => {
     show('/statistics?tab=bids');
-    expect(screen.getByRole('tab', { name: 'Bids → Interviews' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Job applies' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('conversion tab')).toBeTruthy();
   });
 
