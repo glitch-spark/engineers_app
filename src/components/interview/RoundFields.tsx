@@ -1,8 +1,9 @@
 import Select from '../Select';
-import { INTERVIEW_STATUSES, STATUS_NOTE_MAX, statusNotePrompt } from '../../lib/stageBadge';
+import { INTERVIEW_STATUSES, STATUS_NOTE_MAX, statusNotePrompt, statusReasonPrompt } from '../../lib/stageBadge';
 import { DURATION_OPTIONS, type RoundFormState } from '../../lib/interviewForm';
 import StagePicker from './StagePicker';
 import CallerFields from './CallerFields';
+import ReasonSelect, { RescheduleQuestion } from './ReasonSelect';
 import { fromZoned, zoneAbbrev } from '../../lib/interviewTimezone';
 
 function durationLabel(min: number): string {
@@ -22,6 +23,7 @@ export default function RoundFields({
   legend = 'Round',
   callerEditable = true,
   ownerId,
+  reschedule = false,
 }: {
   round: RoundFormState;
   onChange: (patch: Partial<RoundFormState>) => void;
@@ -34,6 +36,8 @@ export default function RoundFields({
   callerEditable?: boolean;
   /** The interview's owner, never offered as the caller. */
   ownerId?: string;
+  /** The saved start of a scheduled round was changed: ask why it was rescheduled. */
+  reschedule?: boolean;
 }) {
   const id = (k: string) => `${idPrefix}-round-${k}`;
   const req = <span className="text-red-700 dark:text-red-400" aria-hidden> *</span>;
@@ -43,6 +47,7 @@ export default function RoundFields({
   // Abbreviation for the round's own date (EST vs EDT), in the chosen zone.
   const tzLabel = zoneAbbrev(round.date ? fromZoned(round.date, round.time || '12:00', tz) : new Date(), tz);
   const noteCopy = statusNotePrompt(round.status);
+  const why = statusReasonPrompt(round.status);
 
   return (
     <fieldset className="space-y-3">
@@ -57,12 +62,17 @@ export default function RoundFields({
           <Select
             id={id('status')}
             value={round.status}
-            onChange={(v) => onChange({ status: v as RoundFormState['status'] })}
+            // Each status has its own reason list (or none): a picked reason never carries over.
+            onChange={(v) => onChange({ status: v as RoundFormState['status'], statusReason: '' })}
             options={[...INTERVIEW_STATUSES]}
             disabled={disabled}
           />
         </div>
       </div>
+      {why && (
+        <ReasonSelect id={id('status-reason')} label={why.question} options={why.options} value={round.statusReason}
+          onChange={(v) => onChange({ statusReason: v })} disabled={disabled} />
+      )}
       {noteCopy && (
         <div>
           <label htmlFor={id('status-note')} className="block text-sm font-medium mb-1">{noteCopy.label}</label>
@@ -92,6 +102,10 @@ export default function RoundFields({
           </select>
         </div>
       </div>
+      {reschedule && (
+        <RescheduleQuestion id={id('reschedule')} reason={round.rescheduleReason} note={round.rescheduleNote}
+          onChange={onChange} disabled={disabled} />
+      )}
       <div>
         <label htmlFor={id('interviewer')} className="block text-sm font-medium mb-1">Interviewer</label>
         <input id={id('interviewer')} className="input" value={round.interviewerName} disabled={disabled}

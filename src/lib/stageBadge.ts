@@ -34,16 +34,16 @@ export const STATUS_NOTE_MAX = 2000;
 type StatusNoteCopy = { title: string; statusLabel: string; label: string; placeholder: string; hint: string; short: string };
 
 /**
- * Statuses that ask why: Canceled keeps the recruiter's reason; Passed (on to the next round) and Rejected the
- * feedback. Optional; saved on the round as `statusNote`.
+ * Statuses that take free text, saved on the round as `statusNote`: the details next to the reason (Canceled,
+ * Rejected) or the caller's feedback (Passed, on to the next round). Optional.
  */
 const STATUS_NOTE_COPY: Partial<Record<InterviewStatusValue, StatusNoteCopy>> = {
   canceled: {
     title: 'Cancel round',
     statusLabel: 'Canceled',
-    label: "Recruiter's reason",
-    placeholder: 'Why was it canceled? e.g. "Recruiter said the role was filled internally"',
-    hint: 'Shown on the round. Leave empty if no reason was given.',
+    label: 'Details (optional)',
+    placeholder: 'e.g. "Recruiter said the role was filled internally"',
+    hint: 'Shown on the round.',
     short: 'Reason',
   },
   passed: {
@@ -57,9 +57,9 @@ const STATUS_NOTE_COPY: Partial<Record<InterviewStatusValue, StatusNoteCopy>> = 
   rejected: {
     title: 'Reject round',
     statusLabel: 'Rejected',
-    label: 'Feedback',
-    placeholder: 'Why was it rejected? Feedback from the caller or the recruiter',
-    hint: 'Shown on the round. Leave empty if no feedback was given.',
+    label: 'Details (optional)',
+    placeholder: 'Feedback from the caller or the recruiter',
+    hint: 'Shown on the round.',
     short: 'Feedback',
   },
 };
@@ -72,6 +72,61 @@ export function statusNotePrompt(status?: string | null): StatusNoteCopy | null 
 /** "Reason" / "Feedback" for a saved note; "Note" for a status that doesn't ask. */
 export function statusNoteLabel(status?: string | null): string {
   return statusNotePrompt(status)?.short ?? 'Note';
+}
+
+export type ReasonOption = { value: string; label: string; help?: string };
+
+/** Why a round was canceled or rescheduled. The keys are the API contract (`statusReason`, `rescheduleReason`). */
+export const CANCEL_REASONS: ReasonOption[] = [
+  { value: 'company', label: 'Company', help: "They canceled or moved it, or the interviewer didn't join." },
+  { value: 'me', label: 'Me', help: "I didn't confirm the time clearly with the company or the caller." },
+  { value: 'caller', label: 'Caller', help: 'The caller had a schedule conflict or a personal matter.' },
+  { value: 'job_mismatch', label: "Job doesn't match", help: 'The location, no remote work or another requirement ruled it out.' },
+  { value: 'technical', label: 'Technical issue', help: 'Audio, video, internet or the meeting link failed.' },
+];
+
+/** Why a round was rejected. The keys are the API contract (`statusReason`). */
+export const REJECT_REASONS: ReasonOption[] = [
+  { value: 'no_reason', label: 'No reason given' },
+  { value: 'no_answer', label: 'No answer from the company' },
+  { value: 'location', label: 'Location, work permit or clearance' },
+  { value: 'language', label: 'Language or communication' },
+  { value: 'technical_answers', label: 'Weak technical answers' },
+  { value: 'experience', label: "Experience didn't match (stack, seniority, domain)" },
+  { value: 'background', label: 'Slip in the background story' },
+  { value: 'test', label: 'Failed test or take-home' },
+  { value: 'pay', label: 'Pay or contract terms' },
+  { value: 'other_candidate', label: 'Another candidate chosen or position filled' },
+  { value: 'av', label: 'Audio or video problem' },
+  { value: 'other', label: 'Other' },
+];
+
+/** Picked when a time change is only a correction: the new time is saved and no reschedule is logged. Never sent. */
+export const JUST_FIXING_TIME = 'fix';
+export const RESCHEDULE_QUESTION = 'Why was it rescheduled?';
+export const RESCHEDULE_REASONS: ReasonOption[] = [
+  ...CANCEL_REASONS,
+  { value: JUST_FIXING_TIME, label: 'Just fixing the time', help: "The time was entered wrong. This won't count as a reschedule." },
+];
+
+/** The required reason for a status: Canceled and Rejected have one, every other status has none. */
+export function statusReasonPrompt(status?: string | null): { question: string; options: ReasonOption[] } | null {
+  const s = normalizeInterviewStatus(status);
+  if (s === 'canceled') return { question: 'Why was it canceled?', options: CANCEL_REASONS };
+  if (s === 'rejected') return { question: 'Why was it rejected?', options: REJECT_REASONS };
+  return null;
+}
+
+/**
+ * What to show for a round's status: the reason's label, then the details ("Reason: Company — role filled").
+ * Rounds from before reasons existed have only the note; null when there is nothing to show.
+ */
+export function statusWhy(
+  status?: string | null, reason?: string | null, note?: string | null,
+): { label: string; text: string } | null {
+  const picked = statusReasonPrompt(status)?.options.find((o) => o.value === reason)?.label;
+  const text = [picked, note?.trim()].filter(Boolean).join(' — ');
+  return text ? { label: picked ? 'Reason' : statusNoteLabel(status), text } : null;
 }
 
 export function interviewStatusLabel(status?: string | null): string {

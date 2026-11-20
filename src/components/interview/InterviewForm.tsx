@@ -5,12 +5,14 @@ import { messageOf, notify } from '../../lib/notify';
 import {
   SELF,
   appliedByPayload,
+  asksReschedule,
   blankApplication,
   blankRound,
   lacksJobLink,
   linkPayload,
   missingFields,
   nextStage,
+  reschedulePayload,
   roundFromEntry,
   roundPayload,
   type ApplicationFormState,
@@ -112,7 +114,10 @@ export default function InterviewForm({
   // Every form but Add round shows the application (company search, linked resume) above the round.
   const showApp = mode !== 'addRound';
   const showRound = mode !== 'editDetails';
+  // Moving a saved, scheduled round: the reason is asked in the round fields and required to save.
+  const reschedule = asksReschedule(entry, round, tz);
   const missing = missingFields(mode, showApp ? app : null, showRound ? round : null);
+  if (reschedule && !round.rescheduleReason) missing.push('Reason it was rescheduled');
   const hintId = `${idPrefix}-missing`;
 
   const submit = async (e: FormEvent) => {
@@ -148,7 +153,10 @@ export default function InterviewForm({
         });
       } else if (mode === 'editRound' && interview && roundId) {
         if (JSON.stringify(app) !== JSON.stringify(savedApp)) await api.updateInterview(interview._id, appBody);
-        const body: api.InterviewStageInput = roundPayload(round, tz);
+        const body: api.InterviewStageInput = {
+          ...roundPayload(round, tz),
+          ...(reschedule ? reschedulePayload(round.rescheduleReason, round.rescheduleNote) : {}),
+        };
         if (!round.callerEnabled && entry?.caller?.enabled) body.caller = { enabled: false };
         saved = await api.updateInterviewStage(interview._id, roundId, body);
       }
@@ -206,6 +214,7 @@ export default function InterviewForm({
             legend={mode === 'new' ? 'First round' : mode === 'addRound' ? 'Next round' : 'Round'}
             callerEditable={callerEditable}
             ownerId={ownerId}
+            reschedule={reschedule}
           />
         )}
         {previousOpen && previous && (

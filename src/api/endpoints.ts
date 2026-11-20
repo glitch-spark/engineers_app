@@ -733,6 +733,8 @@ export interface InterviewRoundRow {
   status: string | null;
   /** The recruiter's reason (canceled) or feedback (passed / rejected). */
   statusNote?: string | null;
+  /** Why it was canceled / rejected: a key from the status's reason list. Missing on older rounds. */
+  statusReason?: string | null;
   scheduledAt: string;
   endsAt: string | null;
   companyName: string | null;
@@ -823,6 +825,8 @@ export interface RoundInput {
   transcript?: string;
   /** Why the round got its status: the recruiter's reason (canceled) or feedback (passed / rejected). */
   statusNote?: string;
+  /** Canceled / rejected only: a key from that status's reason list. */
+  statusReason?: string;
   caller?: CallerInput;
 }
 
@@ -933,6 +937,10 @@ export interface InterviewStageEntry {
   note?: string;
   /** Why the round got its status: the recruiter's reason (canceled) or feedback (passed / rejected). */
   statusNote?: string;
+  /** Why it was canceled / rejected: a key from the status's reason list. Missing on older rounds. */
+  statusReason?: string | null;
+  /** Every logged time change, oldest first. Missing on older rounds. */
+  reschedules?: InterviewReschedule[] | null;
   interviewerName?: string | null;
   endsAt?: string | null;
   caller?: InterviewCaller | null;
@@ -940,7 +948,41 @@ export interface InterviewStageEntry {
   confirmed?: boolean;
 }
 
-export type InterviewStageInput = Partial<RoundInput>;
+/** One logged time change of a round. */
+export interface InterviewReschedule {
+  at: string;
+  by: string | null;
+  fromAt: string;
+  toAt: string;
+  reason: string;
+  note?: string | null;
+}
+
+/**
+ * `rescheduleReason` (+ `rescheduleNote`): sent with a changed `scheduledAt` to log the move as a reschedule; left
+ * out, the new time is saved and nothing is logged.
+ */
+export type InterviewStageInput = Partial<RoundInput> & { rescheduleReason?: string; rescheduleNote?: string };
+
+/** One round that needs something from its owner: the result of a held round, or why it was canceled / rejected. */
+export interface NeedsInputItem {
+  interviewId: string;
+  roundId: string;
+  companyName: string | null;
+  profileName: string | null;
+  ownerId: string;
+  ownerName: string | null;
+  stage: string;
+  status: string;
+  scheduledAt: string;
+  need: 'result' | 'reason';
+}
+
+/** A normal user gets their own rounds; an admin everyone's, or one person's with `userId`. */
+export const getNeedsInput = (userId?: string) =>
+  apiFetch<{ items: NeedsInputItem[]; counts: { result: number; reason: number } }>(
+    `/interviews/needs-input${qs({ userId })}`,
+  );
 
 /** `previousStatusNote`: the caller's feedback on the previous round, saved when it is marked passed. */
 export const addInterviewStage = (

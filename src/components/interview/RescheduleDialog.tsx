@@ -2,13 +2,16 @@ import { useState } from 'react';
 import * as api from '../../api/endpoints';
 import { fromZoned, parseServerTime, zonedDateKey, zonedTime } from '../../lib/interviewTimezone';
 import { notify } from '../../lib/notify';
-import { stageLabel } from '../../lib/stageBadge';
+import { normalizeInterviewStatus, stageLabel } from '../../lib/stageBadge';
+import { reschedulePayload, startMoved } from '../../lib/interviewForm';
+import { RescheduleQuestion } from './ReasonSelect';
 import Modal from '../Modal';
 import type { Interview } from './types';
 
 /**
  * Changes only the time of one round, for an interview manager who cannot open the full round form.
- * Sends `scheduledAt` alone: the server refuses a manager's PATCH that carries any other field.
+ * Sends `scheduledAt` and, for a scheduled round, why it was rescheduled: the server refuses a manager's PATCH that
+ * carries any other round field.
  */
 export default function RescheduleDialog({
   open,
@@ -34,6 +37,7 @@ export default function RescheduleDialog({
           interview={interview}
           roundId={roundId}
           scheduledAt={entry.scheduledAt}
+          scheduled={normalizeInterviewStatus(entry.status) === 'scheduled'}
           tz={tz}
           onClose={onClose}
           onSaved={onSaved}
@@ -47,6 +51,7 @@ function RescheduleForm({
   interview,
   roundId,
   scheduledAt,
+  scheduled,
   tz,
   onClose,
   onSaved,
@@ -54,6 +59,7 @@ function RescheduleForm({
   interview: Interview;
   roundId: string;
   scheduledAt?: string | null;
+  scheduled: boolean;
   tz: string;
   onClose: () => void;
   onSaved: (saved: Interview) => void;
@@ -61,14 +67,19 @@ function RescheduleForm({
   const start = scheduledAt ? parseServerTime(scheduledAt) : null;
   const [date, setDate] = useState(start ? zonedDateKey(start, tz) : '');
   const [time, setTime] = useState(start ? zonedTime(start, tz) : '');
+  const [why, setWhy] = useState({ rescheduleReason: '', rescheduleNote: '' });
   const [busy, setBusy] = useState(false);
+  // Asked only when a scheduled round's start really changes.
+  const asks = scheduled && startMoved(scheduledAt, date, time, tz);
+  const ready = !!date && !!time && (!asks || !!why.rescheduleReason);
 
   const save = async () => {
-    if (!date || !time) return;
+    if (!ready) return;
     setBusy(true);
     try {
       const saved = await api.updateInterviewStage(interview._id, roundId, {
         scheduledAt: fromZoned(date, time, tz).toISOString(),
+        ...(asks ? reschedulePayload(why.rescheduleReason, why.rescheduleNote) : {}),
       });
       notify.success('Time updated');
       onSaved(saved as unknown as Interview);
@@ -98,9 +109,13 @@ function RescheduleForm({
         </div>
       </div>
       <p className="text-xs text-muted">In {tz.replace(/_/g, ' ')}.</p>
+      {asks && (
+        <RescheduleQuestion id="reschedule-reason" reason={why.rescheduleReason} note={why.rescheduleNote}
+          onChange={(p) => setWhy((w) => ({ ...w, ...p }))} />
+      )}
       <div className="flex justify-end gap-2">
         <button type="button" className="btn-outline text-sm" onClick={onClose}>Cancel</button>
-        <button type="submit" className="btn text-sm" disabled={busy || !date || !time}>Save</button>
+        <button type="submit" className="btn text-sm" disabled={busy || !ready}>Save</button>
       </div>
     </form>
   );

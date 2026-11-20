@@ -110,9 +110,11 @@ export default function InterviewPanel({
     const body: api.InterviewStageInput = { status };
     if (statusNotePrompt(status)) {
       const entry = iv.stageHistory?.find((e) => e.id === id);
-      const note = await askStatusNote(status, stageLabel(entry?.stage), entry?.status === status ? entry?.statusNote : '');
-      if (note === null) return; // backed out: the round keeps its status
-      body.statusNote = note;
+      const same = entry?.status === status;
+      const answer = await askStatusNote(status, stageLabel(entry?.stage), same ? entry?.statusNote : '', same ? entry?.statusReason : '');
+      if (!answer) return; // backed out: the round keeps its status
+      body.statusNote = answer.note;
+      if (answer.reason) body.statusReason = answer.reason;
     }
     try {
       const saved = await api.updateInterviewStage(iv._id, id, body);

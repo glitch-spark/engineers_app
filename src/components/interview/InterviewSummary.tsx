@@ -12,7 +12,7 @@ import {
   normalizeInterviewStatus,
   stageBadgeClass,
   stageLabel,
-  statusNoteLabel,
+  statusWhy,
 } from '../../lib/stageBadge';
 import { STATUS_DOT } from '../../pages/interviews/RoundTrail';
 import ActionMenu from '../ActionMenu';
@@ -48,12 +48,15 @@ function methodLabel(method?: string | null): string {
   return CALLER_METHOD_OPTIONS.find((m) => m.value === method)?.label ?? 'Method TBD';
 }
 
-/** The round's status reason / feedback ("Reason: role filled"). */
-function StatusNote({ status, note, className = '' }: { status?: string | null; note?: string; className?: string }) {
-  if (!note?.trim()) return null;
+/** Why the round got its status: the picked reason, then the details ("Reason: Company — role filled"). */
+function StatusNote({ status, reason, note, className = '' }: {
+  status?: string | null; reason?: string | null; note?: string; className?: string;
+}) {
+  const why = statusWhy(status, reason, note);
+  if (!why) return null;
   return (
     <p className={`rounded-lg border-l-2 border-zinc-300 bg-zinc-50 px-2.5 py-1.5 text-xs text-body dark:border-zinc-600 dark:bg-zinc-900/60 whitespace-pre-wrap ${className}`}>
-      <span className="font-medium text-strong">{statusNoteLabel(status)}:</span> {note}
+      <span className="font-medium text-strong">{why.label}:</span> {why.text}
     </p>
   );
 }
@@ -243,7 +246,7 @@ function FullSummary({
               <span className={`badge ${interviewStatusBadgeClass(spotRound.status)}`}>{interviewStatusLabel(spotRound.status)}</span>
             )}
           </div>
-          {spot.kind === 'last' && <StatusNote status={spotRound.status} note={spotRound.statusNote} className="mt-2" />}
+          {spot.kind === 'last' && <StatusNote status={spotRound.status} reason={spotRound.statusReason} note={spotRound.statusNote} className="mt-2" />}
           <div className="mt-1.5 text-sm">
             {spotRound.interviewerName
               ? <span className="text-body">with {spotRound.interviewerName}</span>
@@ -388,7 +391,7 @@ function FullSummary({
                     </span>
                   )}
                 </div>
-                <StatusNote status={e.status} note={e.statusNote} className="mt-1.5" />
+                <StatusNote status={e.status} reason={e.statusReason} note={e.statusNote} className="mt-1.5" />
                 {preview && (
                   <div className="mt-1.5 rounded-lg bg-zinc-50 px-2.5 py-1.5 text-xs text-body dark:bg-zinc-900/60">
                     <p className={open ? 'whitespace-pre-wrap' : 'line-clamp-2'}>
