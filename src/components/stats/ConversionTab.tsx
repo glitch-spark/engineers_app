@@ -15,7 +15,7 @@ import TimingSection from './TimingSection';
 
 /** The Profiles dropdown: Whole team (default, no `scope` in the URL) or All my profiles (`scope=me`). User decision
  * 2026-11-19: no single-profile option. */
-function ScopeSwitch({ f, scope }: { f: StatsFilterState; scope: api.ConversionScope }) {
+export function ScopeSwitch({ f, scope }: { f: StatsFilterState; scope: api.ConversionScope }) {
   return (
     <div className="w-48">
       <Select label="Profiles" labelClassName="mb-1 block text-xs text-muted" options={[{ value: 'team', label: 'Whole team' }, { value: 'me', label: 'All my profiles' }]}
@@ -69,7 +69,7 @@ function ShortPeriodNote({ f }: { f: StatsFilterState }) {
 
 /** The Statistics filters, except that an admin picking a person to view switches to that person's profiles (a
  * whole-team view is the same for everyone), in the same URL patch. */
-function useConversionFilters(): StatsFilterState {
+export function useConversionFilters(): StatsFilterState {
   const f = useStatsFilters('conversion');
   const { patch, values } = f;
   const guarded = useMemo(() => (c: Parameters<typeof patch>[0]) => {
