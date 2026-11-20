@@ -7,6 +7,7 @@ import {
   appliedByPayload,
   blankApplication,
   blankRound,
+  lacksJobLink,
   linkPayload,
   missingFields,
   nextStage,
@@ -103,6 +104,10 @@ export default function InterviewForm({
   const [previousFeedback, setPreviousFeedback] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Asked once: an interview with no job link and no resume can't be counted in Statistics → Conversion.
+  const [linkWarned, setLinkWarned] = useState(false);
+  const asksJobLink = (mode === 'new' || mode === 'editDetails')
+    && lacksJobLink(app.jobUrl, app.link, !!interview?.resumeLink);
 
   // Every form but Add round shows the application (company search, linked resume) above the round.
   const showApp = mode !== 'addRound';
@@ -113,6 +118,10 @@ export default function InterviewForm({
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (missing.length || saving) return;
+    if (asksJobLink && !linkWarned) {
+      setLinkWarned(true);
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -157,6 +166,12 @@ export default function InterviewForm({
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
         {error && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{error}</p>}
+        {linkWarned && asksJobLink && (
+          <p role="status" className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+            No job link or resume — this interview can't be counted in Statistics → Conversion. Add the job link or pick
+            the resume below, or press Save again to save anyway.
+          </p>
+        )}
         {showApp && (
           <ApplicationFields
             app={app}

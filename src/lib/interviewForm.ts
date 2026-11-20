@@ -58,6 +58,18 @@ export function linkPayload(link: LinkChoice): ResumeLinkInput | undefined {
   return undefined;
 }
 
+/**
+ * True when nothing ties this interview to a bid: no job link, no resume picked (or kept), and no reason given for
+ * having none. Statistics → Conversion can only count such an interview as "couldn't be tied to a job".
+ */
+export function lacksJobLink(jobUrl: string, link: LinkChoice, hasSavedLink: boolean): boolean {
+  if (jobUrl.trim()) return false;
+  if (link.mode === 'match') return false;
+  if (link.mode === 'keep') return !hasSavedLink;
+  if (link.mode === 'none') return !link.reason;
+  return true;
+}
+
 export type RoundFormState = {
   stage: string;
   /** Local YYYY-MM-DD. */
