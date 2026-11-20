@@ -155,6 +155,7 @@ export function StatsFilterBar({ f, before, viewing, viewingSubject, children }:
         allowFuture={false}
         today={f.today}
         min={f.tab === 'conversion' ? SINCE_OCT6 : undefined}
+        hint={f.tab === 'conversion' ? 'Data starts Oct 6, 2026. Pick a month or more (Since Oct 6 is best) for reliable numbers.' : undefined}
       />
       {children}
     </FilterBar>

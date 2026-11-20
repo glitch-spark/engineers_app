@@ -149,6 +149,8 @@ describe('ConversionTab', () => {
   it('Profiles dropdown offers Whole team (default) and All my profiles only', async () => {
     show('/statistics');
     const picker = (await screen.findByLabelText('Profiles')) as HTMLSelectElement;
+    // same label style as Region / Date range
+    expect(document.querySelector(`label[for="${picker.id}"]`)!.className).toBe('mb-1 block text-xs text-muted');
     expect([...picker.options].map((o) => o.text)).toEqual(['Whole team', 'All my profiles']);
     expect(picker.value).toBe('team');
     fireEvent.change(picker, { target: { value: 'me' } });
@@ -331,11 +333,19 @@ describe('ConversionTab', () => {
   });
 
   describe('date range guidance', () => {
+    const GUIDE = 'Data starts Oct 6, 2026. Pick a month or more (Since Oct 6 is best) for reliable numbers.';
     const SHORT = 'Short period — rates can swing a lot. For reliable numbers, use Since Oct 6 or a range of a month or more.';
 
-    it('hint under the date range; no short note for Since Oct 6', async () => {
+    it('date guidance is a tooltip next to Date range (no line under the filters); Since Oct 6 is the default', async () => {
       show();
-      expect(await screen.findByText('Data starts Oct 6, 2026 · pick a month or more for reliable numbers.')).toBeTruthy();
+      const tip = await screen.findByRole('button', { name: 'About the date range' });
+      expect(tip.getAttribute('title')).toBe(GUIDE);
+      expect(screen.queryByText(GUIDE)).toBeNull(); // hidden until opened
+      fireEvent.click(tip);
+      expect(screen.getByText(GUIDE)).toBeTruthy();
+      fireEvent.click(tip);
+      expect(screen.queryByText(GUIDE)).toBeNull();
+      expect((screen.getByLabelText('Date range') as HTMLSelectElement).value).toBe('since_oct6');
       await screen.findByRole('table', { name: 'Everyone' });
       expect(screen.queryByText(SHORT)).toBeNull();
       expect(screen.queryByText('Data starts Oct 6 — showing Oct 6 onward.')).toBeNull();

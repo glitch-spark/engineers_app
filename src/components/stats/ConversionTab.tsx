@@ -18,7 +18,7 @@ import TimingSection from './TimingSection';
 function ScopeSwitch({ f, scope }: { f: StatsFilterState; scope: api.ConversionScope }) {
   return (
     <div className="w-48">
-      <Select label="Profiles" options={[{ value: 'team', label: 'Whole team' }, { value: 'me', label: 'All my profiles' }]}
+      <Select label="Profiles" labelClassName="mb-1 block text-xs text-muted" options={[{ value: 'team', label: 'Whole team' }, { value: 'me', label: 'All my profiles' }]}
         value={scope}
         onChange={(v) => f.patch({ scope: v === 'me' ? 'me' : undefined, profile: undefined })} />
     </div>
@@ -106,7 +106,6 @@ export default function ConversionTab() {
         before={<ScopeSwitch f={f} scope={scope} />}>
         {conv.isLoading && d && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
       </StatsFilterBar>
-      <p className="-mt-2 px-1 text-xs text-muted">Data starts Oct 6, 2026 · pick a month or more for reliable numbers.</p>
       <ShortPeriodNote f={f} />
       {!params ? (
         <p className="panel p-6 text-sm text-muted">Pick a valid date range to see statistics.</p>
