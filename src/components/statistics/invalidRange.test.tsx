@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
-import BidsTab from './BidsTab';
-import CallersTab from './CallersTab';
+import ConversionTab from '../stats/ConversionTab';
 import ResumeCompareTab from './ResumeCompareTab';
 
-afterEach(cleanup);
+const fetchSpy = vi.spyOn(globalThis, 'fetch');
+afterEach(() => { cleanup(); fetchSpy.mockClear(); });
+// the profile picker asks for accounts even on an invalid range: keep it off the network
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), listAccounts: () => Promise.resolve({ accounts: [], pagination: {} }) }));
+vi.mock('../../auth/useAuth', () => ({ useAuth: () => ({ user: { role: 'staff' } }) }));
 
 const BACKWARDS = '/statistics?range=custom&from=2026-10-09&to=2026-10-01';
 const IDLE = 'Pick a valid date range to see statistics.';
@@ -22,12 +25,12 @@ function show(tab: JSX.Element, url = BACKWARDS) {
 
 describe('statistics tabs with an invalid date range', () => {
   it.each([
-    ['Bids and Interviews', <BidsTab key="b" />],
-    ['Callers', <CallersTab key="c" />],
+    ['Conversion', <ConversionTab key="c" />],
     ['Resume compare', <ResumeCompareTab key="r" />],
   ])('%s shows the idle message, not a spinner', (_name, tab) => {
     show(tab);
     expect(screen.getByText(IDLE)).toBeTruthy();
     expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled(); // no real request (it used to fail after teardown: flaky CI)
   });
 });

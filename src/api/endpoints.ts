@@ -1227,82 +1227,6 @@ export interface ResumeCompare {
 export const getResumeCompare = (params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; q?: string }) =>
   apiFetch<ResumeCompare>(`/metrics/resume-compare${qs(params)}`);
 
-// ---------- statistics: callers ----------
-
-export type CallerRoundResult = 'passed' | 'rejected' | 'canceled' | 'awaiting' | 'scheduled';
-export type CallerRoundGroup = 'intro' | 'tech' | 'hiring' | 'panel' | 'final';
-
-/** One round type's interviews done (passed + rejected + awaiting) and pass rate. */
-export interface CallerStatsGroup {
-  done: number;
-  passed: number;
-  rejected: number;
-  /** passed ÷ (passed + rejected); null when none is decided. */
-  passRate: number | null;
-}
-
-/** A set of rounds (a caller's, every caller round, or self rounds) in the period. */
-export interface CallerStatsTotals {
-  /** canceled and scheduled aren't done; scheduled = still marked scheduled. */
-  counts: Record<CallerRoundResult, number>;
-  /** passed + rejected + awaiting. */
-  done: number;
-  passRate: number | null;
-  byType: Record<CallerRoundGroup, CallerStatsGroup>;
-}
-
-export interface CallerStatsCaller extends CallerStatsTotals {
-  /** null: Unassigned (no caller set on the round). */
-  callerId: string | null;
-  name: string;
-  /** null: Unassigned, or a caller no longer on the list. */
-  color: CallerColor | null;
-  /** At least 5 decided rounds: its pass rate is ranked. */
-  ranked: boolean;
-  /** Pass rate minus the team's caller pass rate (fraction); null when either is null. */
-  vsTeam: number | null;
-}
-
-export interface CallerStatsRound {
-  interviewId: string;
-  roundId: string | null;
-  callerId: string | null;
-  roundDate: string;
-  company: string;
-  stage: string | null;
-  engineer: string;
-  /** A round held in the period: passed, rejected, awaiting or canceled. */
-  result: CallerRoundResult;
-}
-
-export interface CallerStatsWeekly {
-  unit: 'day' | 'week' | 'month';
-  buckets: {
-    label: string; start: string; end: string;
-    all: { done: number; passRate: number | null };
-    /** callerId (or 'unassigned') → that caller's rounds in the bucket. */
-    callers: Record<string, { done: number; passRate: number | null }>;
-  }[];
-}
-
-export interface CallerStats {
-  period: StatsPeriod;
-  region: StatsRegion;
-  start: string;
-  end: string;
-  label: string;
-  callers: CallerStatsCaller[];
-  /** Every caller round (Unassigned included). */
-  team: CallerStatsTotals;
-  /** Rounds without a caller. */
-  self: CallerStatsTotals;
-  weekly: CallerStatsWeekly;
-  rounds: CallerStatsRound[];
-}
-
-export const getCallerStats = (params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion }) =>
-  apiFetch<CallerStats>(`/metrics/caller-stats${qs(params)}`);
-
 /** A held round awaiting its result is marked rejected (caller managers). */
 export const rejectAwaitingRound = (interviewId: string, roundId: string) =>
   apiFetch<Record<string, unknown>>(`/interviews/${interviewId}/stages/${roundId}/reject`, { method: 'POST' });
@@ -3344,3 +3268,141 @@ export const reviewBids = (
     | { ids: string[]; status: BidStatus; reason?: RejectReason; onlyComplete?: false }
     | { ids: string[]; status: 'approved'; onlyComplete: true },
 ) => postJSON<{ updated: number; skipped: number }>('/bids/review', body);
+
+// ---------- statistics: you vs team (shared frame) ----------
+
+/** Every stat is null when the team is empty (n = 0). */
+export interface StatsTeam { median: number | null; p25: number | null; p75: number | null; min: number | null; max: number | null; n: number }
+export interface StatsHeadline {
+  key: string;
+  label: string;
+  /** null when undefined (e.g. no bids). per100 is one decimal; pct is a 0–1 fraction. */
+  value: number | null;
+  format: 'count' | 'rank' | 'per100' | 'pct' | 'usd';
+  team: StatsTeam | null;
+  rank: number | null;
+  of: number;
+  vsMedian: number | null;
+  higherIsBetter: boolean;
+  note: string;
+}
+export interface StatsTip { id: string; severity: 'bad' | 'watch' | 'good'; text: string; detail: string; evidence: Record<string, unknown> }
+export interface StatsEveryoneRow {
+  userId: string;
+  name: string;
+  value: number | null;
+  vsMedian: number | null;
+  /** null = not ranked (too few bids). */
+  rank: number | null;
+  parts: Record<string, number>;
+  isSubject: boolean;
+}
+export interface StatsTrend { unit: 'week' | 'day'; buckets: { label: string; you: number; median: number }[] }
+export interface StatsView {
+  tab: string;
+  /** Callers tab only: whether the subject is shown as a caller or as an engineer whose rounds callers took. */
+  label: string;
+  subject: { userId: string; name: string };
+  headline: StatsHeadline[];
+  tips: StatsTip[];
+  everyone: { rowKind: 'person'; metric: string; rows: StatsEveryoneRow[] };
+  trend: StatsTrend | null;
+  notEnoughData: boolean;
+  definitions: string[];
+}
+
+export const getStatsView = (
+  tab: 'bids' | 'interviews' | 'ai-usage',
+  params: { period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string },
+) => apiFetch<StatsView>(`/stats/${tab}${qs(params)}`);
+
+export type ConversionScope = 'me' | 'profile' | 'team';
+/** The Conversion tab's request: `profile` (an Account id) goes with scope=profile. */
+export interface ConversionParams {
+  period: StatsPeriod; date: string; to?: string; region: StatsRegion; user?: string;
+  scope?: ConversionScope; profile?: string;
+}
+/** rate: interviews per 100 matured bids (one decimal), null when none matured; few: under 30 matured. */
+/** `few`: under 30 matured bids (`fewReason` "matured") or under 3 interviews expected at the team rate ("expected"). */
+export interface ConversionGroup {
+  key: string; label: string; bids: number; matured: number; interviews: number; rate: number | null; few: boolean;
+  fewReason?: 'matured' | 'expected' | null;
+  /** Only the by-site "other" group: the sites inside it (top 50), how many more there are, and the total. */
+  members?: ConversionGroup[]; moreMembers?: number; memberCount?: number;
+  /** ★ the table's best group / ⚠ its weakest (backend evidence rule); never on `few` groups or catch-alls. */
+  mark?: 'best' | 'weak' | null;
+}
+type CardRank = { rank: number | null; of: number | null };
+/** Conversion top cards, Everyone and coverage. Whole team: rank / of / vsMedian are null (team totals). Bids are Plans +
+ * Bid Track; interviews are interviews started in the period. vsMedian is a fraction (0.12 = 12% above). */
+export interface ConversionSummary {
+  cards: {
+    bids: CardRank & { value: number; self: number; bidder: number; median: number | null; vsMedian: number | null };
+    interviews: CardRank & { value: number; rounds: number; median: number | null; vsMedian: number | null };
+    /** rank null with `of` set: under 30 bids, not ranked. */
+    per100: CardRank & { value: number | null; teamRate: number | null };
+  };
+  everyone: {
+    userId: string; name: string; bids: number; interviews: number; per100: number | null; isSubject: boolean;
+    ranks: { bids: number | null; interviews: number | null; per100: number | null };
+  }[];
+  coverage: { rows: number; bids: number; matched: number; interviews: number };
+}
+export interface ConversionFinding { kind: 'best' | 'weak' | 'gap' | 'none'; text: string; evidence: Record<string, unknown> }
+export interface ConversionReport {
+  label: string; startClamped: boolean; scope: ConversionScope;
+  subject?: { userId: string; name: string };
+  summary?: ConversionSummary;
+  findings?: ConversionFinding[];
+  window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
+  totals: { bids: number; matured: number; interviews: number; interviewsAll: number; interviewOnly: number; inPlay: number; untied: number; rate: number | null };
+  /** The team's interviews per 100 matured bids (one decimal); null with no team baseline. */
+  teamRate?: number | null;
+  /** Absent for scope=team. */
+  /** Self vs bidder bids, every scope (no names). */
+  byWho?: ConversionGroup[];
+  byBidder?: ConversionGroup[];
+  bySite: ConversionGroup[]; byScore: ConversionGroup[]; byArea: ConversionGroup[]; byAge: ConversionGroup[];
+}
+export const getConversion = (params: ConversionParams) => apiFetch<ConversionReport>(`/stats/conversion${qs(params)}`);
+
+export type ProfileGrade = 'strong' | 'watch' | 'dead' | 'early';
+export interface ProfileRow {
+  accountId: string; name: string; region: string | null; archived: boolean;
+  bidsSelf: number; bidsBidder: number; matured: number; maturedInterviews: number; interviews: number;
+  reach: { intro: number; tech: number; final: number };
+  stillInPlay: number; per100: number | null;
+  days: { first: number; median: number; slowest: number } | null;
+  grade: ProfileGrade; reasons: string[];
+}
+export interface ProfileReport {
+  label: string; subject: { userId: string; name: string };
+  window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
+  /** headerBids / unmatchedInterviews: null unless scope=me. */
+  coverage: { rows: number; headerBids: number | null; noLink: number; unmatchedInterviews: number | null };
+  team: { per100: number | null; medianDays: number | null; profiles: number };
+  profiles: ProfileRow[];
+}
+export const getProfileReport = (
+  params: ConversionParams,
+) => apiFetch<ProfileReport>(`/stats/applications/profiles${qs(params)}`);
+
+export interface RateCell { bids: number; matured: number; interviews: number; per100: number | null; tooFew: boolean }
+export interface RateGroup { key: string | null; label: string; you: RateCell; team: RateCell }
+export interface ChangeSuggestion { pattern: string; text: string; evidence: Record<string, unknown> }
+export interface ChangesReport {
+  label: string; subject: { userId: string; name: string };
+  profiles: { accountId: string; name: string; grade: ProfileGrade; suggestions: ChangeSuggestion[] }[];
+}
+export const getChanges = (
+  params: ConversionParams,
+) => apiFetch<ChangesReport>(`/stats/applications/changes${qs(params)}`);
+
+export interface TimingReport {
+  label: string; subject: { userId: string; name: string }; timezone: string;
+  window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
+  weekday: RateGroup[]; hours: RateGroup[];
+}
+export const getTiming = (
+  params: ConversionParams,
+) => apiFetch<TimingReport>(`/stats/applications/timing${qs(params)}`);

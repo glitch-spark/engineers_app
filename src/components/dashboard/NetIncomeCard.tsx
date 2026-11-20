@@ -30,7 +30,7 @@ function monthLabel(period: string): string {
 
 type MonthRow = api.DashboardNetMonthly['months'][number] & { label: string };
 
-export default function NetIncomeCard({ userId }: { userId?: string }) {
+export default function NetIncomeCard({ userId, who }: { userId?: string; /** Whose chart, shown in the title ("everyone", a name). */ who?: string }) {
   const chart = useChartTheme();
   const today = todayInputValue();
   const { data, error, isLoading, mutate } = useSWR(
@@ -41,7 +41,7 @@ export default function NetIncomeCard({ userId }: { userId?: string }) {
   if (error && !data) {
     return (
       <section className="panel p-4">
-        <h2 className="card-title mb-3">Net income · last 12 months</h2>
+        <h2 className="card-title mb-3">Net income · last 12 months{who ? ` · ${who}` : ''}</h2>
         <p className="text-sm text-muted mb-3">Couldn&rsquo;t load transactions.</p>
         <button type="button" className="btn-outline" onClick={() => mutate()}>
           Retry
@@ -65,7 +65,7 @@ export default function NetIncomeCard({ userId }: { userId?: string }) {
   return (
     <section className="panel p-4">
       <header className="mb-3">
-        <h2 className="card-title">Net income · last 12 months</h2>
+        <h2 className="card-title">Net income · last 12 months{who ? ` · ${who}` : ''}</h2>
         <p className="mt-1 text-sm text-muted">
           12-mo total {currency.format(data.total)} · This month {currency.format(thisMonth)}
         </p>

@@ -66,6 +66,8 @@ export default function DateRangeFilter<P extends string = DatePreset>({
   canStepBack,
   rangeFor,
   label = 'Date range',
+  min,
+  hint,
 }: {
   value: DateRangeValue<P>;
   onChange: (value: DateRangeValue<P>) => void;
@@ -86,7 +88,12 @@ export default function DateRangeFilter<P extends string = DatePreset>({
   rangeFor?: (preset: P) => DateRange | null;
   /** The label above the dropdown. */
   label?: string;
+  /** `YYYY-MM-DD`: the earliest day the custom pickers offer (Conversion's data start). */
+  min?: string;
+  /** Guidance shown behind an ⓘ next to the label (hover shows it; tap / click toggles it). */
+  hint?: string;
 }) {
+  const [hintOpen, setHintOpen] = useState(false);
   const id = useId();
   const now = today ?? localToday();
   const preset: string = value.preset;
@@ -170,10 +177,21 @@ export default function DateRangeFilter<P extends string = DatePreset>({
 
   return (
     <>
-      <div className="w-44">
-        <label htmlFor={`${id}-range`} className="mb-1 block text-xs text-muted">
-          {label}
-        </label>
+      <div className="relative w-44">
+        <div className="mb-1 flex items-center gap-1">
+          <label htmlFor={`${id}-range`} className="block text-xs text-muted">{label}</label>
+          {hint && (
+            <button type="button" title={hint} aria-label="About the date range" aria-expanded={hintOpen}
+              className="text-xs leading-none text-muted hover:text-body" onClick={() => setHintOpen((o) => !o)}>
+              ⓘ
+            </button>
+          )}
+        </div>
+        {hint && hintOpen && (
+          <p role="note" className="absolute z-20 mt-1 w-64 rounded-md border border-zinc-200 bg-white p-2 text-xs text-body shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+            {hint}
+          </p>
+        )}
         <Select
           id={`${id}-range`}
           value={inList ? preset : ''}
@@ -220,6 +238,7 @@ export default function DateRangeFilter<P extends string = DatePreset>({
               type="date"
               className="input text-sm"
               value={validFrom}
+              min={min}
               max={fromMax}
               onChange={(e) => edit({ from: e.target.value })}
             />
@@ -233,7 +252,7 @@ export default function DateRangeFilter<P extends string = DatePreset>({
               type="date"
               className="input text-sm"
               value={validTo}
-              min={validFrom || undefined}
+              min={validFrom || min}
               max={dateMax}
               onChange={(e) => edit({ to: e.target.value })}
             />

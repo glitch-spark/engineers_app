@@ -3,36 +3,30 @@ import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Tabs from '../components/Tabs';
 import AiUsageCard from '../components/statistics/AiUsageCard';
-import CallersTab from '../components/statistics/CallersTab';
-import BidsTab from '../components/statistics/BidsTab';
-import EarningsTab from '../components/statistics/EarningsTab';
-import InterviewsTab from '../components/statistics/InterviewsTab';
+import FramedTab from '../components/stats/FramedTab';
+import ConversionTab from '../components/stats/ConversionTab';
 import ResumeCompareTab from '../components/statistics/ResumeCompareTab';
 
-const TAB_KEYS = ['bids', 'interviews', 'earnings', 'callers', 'resume-compare', 'ai-usage'];
+const TAB_KEYS = ['conversion', 'resume-compare', 'ai-usage'];
+/** The Bids and Interviews tabs became Conversion: old links open it. */
+const OLD_TABS: Record<string, string> = { bids: 'conversion', interviews: 'conversion' };
 
-/** Statistics: everyone's bids (self and bidder), interviews (self and caller) and how bids turn into interviews,
- * resumes compared side by side, each caller's pass rate, and AI usage. Every tab has the one sticky filter bar, and
+/** Statistics: how bids turn into interviews (Conversion, with the you-vs-team bids strip), resumes compared side by
+ * side, and AI usage. Every tab has the one sticky filter bar, and
  * its values (region, range, from, to, q, users, features, models) live in the URL, so switching tabs keeps them; AI
  * usage adds Today and Yesterday (down to the hour). */
 export default function Statistics() {
   const [params, setParams] = useSearchParams();
-  const tabParam = params.get('tab') ?? '';
-  const [tab, setTabState] = useState(TAB_KEYS.includes(tabParam) ? tabParam : 'bids');
-  // `?caller=` opens the Callers tab on that caller (the Callers directory links here).
-  const [callerParam] = useState(params.get('caller') ?? '');
+  const tabParam = OLD_TABS[params.get('tab') ?? ''] ?? params.get('tab') ?? '';
+  const [tab, setTabState] = useState(TAB_KEYS.includes(tabParam) ? tabParam : 'conversion');
   const setTab = (key: string) => {
     setTabState(key);
     const next = new URLSearchParams(params);
     next.set('tab', key);
-    if (key !== 'callers') next.delete('caller');
     setParams(next, { replace: true });
   };
   const tabs = [
-    { key: 'bids', label: 'Bids' },
-    { key: 'interviews', label: 'Interviews' },
-    { key: 'earnings', label: 'Earnings' },
-    { key: 'callers', label: 'Callers' },
+    { key: 'conversion', label: 'Bids → Interviews' },
     { key: 'resume-compare', label: 'Resume compare' },
     { key: 'ai-usage', label: 'AI usage' },
   ];
@@ -40,12 +34,9 @@ export default function Statistics() {
     <div className="space-y-4">
       <PageHeader title="Statistics" />
       <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel="Statistics">
-        {tab === 'bids' ? <BidsTab />
-          : tab === 'interviews' ? <InterviewsTab />
-          : tab === 'earnings' ? <EarningsTab />
+        {tab === 'conversion' ? <ConversionTab />
           : tab === 'resume-compare' ? <ResumeCompareTab />
-            : tab === 'callers' ? <CallersTab initialCaller={callerParam} />
-              : <AiUsageCard />}
+            : <><FramedTab /><AiUsageCard embedded /></>}
       </Tabs>
     </div>
   );

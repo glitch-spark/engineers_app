@@ -109,3 +109,10 @@ export function txCanClear(f: TxFilters, userId: string): boolean {
 
 /** What Clear puts back: the bar's own keys (the page and per-page size are not filters). */
 export const TX_CLEAR_KEYS: TxKey[] = ['user', 'method', 'payer', 'range', 'from', 'to'];
+
+/** Whose 12-month net income the Transactions page charts: admins follow the User filter (All users = everyone,
+ * sent as `all`); staff always see their own (the endpoint refuses anyone else). `{}` = the signed-in user. */
+export function netChartUser(filterUser: string, meId: string, isAdmin: boolean): { userId?: string } {
+  if (!isAdmin || filterUser === meId) return {};
+  return { userId: filterUser === ALL_USERS ? 'all' : filterUser };
+}

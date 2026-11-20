@@ -99,13 +99,7 @@ export default function CallersDirectory() {
           {!overview || o.passRate == null ? (
             <span className="text-faint">—</span>
           ) : (
-            <Link
-              to={`/statistics?tab=callers&caller=${encodeURIComponent(c._id)}`}
-              className="text-sky-700 hover:underline dark:text-sky-400"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {Math.round(o.passRate * 100)}% →
-            </Link>
+<span className="tabular-nums">{Math.round(o.passRate * 100)}%</span>
           )}
         </td>
         {canManage && (

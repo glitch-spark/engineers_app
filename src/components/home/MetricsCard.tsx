@@ -42,7 +42,7 @@ export default function MetricsCard() {
           <span className="text-xl font-bold tabular-nums">{usd.format(cur?.net ?? 0)}</span>
           {change != null && <span className="text-xs text-muted">{change >= 0 ? '▲' : '▼'}{Math.abs(change)}%</span>}
         </div>
-        <Link to="/statistics?tab=earnings" className="link-inline text-xs">Statistics</Link>
+        <Link to="/transactions" className="link-inline text-xs">Transactions</Link>
       </div>
       <div>
         <div className="text-xs text-muted">Pipeline</div>

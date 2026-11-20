@@ -73,6 +73,10 @@ describe('useStatsFilters requests', () => {
 });
 
 describe('Clear', () => {
+  it('a carried-over region does not make Clear available on AI usage (it hides Region)', () => {
+    expect(setup('?region=EU', 'ai').result.current.canClear).toBe(false);
+  });
+
   it('on a report tab resets region and range but leaves AI usage and search keys alone', () => {
     const { result } = setup('?region=EU&range=last_week&users=a,b&q=acme');
     expect(result.current.canClear).toBe(true);
@@ -91,6 +95,14 @@ describe('Clear', () => {
     expect(result.current.canClear).toBe(true);
     act(() => result.current.clear());
     expect(new URLSearchParams(seen.search).toString()).toBe('region=EU');
+  });
+
+  it('leaves the Viewing choice (user) alone', () => {
+    const { result } = setup('?region=EU&user=u7');
+    act(() => result.current.clear());
+    expect(seen.search).toBe('?user=u7');
+    expect(setup('?user=u7').result.current.canClear).toBe(false);
+    expect(setup('').result.current.values.user).toBe('');
   });
 
   it('is only offered when something differs from the default', () => {

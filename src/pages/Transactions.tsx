@@ -17,6 +17,7 @@ import {
   txDefaultUser,
   txUrlDefaults,
   type TxKey,
+  netChartUser,
 } from '../lib/transactionFilters';
 import { useUrlFilters } from '../lib/useUrlFilters';
 import DateRangeFilter, { type DateRangeValue } from '../components/filters/DateRangeFilter';
@@ -25,6 +26,7 @@ import Pagination from '../components/Pagination';
 import Select from '../components/Select';
 import NameWithAvatar from '../components/NameWithAvatar';
 import PageHeader from '../components/PageHeader';
+import NetIncomeCard from '../components/dashboard/NetIncomeCard';
 
 type PayMethod = 'coin' | 'card';
 type BillingCycle = 'one_time' | 'monthly';
@@ -320,6 +322,13 @@ export default function TransactionsPage() {
         title="Transactions"
         action={<button type="button" className="btn" onClick={openAdd}>Add</button>}
       />
+
+      {(() => {
+        const chart = netChartUser(filters.user, user?.id ?? '', isAdmin);
+        const who = chart.userId === 'all' ? 'everyone'
+          : chart.userId ? (allUsers.find((u) => u._id === chart.userId)?.name || undefined) : undefined;
+        return <NetIncomeCard userId={chart.userId} who={who} />;
+      })()}
 
       <FilterBar canClear={canClear} onClear={clearFilters}>
         <FilterField label="User" htmlFor={`${formId}-filter-user`} width="w-52">
