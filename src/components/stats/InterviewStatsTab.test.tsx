@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import type { InterviewGroup, InterviewStatsReport } from '../../api/endpoints';
-import InterviewStatsTab from './InterviewStatsTab';
+import InterviewStatsTab, { FollowUps } from './InterviewStatsTab';
 
 const getInterviewsReport = vi.fn();
 vi.mock('../../api/endpoints', async (orig) => ({
@@ -190,7 +190,6 @@ describe('InterviewStatsTab', () => {
       expect(within(screen.getByRole('region', { name: 'Team numbers' })).getByText('—')).toBeTruthy();
       expect(screen.getByText('No reschedules logged yet')).toBeTruthy();
       expect(screen.getByText('No rejected rounds in this period.')).toBeTruthy();
-      expect(screen.getByRole('table', { name: 'Follow-ups' })).toBeTruthy();
       expect(screen.queryByText(/clearly above the team rate/)).toBeNull();
     });
   });
@@ -402,9 +401,18 @@ describe('InterviewStatsTab', () => {
     });
   });
 
-  it('Follow-ups table with its note', async () => {
+  it('shows no Follow-ups section for now', async () => {
     show();
-    const t = await table('Follow-ups');
+    await table('By region');
+    expect(screen.queryByRole('heading', { name: 'Follow-ups' })).toBeNull();
+    expect(screen.queryByRole('table', { name: 'Follow-ups' })).toBeNull();
+    expect(screen.queryByText(/follow-up reminder/)).toBeNull();
+  });
+
+  it('the FollowUps component (hidden for now) still renders its table and note', () => {
+    render(<FollowUps rows={report.followUps} />);
+    expect(screen.getByRole('heading', { name: 'Follow-ups' })).toBeTruthy();
+    const t = screen.getByRole('table', { name: 'Follow-ups' });
     expect(heads(t)).toEqual(['Group', 'Rounds', 'Passed', 'Rejected', 'No answer', 'Still waiting']);
     const rows = within(t).getAllByRole('row').slice(1);
     expect(rows.map(cells)).toEqual([['Followed up', '0', '0', '0', '0', '0'], ['Not followed up', '84', '0', '0', '57', '27']]);
@@ -414,14 +422,14 @@ describe('InterviewStatsTab', () => {
 
   it('has no answer-score table and no Depth and speed section', async () => {
     show();
-    await table('Follow-ups');
+    await table('By region');
     expect(screen.queryByText(/answer score/i)).toBeNull();
     expect(screen.queryByText(/Depth and speed|Rounds until it ended|Days until an answer|Days between rounds/)).toBeNull();
   });
 
   it('sections in the agreed order', async () => {
     show();
-    await table('Follow-ups');
+    await table('By region');
     const order = [
       screen.getByRole('group', { name: 'Filters' }),
       screen.getByRole('region', { name: 'Team numbers' }),
@@ -435,7 +443,6 @@ describe('InterviewStatsTab', () => {
       screen.getByRole('heading', { name: 'What raises the pass rate' }),
       ...['By time of day', 'By who applied', 'By weekday', 'By resume score', 'By job area', 'By profile', 'By region']
         .map((name) => screen.getByRole('table', { name })),
-      screen.getByRole('table', { name: 'Follow-ups' }),
     ];
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

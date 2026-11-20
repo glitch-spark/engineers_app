@@ -174,7 +174,12 @@ function Rescheduled({ reasons }: { reasons?: InterviewStatsReport['reasons'] })
   );
 }
 
-function FollowUps({ rows = [] }: { rows?: InterviewStatsReport['followUps'] }) {
+/** The Follow-ups section is hidden for now (user, 2026-11-20): it says nothing until the follow-up reminder has
+ * produced data. Set to true to show it again; the component, the `followUps` type and a test of it are kept. */
+const SHOW_FOLLOW_UPS = false;
+
+/** Exported for its test while the section is hidden. */
+export function FollowUps({ rows = [] }: { rows?: InterviewStatsReport['followUps'] }) {
   const cell = 'py-1 pr-3 tabular-nums';
   return (
     <div className="panel p-4">
@@ -238,14 +243,14 @@ function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; o
         {table('By profile', d.byProfile)}
         {table('By region', d.byRegion)}
       </div>
-      <FollowUps rows={d.followUps} />
+      {SHOW_FOLLOW_UPS && <FollowUps rows={d.followUps} />}
     </>
   );
 }
 
 /** Statistics → Interviews (spec 2026-11-20): what happens to interview rounds after they are scheduled. The same
  * filters (and URL keys) as Job applies, then cards, Everyone, key findings, By stage, By caller, the
- * reasons, the pass-rate breakdowns and follow-ups. */
+ * reasons and the pass-rate breakdowns (Follow-ups is hidden for now: SHOW_FOLLOW_UPS). */
 export default function InterviewStatsTab() {
   const f = useConversionFilters();
   const isAdmin = useAuth().user?.role === 'admin';
