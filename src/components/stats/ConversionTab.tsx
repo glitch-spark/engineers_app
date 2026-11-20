@@ -17,12 +17,12 @@ const scopeBtn = (on: boolean) =>
   `whitespace-nowrap rounded-[10px] px-3 py-1 text-sm font-medium ${on ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-50' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`;
 
 /** `My profiles | Profile ▾ | Team total`, bound to the `scope` / `profile` URL keys. The picker lists the subject's
- * active profiles of the region. */
+ * profiles of the region, archived included. */
 function ScopeSwitch({ f, scope, subject }: { f: StatsFilterState; scope: api.ConversionScope; subject?: string }) {
   const region = f.region === 'all' ? undefined : f.region;
-  const { data } = useSWR(['conversion-profiles', region, subject], () => api.listAccounts({ limit: 1000, region, userId: subject }));
-  const options = ((data?.accounts ?? []) as { _id: string; name?: string; region?: string }[])
-    .map((a) => ({ value: a._id, label: a.region ? `${a.name ?? a._id} · ${a.region}` : (a.name ?? a._id) }));
+  const { data } = useSWR(['conversion-profiles', region, subject], () => api.listAccounts({ limit: 1000, status: 'all', region, userId: subject }));
+  const options = ((data?.accounts ?? []) as { _id: string; name?: string; region?: string; archived?: boolean }[])
+    .map((a) => ({ value: a._id, label: [a.name ?? a._id, a.region, a.archived && 'archived'].filter(Boolean).join(' · ') }));
   const listed = options.some((o) => o.value === f.values.profile);
   // A profile the list doesn't hold (another region / user, archived, or none at all) would only give empty tables.
   const stale = data !== undefined && f.values.scope === 'profile' && !listed;
@@ -57,9 +57,10 @@ function Breakdown({ d, onShowLastMonth }: { d: ConversionReport; onShowLastMont
   return (
     <div className="panel p-4">
       <p className="font-medium tabular-nums">
-        {`${d.label} · ${n(t.bids)} bids · ${n(t.matured)} matured · ${n(t.interviews)} interviews from matured bids (${n(t.interviewsAll)} in all) · ${pct(t.rate)} · ${n(t.inPlay)} in play`}
+        {`${d.label} · ${n(t.bids)} bids · ${n(t.matured)} matured · ${n(t.interviews)} interviews from matured bids (${n(t.interviewsAll)} in all) · ${pct(t.rate)} · ${n(t.inPlay)} in play${t.untied > 0 ? ` · ${n(t.untied)} more interviews not tied to a bid` : ''}`}
       </p>
       <p className="text-xs text-muted">{`Rate = interviews per 100 bids that had ${d.window.matured_days}+ days to work ("matured").`}</p>
+      <p className="text-xs text-muted">Includes applications known only from their interview (no tracked bid), so rates can read a little high.</p>
       {t.matured === 0 && t.bids > 0 && <NoMaturedNote days={d.window.matured_days} onShowLastMonth={onShowLastMonth} />}
       <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
         {tables.map(([title, rows]) => rows && <ConversionTable key={title} title={title} rows={rows} teamRate={d.teamRate} note={title === 'By resume score' ? SCORE_NOTE : undefined} />)}

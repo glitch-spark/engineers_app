@@ -42,7 +42,7 @@ const g = (key: string, label: string, over: Partial<ConversionGroup> = {}): Con
 const report: ConversionReport = {
   label: 'Oct 6 – Nov 19, 2026', startClamped: true, scope: 'me',
   window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true },
-  totals: { bids: 9840, matured: 6120, interviews: 41, interviewsAll: 44, inPlay: 3720, rate: 0.7 },
+  totals: { bids: 9840, matured: 6120, interviews: 41, interviewsAll: 44, inPlay: 3720, rate: 0.7, untied: 0 },
   byWho: [g('self', 'Self'), g('bidder', 'Bidder')],
   byBidder: [g('self', 'Self'), g('b1', 'Ana', { matured: 12, rate: 8.3, few: true })],
   bySite: [g('lever', 'Lever')], byScore: [g('80', '80+', { rate: null, matured: 0 })], byArea: [g('be', 'Backend')], byAge: [g('new', 'Under 30 days')],
@@ -69,6 +69,28 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('ConversionTab', () => {
+  it('shows untied interviews and the interview-only note', async () => {
+    getConversion.mockResolvedValue({ ...report, totals: { ...report.totals, untied: 5 } });
+    show();
+    expect(await screen.findByText(/0\.7% · 3,720 in play · 5 more interviews not tied to a bid$/)).toBeTruthy();
+    expect(screen.getByText('Includes applications known only from their interview (no tracked bid), so rates can read a little high.')).toBeTruthy();
+  });
+
+  it('omits the untied part when untied is 0', async () => {
+    show();
+    expect(await screen.findByText(/3,720 in play$/)).toBeTruthy();
+    expect(screen.queryByText(/not tied to a bid/)).toBeNull();
+  });
+
+  it('lists archived profiles in the picker, selectable', async () => {
+    listAccounts.mockResolvedValue({ accounts: [{ _id: 'a1', name: 'Pedro', region: 'US' }, { _id: 'a3', name: 'Old', region: 'EU', archived: true }], pagination: {} });
+    show('/statistics?scope=profile&profile=a3');
+    const picker = (await screen.findByLabelText('Profile')) as HTMLSelectElement;
+    expect(listAccounts).toHaveBeenCalledWith(expect.objectContaining({ status: 'all' }));
+    await waitFor(() => expect(picker.value).toBe('a3'));
+    expect(within(picker).getByText('Old · EU · archived')).toBeTruthy();
+  });
+
   it('renders totals and six tables', async () => {
     show();
     expect(await screen.findByText('Oct 6 – Nov 19, 2026 · 9,840 bids · 6,120 matured · 41 interviews from matured bids (44 in all) · 0.7% · 3,720 in play')).toBeTruthy();
