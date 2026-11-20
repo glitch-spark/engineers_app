@@ -1,6 +1,32 @@
-import { Fragment, useId, useState } from 'react';
+import { Fragment, useId, useState, type ReactNode } from 'react';
 import type { ConversionGroup } from '../../api/endpoints';
 
+/** What the table needs of a row, whatever its count columns are. */
+export interface RateRow<T> {
+  key: string; label: string; rate: number | null; few: boolean; mark?: 'best' | 'weak' | null;
+  members?: T[]; moreMembers?: number; memberCount?: number;
+}
+/** What differs between the tables of this family: the count columns, the wording, and which rows get a bar. */
+export interface RateTableSpec<T> {
+  /** Head of the first (label) column. */
+  groupHead: string;
+  /** The count columns between the label and the rate. */
+  columns: { head: string; cell: (g: T) => ReactNode }[];
+  rateHead: string;
+  /** The ⚠ explanation of a `few` row. */
+  fewTip: (g: T, teamRate?: number | null) => string;
+  /** Rows whose rate may set the bar scale. */
+  scaled: (g: T) => boolean;
+  /** Rows that get a bar (default: all); the others are muted like `few` rows. */
+  showBar?: (g: T) => boolean;
+  /** Text shown in place of a rate that means nothing, or null. */
+  unrated?: (g: T) => string | null;
+  /** "sites" in "Other sites (12 sites)"; '' for a bare count. */
+  memberNoun: string;
+  empty: string;
+}
+
+const num = (v: number) => v.toLocaleString();
 const tipFor = (g: ConversionGroup, teamRate?: number | null) => (g.fewReason === 'expected' && teamRate
   ? `Only about ${((g.matured * teamRate) / 100).toFixed(1)} interviews expected from ${g.matured.toLocaleString()} matured bids at the team rate — this rate can swing a lot.`
   : `Only ${g.matured.toLocaleString()} matured bids — this rate can swing a lot.`);
@@ -28,10 +54,13 @@ const TONE_CLASS: Record<Tone, string> = {
   good: 'bg-green-500 dark:bg-green-400', bad: 'bg-red-500 dark:bg-red-400', same: 'bg-zinc-400 dark:bg-zinc-500',
 };
 /** Clearly above / below the team rate (1.5x / 0.5x, and not too few to tell), else about the same. */
-function toneOf(g: ConversionGroup, teamRate?: number | null): Tone {
+function toneOf(g: { few: boolean; rate: number | null }, teamRate?: number | null): Tone {
   if (g.few || g.rate == null || !teamRate) return 'same';
   return g.rate >= 1.5 * teamRate ? 'good' : g.rate <= 0.5 * teamRate ? 'bad' : 'same';
 }
+
+/** What the bar colours mean, for under a table. */
+export const rateLegend = (teamRate: number) => `Green = clearly above the team rate (${teamRate}%), red = clearly below, grey = about the same or too few to tell.`;
 
 /** Rate bar: width relative to the table's highest rate, coloured by the gap to the team rate (user, 2026-11-19). */
 function RateBar({ rate, max, tone }: { rate: number; max: number; tone: Tone }) {
@@ -43,42 +72,69 @@ function RateBar({ rate, max, tone }: { rate: number; max: number; tone: Tone })
   );
 }
 
-/** One Conversion breakdown: per group, bids, matured bids, interviews and the rate (interviews per 100 matured) with a
- * bar against the team rate; ★ / ⚠ from the backend's `mark`, `few` rows muted. */
-export default function ConversionTable({ title, rows, teamRate, note }: { title: string; rows: ConversionGroup[]; teamRate?: number | null; note?: string }) {
+// "No tracked bid" rows exist only because they got an interview: their rate is meaningless, so it is not shown
+// and doesn't set the bar scale.
+const tracked = (g: ConversionGroup) => g.key !== 'unknown';
+/** Job applies: bids, matured bids, interviews and the rate (interviews per 100 matured). */
+export const CONVERSION_SPEC: RateTableSpec<ConversionGroup> = {
+  groupHead: 'Group',
+  columns: [
+    { head: 'Bids', cell: (g) => num(g.bids) },
+    { head: 'Matured', cell: (g) => num(g.matured) },
+    { head: 'Interviews', cell: (g) => num(g.interviews) },
+  ],
+  rateHead: 'Rate',
+  fewTip: tipFor,
+  // a group with under 30 matured bids (e.g. 1 bid at 100%) would shrink every other bar: it doesn't set the scale
+  scaled: (g) => tracked(g) && !(g.few && g.fewReason !== 'expected' && g.matured < 30),
+  unrated: (g) => (tracked(g) ? null : 'known only from interviews'),
+  memberNoun: 'sites',
+  empty: 'No bids.',
+};
+
+interface Props<T> {
+  title: string; rows: T[]; teamRate?: number | null; note?: string;
+  /** Columns and wording; the Job applies ones by default. */
+  spec?: RateTableSpec<T>;
+  /** The bar colour legend under the table (needs a team rate). */
+  legend?: boolean;
+  /** Shown between the title and the table (a legend for a column). */
+  above?: ReactNode;
+}
+
+/** One breakdown table: per group, the spec's count columns and the rate with a bar coloured by the gap to the team
+ * rate; ★ / ⚠ from the backend's `mark`, `few` rows muted. */
+export default function ConversionTable<T extends RateRow<T> = ConversionGroup>({ title, rows, teamRate, note, spec: given, legend = true, above }: Props<T>) {
+  const spec = given ?? (CONVERSION_SPEC as unknown as RateTableSpec<T>);
   const [open, setOpen] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const head = ['Group', 'Bids', 'Matured', 'Interviews', 'Rate'];
-  // "No tracked bid" rows exist only because they got an interview: their rate is meaningless, so it is not shown
-  // and doesn't set the bar scale.
-  const rated = (g: ConversionGroup) => g.key !== 'unknown';
-  // a group with under 30 matured bids (e.g. 1 bid at 100%) would shrink every other bar: it doesn't set the scale
-  const scaled = (g: ConversionGroup) => rated(g) && !(g.few && g.fewReason !== 'expected' && g.matured < 30);
-  const max = Math.max(teamRate ?? 0, ...rows.filter(scaled).map((g) => g.rate ?? 0)) || 1;
-  const dataRow = (g: ConversionGroup, member = false) => {
+  const head = [spec.groupHead, ...spec.columns.map((c) => c.head), spec.rateHead];
+  const noun = spec.memberNoun && ` ${spec.memberNoun}`;
+  const showBar = spec.showBar ?? (() => true);
+  const max = Math.max(teamRate ?? 0, ...rows.filter(spec.scaled).map((g) => g.rate ?? 0)) || 1;
+  const dataRow = (g: T, member = false) => {
     const id = member ? `m:${g.key}` : g.label;
+    const unrated = spec.unrated?.(g);
     return (
       <Fragment>
-        <tr className={`border-t border-zinc-200 dark:border-zinc-800${member || g.few ? ' text-muted' : ''}`}>
+        <tr className={`border-t border-zinc-200 dark:border-zinc-800${member || g.few || !showBar(g) ? ' text-muted' : ''}`}>
           <td className={`py-1 pr-3${member ? ' pl-4' : ''}`}>
             {g.members ? (
               <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-                {expanded ? '▾' : '▸'} {g.label} ({g.memberCount ?? g.members.length} sites)
+                {expanded ? '▾' : '▸'} {g.label} ({g.memberCount ?? g.members.length}{noun})
               </button>
             ) : g.label}
             {g.mark && MARK[g.mark]}
           </td>
-          <td className="py-1 pr-3 tabular-nums">{g.bids.toLocaleString()}</td>
-          <td className="py-1 pr-3 tabular-nums">{g.matured.toLocaleString()}</td>
-          <td className="py-1 pr-3 tabular-nums">{g.interviews.toLocaleString()}</td>
+          {spec.columns.map((c) => <td key={c.head} className="py-1 pr-3 tabular-nums">{c.cell(g)}</td>)}
           <td className="whitespace-nowrap py-1 tabular-nums">
-            {!rated(g) ? <span className="text-xs text-muted">known only from interviews</span> : (
+            {unrated ? <span className="text-xs text-muted">{unrated}</span> : (
             <span className="flex items-center gap-2">
-              {g.rate != null && <RateBar rate={g.rate} max={max} tone={toneOf(g, teamRate)} />}
+              {g.rate != null && showBar(g) && <RateBar rate={g.rate} max={max} tone={toneOf(g, teamRate)} />}
               <span>
                 {g.rate == null ? '—' : `${g.rate}%`}
                 {g.few && g.rate != null && (
-                  <FewWarning tip={tipFor(g, teamRate)} open={open === id} onToggle={() => setOpen(open === id ? null : id)} />
+                  <FewWarning tip={spec.fewTip(g, teamRate)} open={open === id} onToggle={() => setOpen(open === id ? null : id)} />
                 )}
               </span>
             </span>
@@ -86,7 +142,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
           </td>
         </tr>
         {g.few && open === id && (
-          <tr><td colSpan={5} role="note" className="pb-1 text-xs text-amber-700 dark:text-amber-400">{tipFor(g, teamRate)}</td></tr>
+          <tr><td colSpan={head.length} role="note" className="pb-1 text-xs text-amber-700 dark:text-amber-400">{spec.fewTip(g, teamRate)}</td></tr>
         )}
       </Fragment>
     );
@@ -94,6 +150,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
   return (
     <div>
       <h4 className="text-sm font-medium">{title}</h4>
+      {above}
       <div className="mt-1 overflow-x-auto">
         <table aria-label={title} className="w-full text-left text-sm">
           <thead>
@@ -107,17 +164,17 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
                   <>
                     {g.members.map((m) => <Fragment key={m.key}>{dataRow(m, true)}</Fragment>)}
                     {!!g.moreMembers && (
-                      <tr><td colSpan={5} className="py-1 pl-4 pr-3 text-muted">…and {g.moreMembers} more sites</td></tr>
+                      <tr><td colSpan={head.length} className="py-1 pl-4 pr-3 text-muted">…and {g.moreMembers} more{noun}</td></tr>
                     )}
                   </>
                 )}
               </Fragment>
             ))}
-            {rows.length === 0 && <tr><td colSpan={5} className="py-1 text-muted">No bids.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={head.length} className="py-1 text-muted">{spec.empty}</td></tr>}
           </tbody>
         </table>
       </div>
-      {teamRate != null && rows.length > 0 && <p className="mt-1 text-xs text-muted">{`Green = clearly above the team rate (${teamRate}%), red = clearly below, grey = about the same or too few to tell.`}</p>}
+      {legend && teamRate != null && rows.length > 0 && <p className="mt-1 text-xs text-muted">{rateLegend(teamRate)}</p>}
       {note && <p className="mt-1 text-xs text-muted">{note}</p>}
     </div>
   );

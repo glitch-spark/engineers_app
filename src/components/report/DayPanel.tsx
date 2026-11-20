@@ -198,6 +198,7 @@ export default function DayPanel({
             showDone={canFollowUp}
             readOnly={!editable}
           />
+          {canFollowUp && <FollowUpsLine followUps={data.followUps} />}
 
           {(['routine', 'goal'] as const).map((scope) => {
             const rows = items.filter((i) => i.scope === scope);
@@ -252,5 +253,22 @@ export default function DayPanel({
         </div>
       ) : null}
     </SidePanel>
+  );
+}
+
+const FOLLOW_UP_NAMES = 5;
+
+/** The standup's read-only line about interview follow-ups; nothing when none were done and none wait. */
+function FollowUpsLine({ followUps }: { followUps: api.DayPlan['followUps'] }) {
+  const done = followUps?.doneToday ?? [];
+  const toDo = followUps?.toDo ?? 0;
+  if (!done.length && toDo <= 0) return null;
+  const more = done.length - FOLLOW_UP_NAMES;
+  return (
+    <p className="text-xs text-muted">
+      <span className="font-medium text-body">Follow-ups</span>
+      {done.length > 0 && ` · done today: ${done.slice(0, FOLLOW_UP_NAMES).join(', ')}${more > 0 ? ` +${more}` : ''}`}
+      {toDo > 0 && ` · still to do: ${toDo}`}
+    </p>
   );
 }

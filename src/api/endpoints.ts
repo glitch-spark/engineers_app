@@ -578,6 +578,11 @@ export interface DayPlan {
   selfOtherByProfile?: Record<string, number>;
   /** Whether the day's week has a saved weekly plan (draft saves need one). */
   weekSaved: boolean;
+  /**
+   * Interview follow-ups for the standup, read-only: the companies followed up on that day, in the order done, and
+   * how many rounds still wait for a follow-up or its answer. Missing from an older server.
+   */
+  followUps?: { doneToday: string[]; toDo: number };
 }
 
 /** A day's follow-up: results per item, bids done, notes (posts to Slack). */
@@ -946,6 +951,10 @@ export interface InterviewStageEntry {
   caller?: InterviewCaller | null;
   /** Caller rounds: the caller is lined up. Cleared when the round's time changes. */
   confirmed?: boolean;
+  /** Each time the owner followed up with the company after the round, oldest first. Missing on older rounds. */
+  followUps?: { at: string; by: string | null }[] | null;
+  /** When the round got its current status. Missing on rounds from before the field existed. */
+  statusAt?: string | null;
 }
 
 /** One logged time change of a round. */
@@ -964,7 +973,11 @@ export interface InterviewReschedule {
  */
 export type InterviewStageInput = Partial<RoundInput> & { rescheduleReason?: string; rescheduleNote?: string };
 
-/** One round that needs something from its owner: the result of a held round, or why it was canceled / rejected. */
+/**
+ * One round that needs something from its owner. `need`: how a round whose time has passed went (`outcome`), a
+ * follow-up with the company a week after a held round (`follow_up`), whether that follow-up was answered
+ * (`heard_back`), or why a round was canceled / rejected (`reason`).
+ */
 export interface NeedsInputItem {
   interviewId: string;
   roundId: string;
@@ -975,14 +988,22 @@ export interface NeedsInputItem {
   stage: string;
   status: string;
   scheduledAt: string;
-  need: 'result' | 'reason';
+  /** Not sent by every server version; without it the row shows the start time. */
+  endsAt?: string | null;
+  need: 'outcome' | 'follow_up' | 'heard_back' | 'reason';
+  /** `heard_back` only: when the owner followed up. */
+  followedUpAt?: string | null;
 }
 
 /** A normal user gets their own rounds; an admin everyone's, or one person's with `userId`. */
 export const getNeedsInput = (userId?: string) =>
-  apiFetch<{ items: NeedsInputItem[]; counts: { result: number; reason: number } }>(
+  apiFetch<{ items: NeedsInputItem[]; counts: Record<NeedsInputItem['need'], number> }>(
     `/interviews/needs-input${qs({ userId })}`,
   );
+
+/** Records "I followed up with the company" on a completed round. */
+export const followUpInterviewStage = (id: string, stageId: string) =>
+  apiFetch<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}/follow-up`, { method: 'POST' });
 
 /** `previousStatusNote`: the caller's feedback on the previous round, saved when it is marked passed. */
 export const addInterviewStage = (
@@ -3407,6 +3428,47 @@ export interface ConversionReport {
   bySite: ConversionGroup[]; byScore: ConversionGroup[]; byArea: ConversionGroup[]; byAge: ConversionGroup[];
 }
 export const getConversion = (params: ConversionParams) => apiFetch<ConversionReport>(`/stats/conversion${qs(params)}`);
+
+/** One row of a Statistics → Interviews table. held = passed + rejected + noAnswer + waiting; decided = held − waiting;
+ * rate = passed per 100 decided (one decimal), null with none decided; few: under 20 decided. `members` only on a
+ * folded "Other callers" / "Other profiles" row. */
+export interface InterviewGroup {
+  key: string; label: string; rounds: number; held: number; decided: number; passed: number; rejected: number;
+  noAnswer: number; waiting: number; canceled: number; scheduled: number; rate: number | null; few: boolean;
+  mark?: 'best' | 'weak' | null; members?: InterviewGroup[]; memberCount?: number;
+}
+export interface InterviewReason { key: string; label: string; count: number; share: number }
+/** `GET /stats/interviews-report` (spec 2026-11-20). Whole team: rank / of / vsMedian are null. */
+export interface InterviewStatsReport {
+  window: { start: string; end: string; startClamped: boolean };
+  totals: InterviewGroup & { companies: number; offers: number };
+  summary: {
+    cards: {
+      companies: CardRank & { value: number; median: number | null; vsMedian: number | null };
+      /** value = all rounds; the rank is on rounds held. */
+      rounds: CardRank & { value: number; held: number; canceled: number; scheduled: number; median: number | null; vsMedian: number | null };
+      /** rank null with `of` set: under 20 decided rounds, not ranked. */
+      passRate: CardRank & { value: number | null; passed: number; decided: number; waiting: number; teamRate: number | null };
+      offers: CardRank & { value: number };
+    };
+    everyone: {
+      userId: string; name: string; companies: number; held: number; decided: number; passed: number;
+      passRate: number | null; few: boolean; offers: number; isSubject: boolean;
+      ranks: { companies: number | null; held: number | null; passRate: number | null; offers: number | null };
+    }[];
+  };
+  findings: { kind: 'best' | 'weak' | 'reason' | 'no_answer' | 'none'; text: string }[];
+  byStage: InterviewGroup[]; byCaller: InterviewGroup[]; byProfile: InterviewGroup[];
+  byRegion: InterviewGroup[]; byArea: InterviewGroup[]; byScore: InterviewGroup[]; byAppliedBy: InterviewGroup[];
+  byWeekday: InterviewGroup[]; byHour: InterviewGroup[];
+  reasons: {
+    canceled: InterviewReason[]; rescheduled: InterviewReason[]; rejected: InterviewReason[];
+    rescheduleRate?: { rescheduled: number; rounds: number; since: string };
+  };
+  followUps: { key: string; label: string; rounds: number; passed: number; rejected: number; noAnswer: number; waiting: number }[];
+}
+/** Same query as `getConversion` (period, date, to, region, scope, admin `user`). */
+export const getInterviewsReport = (params: ConversionParams) => apiFetch<InterviewStatsReport>(`/stats/interviews-report${qs(params)}`);
 
 export type ProfileGrade = 'strong' | 'watch' | 'dead' | 'early';
 export interface ProfileRow {
