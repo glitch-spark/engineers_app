@@ -3327,6 +3327,8 @@ export interface ConversionParams {
 export interface ConversionGroup {
   key: string; label: string; bids: number; matured: number; interviews: number; rate: number | null; few: boolean;
   fewReason?: 'matured' | 'expected' | null;
+  /** Only the by-site "other" group: the sites inside it (top 50), how many more there are, and the total. */
+  members?: ConversionGroup[]; moreMembers?: number; memberCount?: number;
 }
 export interface ConversionReport {
   label: string; startClamped: boolean; scope: ConversionScope;

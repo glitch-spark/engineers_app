@@ -40,4 +40,36 @@ describe('ConversionTable', () => {
     ]} />);
     expect(screen.queryByText(/this rate can swing a lot/)).toBeNull();
   });
+
+  describe('expandable Other sites', () => {
+    const m = (key: string, bids: number) => ({ key, label: key, bids, matured: 40, interviews: 2, rate: 5, few: false });
+    const rows = (more = 0) => [
+      { key: 'l', label: 'Lever', bids: 40, matured: 40, interviews: 2, rate: 5, few: false },
+      { key: 'other', label: 'Other sites', bids: 9, matured: 40, interviews: 2, rate: 5, few: false,
+        members: [m('a.io', 6), { ...m('b.io', 3), matured: 12, few: true, fewReason: 'matured' as const }], moreMembers: more, memberCount: 2 + more },
+    ];
+
+    it('is collapsed by default, then expands and collapses', () => {
+      render(<ConversionTable title="By job site" rows={rows()} />);
+      const btn = screen.getByRole('button', { name: /Other sites \(2 sites\)/ });
+      expect(btn.getAttribute('aria-expanded')).toBe('false');
+      expect(screen.queryByText('a.io')).toBeNull();
+      fireEvent.click(btn);
+      expect(btn.getAttribute('aria-expanded')).toBe('true');
+      expect(screen.getByText('a.io')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /swing a lot/ })).toBeTruthy();
+      fireEvent.click(btn);
+      expect(screen.queryByText('a.io')).toBeNull();
+    });
+
+    it('shows "…and N more sites" when capped, and nothing otherwise', () => {
+      const { unmount } = render(<ConversionTable title="By job site" rows={rows(623)} />);
+      fireEvent.click(screen.getByRole('button', { name: /Other sites \(625 sites\)/ }));
+      expect(screen.getByText('…and 623 more sites')).toBeTruthy();
+      unmount();
+      render(<ConversionTable title="By job site" rows={rows()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Other sites/ }));
+      expect(screen.queryByText(/more sites/)).toBeNull();
+    });
+  });
 });

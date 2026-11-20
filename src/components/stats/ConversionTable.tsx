@@ -22,6 +22,35 @@ const HEAD = ['Group', 'Bids', 'Matured', 'Interviews', 'Rate'];
 /** One Conversion breakdown: per group, bids, matured bids, interviews and the rate (interviews per 100 matured). */
 export default function ConversionTable({ title, rows, teamRate, note }: { title: string; rows: ConversionGroup[]; teamRate?: number | null; note?: string }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const dataRow = (g: ConversionGroup, member = false) => {
+    const id = member ? `m:${g.key}` : g.label;
+    return (
+      <Fragment>
+        <tr className={`border-t border-zinc-200 dark:border-zinc-800${member ? ' text-muted' : ''}`}>
+          <td className={`py-1 pr-3${member ? ' pl-4' : ''}`}>
+            {g.members ? (
+              <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+                {expanded ? '▾' : '▸'} {g.label} ({g.memberCount ?? g.members.length} sites)
+              </button>
+            ) : g.label}
+          </td>
+          <td className="py-1 pr-3 tabular-nums">{g.bids.toLocaleString()}</td>
+          <td className="py-1 pr-3 tabular-nums">{g.matured.toLocaleString()}</td>
+          <td className="py-1 pr-3 tabular-nums">{g.interviews.toLocaleString()}</td>
+          <td className="whitespace-nowrap py-1 tabular-nums">
+            {g.rate == null ? '—' : `${g.rate}%`}
+            {g.few && g.rate != null && (
+              <FewWarning tip={tipFor(g, teamRate)} open={open === id} onToggle={() => setOpen(open === id ? null : id)} />
+            )}
+          </td>
+        </tr>
+        {g.few && open === id && (
+          <tr><td colSpan={5} role="note" className="pb-1 text-xs text-amber-700 dark:text-amber-400">{tipFor(g, teamRate)}</td></tr>
+        )}
+      </Fragment>
+    );
+  };
   return (
     <div>
       <h4 className="text-sm font-medium">{title}</h4>
@@ -33,20 +62,14 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
           <tbody>
             {rows.map((g) => (
               <Fragment key={g.label}>
-                <tr className="border-t border-zinc-200 dark:border-zinc-800">
-                  <td className="py-1 pr-3">{g.label}</td>
-                  <td className="py-1 pr-3 tabular-nums">{g.bids.toLocaleString()}</td>
-                  <td className="py-1 pr-3 tabular-nums">{g.matured.toLocaleString()}</td>
-                  <td className="py-1 pr-3 tabular-nums">{g.interviews.toLocaleString()}</td>
-                  <td className="whitespace-nowrap py-1 tabular-nums">
-                    {g.rate == null ? '—' : `${g.rate}%`}
-                    {g.few && g.rate != null && (
-                      <FewWarning tip={tipFor(g, teamRate)} open={open === g.label} onToggle={() => setOpen(open === g.label ? null : g.label)} />
+                {dataRow(g)}
+                {g.members && expanded && (
+                  <>
+                    {g.members.map((m) => <Fragment key={m.key}>{dataRow(m, true)}</Fragment>)}
+                    {!!g.moreMembers && (
+                      <tr><td colSpan={5} className="py-1 pl-4 pr-3 text-muted">…and {g.moreMembers} more sites</td></tr>
                     )}
-                  </td>
-                </tr>
-                {g.few && open === g.label && (
-                  <tr><td colSpan={5} role="note" className="pb-1 text-xs text-amber-700 dark:text-amber-400">{tipFor(g, teamRate)}</td></tr>
+                  </>
                 )}
               </Fragment>
             ))}
