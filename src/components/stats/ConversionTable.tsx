@@ -52,7 +52,9 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
   // "No tracked bid" rows exist only because they got an interview: their rate is meaningless, so it is not shown
   // and doesn't set the bar scale.
   const rated = (g: ConversionGroup) => g.key !== 'unknown';
-  const max = Math.max(teamRate ?? 0, ...rows.filter(rated).map((g) => g.rate ?? 0)) || 1;
+  // a group with under 30 matured bids (e.g. 1 bid at 100%) would shrink every other bar: it doesn't set the scale
+  const scaled = (g: ConversionGroup) => rated(g) && !(g.few && g.fewReason !== 'expected' && g.matured < 30);
+  const max = Math.max(teamRate ?? 0, ...rows.filter(scaled).map((g) => g.rate ?? 0)) || 1;
   const dataRow = (g: ConversionGroup, member = false) => {
     const id = member ? `m:${g.key}` : g.label;
     return (

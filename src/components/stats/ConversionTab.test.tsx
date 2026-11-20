@@ -114,7 +114,7 @@ describe('ConversionTab', () => {
   it('renders totals and six tables', async () => {
     show('/statistics?scope=me');
     expect(await screen.findByText('Oct 6 – Nov 19, 2026 · 9,840 bids · 6,120 matured · 41 interviews from matured bids (44 in all) · 0.7% · 3,720 in play')).toBeTruthy();
-    for (const t of ['Self vs bidder', 'By bidder', 'By job site', 'By resume score', 'By job area', 'By profile age']) {
+    for (const t of ['Self vs bidder', 'By bidder', 'By job site', 'By resume score', 'By job area', 'By profile age (when the bid went out)']) {
       expect(screen.getByRole('table', { name: t })).toBeTruthy();
     }
     const site = screen.getByRole('table', { name: 'By job site' });

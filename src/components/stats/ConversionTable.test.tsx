@@ -130,4 +130,13 @@ describe('ConversionTable rate bars', () => {
     expect(fill('Tiny')).toBe('same');    // too few to call
     expect(screen.getByText('Green = clearly above the team rate (1%), red = clearly below, grey = about the same or too few to tell.')).toBeTruthy();
   });
+
+  it('a few-matured group (1 bid at 100%) does not set the bar scale', () => {
+    render(<ConversionTable title="By profile age (when the bid went out)" teamRate={0.4} rows={[
+      grp('0-2w', '0–2 weeks', 0.4), grp('12w+', '12+ weeks', 3.1), grp('6-12w', '6–12 weeks', 100, { few: true, matured: 1 }),
+    ]} />);
+    const width = (label: string) => (screen.getByText(label).closest('tr')!.querySelector('[data-bar="fill"]') as HTMLElement).style.width;
+    expect(width('12+ weeks')).toBe('100%'); // scaled to 3.1, not 100
+    expect(width('6–12 weeks')).toBe('100%'); // capped
+  });
 });
