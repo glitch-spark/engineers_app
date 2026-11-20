@@ -3424,6 +3424,51 @@ export interface ConversionReport {
 }
 export const getConversion = (params: ConversionParams) => apiFetch<ConversionReport>(`/stats/conversion${qs(params)}`);
 
+/** One row of a Statistics → Interviews table. held = passed + rejected + noAnswer + waiting; decided = held − waiting;
+ * rate = passed per 100 decided (one decimal), null with none decided; few: under 20 decided. `members` only on a
+ * folded "Other callers" / "Other profiles" row. */
+export interface InterviewGroup {
+  key: string; label: string; rounds: number; held: number; decided: number; passed: number; rejected: number;
+  noAnswer: number; waiting: number; canceled: number; scheduled: number; rate: number | null; few: boolean;
+  mark?: 'best' | 'weak' | null; members?: InterviewGroup[]; memberCount?: number;
+}
+export interface InterviewReason { key: string; label: string; count: number; share: number }
+/** `GET /stats/interviews-report` (spec 2026-11-20). Whole team: rank / of / vsMedian are null. */
+export interface InterviewStatsReport {
+  window: { start: string; end: string; startClamped: boolean };
+  totals: InterviewGroup & { companies: number; offers: number };
+  summary: {
+    cards: {
+      companies: CardRank & { value: number; median: number | null; vsMedian: number | null };
+      /** value = all rounds; the rank is on rounds held. */
+      rounds: CardRank & { value: number; held: number; canceled: number; scheduled: number; median: number | null; vsMedian: number | null };
+      /** rank null with `of` set: under 20 decided rounds, not ranked. */
+      passRate: CardRank & { value: number | null; passed: number; decided: number; waiting: number; teamRate: number | null };
+      offers: CardRank & { value: number };
+    };
+    everyone: {
+      userId: string; name: string; companies: number; held: number; decided: number; passed: number;
+      passRate: number | null; few: boolean; offers: number; isSubject: boolean;
+      ranks: { companies: number | null; held: number | null; passRate: number | null; offers: number | null };
+    }[];
+  };
+  findings: { kind: 'best' | 'weak' | 'reason' | 'no_answer' | 'none'; text: string }[];
+  byStage: InterviewGroup[]; byWho: InterviewGroup[]; byCaller: InterviewGroup[]; byProfile: InterviewGroup[];
+  byRegion: InterviewGroup[]; byArea: InterviewGroup[]; byScore: InterviewGroup[]; byAppliedBy: InterviewGroup[];
+  byWeekday: InterviewGroup[]; byHour: InterviewGroup[];
+  reasons: {
+    canceled: InterviewReason[]; rescheduled: InterviewReason[]; rejected: InterviewReason[];
+    rescheduleRate?: { rescheduled: number; rounds: number; since: string };
+  };
+  depth: {
+    ended: number; avgRounds: number | null; endedAfter: { label: string; count: number }[];
+    daysBetweenRounds: { median: number | null; n: number }; daysToAnswer: { median: number | null; n: number };
+  };
+  followUps: { key: string; label: string; rounds: number; passed: number; rejected: number; noAnswer: number; waiting: number }[];
+}
+/** Same query as `getConversion` (period, date, to, region, scope, admin `user`). */
+export const getInterviewsReport = (params: ConversionParams) => apiFetch<InterviewStatsReport>(`/stats/interviews-report${qs(params)}`);
+
 export type ProfileGrade = 'strong' | 'watch' | 'dead' | 'early';
 export interface ProfileRow {
   accountId: string; name: string; region: string | null; archived: boolean;

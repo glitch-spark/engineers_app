@@ -4,6 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import ConversionTab from '../stats/ConversionTab';
+import InterviewStatsTab from '../stats/InterviewStatsTab';
 import ResumeCompareTab from './ResumeCompareTab';
 
 const fetchSpy = vi.spyOn(globalThis, 'fetch');
@@ -26,6 +27,7 @@ function show(tab: JSX.Element, url = BACKWARDS) {
 describe('statistics tabs with an invalid date range', () => {
   it.each([
     ['Conversion', <ConversionTab key="c" />],
+    ['Interviews', <InterviewStatsTab key="i" />],
     ['Resume compare', <ResumeCompareTab key="r" />],
   ])('%s shows the idle message, not a spinner', (_name, tab) => {
     show(tab);
