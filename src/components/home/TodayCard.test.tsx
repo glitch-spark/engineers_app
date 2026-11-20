@@ -417,13 +417,20 @@ describe('TodayCard: interviews waiting on you', () => {
     await waitFor(() => expect(api.updateInterviewStage).toHaveBeenCalledWith('iv2', 'r2', { status: 'rejected', statusReason: 'no_answer' }));
   });
 
-  it("an admin asks without a userId and sees only their own rounds, not the team's", async () => {
+  it("an admin asks for their own rounds by id and sees only those, not the team's", async () => {
     auth.role = 'admin';
     waiting([round(), round({ interviewId: 'iv8', roundId: 'r8', companyName: 'Theirs', ownerId: 'other' }), { ...outcome(1), ownerId: 'other' }]);
     setup(plan());
     const box = await block();
     expect(within(box).getByText('Interviews waiting on you (1)')).toBeTruthy();
     expect(box.textContent).not.toContain('Theirs');
-    expect(vi.mocked(api.getNeedsInput).mock.calls.every((args) => args.length === 0 || args[0] === undefined)).toBe(true);
+    expect(vi.mocked(api.getNeedsInput).mock.calls.every((args) => args[0] === 'me')).toBe(true);
+  });
+
+  it('staff ask without a userId', async () => {
+    waiting([round()]);
+    setup(plan());
+    await block();
+    expect(vi.mocked(api.getNeedsInput).mock.calls.every((args) => args[0] === undefined)).toBe(true);
   });
 });

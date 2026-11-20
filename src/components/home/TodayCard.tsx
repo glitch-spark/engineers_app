@@ -184,10 +184,12 @@ const WAITING_ROWS = 5;
 function WaitingInterviews({ onSaved }: { onSaved: () => unknown }) {
   const { user } = useAuth();
   const { tz } = useInterviewTimezone();
-  // Same key as the Interviews page's own list, so a save on either refreshes both.
-  const { data, mutate } = useSWR(['interviews-needs-input', ''], () => api.getNeedsInput());
+  // An admin asks for their own rounds by id (without it the server returns the whole team's). Same key shape as
+  // the Interviews page's list, so a save on either refreshes both.
+  const own = user?.role === 'admin' ? user.id : undefined;
+  const { data, mutate } = useSWR(['interviews-needs-input', own ?? ''], () => api.getNeedsInput(own));
   const { dialog, isSaving, followUp, resultButtons } = useNeedsInputActions(() => Promise.all([mutate(), onSaved()]));
-  // Asked without a user, an admin gets the whole team's rounds: keep only their own.
+  // Guard: never show an admin someone else's round here, whatever the server returned.
   const items = (data?.items ?? []).filter((row) => user?.role !== 'admin' || row.ownerId === user.id);
   if (!items.length) return dialog;
 
