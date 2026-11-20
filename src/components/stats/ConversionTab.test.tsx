@@ -86,6 +86,14 @@ describe('ConversionTab', () => {
     expect(screen.getByText('Bidder quality')).toBeTruthy();
   });
 
+  it('score table carries the undercount caption, other tables do not', async () => {
+    show();
+    const note = 'Interviews are easier to match to bids with a tailored resume, so "No score" is undercounted.';
+    const el = await screen.findByText(note);
+    expect(screen.getAllByText(note)).toHaveLength(1);
+    expect(el.previousElementSibling?.querySelector('table')?.getAttribute('aria-label')).toBe('By resume score');
+  });
+
   it('few rate shows warning tooltip', async () => {
     show();
     const bidder = await screen.findByRole('table', { name: 'By bidder' });

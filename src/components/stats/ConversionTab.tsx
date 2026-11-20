@@ -45,6 +45,7 @@ function ScopeSwitch({ f, scope, subject }: { f: StatsFilterState; scope: api.Co
   );
 }
 
+const SCORE_NOTE = 'Interviews are easier to match to bids with a tailored resume, so "No score" is undercounted.';
 const n = (v: number) => v.toLocaleString();
 const pct = (v: number | null) => (v == null ? '—' : `${v}%`);
 
@@ -61,7 +62,7 @@ function Breakdown({ d, onShowLastMonth }: { d: ConversionReport; onShowLastMont
       <p className="text-xs text-muted">{`Rate = interviews per 100 bids that had ${d.window.matured_days}+ days to work ("matured").`}</p>
       {t.matured === 0 && t.bids > 0 && <NoMaturedNote days={d.window.matured_days} onShowLastMonth={onShowLastMonth} />}
       <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-        {tables.map(([title, rows]) => rows && <ConversionTable key={title} title={title} rows={rows} teamRate={d.teamRate} />)}
+        {tables.map(([title, rows]) => rows && <ConversionTable key={title} title={title} rows={rows} teamRate={d.teamRate} note={title === 'By resume score' ? SCORE_NOTE : undefined} />)}
       </div>
     </div>
   );

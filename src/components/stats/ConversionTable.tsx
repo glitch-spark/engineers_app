@@ -20,7 +20,7 @@ function FewWarning({ tip, open, onToggle }: { tip: string; open: boolean; onTog
 const HEAD = ['Group', 'Bids', 'Matured', 'Interviews', 'Rate'];
 
 /** One Conversion breakdown: per group, bids, matured bids, interviews and the rate (interviews per 100 matured). */
-export default function ConversionTable({ title, rows, teamRate }: { title: string; rows: ConversionGroup[]; teamRate?: number | null }) {
+export default function ConversionTable({ title, rows, teamRate, note }: { title: string; rows: ConversionGroup[]; teamRate?: number | null; note?: string }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div>
@@ -54,6 +54,7 @@ export default function ConversionTable({ title, rows, teamRate }: { title: stri
           </tbody>
         </table>
       </div>
+      {note && <p className="mt-1 text-xs text-muted">{note}</p>}
     </div>
   );
 }
