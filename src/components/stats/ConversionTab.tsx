@@ -13,11 +13,8 @@ import { NoMaturedNote } from './RateTable';
 import StatsFrame from './StatsFrame';
 import TimingSection from './TimingSection';
 
-const scopeBtn = (on: boolean) =>
-  `whitespace-nowrap rounded-[10px] px-3 py-1 text-sm font-medium ${on ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-50' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`;
-
-/** `My profiles | Profile ▾ | Team total`, bound to the `scope` / `profile` URL keys. The picker lists the subject's
- * profiles of the region, archived included. */
+/** The Profiles dropdown (All my profiles / one profile / Whole team), bound to the `scope` / `profile` URL keys. It
+ * lists the subject's profiles of the region, archived included. */
 function ScopeSwitch({ f, scope, subject }: { f: StatsFilterState; scope: api.ConversionScope; subject?: string }) {
   const region = f.region === 'all' ? undefined : f.region;
   const { data } = useSWR(['conversion-profiles', region, subject], () => api.listAccounts({ limit: 1000, status: 'all', region, userId: subject }));
@@ -30,17 +27,19 @@ function ScopeSwitch({ f, scope, subject }: { f: StatsFilterState; scope: api.Co
   useEffect(() => {
     if (stale) patch({ scope: undefined, profile: undefined });
   }, [stale, patch]);
+  // One labelled dropdown like Region / Date range (user, 2026-11-19): all my profiles, one profile, or the whole team.
+  const value = scope === 'team' ? 'team' : scope === 'profile' && listed ? f.values.profile : 'me';
   return (
-    <div className="flex max-w-full flex-wrap items-center gap-0.5 rounded-xl border border-zinc-200 bg-zinc-100/70 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/60">
-      <button type="button" aria-pressed={scope === 'me'} className={scopeBtn(scope === 'me')}
-        onClick={() => f.patch({ scope: undefined, profile: undefined })}>My profiles</button>
-      <div className="w-44">
-        <Select ariaLabel="Profile" options={[{ value: '', label: 'Profile…' }, ...options]}
-          value={scope === 'profile' && listed ? f.values.profile : ''}
-          onChange={(profile) => f.patch(profile ? { scope: 'profile', profile } : { scope: undefined, profile: undefined })} />
-      </div>
-      <button type="button" aria-pressed={scope === 'team'} className={scopeBtn(scope === 'team')}
-        onClick={() => f.patch({ scope: 'team', profile: undefined })}>Team total</button>
+    <div className="w-56">
+      <Select label="Profiles" options={[
+        { value: 'me', label: 'All my profiles' },
+        ...(options.length ? [{ value: '__one', label: '— One profile —', disabled: true }, ...options] : []),
+        { value: '__sep', label: '──────────', disabled: true },
+        { value: 'team', label: 'Whole team' },
+      ]}
+        value={value}
+        onChange={(v) => f.patch(v === 'team' ? { scope: 'team', profile: undefined }
+          : v === 'me' ? { scope: undefined, profile: undefined } : { scope: 'profile', profile: v })} />
     </div>
   );
 }

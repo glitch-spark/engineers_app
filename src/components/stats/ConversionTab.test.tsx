@@ -91,7 +91,7 @@ describe('ConversionTab', () => {
   it('lists archived profiles in the picker, selectable', async () => {
     listAccounts.mockResolvedValue({ accounts: [{ _id: 'a1', name: 'Pedro', region: 'US' }, { _id: 'a3', name: 'Old', region: 'EU', archived: true }], pagination: {} });
     show('/statistics?scope=profile&profile=a3');
-    const picker = (await screen.findByLabelText('Profile')) as HTMLSelectElement;
+    const picker = (await screen.findByLabelText('Profiles')) as HTMLSelectElement;
     expect(listAccounts).toHaveBeenCalledWith(expect.objectContaining({ status: 'all' }));
     await waitFor(() => expect(picker.value).toBe('a3'));
     expect(within(picker).getByText('Old · EU · archived')).toBeTruthy();
@@ -155,14 +155,22 @@ describe('ConversionTab', () => {
     await waitFor(() => expect(search).not.toContain('profile='));
     expect(search).not.toContain('scope=');
     await waitFor(() => expect(getConversion).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'me' })));
-    expect(screen.getByRole('button', { name: 'My profiles' }).getAttribute('aria-pressed')).toBe('true');
+    expect((screen.getByLabelText('Profiles') as HTMLSelectElement).value).toBe('me');
   });
 
-  it('choosing the empty profile option goes back to My profiles and leaves the URL clean', async () => {
+  it('one labelled Profiles dropdown: All my profiles, each profile, Whole team', async () => {
     show('/statistics?scope=profile&profile=a1');
-    const picker = (await screen.findByLabelText('Profile')) as HTMLSelectElement;
+    const picker = (await screen.findByLabelText('Profiles')) as HTMLSelectElement;
     await waitFor(() => expect(picker.value).toBe('a1'));
-    fireEvent.change(picker, { target: { value: '' } });
+    const texts = [...picker.options].map((o) => o.text);
+    expect(texts[0]).toBe('All my profiles');
+    expect(texts).toContain('Pedro · US');
+    expect(texts[texts.length - 1]).toBe('Whole team');
+    expect(screen.queryByRole('button', { name: 'My profiles' })).toBeNull();
+    fireEvent.change(picker, { target: { value: 'team' } });
+    expect(search).toContain('scope=team');
+    expect(search).not.toContain('profile=');
+    fireEvent.change(picker, { target: { value: 'me' } });
     expect(search).toBe('');
   });
 
@@ -183,7 +191,7 @@ describe('ConversionTab', () => {
 
   it('one profile narrows tables and cards', async () => {
     show('/statistics?region=US');
-    const picker = (await screen.findByLabelText('Profile')) as HTMLSelectElement;
+    const picker = (await screen.findByLabelText('Profiles')) as HTMLSelectElement;
     await waitFor(() => expect([...picker.options].map((o) => o.text)).toContain('Pedro · US'));
     expect(listAccounts).toHaveBeenCalledWith(expect.objectContaining({ region: 'US' }));
     fireEvent.change(picker, { target: { value: 'a1' } });
@@ -194,7 +202,7 @@ describe('ConversionTab', () => {
     await waitFor(() => expect(getProfileReport).toHaveBeenLastCalledWith(narrowed));
     await waitFor(() => expect(getChanges).toHaveBeenLastCalledWith(narrowed));
     await waitFor(() => expect(getTiming).toHaveBeenLastCalledWith(narrowed));
-    fireEvent.click(screen.getByRole('button', { name: 'My profiles' }));
+    fireEvent.change(picker, { target: { value: 'me' } });
     expect(search).not.toContain('scope=');
     expect(search).not.toContain('profile=');
   });
