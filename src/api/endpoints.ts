@@ -3335,6 +3335,8 @@ export interface ConversionReport {
   /** The team's interviews per 100 matured bids (one decimal); null with no team baseline. */
   teamRate?: number | null;
   /** Absent for scope=team. */
+  /** Self vs bidder bids, every scope (no names). */
+  byWho?: ConversionGroup[];
   byBidder?: ConversionGroup[];
   bySite: ConversionGroup[]; byScore: ConversionGroup[]; byArea: ConversionGroup[]; byAge: ConversionGroup[];
 }

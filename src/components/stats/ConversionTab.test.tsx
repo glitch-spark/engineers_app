@@ -43,6 +43,7 @@ const report: ConversionReport = {
   label: 'Oct 6 – Nov 19, 2026', startClamped: true, scope: 'me',
   window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true },
   totals: { bids: 9840, matured: 6120, interviews: 41, interviewsAll: 44, inPlay: 3720, rate: 0.7 },
+  byWho: [g('self', 'Self'), g('bidder', 'Bidder')],
   byBidder: [g('self', 'Self'), g('b1', 'Ana', { matured: 12, rate: 8.3, few: true })],
   bySite: [g('lever', 'Lever')], byScore: [g('80', '80+', { rate: null, matured: 0 })], byArea: [g('be', 'Backend')], byAge: [g('new', 'Under 30 days')],
 };
@@ -68,10 +69,10 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('ConversionTab', () => {
-  it('renders totals and five tables', async () => {
+  it('renders totals and six tables', async () => {
     show();
     expect(await screen.findByText('Oct 6 – Nov 19, 2026 · 9,840 bids · 6,120 matured · 41 interviews from matured bids (44 in all) · 0.7% · 3,720 in play')).toBeTruthy();
-    for (const t of ['By bidder', 'By job site', 'By resume score', 'By job area', 'By profile age']) {
+    for (const t of ['Self vs bidder', 'By bidder', 'By job site', 'By resume score', 'By job area', 'By profile age']) {
       expect(screen.getByRole('table', { name: t })).toBeTruthy();
     }
     const site = screen.getByRole('table', { name: 'By job site' });
@@ -141,6 +142,7 @@ describe('ConversionTab', () => {
     show('/statistics?scope=team');
     expect(await screen.findByRole('table', { name: 'By job site' })).toBeTruthy();
     expect(screen.queryByRole('table', { name: 'By bidder' })).toBeNull();
+    expect(screen.getByRole('table', { name: 'Self vs bidder' })).toBeTruthy();
     expect(await screen.findByText('When to bid')).toBeTruthy();
     expect(screen.queryByText('Your profiles')).toBeNull();
     expect(screen.queryByText('What to change')).toBeNull();

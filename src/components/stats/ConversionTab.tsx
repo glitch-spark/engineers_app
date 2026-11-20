@@ -52,7 +52,7 @@ const pct = (v: number | null) => (v == null ? '—' : `${v}%`);
 function Breakdown({ d, onShowLastMonth }: { d: ConversionReport; onShowLastMonth: () => void }) {
   const t = d.totals;
   const tables: [string, api.ConversionGroup[] | undefined][] = [
-    ['By bidder', d.byBidder], ['By job site', d.bySite], ['By resume score', d.byScore], ['By job area', d.byArea], ['By profile age', d.byAge],
+    ['Self vs bidder', d.byWho], ['By bidder', d.byBidder], ['By job site', d.bySite], ['By resume score', d.byScore], ['By job area', d.byArea], ['By profile age', d.byAge],
   ];
   return (
     <div className="panel p-4">
