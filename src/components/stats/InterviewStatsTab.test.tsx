@@ -191,7 +191,7 @@ describe('InterviewStatsTab', () => {
       expect(screen.getByText('No reschedules logged yet')).toBeTruthy();
       expect(screen.getByText('No rejected rounds in this period.')).toBeTruthy();
       expect(screen.getByRole('table', { name: 'Follow-ups' })).toBeTruthy();
-      expect(screen.queryByText(/Green = clearly above/)).toBeNull();
+      expect(screen.queryByText(/clearly above the team rate/)).toBeNull();
     });
   });
 
@@ -330,7 +330,7 @@ describe('InterviewStatsTab', () => {
 
     it('the bar colour legend with the team rate appears once: under By stage, below the pass-rate definition', async () => {
       show();
-      const legend = await screen.findAllByText('Green = clearly above the team rate (23.9%), red = clearly below, grey = about the same or too few to tell.');
+      const legend = await screen.findAllByText('Pass rate bar: green = clearly above the team rate (23.9%), red = clearly below, grey = about the same or too few to tell.');
       expect(legend).toHaveLength(1);
       const after = (a: Node, b: Node) => expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       after(screen.getByRole('table', { name: 'By stage' }), legend[0]);

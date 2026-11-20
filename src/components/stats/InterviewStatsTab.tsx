@@ -218,7 +218,7 @@ function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; o
       <Panel>
         <ConversionTable title="By stage" rows={d.byStage ?? []} teamRate={teamRate} spec={STAGE_SPEC} legend={false}
           above={OutcomeLegend} note={PASS_RATE_NOTE} />
-        {teamRate != null && !!d.byStage?.length && <p className="mt-1 text-xs text-muted">{rateLegend(teamRate)}</p>}
+        {teamRate != null && !!d.byStage?.length && <p className="mt-1 text-xs text-muted">{`Pass rate bar: ${rateLegend(teamRate).replace(/^Green/, "green")}`}</p>}
       </Panel>
       {table('By caller', d.byCaller, CALLER_SPEC)}
       <div className={GRID}>
