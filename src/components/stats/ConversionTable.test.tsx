@@ -32,4 +32,12 @@ describe('ConversionTable', () => {
     expect(screen.getByRole('button', { name: /Only 29 matured bids/ }).getAttribute('title')).toBe(
       'Only 29 matured bids — this rate can swing a lot.');
   });
+
+  it('starts with every note closed, also for rows without a key (unknown / no score)', () => {
+    render(<ConversionTable title="By resume score" rows={[
+      { key: null as unknown as string, label: 'No score', bids: 3341, matured: 1924, interviews: 0, rate: 0, few: false },
+      { key: null as unknown as string, label: 'Unknown', bids: 0, matured: 0, interviews: 0, rate: null, few: true, fewReason: 'matured' },
+    ]} />);
+    expect(screen.queryByText(/this rate can swing a lot/)).toBeNull();
+  });
 });

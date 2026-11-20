@@ -32,7 +32,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
           </thead>
           <tbody>
             {rows.map((g) => (
-              <Fragment key={g.key}>
+              <Fragment key={g.label}>
                 <tr className="border-t border-zinc-200 dark:border-zinc-800">
                   <td className="py-1 pr-3">{g.label}</td>
                   <td className="py-1 pr-3 tabular-nums">{g.bids.toLocaleString()}</td>
@@ -41,11 +41,11 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
                   <td className="whitespace-nowrap py-1 tabular-nums">
                     {g.rate == null ? '—' : `${g.rate}%`}
                     {g.few && g.rate != null && (
-                      <FewWarning tip={tipFor(g, teamRate)} open={open === g.key} onToggle={() => setOpen(open === g.key ? null : g.key)} />
+                      <FewWarning tip={tipFor(g, teamRate)} open={open === g.label} onToggle={() => setOpen(open === g.label ? null : g.label)} />
                     )}
                   </td>
                 </tr>
-                {open === g.key && (
+                {g.few && open === g.label && (
                   <tr><td colSpan={5} role="note" className="pb-1 text-xs text-amber-700 dark:text-amber-400">{tipFor(g, teamRate)}</td></tr>
                 )}
               </Fragment>
