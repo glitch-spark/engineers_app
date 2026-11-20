@@ -88,17 +88,8 @@ describe('ConversionTab', () => {
     expect(screen.queryByText(/not tied to a bid/)).toBeNull();
   });
 
-  it('lists archived profiles in the picker, selectable', async () => {
-    listAccounts.mockResolvedValue({ accounts: [{ _id: 'a1', name: 'Pedro', region: 'US' }, { _id: 'a3', name: 'Old', region: 'EU', archived: true }], pagination: {} });
-    show('/statistics?scope=profile&profile=a3');
-    const picker = (await screen.findByLabelText('Profiles')) as HTMLSelectElement;
-    expect(listAccounts).toHaveBeenCalledWith(expect.objectContaining({ status: 'all' }));
-    await waitFor(() => expect(picker.value).toBe('a3'));
-    expect(within(picker).getByText('Old · EU · archived')).toBeTruthy();
-  });
-
   it('renders totals and six tables', async () => {
-    show();
+    show('/statistics?scope=me');
     expect(await screen.findByText('Oct 6 – Nov 19, 2026 · 9,840 bids · 6,120 matured · 41 interviews from matured bids (44 in all) · 0.7% · 3,720 in play')).toBeTruthy();
     for (const t of ['Self vs bidder', 'By bidder', 'By job site', 'By resume score', 'By job area', 'By profile age']) {
       expect(screen.getByRole('table', { name: t })).toBeTruthy();
@@ -124,7 +115,7 @@ describe('ConversionTab', () => {
   });
 
   it('few rate shows warning tooltip', async () => {
-    show();
+    show('/statistics?scope=me');
     const bidder = await screen.findByRole('table', { name: 'By bidder' });
     const warn = within(bidder).getByRole('button', { name: /Only 12 matured bids — this rate can swing a lot\./ });
     expect(warn.textContent).toContain('⚠');
@@ -132,50 +123,20 @@ describe('ConversionTab', () => {
     expect(within(bidder).getByRole('note').textContent).toBe('Only 12 matured bids — this rate can swing a lot.');
   });
 
-  it('changing region or the viewed user drops a chosen profile back to My profiles', async () => {
-    role = 'admin';
-    show('/statistics?region=US&scope=profile&profile=a1');
-    await waitFor(() => expect(getConversion).toHaveBeenCalledWith(expect.objectContaining({ scope: 'profile', profile: 'a1' })));
-    fireEvent.change(screen.getByLabelText('Region'), { target: { value: 'EU' } });
-    expect(search).toContain('region=EU');
-    expect(search).not.toContain('scope=');
-    expect(search).not.toContain('profile=');
-    await waitFor(() => expect(getConversion).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'me', region: 'EU' })));
-    cleanup();
-    show('/statistics?scope=profile&profile=a1');
-    await screen.findByLabelText('Viewing');
-    fireEvent.change(screen.getByLabelText('Viewing'), { target: { value: 'u7' } });
-    await waitFor(() => expect(search).toContain('user=u7'));
-    expect(search).not.toContain('scope=');
-    expect(search).not.toContain('profile=');
-  });
-
-  it('a URL profile missing from the picker list falls back to My profiles', async () => {
-    show('/statistics?scope=profile&profile=gone');
-    await waitFor(() => expect(search).not.toContain('profile='));
-    expect(search).not.toContain('scope=');
-    await waitFor(() => expect(getConversion).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'me' })));
-    expect((screen.getByLabelText('Profiles') as HTMLSelectElement).value).toBe('me');
-  });
-
-  it('one labelled Profiles dropdown: All my profiles, each profile, Whole team', async () => {
-    show('/statistics?scope=profile&profile=a1');
+  it('Profiles dropdown offers Whole team (default) and All my profiles only', async () => {
+    show('/statistics');
     const picker = (await screen.findByLabelText('Profiles')) as HTMLSelectElement;
-    await waitFor(() => expect(picker.value).toBe('a1'));
-    const texts = [...picker.options].map((o) => o.text);
-    expect(texts[0]).toBe('All my profiles');
-    expect(texts).toContain('Pedro · US');
-    expect(texts[texts.length - 1]).toBe('Whole team');
-    expect(screen.queryByRole('button', { name: 'My profiles' })).toBeNull();
-    fireEvent.change(picker, { target: { value: 'team' } });
-    expect(search).toContain('scope=team');
-    expect(search).not.toContain('profile=');
+    expect([...picker.options].map((o) => o.text)).toEqual(['Whole team', 'All my profiles']);
+    expect(picker.value).toBe('team');
     fireEvent.change(picker, { target: { value: 'me' } });
-    expect(search).toBe('');
+    expect(search).toContain('scope=me');
+    await waitFor(() => expect(getConversion).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'me' })));
+    fireEvent.change(picker, { target: { value: 'team' } });
+    expect(search).not.toContain('scope=');
   });
 
-  it('team total hides bidder table and per-person cards', async () => {
-    show('/statistics?scope=team');
+  it('Whole team is the default: hides the bidder table and per-person cards', async () => {
+    show('/statistics');
     expect(await screen.findByRole('table', { name: 'By job site' })).toBeTruthy();
     expect(screen.queryByRole('table', { name: 'By bidder' })).toBeNull();
     expect(screen.getByRole('table', { name: 'Self vs bidder' })).toBeTruthy();
@@ -189,40 +150,31 @@ describe('ConversionTab', () => {
     expect(getChanges).not.toHaveBeenCalled();
   });
 
-  it('one profile narrows tables and cards', async () => {
-    show('/statistics?region=US');
-    const picker = (await screen.findByLabelText('Profiles')) as HTMLSelectElement;
-    await waitFor(() => expect([...picker.options].map((o) => o.text)).toContain('Pedro · US'));
-    expect(listAccounts).toHaveBeenCalledWith(expect.objectContaining({ region: 'US' }));
-    fireEvent.change(picker, { target: { value: 'a1' } });
-    expect(search).toContain('scope=profile');
-    expect(search).toContain('profile=a1');
-    const narrowed = expect.objectContaining({ scope: 'profile', profile: 'a1' });
-    await waitFor(() => expect(getConversion).toHaveBeenLastCalledWith(narrowed));
-    await waitFor(() => expect(getProfileReport).toHaveBeenLastCalledWith(narrowed));
-    await waitFor(() => expect(getChanges).toHaveBeenLastCalledWith(narrowed));
-    await waitFor(() => expect(getTiming).toHaveBeenLastCalledWith(narrowed));
-    fireEvent.change(picker, { target: { value: 'me' } });
-    expect(search).not.toContain('scope=');
-    expect(search).not.toContain('profile=');
-  });
-
   it('Since Oct 6 is the default and sends custom 2026-10-06..today', async () => {
     show();
     await waitFor(() => expect(getConversion).toHaveBeenCalled());
-    expect(getConversion).toHaveBeenCalledWith(expect.objectContaining({ period: 'custom', date: '2026-10-06', to: '2026-11-19', region: 'all', scope: 'me' }));
+    expect(getConversion).toHaveBeenCalledWith(expect.objectContaining({ period: 'custom', date: '2026-10-06', to: '2026-11-19', region: 'all', scope: 'team' }));
     expect(getStatsView).toHaveBeenCalledWith('bids', expect.objectContaining({ period: 'custom', date: '2026-10-06', to: '2026-11-19' }));
     expect((screen.getByLabelText('Date range') as HTMLSelectElement).value).toBe('since_oct6');
     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
   });
 
-  it('admin viewing a teammate sends user everywhere and lists their profiles; staff never sends user', async () => {
+  it('an admin picking a person under Viewing switches to that person\'s profiles', async () => {
     role = 'admin';
-    show('/statistics?user=u7');
+    show('/statistics');
+    const viewing = (await screen.findByLabelText('Viewing')) as HTMLSelectElement;
+    await waitFor(() => expect([...viewing.options].map((o) => o.value)).toContain('u7'));
+    fireEvent.change(viewing, { target: { value: 'u7' } });
+    expect(search).toContain('user=u7');
+    expect(search).toContain('scope=me');
+  });
+
+  it('admin viewing a teammate sends user everywhere; staff never sends user', async () => {
+    role = 'admin';
+    show('/statistics?user=u7&scope=me');
     await waitFor(() => expect(getTiming).toHaveBeenCalled());
     for (const fn of [getConversion, getProfileReport, getChanges, getTiming]) expect(fn).toHaveBeenCalledWith(expect.objectContaining({ user: 'u7' }));
     expect(getStatsView).toHaveBeenCalledWith('bids', expect.objectContaining({ user: 'u7' }));
-    expect(listAccounts).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u7' }));
     cleanup(); role = 'staff'; getConversion.mockClear();
     show('/statistics?user=u7');
     await waitFor(() => expect(getConversion).toHaveBeenCalled());

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { ConversionParams, ConversionReport } from '../../api/endpoints';
@@ -13,33 +13,14 @@ import { NoMaturedNote } from './RateTable';
 import StatsFrame from './StatsFrame';
 import TimingSection from './TimingSection';
 
-/** The Profiles dropdown (All my profiles / one profile / Whole team), bound to the `scope` / `profile` URL keys. It
- * lists the subject's profiles of the region, archived included. */
-function ScopeSwitch({ f, scope, subject }: { f: StatsFilterState; scope: api.ConversionScope; subject?: string }) {
-  const region = f.region === 'all' ? undefined : f.region;
-  const { data } = useSWR(['conversion-profiles', region, subject], () => api.listAccounts({ limit: 1000, status: 'all', region, userId: subject }));
-  const options = ((data?.accounts ?? []) as { _id: string; name?: string; region?: string; archived?: boolean }[])
-    .map((a) => ({ value: a._id, label: [a.name ?? a._id, a.region, a.archived && 'archived'].filter(Boolean).join(' · ') }));
-  const listed = options.some((o) => o.value === f.values.profile);
-  // A profile the list doesn't hold (another region / user, archived, or none at all) would only give empty tables.
-  const stale = data !== undefined && f.values.scope === 'profile' && !listed;
-  const { patch } = f;
-  useEffect(() => {
-    if (stale) patch({ scope: undefined, profile: undefined });
-  }, [stale, patch]);
-  // One labelled dropdown like Region / Date range (user, 2026-11-19): all my profiles, one profile, or the whole team.
-  const value = scope === 'team' ? 'team' : scope === 'profile' && listed ? f.values.profile : 'me';
+/** The Profiles dropdown: Whole team (default, no `scope` in the URL) or All my profiles (`scope=me`). User decision
+ * 2026-11-19: no single-profile option. */
+function ScopeSwitch({ f, scope }: { f: StatsFilterState; scope: api.ConversionScope }) {
   return (
-    <div className="w-56">
-      <Select label="Profiles" options={[
-        { value: 'me', label: 'All my profiles' },
-        ...(options.length ? [{ value: '__one', label: '— One profile —', disabled: true }, ...options] : []),
-        { value: '__sep', label: '──────────', disabled: true },
-        { value: 'team', label: 'Whole team' },
-      ]}
-        value={value}
-        onChange={(v) => f.patch(v === 'team' ? { scope: 'team', profile: undefined }
-          : v === 'me' ? { scope: undefined, profile: undefined } : { scope: 'profile', profile: v })} />
+    <div className="w-48">
+      <Select label="Profiles" options={[{ value: 'team', label: 'Whole team' }, { value: 'me', label: 'All my profiles' }]}
+        value={scope}
+        onChange={(v) => f.patch({ scope: v === 'me' ? 'me' : undefined, profile: undefined })} />
     </div>
   );
 }
@@ -70,30 +51,26 @@ function Breakdown({ d, onShowLastMonth }: { d: ConversionReport; onShowLastMont
   );
 }
 
-/** The Statistics filters, except that a new region or viewed user drops a chosen profile (it belongs to the old
- * one) back to My profiles, in the same URL patch. */
+/** The Statistics filters, except that an admin picking a person to view switches to that person's profiles (a
+ * whole-team view is the same for everyone), in the same URL patch. */
 function useConversionFilters(): StatsFilterState {
   const f = useStatsFilters('conversion');
   const { patch, values } = f;
   const guarded = useMemo(() => (c: Parameters<typeof patch>[0]) => {
-    const moved = (c.region !== undefined && c.region !== values.region) || (c.user !== undefined && c.user !== values.user);
-    patch(moved && values.scope === 'profile' ? { ...c, scope: undefined, profile: undefined } : c);
+    patch(c.user && c.user !== values.user ? { ...c, scope: 'me', profile: undefined } : c);
   }, [patch, values]);
   return { ...f, patch: guarded };
 }
 
 /** Statistics → Conversion: the you-vs-team bids strip, then how the scope's bids turn into interviews (totals and
- * five breakdowns), then the per-profile cards. Team total drops the bidder table and the per-person cards. */
+ * breakdowns), then the per-profile cards. Whole team (the default) drops the bidder table and the per-person cards. */
 export default function ConversionTab() {
   const f = useConversionFilters();
   const me = useAuth().user;
   const isAdmin = me?.role === 'admin';
   const user = isAdmin ? f.values.user : '';
-  const scope: api.ConversionScope = f.values.scope === 'team' ? 'team'
-    : f.values.scope === 'profile' && f.values.profile ? 'profile' : 'me';
-  const params: ConversionParams | null = f.params
-    ? { ...f.params, scope, ...(scope === 'profile' ? { profile: f.values.profile } : {}) }
-    : null;
+  const scope: api.ConversionScope = f.values.scope === 'me' ? 'me' : 'team';
+  const params: ConversionParams | null = f.params ? { ...f.params, scope } : null;
   const withUser = (p: ConversionParams) => (user ? { ...p, user } : p);
   const showLast = () => f.patch({ range: 'last_month', from: '', to: '' });
 
@@ -103,7 +80,7 @@ export default function ConversionTab() {
     { keepPreviousData: true },
   );
   const conv = useSWR(
-    params ? ['stats-conversion', params.period, params.date, params.to, params.region, scope, params.profile, user] : null,
+    params ? ['stats-conversion', params.period, params.date, params.to, params.region, scope, user] : null,
     () => api.getConversion(withUser(params!)),
     { keepPreviousData: true },
   );
@@ -115,7 +92,7 @@ export default function ConversionTab() {
   return (
     <div className="space-y-4">
       <StatsFilterBar f={f} viewing viewingSubject={view?.subject}
-        before={<ScopeSwitch f={f} scope={scope} subject={isAdmin ? (user || me?.id) : undefined} />}>
+        before={<ScopeSwitch f={f} scope={scope} />}>
         {loading && <span className="spinner spinner-sm mb-2.5" role="status" aria-label="Loading" />}
       </StatsFilterBar>
       {!params ? (
