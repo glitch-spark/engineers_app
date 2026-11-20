@@ -3460,10 +3460,6 @@ export interface InterviewStatsReport {
     canceled: InterviewReason[]; rescheduled: InterviewReason[]; rejected: InterviewReason[];
     rescheduleRate?: { rescheduled: number; rounds: number; since: string };
   };
-  depth: {
-    ended: number; avgRounds: number | null; endedAfter: { label: string; count: number }[];
-    daysBetweenRounds: { median: number | null; n: number }; daysToAnswer: { median: number | null; n: number };
-  };
   followUps: { key: string; label: string; rounds: number; passed: number; rejected: number; noAnswer: number; waiting: number }[];
 }
 /** Same query as `getConversion` (period, date, to, region, scope, admin `user`). */

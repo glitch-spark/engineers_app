@@ -59,8 +59,9 @@ const EVERYONE: EveryoneMetric<Person>[] = [
   { key: 'offers', label: 'Offers', head: 'Offers', value: (r) => r.offers, cell: (r) => n(r.offers) },
 ];
 
-/** A group can be compared (bar, bar scale) when it has enough decided rounds and is not the "Unknown" catch-all. */
-const comparable = (g: InterviewGroup) => !g.few && g.key !== 'unknown';
+/** A group can be compared (bar, bar scale) when it has enough decided rounds and is not a catch-all: "Unknown", or
+ * Self vs caller's "Caller not assigned" (a caller was asked for but nobody was assigned). */
+const comparable = (g: InterviewGroup) => !g.few && g.key !== 'unknown' && g.key !== 'unassigned';
 const col = (head: string, f: (g: InterviewGroup) => number) => ({ head, cell: (g: InterviewGroup) => n(f(g)) });
 const ROUNDS = col('Rounds', (g) => g.rounds);
 const CANCELED = col('Canceled', (g) => g.canceled);
@@ -115,9 +116,9 @@ const PASS_RATE_NOTE = 'Pass rate = passed ÷ (passed + rejected + no answer). "
 const Panel = ({ children }: { children: ReactNode }) => <div className="panel min-w-0 p-4">{children}</div>;
 const GRID = 'grid grid-cols-1 gap-4 md:grid-cols-2';
 
-interface CountRow { key?: string; label: string; count: number; share?: number }
+interface CountRow { key: string; label: string; count: number; share: number }
 
-/** Rows of label · bar · count (· share of the list). The "not filled in yet" row (key `none`) is greyed and last. */
+/** Rows of label · bar · count · share of the list. The "not filled in yet" row (key `none`) is greyed and last. */
 function CountBars({ label, rows, empty }: { label: string; rows: CountRow[]; empty?: string }) {
   if (rows.length === 0) return empty ? <p className="mt-1 text-sm text-muted">{empty}</p> : null;
   const blank = (r: CountRow) => r.key === 'none';
@@ -128,14 +129,14 @@ function CountBars({ label, rows, empty }: { label: string; rows: CountRow[]; em
       <table aria-label={label} className="w-full text-left text-sm">
         <tbody>
           {sorted.map((r) => (
-            <tr key={r.key ?? r.label} className={`border-t border-zinc-200 dark:border-zinc-800${blank(r) ? ' text-muted' : ''}`}>
+            <tr key={r.key} className={`border-t border-zinc-200 dark:border-zinc-800${blank(r) ? ' text-muted' : ''}`}>
               <td className="py-1 pr-3">{r.label}</td>
               <td className="w-1/3 min-w-16 py-1 pr-3">
                 <span aria-hidden data-bar className={`block h-2 rounded ${blank(r) ? 'bg-zinc-200 dark:bg-zinc-700' : 'bg-zinc-400 dark:bg-zinc-500'}`}
                   style={{ width: width(r.count, max) }} />
               </td>
               <td className="py-1 pr-3 tabular-nums">{n(r.count)}</td>
-              {r.share != null && <td className="py-1 tabular-nums">{pct(r.share)}</td>}
+              <td className="py-1 tabular-nums">{pct(r.share)}</td>
             </tr>
           ))}
         </tbody>
@@ -171,44 +172,6 @@ function Rescheduled({ reasons }: { reasons?: InterviewStatsReport['reasons'] })
           <CountBars label="Why rounds were rescheduled" rows={reasons?.rescheduled ?? []} />
         </>
       )}
-    </section>
-  );
-}
-
-function Stat({ title, value, children }: { title: string; value?: string; children?: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs uppercase tracking-wide text-muted">{title}</p>
-      {value != null && <p className="my-0.5 text-2xl font-bold tabular-nums">{value}</p>}
-      {children}
-    </div>
-  );
-}
-
-function Depth({ depth }: { depth?: InterviewStatsReport['depth'] }) {
-  const ended = depth?.ended ?? 0;
-  const after = depth?.endedAfter ?? [];
-  const first = after.find((a) => a.label === '1 round')?.count;
-  const between = depth?.daysBetweenRounds;
-  const answer = depth?.daysToAnswer;
-  const note = 'text-xs text-muted';
-  return (
-    <section aria-label="Depth and speed" className="panel p-4">
-      <h3 className="font-semibold">Depth and speed</h3>
-      <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat title="Rounds until it ended" value={depth?.avgRounds == null ? '—' : String(depth.avgRounds)}>
-          <p className={note}>{`${n(ended)} ended interviews${ended > 0 && first != null ? ` · ${Math.round((first / ended) * 100)}% ended after the first round` : ''}`}</p>
-        </Stat>
-        <Stat title="Ended after">
-          <CountBars label="Ended after" rows={after} empty="No ended interviews yet" />
-        </Stat>
-        <Stat title="Days between rounds" value={between?.median == null ? '—' : String(between.median)}>
-          <p className={note}>{between?.median == null ? 'No next rounds yet' : `Median, ${n(between.n)} next rounds`}</p>
-        </Stat>
-        <Stat title="Days until an answer" value={answer?.median == null ? '—' : String(answer.median)}>
-          <p className={note}>{answer?.median == null ? 'Starts once result dates are saved' : `Median, ${n(answer.n)} rounds with a result date`}</p>
-        </Stat>
-      </div>
     </section>
   );
 }
@@ -266,7 +229,6 @@ function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; o
           <Rescheduled reasons={d.reasons} />
         </Panel>
       </div>
-      <Depth depth={d.depth} />
       <h3 className="px-1 pt-2 font-semibold">What raises the pass rate</h3>
       <div className={GRID}>
         {table('By time of day', d.byHour)}
@@ -284,7 +246,7 @@ function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; o
 
 /** Statistics → Interviews (spec 2026-11-20): what happens to interview rounds after they are scheduled. The same
  * filters (and URL keys) as Job applies, then cards, Everyone, key findings, By stage, self vs caller, the
- * reasons, depth and speed, the pass-rate breakdowns and follow-ups. */
+ * reasons, the pass-rate breakdowns and follow-ups. */
 export default function InterviewStatsTab() {
   const f = useConversionFilters();
   const isAdmin = useAuth().user?.role === 'admin';

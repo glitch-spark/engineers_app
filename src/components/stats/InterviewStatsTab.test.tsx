@@ -79,11 +79,6 @@ const report: InterviewStatsReport = {
     rescheduled: [{ key: 'company', label: 'Company asked', count: 1, share: 100 }],
     rescheduleRate: { rescheduled: 1, rounds: 19, since: '2026-11-20' },
   },
-  depth: {
-    ended: 185, avgRounds: 1.17,
-    endedAfter: [{ label: '1 round', count: 164 }, { label: '2 rounds', count: 13 }, { label: '3 or more', count: 8 }],
-    daysBetweenRounds: { median: 6.5, n: 56 }, daysToAnswer: { median: null, n: 0 },
-  },
   byProfile: [g('p1', 'Pedro')], byRegion: [g('US', 'US')], byArea: [g('be', 'Backend'), g('unknown', 'Unknown', { rate: 12.1 })],
   byScore: [g('80', '80+')], byAppliedBy: [g('self', 'Self bid')], byWeekday: [g('mon', 'Mon')], byHour: [g('morning', 'Morning')],
   followUps: [
@@ -175,7 +170,6 @@ describe('InterviewStatsTab', () => {
     });
 
     it('renders with empty lists, null rates and missing optional parts', async () => {
-      const nul = { median: null, n: 0 };
       getInterviewsReport.mockResolvedValue({
         window: report.window,
         totals: { ...g('all', 'All', { rate: null }), companies: 1, offers: 0 },
@@ -190,7 +184,6 @@ describe('InterviewStatsTab', () => {
         },
         findings: [], byStage: [], byWho: [], byCaller: [],
         reasons: { canceled: [], rescheduled: [], rejected: [] },
-        depth: { ended: 0, avgRounds: null, endedAfter: [], daysBetweenRounds: nul, daysToAnswer: nul },
         byProfile: [], byRegion: [], byArea: [], byScore: [], byAppliedBy: [], byWeekday: [], byHour: [],
       });
       show();
@@ -362,6 +355,23 @@ describe('InterviewStatsTab', () => {
       expect(within(t).queryByText('Jamil')).toBeNull();
     });
 
+    it('"Caller not assigned" in Self vs caller is muted with its counts, no bar and no say in the bar scale', async () => {
+      getInterviewsReport.mockResolvedValue({ ...report, byWho: [
+        g('self', 'Self', { rate: 21.9 }), g('caller', 'Caller', { rate: 29.2 }),
+        g('unassigned', 'Caller not assigned', { rounds: 30, canceled: 4, decided: 25, passed: 20, rate: 80 }),
+      ] });
+      show();
+      const t = await table('Self vs caller');
+      expect(within(t).getAllByRole('row').slice(1).map((r) => (r as HTMLTableRowElement).cells[0].textContent)).toEqual(['Self', 'Caller', 'Caller not assigned']);
+      const row = within(t).getByText('Caller not assigned').closest('tr')!;
+      expect(cells(row)).toEqual(['Caller not assigned', '30', '4', '25', '20', '80%']);
+      expect(row.className).toContain('text-muted');
+      expect(row.querySelector('[data-bar="fill"]')).toBeNull();
+      const fill = within(t).getByText('Caller').closest('tr')!.querySelector('[data-bar="fill"]') as HTMLElement;
+      expect(fill.style.width).toBe('100%'); // scaled to 29.2, not 80
+      expect(fill.getAttribute('data-tone')).toBe('same');
+    });
+
     it('an Unknown group is muted, with no bar and no say in the bar scale', async () => {
       show();
       const t = await table('By job area');
@@ -410,27 +420,6 @@ describe('InterviewStatsTab', () => {
     });
   });
 
-  it('Depth and speed: four blocks; a missing median shows — with a note', async () => {
-    show();
-    const box = within(await screen.findByRole('region', { name: 'Depth and speed' }));
-    expect(box.getByText('Rounds until it ended').nextElementSibling!.textContent).toBe('1.17');
-    expect(box.getByText('185 ended interviews · 89% ended after the first round')).toBeTruthy();
-    expect(within(box.getByRole('table', { name: 'Ended after' })).getAllByRole('row').map(cells))
-      .toEqual([['1 round', '', '164'], ['2 rounds', '', '13'], ['3 or more', '', '8']]);
-    expect(box.getByText('Days between rounds').nextElementSibling!.textContent).toBe('6.5');
-    expect(box.getByText('Median, 56 next rounds')).toBeTruthy();
-    expect(box.getByText('Days until an answer').nextElementSibling!.textContent).toBe('—');
-    expect(box.getByText('Starts once result dates are saved').className).toContain('text-muted');
-  });
-
-  it('Depth and speed: days until an answer once result dates exist', async () => {
-    getInterviewsReport.mockResolvedValue({ ...report, depth: { ...report.depth, daysToAnswer: { median: 3, n: 12 } } });
-    show();
-    const box = within(await screen.findByRole('region', { name: 'Depth and speed' }));
-    expect(box.getByText('Days until an answer').nextElementSibling!.textContent).toBe('3');
-    expect(box.getByText('Median, 12 rounds with a result date')).toBeTruthy();
-  });
-
   it('Follow-ups table with its note', async () => {
     show();
     const t = await table('Follow-ups');
@@ -441,10 +430,11 @@ describe('InterviewStatsTab', () => {
     expect(screen.getByText('Fills in once the follow-up reminder is live: how many silent rounds got an answer after a follow-up.')).toBeTruthy();
   });
 
-  it('has no answer-score table', async () => {
+  it('has no answer-score table and no Depth and speed section', async () => {
     show();
-    await table('By stage');
+    await table('Follow-ups');
     expect(screen.queryByText(/answer score/i)).toBeNull();
+    expect(screen.queryByText(/Depth and speed|Rounds until it ended|Days until an answer|Days between rounds/)).toBeNull();
   });
 
   it('sections in the agreed order', async () => {
@@ -461,7 +451,6 @@ describe('InterviewStatsTab', () => {
       screen.getByRole('table', { name: 'Why rounds were rejected' }),
       screen.getByRole('table', { name: 'Why rounds were canceled' }),
       screen.getByRole('region', { name: 'Rescheduled' }),
-      screen.getByRole('region', { name: 'Depth and speed' }),
       screen.getByRole('heading', { name: 'What raises the pass rate' }),
       ...['By time of day', 'By who applied', 'By weekday', 'By resume score', 'By job area', 'By profile', 'By region']
         .map((name) => screen.getByRole('table', { name })),
