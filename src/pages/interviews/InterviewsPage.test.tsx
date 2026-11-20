@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   lookupUsers: vi.fn(),
   lookupAccounts: vi.fn(),
   listInterviews: vi.fn(),
+  getNeedsInput: vi.fn(),
   role: 'staff',
 }));
 
@@ -27,6 +28,7 @@ vi.mock('../../api/endpoints', async () => ({
   lookupUsers: mocks.lookupUsers,
   lookupAccounts: mocks.lookupAccounts,
   listInterviews: mocks.listInterviews,
+  getNeedsInput: mocks.getNeedsInput,
 }));
 
 vi.mock('../../auth/useAuth', () => ({
@@ -40,6 +42,7 @@ beforeEach(() => {
   mocks.lookupAccounts.mockResolvedValue({ accounts: [] });
   mocks.listInterviews.mockResolvedValue({ interviews: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } });
   mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 0 } });
+  mocks.getNeedsInput.mockResolvedValue({ items: [], counts: { result: 0, reason: 0 } });
 });
 afterEach(() => {
   cleanup();
@@ -251,6 +254,7 @@ describe('InterviewsPage caller rounds open in the pane', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Change time' }));
     const dialog = await screen.findByRole('dialog', { name: /Change time/ });
     fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2030-01-02' } });
+    fireEvent.change(within(dialog).getByLabelText(/Why was it rescheduled\?/), { target: { value: 'fix' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledTimes(1));
     const [id, roundId, body] = mocks.updateInterviewStage.mock.calls[0];
@@ -288,5 +292,137 @@ describe('InterviewsPage caller rounds open in the pane', () => {
     expect(screen.getByRole('dialog', { name: 'Acme Corp' })).toBeTruthy();
     fireEvent.keyDown(screen.getByRole('dialog', { name: 'Acme Corp' }), { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Acme Corp' })).toBeNull());
+  });
+});
+
+describe('Interviews page: Needs your input', () => {
+  const item = (over: Record<string, unknown> = {}) => ({
+    interviewId: 'iv1', roundId: 'r1', companyName: 'Acme Corp', profileName: 'John D', ownerId: 'me', ownerName: 'Maya Owner',
+    stage: 'tech1', status: 'completed', scheduledAt: '2026-11-10T15:00:00Z', need: 'result', ...over,
+  });
+  const reasonItem = item({ interviewId: 'iv2', roundId: 'r2', companyName: 'Globex', status: 'canceled', need: 'reason' });
+  const feed = (items: unknown[]) => ({
+    items,
+    counts: {
+      result: items.filter((i) => (i as { need: string }).need === 'result').length,
+      reason: items.filter((i) => (i as { need: string }).need === 'reason').length,
+    },
+  });
+
+  function renderPage(url = '/interviews') {
+    return render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <MemoryRouter initialEntries={[url]}>
+          <Routes>
+            <Route path="/interviews" element={<InterviewsPage view="list" />} />
+            <Route path="/interviews/callers" element={<InterviewsPage view="list" callers />} />
+          </Routes>
+        </MemoryRouter>
+      </SWRConfig>,
+    );
+  }
+  const section = () => screen.findByRole('region', { name: /Needs your input/ });
+
+  it('is hidden when nothing needs input', async () => {
+    renderPage();
+    await waitFor(() => expect(mocks.getNeedsInput).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.listInterviews).toHaveBeenCalled());
+    expect(screen.queryByText(/Needs your input/)).toBeNull();
+  });
+
+  it('shows the count and one row per round, with what is missing', async () => {
+    mocks.getNeedsInput.mockResolvedValue(feed([item(), reasonItem]));
+    renderPage();
+    const box = await section();
+    expect(within(box).getByRole('heading', { name: 'Needs your input (2)' })).toBeTruthy();
+    const rows = within(box).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Acme Corp');
+    expect(rows[0].textContent).toContain('John D');
+    expect(rows[0].textContent).toContain('Tech round 1');
+    expect(rows[0].textContent).toContain('Nov 10');
+    expect(within(rows[0]).getByText('No result yet')).toBeTruthy();
+    expect(within(rows[0]).getByRole('button', { name: 'Passed' })).toBeTruthy();
+    expect(within(rows[1]).getByText('Canceled, no reason')).toBeTruthy();
+    expect(within(rows[1]).queryByRole('button', { name: 'Passed' })).toBeNull();
+    // A normal user gets their own: no user is asked for, and the owner is not repeated on each row.
+    expect(mocks.getNeedsInput).toHaveBeenCalledWith(undefined);
+    expect(within(box).queryByText('Maya Owner')).toBeNull();
+  });
+
+  it('a result row saved as Rejected asks the reason, then leaves the list', async () => {
+    mocks.getNeedsInput.mockResolvedValueOnce(feed([item()]));
+    mocks.updateInterviewStage.mockResolvedValue({});
+    renderPage();
+    const box = await section();
+    fireEvent.click(within(box).getByRole('button', { name: 'Rejected' }));
+    const dialog = await screen.findByRole('dialog', { name: /Reject round · Acme Corp · Tech round 1/ });
+    const save = within(dialog).getByRole('button', { name: 'Save as Rejected' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(mocks.updateInterviewStage).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByLabelText(/Why was it rejected\?/), { target: { value: 'no_answer' } });
+    fireEvent.click(save);
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith(
+      'iv1', 'r1', { status: 'rejected', statusNote: '', statusReason: 'no_answer' },
+    ));
+    await waitFor(() => expect(screen.queryByText(/Needs your input/)).toBeNull());
+  });
+
+  it('a result row saved as Passed needs no reason', async () => {
+    mocks.getNeedsInput.mockResolvedValueOnce(feed([item()]));
+    mocks.updateInterviewStage.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(within(await section()).getByRole('button', { name: 'Passed' }));
+    const dialog = await screen.findByRole('dialog', { name: /Passed to next round · Acme Corp/ });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save as Passed' }));
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv1', 'r1', { status: 'passed', statusNote: '' }));
+  });
+
+  it('a reason row opens the reason dialog and sends only the reason, keeping the round status and note', async () => {
+    mocks.getNeedsInput.mockResolvedValueOnce(feed([reasonItem]));
+    mocks.updateInterviewStage.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(within(await section()).getByRole('button', { name: 'Add reason' }));
+    const dialog = await screen.findByRole('dialog', { name: /Globex · Tech round 1/ });
+    fireEvent.change(within(dialog).getByLabelText(/Why was it canceled\?/), { target: { value: 'company' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save as Canceled' }));
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv2', 'r2', { statusReason: 'company' }));
+    await waitFor(() => expect(screen.queryByText(/Needs your input/)).toBeNull());
+  });
+
+  it('backing out of the dialog saves nothing and keeps the row', async () => {
+    mocks.getNeedsInput.mockResolvedValue(feed([item()]));
+    renderPage();
+    fireEvent.click(within(await section()).getByRole('button', { name: 'Rejected' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: /Reject round/ })).getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Reject round/ })).toBeNull());
+    expect(mocks.updateInterviewStage).not.toHaveBeenCalled();
+    expect(within(await section()).getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('an admin sees the owner on each row, for the user picked in the filter', async () => {
+    mocks.role = 'admin';
+    mocks.lookupUsers.mockResolvedValue({ users: [{ _id: 't1', name: 'ben' }] });
+    mocks.getNeedsInput.mockResolvedValue(feed([item()]));
+    renderPage();
+    const box = await section();
+    expect(within(box).getByText('Maya Owner')).toBeTruthy();
+    expect(mocks.getNeedsInput.mock.calls.every(([u]) => u === 't1')).toBe(true);
+  });
+
+  it("an admin on All users asks for everyone's", async () => {
+    mocks.role = 'admin';
+    mocks.getNeedsInput.mockResolvedValue(feed([item()]));
+    renderPage('/interviews?user=all');
+    await section();
+    expect(mocks.getNeedsInput.mock.calls.every(([u]) => u === undefined)).toBe(true);
+  });
+
+  it('is not shown on Caller interviews', async () => {
+    mocks.getNeedsInput.mockResolvedValue(feed([item()]));
+    renderPage('/interviews/callers');
+    await waitFor(() => expect(mocks.listCallerRounds).toHaveBeenCalled());
+    expect(screen.queryByText(/Needs your input/)).toBeNull();
+    expect(mocks.getNeedsInput).not.toHaveBeenCalled();
   });
 });

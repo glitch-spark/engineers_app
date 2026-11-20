@@ -78,11 +78,13 @@ export default function InterviewsList({
     if (!tip) return;
     const body: api.InterviewStageInput = { status };
     if (statusNotePrompt(status)) {
-      const note = await askStatusNote(
-        status, `${iv.companyName || 'Interview'} · ${stageLabel(tip.stage)}`, tip.status === status ? tip.statusNote : '',
+      const same = tip.status === status;
+      const answer = await askStatusNote(
+        status, `${iv.companyName || 'Interview'} · ${stageLabel(tip.stage)}`, same ? tip.statusNote : '', same ? tip.statusReason : '',
       );
-      if (note === null) return;
-      body.statusNote = note;
+      if (!answer) return;
+      body.statusNote = answer.note;
+      if (answer.reason) body.statusReason = answer.reason;
     }
     try {
       await api.updateInterviewStage(iv._id, tip.id, body);

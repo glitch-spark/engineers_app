@@ -12,6 +12,7 @@ import { notify } from '../../lib/notify';
 import InterviewFilters from './InterviewFilters';
 import InterviewsCalendar from './InterviewsCalendar';
 import InterviewsList from './InterviewsList';
+import NeedsInput from './NeedsInput';
 import { useInterviewFilters } from './useInterviewFilters';
 import { legacyCallTarget } from '../../lib/interviewFilters';
 import ZoneSelect from '../../components/interview/ZoneSelect';
@@ -43,7 +44,7 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
   const [deleting, setDeleting] = useState(false);
 
   const refresh = () => mutate(
-    (key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list'].includes(key[0]),
+    (key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list', 'interviews-needs-input'].includes(key[0]),
   );
 
   // Dropping the deep-link param re-renders this page; only unmounting should discard a pending lookup.
@@ -126,6 +127,8 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
         )}
       </div>
 
+      {/* Self interviews only; waits for an admin's default user like the list below. */}
+      {!directory && !callers && !pending && <NeedsInput filterUser={filters.user} onSaved={refresh} />}
       {!directory && <InterviewFilters filters={filters} update={update} canClear={canClear} onClear={clear} callers={callers} />}
       {callers && !directory && <CallersLegend />}
 

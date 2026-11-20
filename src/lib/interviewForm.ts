@@ -2,7 +2,9 @@
 import type {
   AppliedByInput, AppliedByOption, CallerInput, InterviewStageEntry, NoMatchReason, ResumeLinkInput, RoundInput,
 } from '../api/endpoints';
-import { INTERVIEW_STAGE_ORDER, normalizeInterviewStatus, statusNotePrompt, type InterviewStatusValue } from './stageBadge';
+import {
+  INTERVIEW_STAGE_ORDER, JUST_FIXING_TIME, normalizeInterviewStatus, statusNotePrompt, statusReasonPrompt, type InterviewStatusValue,
+} from './stageBadge';
 import { browserZone, fromZoned, parseServerTime, zonedDateKey, zonedTime } from './interviewTimezone';
 
 export type InterviewFormMode = 'new' | 'editDetails' | 'addRound' | 'editRound';
@@ -82,6 +84,11 @@ export type RoundFormState = {
   note: string;
   /** The recruiter's reason (Canceled) or feedback (Passed / Rejected); sent only with those statuses. */
   statusNote: string;
+  /** Why it was canceled / rejected (a key from that status's list); '' = not picked, or an older round. */
+  statusReason: string;
+  /** Asked when an existing scheduled round's start changes: a reschedule key or JUST_FIXING_TIME; '' = not picked. */
+  rescheduleReason: string;
+  rescheduleNote: string;
   callerEnabled: boolean;
   /** The saved caller's name (shown when it is not on the caller list). */
   callerName: string;
@@ -120,6 +127,9 @@ export function blankRound(
     interviewerName: '',
     note: '',
     statusNote: '',
+    statusReason: '',
+    rescheduleReason: '',
+    rescheduleNote: '',
     callerEnabled: !!opts.callerEnabled,
     callerName: '',
     callerId: '',
@@ -146,6 +156,9 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     interviewerName: e.interviewerName || '',
     note: e.note || '',
     statusNote: e.statusNote || '',
+    statusReason: e.statusReason || '',
+    rescheduleReason: '',
+    rescheduleNote: '',
     callerEnabled: !!caller?.enabled,
     callerName: typedName,
     callerId,
@@ -153,6 +166,33 @@ export function roundFromEntry(e: InterviewStageEntry, tz: string = browserZone(
     callerMethod: caller?.method || '',
     callerMethodValue: caller?.methodValue || '',
   };
+}
+
+/** The picked reason when it belongs to the round's status; '' for a status that takes none or a key from another list. */
+function statusReasonOf(r: RoundFormState): string {
+  return statusReasonPrompt(r.status)?.options.some((o) => o.value === r.statusReason) ? r.statusReason : '';
+}
+
+/** True when `date` + `time` (read in `tz`) is a different minute than the saved start. */
+export function startMoved(scheduledAt: string | null | undefined, date: string, time: string, tz: string): boolean {
+  if (!scheduledAt || !date || !time) return false;
+  const was = Math.floor(parseServerTime(scheduledAt).getTime() / 60000);
+  const now = Math.floor(fromZoned(date, time, tz).getTime() / 60000);
+  return !isNaN(was) && !isNaN(now) && was !== now;
+}
+
+/**
+ * The form asks "Why was it rescheduled?": only for a saved round that is scheduled (and stays so) whose start
+ * changed. A new round, a held one, or one being canceled in the same save is not a reschedule.
+ */
+export function asksReschedule(entry: InterviewStageEntry | undefined, r: RoundFormState, tz: string = browserZone()): boolean {
+  if (!entry || normalizeInterviewStatus(entry.status) !== 'scheduled' || r.status !== 'scheduled') return false;
+  return startMoved(entry.scheduledAt, r.date, r.time || DEFAULT_START_TIME, tz);
+}
+
+/** What the round PATCH gets for the answer: nothing for "Just fixing the time" (the time is saved, no reschedule logged). */
+export function reschedulePayload(reason: string, note: string): { rescheduleReason?: string; rescheduleNote?: string } {
+  return reason && reason !== JUST_FIXING_TIME ? { rescheduleReason: reason, rescheduleNote: note.trim() } : {};
 }
 
 /** Date + time read in `tz` → UTC ISO; end = start + duration. */
@@ -176,6 +216,8 @@ export function roundPayload(r: RoundFormState, tz: string = browserZone()): Rou
     interviewerName: r.interviewerName.trim(),
     note: r.note,
     statusNote: statusNotePrompt(r.status) ? r.statusNote.trim() : '',
+    // Left out for a status that takes no reason: the server clears the saved one when the status changes.
+    ...(statusReasonOf(r) ? { statusReason: statusReasonOf(r) } : {}),
     ...(caller ? { caller } : {}),
   };
 }
@@ -212,6 +254,7 @@ export function missingFields(
     if (!round.stage) out.push('Stage');
     if (!round.date) out.push('Date');
     if (!round.time) out.push('Start time');
+    if (statusReasonPrompt(round.status) && !statusReasonOf(round)) out.push(`Reason it was ${round.status}`);
   }
   return out;
 }

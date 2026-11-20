@@ -8,7 +8,7 @@ import { CALLER_METHOD_OPTIONS } from '../../components/interview/types';
 import { callerRoundsQuery, type InterviewFilters } from '../../lib/interviewFilters';
 import { MessageSquareText } from 'lucide-react';
 import {
-  interviewStatusBadgeClass, interviewStatusLabel, normalizeInterviewStatus, stageBadgeClass, stageLabel, statusNoteLabel,
+  interviewStatusBadgeClass, interviewStatusLabel, normalizeInterviewStatus, stageBadgeClass, stageLabel, statusWhy,
 } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
@@ -85,11 +85,12 @@ export default function CallerRoundsList({
   const stageCell = (row: InterviewRoundRow) => <span className={`badge ${stageBadgeClass(row.stage)}`}>{stageLabel(row.stage)}</span>;
   const statusCell = (row: InterviewRoundRow) => {
     const s = normalizeInterviewStatus(row.status);
-    const note = row.statusNote?.trim();
+    const why = statusWhy(s, row.statusReason, row.statusNote);
+    const note = why && `${why.label}: ${why.text}`;
     return (
-      <span className={`badge ${interviewStatusBadgeClass(s)}`} title={note ? `${statusNoteLabel(s)}: ${note}` : undefined}>
+      <span className={`badge ${interviewStatusBadgeClass(s)}`} title={note || undefined}>
         {interviewStatusLabel(s)}
-        {note && <><MessageSquareText size={11} className="ml-1 inline" aria-hidden /><span className="sr-only">. {statusNoteLabel(s)}: {note}</span></>}
+        {note && <><MessageSquareText size={11} className="ml-1 inline" aria-hidden /><span className="sr-only">. {note}</span></>}
       </span>
     );
   };

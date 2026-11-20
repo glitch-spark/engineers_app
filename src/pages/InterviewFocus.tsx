@@ -30,7 +30,7 @@ import {
   normalizeInterviewStage,
   stageBadgeClass,
   stageLabel,
-  statusNoteLabel,
+  statusWhy,
 } from '../lib/stageBadge';
 import ThemeToggle from '../components/ThemeToggle';
 import { formatScheduledDate } from '../components/interview/format';
@@ -478,6 +478,7 @@ function StageWorkspace({
   const { tz } = useInterviewTimezone();
   const [note, setNote] = useState(entry.note ?? '');
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const why = statusWhy(entry.status, entry.statusReason, entry.statusNote);
 
   const pending = useRef<{ note?: string }>({});
   const timer = useRef<number | null>(null);
@@ -536,9 +537,9 @@ function StageWorkspace({
               {interviewStatusLabel(entry.status)}
             </span>
           )}
-          {entry.statusNote?.trim() && (
+          {why && (
             <p className="basis-full whitespace-pre-wrap text-sm text-body">
-              <span className="font-medium text-strong">{statusNoteLabel(entry.status)}:</span> {entry.statusNote}
+              <span className="font-medium text-strong">{why.label}:</span> {why.text}
             </p>
           )}
         </div>
