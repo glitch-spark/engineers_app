@@ -4,6 +4,7 @@ import {
   customError,
   isoDay,
   presetOptions,
+  SINCE_OCT6,
   toStatsParams,
   type DatePreset,
   type DateRange,
@@ -153,6 +154,7 @@ export function StatsFilterBar({ f, before, viewing, viewingSubject, children }:
         presets={f.presets}
         allowFuture={false}
         today={f.today}
+        min={f.tab === 'conversion' ? SINCE_OCT6 : undefined}
       />
       {children}
     </FilterBar>

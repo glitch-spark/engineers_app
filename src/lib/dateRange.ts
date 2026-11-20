@@ -26,7 +26,7 @@ export type DateRange = { from: string; to: string };
 
 const DAY_MS = 86_400_000;
 /** First day of the Conversion tab's data (the backend's DATA_START). */
-const SINCE_OCT6 = '2026-10-06';
+export const SINCE_OCT6 = '2026-10-06';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 

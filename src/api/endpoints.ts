@@ -3329,9 +3329,31 @@ export interface ConversionGroup {
   fewReason?: 'matured' | 'expected' | null;
   /** Only the by-site "other" group: the sites inside it (top 50), how many more there are, and the total. */
   members?: ConversionGroup[]; moreMembers?: number; memberCount?: number;
+  /** ★ the table's best group / ⚠ its weakest (backend evidence rule); never on `few` groups or catch-alls. */
+  mark?: 'best' | 'weak' | null;
 }
+type CardRank = { rank: number | null; of: number | null };
+/** Conversion top cards, Everyone and coverage. Whole team: rank / of / vsMedian are null (team totals). Bids are Plans +
+ * Bid Track; interviews are interviews started in the period. vsMedian is a fraction (0.12 = 12% above). */
+export interface ConversionSummary {
+  cards: {
+    bids: CardRank & { value: number; self: number; bidder: number; median: number | null; vsMedian: number | null };
+    interviews: CardRank & { value: number; rounds: number; median: number | null; vsMedian: number | null };
+    /** rank null with `of` set: under 30 bids, not ranked. */
+    per100: CardRank & { value: number | null; teamRate: number | null };
+  };
+  everyone: {
+    userId: string; name: string; bids: number; interviews: number; per100: number | null; isSubject: boolean;
+    ranks: { bids: number | null; interviews: number | null; per100: number | null };
+  }[];
+  coverage: { rows: number; bids: number; matched: number; interviews: number };
+}
+export interface ConversionFinding { kind: 'best' | 'weak' | 'gap' | 'none'; text: string; evidence: Record<string, unknown> }
 export interface ConversionReport {
   label: string; startClamped: boolean; scope: ConversionScope;
+  subject?: { userId: string; name: string };
+  summary?: ConversionSummary;
+  findings?: ConversionFinding[];
   window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
   totals: { bids: number; matured: number; interviews: number; interviewsAll: number; interviewOnly: number; inPlay: number; untied: number; rate: number | null };
   /** The team's interviews per 100 matured bids (one decimal); null with no team baseline. */

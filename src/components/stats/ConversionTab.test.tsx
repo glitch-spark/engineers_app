@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SWRConfig } from 'swr';
-import type { ConversionGroup, ConversionReport, StatsView } from '../../api/endpoints';
+import type { ConversionFinding, ConversionGroup, ConversionReport, ConversionSummary } from '../../api/endpoints';
 import ConversionTab from './ConversionTab';
 
 const getStatsView = vi.fn();
@@ -32,15 +32,38 @@ vi.mock('../../lib/useFirstTeamMember', async (orig) => ({
 let search = '';
 const Probe = () => { search = useLocation().search; return null; };
 
-const view: StatsView = {
-  tab: 'bids', label: 'Bids', subject: { userId: 'me', name: 'Me' },
-  headline: [{ key: 'bids', label: 'Your bids', value: 519, format: 'count', team: null, rank: 1, of: 2, vsMedian: null, higherIsBetter: true, note: '' }],
-  tips: [], everyone: { rowKind: 'person', metric: 'bids', rows: [] }, trend: null, notEnoughData: false, definitions: [],
-};
 const g = (key: string, label: string, over: Partial<ConversionGroup> = {}): ConversionGroup =>
   ({ key, label, bids: 100, matured: 60, interviews: 1, rate: 1.7, few: false, ...over });
+const person = (userId: string, name: string, bids: number, interviews: number, per100: number | null, ranks: [number | null, number | null, number | null], isSubject = false) =>
+  ({ userId, name, bids, interviews, per100, isSubject, ranks: { bids: ranks[0], interviews: ranks[1], per100: ranks[2] } });
+const everyone = [
+  person('u1', 'Puma', 3686, 47, 1.3, [2, 1, 2]),
+  person('me', 'Nicholas', 3917, 41, 1.4, [1, 2, 1], true),
+  person('u3', 'Justin', 12, 3, null, [3, 3, null]),
+];
+const meSummary: ConversionSummary = {
+  cards: {
+    bids: { value: 3917, self: 1497, bidder: 2420, rank: 1, of: 6, median: 3504, vsMedian: 0.12 },
+    interviews: { value: 41, rounds: 63, rank: 2, of: 6, median: 32, vsMedian: 0.28 },
+    per100: { value: 1.0, rank: 3, of: 6, teamRate: 1.2 },
+  },
+  everyone, coverage: { rows: 2594, bids: 3917, matched: 38, interviews: 41 },
+};
+const teamSummary: ConversionSummary = {
+  cards: {
+    bids: { value: 42458, self: 20000, bidder: 22458, rank: null, of: null, median: 3504, vsMedian: null },
+    interviews: { value: 233, rounds: 300, rank: null, of: null, median: 32, vsMedian: null },
+    per100: { value: 0.5, rank: null, of: null, teamRate: 0.5 },
+  },
+  everyone, coverage: { rows: 40000, bids: 42458, matched: 200, interviews: 233 },
+};
+const findings: ConversionFinding[] = [
+  { kind: 'best', text: '80+ converts best for resume score: 1.5% (27 interviews from 1,800 matured bids) vs 0.6% across all matured bids.', evidence: {} },
+  { kind: 'weak', text: 'Backend: 0 interviews from 791 matured bids — the team rate would give about 5.', evidence: {} },
+];
 const report: ConversionReport = {
-  label: 'Oct 6 – Nov 19, 2026', startClamped: true, scope: 'me',
+  label: 'Oct 6 – Nov 19, 2026', startClamped: false, scope: 'me', subject: { userId: 'me', name: 'Nicholas' },
+  summary: meSummary, findings, teamRate: 1.2,
   window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true },
   totals: { bids: 9840, matured: 6120, interviews: 41, interviewsAll: 44, interviewOnly: 0, inPlay: 3720, rate: 0.7, untied: 0 },
   byWho: [g('self', 'Self'), g('bidder', 'Bidder')],
@@ -58,9 +81,9 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 10, 19, 12, 0, 0));
   role = 'staff';
-  getStatsView.mockReset(); getStatsView.mockResolvedValue(view);
+  getStatsView.mockReset();
   getConversion.mockReset(); getConversion.mockImplementation((p: { scope: string }) => Promise.resolve(
-    p.scope === 'team' ? { ...report, scope: 'team', byBidder: undefined } : { ...report, scope: p.scope }));
+    p.scope === 'team' ? { ...report, scope: 'team', byBidder: undefined, summary: teamSummary } : { ...report, scope: p.scope }));
   getChanges.mockReset(); getChanges.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, profiles: [] });
   getTiming.mockReset(); getTiming.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, timezone: 'UTC', window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, weekday: [], hours: [] });
   getProfileReport.mockReset(); getProfileReport.mockResolvedValue({ label: 'L', subject: { userId: 'me', name: 'Me' }, window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true }, coverage: { rows: 0, headerBids: null, noLink: 0, unmatchedInterviews: null }, team: { per100: null, medianDays: null, profiles: 0 }, profiles: [] });
@@ -95,11 +118,11 @@ describe('ConversionTab', () => {
       expect(screen.getByRole('table', { name: t })).toBeTruthy();
     }
     const site = screen.getByRole('table', { name: 'By job site' });
-    expect(within(site).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Group', 'Bids', 'Matured', 'Interviews', 'Rate']);
+    expect(within(site).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Group', 'Bids', 'Matured', 'Interviews', 'Rate (│ = team)']);
     expect(within(site).getByText('1.7%')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'By resume score' })).getByText('—')).toBeTruthy();
-    expect(screen.getByText('Bids counted from Plans and Bid Track, all profiles.')).toBeTruthy();
-    expect((await screen.findAllByText('Your bids')).length).toBeGreaterThan(0); // header strip
+    expect(getStatsView).not.toHaveBeenCalled(); // the old StatsFrame bids strip is gone
+    expect(screen.queryByText('Bids counted from Plans and Bid Track, all profiles.')).toBeNull();
     expect(await screen.findByText('Your profiles')).toBeTruthy();
     expect(screen.getByText('What to change')).toBeTruthy();
     expect(await screen.findByText('When to bid')).toBeTruthy();
@@ -154,7 +177,6 @@ describe('ConversionTab', () => {
     show();
     await waitFor(() => expect(getConversion).toHaveBeenCalled());
     expect(getConversion).toHaveBeenCalledWith(expect.objectContaining({ period: 'custom', date: '2026-10-06', to: '2026-11-19', region: 'all', scope: 'team' }));
-    expect(getStatsView).toHaveBeenCalledWith('bids', expect.objectContaining({ period: 'custom', date: '2026-10-06', to: '2026-11-19' }));
     expect((screen.getByLabelText('Date range') as HTMLSelectElement).value).toBe('since_oct6');
     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
   });
@@ -174,7 +196,6 @@ describe('ConversionTab', () => {
     show('/statistics?user=u7&scope=me');
     await waitFor(() => expect(getTiming).toHaveBeenCalled());
     for (const fn of [getConversion, getProfileReport, getChanges, getTiming]) expect(fn).toHaveBeenCalledWith(expect.objectContaining({ user: 'u7' }));
-    expect(getStatsView).toHaveBeenCalledWith('bids', expect.objectContaining({ user: 'u7' }));
     cleanup(); role = 'staff'; getConversion.mockClear();
     show('/statistics?user=u7');
     await waitFor(() => expect(getConversion).toHaveBeenCalled());
@@ -195,5 +216,145 @@ describe('ConversionTab', () => {
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Show last month' }));
     await waitFor(() => expect(search).toContain('range=last_month'));
+  });
+  describe('redesign', () => {
+    const names = () => within(screen.getByRole('table', { name: 'Everyone' })).getAllByRole('row').slice(1)
+      .map((r) => (r as HTMLTableRowElement).cells[1].textContent);
+
+    it('All my profiles: cards show the subject with rank, % vs team median and basis lines', async () => {
+      show('/statistics?scope=me');
+      const cards = await screen.findByRole('region', { name: 'Your numbers' });
+      const c = within(cards);
+      expect(c.getByText('3,917')).toBeTruthy();
+      expect(c.getByText('#1 of 6')).toBeTruthy();
+      expect(c.getByText('▲ 12% above team median (3,504)')).toBeTruthy();
+      expect(c.getByText('Self 1,497 · bidder 2,420')).toBeTruthy();
+      expect(c.getByText('#2 of 6')).toBeTruthy();
+      expect(c.getByText('▲ 28% above team median (32)')).toBeTruthy();
+      expect(c.getByText('Interviews started in the period · 63 rounds held')).toBeTruthy();
+      expect(c.getByText('Interviews per 100 bids')).toBeTruthy();
+      expect(c.getByText('1.0')).toBeTruthy();
+      expect(c.getByText('#3 of 6')).toBeTruthy();
+      expect(c.getByText('▼ team 1.2')).toBeTruthy();
+      expect(c.getByText('41 interviews from 3,917 bids')).toBeTruthy();
+    });
+
+    it('per 100 under 30 bids reads "not ranked"', async () => {
+      getConversion.mockResolvedValue({ ...report, summary: { ...meSummary, cards: { ...meSummary.cards, per100: { value: 25, rank: null, of: 4, teamRate: 1.2 } } } });
+      show('/statistics?scope=me');
+      expect(await screen.findByText('not ranked (under 30 bids)')).toBeTruthy();
+    });
+
+    it('Whole team: cards show team totals, no rank, the median per person', async () => {
+      show('/statistics');
+      const c = within(await screen.findByRole('region', { name: 'Your numbers' }));
+      expect(c.getByText('42,458')).toBeTruthy();
+      expect(c.getByText('233')).toBeTruthy();
+      expect(c.getByText('median per person 3,504')).toBeTruthy();
+      expect(c.getByText('median per person 32')).toBeTruthy();
+      expect(c.queryByText(/^#/)).toBeNull();
+      expect(c.getByText('233 interviews from 42,458 bids')).toBeTruthy();
+    });
+
+    it('Everyone: Interviews by default, the switch re-sorts by rank (nulls last), subject highlighted', async () => {
+      show('/statistics?scope=me');
+      await screen.findByRole('table', { name: 'Everyone' });
+      expect(screen.getByRole('button', { name: 'Interviews' }).getAttribute('aria-pressed')).toBe('true');
+      expect(names()).toEqual(['Puma', 'Nicholas', 'Justin']);
+      fireEvent.click(screen.getByRole('button', { name: 'Bids' }));
+      expect(names()).toEqual(['Nicholas', 'Puma', 'Justin']);
+      fireEvent.click(screen.getByRole('button', { name: 'Per 100 bids' }));
+      expect(names()).toEqual(['Nicholas', 'Puma', 'Justin']);
+      const justin = within(screen.getByRole('table', { name: 'Everyone' })).getAllByRole('row')[3] as HTMLTableRowElement;
+      expect([...justin.cells].map((td) => td.textContent)).toEqual(['—', 'Justin', '', '12', '3', '—']);
+      const subject = screen.getByText('Nicholas').closest('tr')!;
+      expect(subject.getAttribute('aria-current')).toBe('true');
+      expect(screen.queryByRole('button', { name: 'Puma' })).toBeNull(); // staff can't switch person
+    });
+
+    it('Everyone: an admin clicking a name views that person (scope me)', async () => {
+      role = 'admin';
+      show('/statistics');
+      fireEvent.click(await screen.findByRole('button', { name: 'Puma' }));
+      expect(search).toContain('user=u1');
+      expect(search).toContain('scope=me');
+    });
+
+    it('Key findings render ★ / ⚠ and the none line muted', async () => {
+      show();
+      const box = within(await screen.findByRole('region', { name: 'Key findings' }));
+      expect(box.getByText(findings[0].text).parentElement!.textContent).toBe(`★ ${findings[0].text}`);
+      expect(box.getByText(findings[1].text).parentElement!.textContent).toBe(`⚠ ${findings[1].text}`);
+      cleanup();
+      getConversion.mockResolvedValue({ ...report, findings: [{ kind: 'none', text: 'No clear pattern yet in this period — try a longer date range.', evidence: {} }] });
+      show();
+      const none = await screen.findByText('No clear pattern yet in this period — try a longer date range.');
+      expect(none.className).toContain('text-muted');
+      expect(none.textContent).not.toMatch(/[★⚠]/);
+    });
+
+    it('coverage line', async () => {
+      show('/statistics?scope=me');
+      const line = await screen.findByText(/^Breakdowns below use job-level data/);
+      expect(line.textContent).toBe('Breakdowns below use job-level data: they cover 2,594 of 3,917 bids and 38 of 41 interviews.');
+    });
+
+    it('sections in spec order', async () => {
+      show('/statistics?scope=me');
+      await screen.findByText('When to bid');
+      await screen.findByText('Your profiles');
+      const order = [
+        screen.getByRole('group', { name: 'Filters' }),
+        screen.getByRole('region', { name: 'Your numbers' }),
+        screen.getByRole('table', { name: 'Everyone' }),
+        screen.getByRole('region', { name: 'Key findings' }),
+        screen.getByText(/^Breakdowns below use job-level data/),
+        screen.getByRole('table', { name: 'Self vs bidder' }),
+        screen.getByText('What to change'),
+        screen.getByText('Your profiles'),
+        screen.getByText('When to bid'),
+      ];
+      for (let i = 1; i < order.length; i++) {
+        expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+    });
+  });
+
+  describe('date range guidance', () => {
+    const SHORT = 'Short period — rates can swing a lot. For reliable numbers, use Since Oct 6 or a range of a month or more.';
+
+    it('hint under the date range; no short note for Since Oct 6', async () => {
+      show();
+      expect(await screen.findByText('Data starts Oct 6, 2026 · pick a month or more for reliable numbers.')).toBeTruthy();
+      await screen.findByRole('table', { name: 'Everyone' });
+      expect(screen.queryByText(SHORT)).toBeNull();
+      expect(screen.queryByText('Data starts Oct 6 — showing Oct 6 onward.')).toBeNull();
+    });
+
+    it('custom range pickers start at 2026-10-06', async () => {
+      show('/statistics?range=custom&from=2026-10-10&to=2026-11-15');
+      expect((await screen.findByLabelText('From') as HTMLInputElement).min).toBe('2026-10-06');
+      expect((screen.getByLabelText('To') as HTMLInputElement).min).toBe('2026-10-10');
+    });
+
+    it('clamped note when the range starts before Oct 6', async () => {
+      getConversion.mockResolvedValue({ ...report, startClamped: true });
+      show('/statistics?range=last_month');
+      expect(await screen.findByText('Data starts Oct 6 — showing Oct 6 onward.')).toBeTruthy();
+    });
+
+    it('short-period note for a 2-week range; its buttons set the range', async () => {
+      show('/statistics?range=custom&from=2026-11-01&to=2026-11-14');
+      expect(await screen.findByText(SHORT)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Since Oct 6' }));
+      await waitFor(() => expect(search).not.toContain('range='));
+      expect(search).not.toContain('from=');
+      await waitFor(() => expect(screen.queryByText(SHORT)).toBeNull());
+      cleanup();
+      show('/statistics?range=custom&from=2026-11-01&to=2026-11-14');
+      fireEvent.click(await screen.findByRole('button', { name: 'Last month' }));
+      await waitFor(() => expect(search).toContain('range=last_month'));
+      expect(search).not.toContain('from=');
+    });
   });
 });

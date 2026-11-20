@@ -66,6 +66,7 @@ export default function DateRangeFilter<P extends string = DatePreset>({
   canStepBack,
   rangeFor,
   label = 'Date range',
+  min,
 }: {
   value: DateRangeValue<P>;
   onChange: (value: DateRangeValue<P>) => void;
@@ -86,6 +87,8 @@ export default function DateRangeFilter<P extends string = DatePreset>({
   rangeFor?: (preset: P) => DateRange | null;
   /** The label above the dropdown. */
   label?: string;
+  /** `YYYY-MM-DD`: the earliest day the custom pickers offer (Conversion's data start). */
+  min?: string;
 }) {
   const id = useId();
   const now = today ?? localToday();
@@ -220,6 +223,7 @@ export default function DateRangeFilter<P extends string = DatePreset>({
               type="date"
               className="input text-sm"
               value={validFrom}
+              min={min}
               max={fromMax}
               onChange={(e) => edit({ from: e.target.value })}
             />
@@ -233,7 +237,7 @@ export default function DateRangeFilter<P extends string = DatePreset>({
               type="date"
               className="input text-sm"
               value={validTo}
-              min={validFrom || undefined}
+              min={validFrom || min}
               max={dateMax}
               onChange={(e) => edit({ to: e.target.value })}
             />

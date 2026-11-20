@@ -17,32 +17,57 @@ function FewWarning({ tip, open, onToggle }: { tip: string; open: boolean; onTog
   );
 }
 
-const HEAD = ['Group', 'Bids', 'Matured', 'Interviews', 'Rate'];
+const MARK = {
+  best: <span role="img" aria-label="Best group" title="Best group" className="ml-1 text-yellow-600 dark:text-yellow-400">★</span>,
+  weak: <span role="img" aria-label="Weakest group" title="Weakest group" className="ml-1 text-amber-600 dark:text-amber-400">⚠</span>,
+};
+const pctOf = (v: number, max: number) => `${+((v / max) * 100).toFixed(2)}%`;
 
-/** One Conversion breakdown: per group, bids, matured bids, interviews and the rate (interviews per 100 matured). */
+/** Rate bar: width relative to the table's max rate, a thin tick at the team rate. */
+function RateBar({ rate, max, teamRate }: { rate: number; max: number; teamRate?: number | null }) {
+  return (
+    <span aria-hidden className="relative inline-block h-2 w-16 shrink-0 rounded bg-zinc-100 sm:w-24 dark:bg-zinc-800">
+      <span data-bar="fill" className="absolute inset-y-0 left-0 rounded bg-blue-500 dark:bg-blue-400" style={{ width: pctOf(Math.min(rate, max), max) }} />
+      {teamRate != null && (
+        <span data-bar="team" className="absolute -top-[3px] h-3.5 w-0.5 bg-zinc-900 dark:bg-zinc-100" style={{ left: pctOf(teamRate, max) }} />
+      )}
+    </span>
+  );
+}
+
+/** One Conversion breakdown: per group, bids, matured bids, interviews and the rate (interviews per 100 matured) with a
+ * bar against the team rate; ★ / ⚠ from the backend's `mark`, `few` rows muted. */
 export default function ConversionTable({ title, rows, teamRate, note }: { title: string; rows: ConversionGroup[]; teamRate?: number | null; note?: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const head = ['Group', 'Bids', 'Matured', 'Interviews', teamRate != null ? 'Rate (│ = team)' : 'Rate'];
+  const max = Math.max(teamRate ?? 0, ...rows.map((g) => g.rate ?? 0)) || 1;
   const dataRow = (g: ConversionGroup, member = false) => {
     const id = member ? `m:${g.key}` : g.label;
     return (
       <Fragment>
-        <tr className={`border-t border-zinc-200 dark:border-zinc-800${member ? ' text-muted' : ''}`}>
+        <tr className={`border-t border-zinc-200 dark:border-zinc-800${member || g.few ? ' text-muted' : ''}`}>
           <td className={`py-1 pr-3${member ? ' pl-4' : ''}`}>
             {g.members ? (
               <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
                 {expanded ? '▾' : '▸'} {g.label} ({g.memberCount ?? g.members.length} sites)
               </button>
             ) : g.label}
+            {g.mark && MARK[g.mark]}
           </td>
           <td className="py-1 pr-3 tabular-nums">{g.bids.toLocaleString()}</td>
           <td className="py-1 pr-3 tabular-nums">{g.matured.toLocaleString()}</td>
           <td className="py-1 pr-3 tabular-nums">{g.interviews.toLocaleString()}</td>
           <td className="whitespace-nowrap py-1 tabular-nums">
-            {g.rate == null ? '—' : `${g.rate}%`}
-            {g.few && g.rate != null && (
-              <FewWarning tip={tipFor(g, teamRate)} open={open === id} onToggle={() => setOpen(open === id ? null : id)} />
-            )}
+            <span className="flex items-center gap-2">
+              {g.rate != null && <RateBar rate={g.rate} max={max} teamRate={teamRate} />}
+              <span>
+                {g.rate == null ? '—' : `${g.rate}%`}
+                {g.few && g.rate != null && (
+                  <FewWarning tip={tipFor(g, teamRate)} open={open === id} onToggle={() => setOpen(open === id ? null : id)} />
+                )}
+              </span>
+            </span>
           </td>
         </tr>
         {g.few && open === id && (
@@ -57,7 +82,7 @@ export default function ConversionTable({ title, rows, teamRate, note }: { title
       <div className="mt-1 overflow-x-auto">
         <table aria-label={title} className="w-full text-left text-sm">
           <thead>
-            <tr className="text-xs text-muted">{HEAD.map((h) => <th key={h} className="pb-1 pr-3 font-normal">{h}</th>)}</tr>
+            <tr className="text-xs text-muted">{head.map((h) => <th key={h} className="pb-1 pr-3 font-normal">{h}</th>)}</tr>
           </thead>
           <tbody>
             {rows.map((g) => (
