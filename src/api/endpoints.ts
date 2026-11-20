@@ -946,6 +946,10 @@ export interface InterviewStageEntry {
   caller?: InterviewCaller | null;
   /** Caller rounds: the caller is lined up. Cleared when the round's time changes. */
   confirmed?: boolean;
+  /** Each time the owner followed up with the company after the round, oldest first. Missing on older rounds. */
+  followUps?: { at: string; by: string | null }[] | null;
+  /** When the round got its current status. Missing on rounds from before the field existed. */
+  statusAt?: string | null;
 }
 
 /** One logged time change of a round. */
@@ -964,7 +968,11 @@ export interface InterviewReschedule {
  */
 export type InterviewStageInput = Partial<RoundInput> & { rescheduleReason?: string; rescheduleNote?: string };
 
-/** One round that needs something from its owner: the result of a held round, or why it was canceled / rejected. */
+/**
+ * One round that needs something from its owner. `need`: how a round whose time has passed went (`outcome`), a
+ * follow-up with the company a week after a held round (`follow_up`), whether that follow-up was answered
+ * (`heard_back`), or why a round was canceled / rejected (`reason`).
+ */
 export interface NeedsInputItem {
   interviewId: string;
   roundId: string;
@@ -975,14 +983,22 @@ export interface NeedsInputItem {
   stage: string;
   status: string;
   scheduledAt: string;
-  need: 'result' | 'reason';
+  /** Not sent by every server version; without it the row shows the start time. */
+  endsAt?: string | null;
+  need: 'outcome' | 'follow_up' | 'heard_back' | 'reason';
+  /** `heard_back` only: when the owner followed up. */
+  followedUpAt?: string | null;
 }
 
 /** A normal user gets their own rounds; an admin everyone's, or one person's with `userId`. */
 export const getNeedsInput = (userId?: string) =>
-  apiFetch<{ items: NeedsInputItem[]; counts: { result: number; reason: number } }>(
+  apiFetch<{ items: NeedsInputItem[]; counts: Record<NeedsInputItem['need'], number> }>(
     `/interviews/needs-input${qs({ userId })}`,
   );
+
+/** Records "I followed up with the company" on a completed round. */
+export const followUpInterviewStage = (id: string, stageId: string) =>
+  apiFetch<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}/follow-up`, { method: 'POST' });
 
 /** `previousStatusNote`: the caller's feedback on the previous round, saved when it is marked passed. */
 export const addInterviewStage = (

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   lookupAccounts: vi.fn(),
   listInterviews: vi.fn(),
   getNeedsInput: vi.fn(),
+  followUpInterviewStage: vi.fn(),
   role: 'staff',
 }));
 
@@ -29,6 +30,7 @@ vi.mock('../../api/endpoints', async () => ({
   lookupAccounts: mocks.lookupAccounts,
   listInterviews: mocks.listInterviews,
   getNeedsInput: mocks.getNeedsInput,
+  followUpInterviewStage: mocks.followUpInterviewStage,
 }));
 
 vi.mock('../../auth/useAuth', () => ({
@@ -42,7 +44,7 @@ beforeEach(() => {
   mocks.lookupAccounts.mockResolvedValue({ accounts: [] });
   mocks.listInterviews.mockResolvedValue({ interviews: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } });
   mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 0 } });
-  mocks.getNeedsInput.mockResolvedValue({ items: [], counts: { result: 0, reason: 0 } });
+  mocks.getNeedsInput.mockResolvedValue({ items: [], counts: { outcome: 0, follow_up: 0, heard_back: 0, reason: 0 } });
 });
 afterEach(() => {
   cleanup();
@@ -296,17 +298,25 @@ describe('InterviewsPage caller rounds open in the pane', () => {
 });
 
 describe('Interviews page: Needs your input', () => {
+  const DAY = 86400000;
   const item = (over: Record<string, unknown> = {}) => ({
     interviewId: 'iv1', roundId: 'r1', companyName: 'Acme Corp', profileName: 'John D', ownerId: 'me', ownerName: 'Maya Owner',
-    stage: 'tech1', status: 'completed', scheduledAt: '2026-11-10T15:00:00Z', need: 'result', ...over,
+    stage: 'tech1', status: 'scheduled', scheduledAt: '2026-11-10T15:00:00Z', need: 'outcome', ...over,
   });
-  const reasonItem = item({ interviewId: 'iv2', roundId: 'r2', companyName: 'Globex', status: 'canceled', need: 'reason' });
+  const followUpItem = item({
+    interviewId: 'iv2', roundId: 'r2', companyName: 'Globex', status: 'completed', need: 'follow_up',
+    scheduledAt: new Date(Date.now() - 9 * DAY - 3600000).toISOString(),
+  });
+  const heardBackItem = item({
+    interviewId: 'iv3', roundId: 'r3', companyName: 'Initech', status: 'completed', need: 'heard_back',
+    scheduledAt: '2026-10-20T15:00:00Z', followedUpAt: '2026-11-06T12:00:00Z',
+  });
+  const reasonItem = item({ interviewId: 'iv4', roundId: 'r4', companyName: 'Umbrella', status: 'canceled', need: 'reason' });
   const feed = (items: unknown[]) => ({
     items,
-    counts: {
-      result: items.filter((i) => (i as { need: string }).need === 'result').length,
-      reason: items.filter((i) => (i as { need: string }).need === 'reason').length,
-    },
+    counts: Object.fromEntries(['outcome', 'follow_up', 'heard_back', 'reason'].map(
+      (need) => [need, items.filter((i) => (i as { need: string }).need === need).length],
+    )),
   });
 
   function renderPage(url = '/interviews') {
@@ -322,6 +332,8 @@ describe('Interviews page: Needs your input', () => {
     );
   }
   const section = () => screen.findByRole('region', { name: /Needs your input/ });
+  const buttons = (el: HTMLElement) => within(el).getAllByRole('button').map((b) => b.textContent);
+  const gone = () => waitFor(() => expect(screen.queryByText(/Needs your input/)).toBeNull());
 
   it('is hidden when nothing needs input', async () => {
     renderPage();
@@ -330,52 +342,183 @@ describe('Interviews page: Needs your input', () => {
     expect(screen.queryByText(/Needs your input/)).toBeNull();
   });
 
-  it('shows the count and one row per round, with what is missing', async () => {
-    mocks.getNeedsInput.mockResolvedValue(feed([item(), reasonItem]));
+  it('shows the total count and the four groups in order, each with its row text and buttons', async () => {
+    // Fed out of order: the headings follow the steps, not the feed.
+    mocks.getNeedsInput.mockResolvedValue(feed([reasonItem, heardBackItem, followUpItem, item()]));
     renderPage();
     const box = await section();
-    expect(within(box).getByRole('heading', { name: 'Needs your input (2)' })).toBeTruthy();
+    expect(within(box).getByRole('heading', { name: 'Needs your input (4)' })).toBeTruthy();
+    expect(within(box).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'How did it go?', 'Follow up with the company', 'Did you hear back?', 'Add the reason',
+    ]);
     const rows = within(box).getAllByRole('listitem');
-    expect(rows).toHaveLength(2);
-    expect(rows[0].textContent).toContain('Acme Corp');
-    expect(rows[0].textContent).toContain('John D');
-    expect(rows[0].textContent).toContain('Tech round 1');
-    expect(rows[0].textContent).toContain('Nov 10');
-    expect(within(rows[0]).getByText('No result yet')).toBeTruthy();
-    expect(within(rows[0]).getByRole('button', { name: 'Passed' })).toBeTruthy();
-    expect(within(rows[1]).getByText('Canceled, no reason')).toBeTruthy();
-    expect(within(rows[1]).queryByRole('button', { name: 'Passed' })).toBeNull();
+    expect(rows).toHaveLength(4);
+
+    for (const text of ['Acme Corp', 'John D', 'Tech round 1']) expect(rows[0].textContent).toContain(text);
+    expect(buttons(rows[0])).toEqual(['Completed', 'Passed', 'Rejected', 'Rescheduled', 'Canceled']);
+
+    expect(rows[1].textContent).toContain('Globex');
+    expect(within(rows[1]).getByText('No result for 9 days')).toBeTruthy();
+    expect(buttons(rows[1])).toEqual(['I followed up', 'Passed', 'Rejected']);
+
+    expect(rows[2].textContent).toContain('Initech');
+    expect(within(rows[2]).getByText('Followed up on Nov 6, no result yet')).toBeTruthy();
+    expect(buttons(rows[2])).toEqual(['No, close as rejected', 'Passed', 'Rejected']);
+
+    expect(rows[3].textContent).toContain('Umbrella');
+    expect(within(rows[3]).getByText('Canceled, no reason')).toBeTruthy();
+    expect(buttons(rows[3])).toEqual(['Add reason']);
+
     // A normal user gets their own: no user is asked for, and the owner is not repeated on each row.
     expect(mocks.getNeedsInput).toHaveBeenCalledWith(undefined);
     expect(within(box).queryByText('Maya Owner')).toBeNull();
   });
 
-  it('a result row saved as Rejected asks the reason, then leaves the list', async () => {
+  it('a group with no rows shows no heading', async () => {
+    mocks.getNeedsInput.mockResolvedValue(feed([followUpItem, reasonItem]));
+    renderPage();
+    const box = await section();
+    expect(within(box).getByRole('heading', { name: 'Needs your input (2)' })).toBeTruthy();
+    expect(within(box).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'Follow up with the company', 'Add the reason',
+    ]);
+  });
+
+  it('a "How did it go?" row says when the round ended, or when it started if the end is not known', async () => {
+    mocks.getNeedsInput.mockResolvedValue(feed([
+      item({ endsAt: '2026-11-10T16:00:00Z' }), item({ interviewId: 'iv9', roundId: 'r9' }),
+    ]));
+    renderPage();
+    const rows = within(await section()).getAllByRole('listitem');
+    expect(rows[0].textContent).toMatch(/ended \w+, Nov 10/);
+    expect(rows[1].textContent).toMatch(/started \w+, Nov 10/);
+  });
+
+  it('Completed saves the status at once and the row leaves the list', async () => {
     mocks.getNeedsInput.mockResolvedValueOnce(feed([item()]));
     mocks.updateInterviewStage.mockResolvedValue({});
     renderPage();
-    const box = await section();
-    fireEvent.click(within(box).getByRole('button', { name: 'Rejected' }));
-    const dialog = await screen.findByRole('dialog', { name: /Reject round · Acme Corp · Tech round 1/ });
-    const save = within(dialog).getByRole('button', { name: 'Save as Rejected' }) as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
-    expect(mocks.updateInterviewStage).not.toHaveBeenCalled();
-    fireEvent.change(within(dialog).getByLabelText(/Why was it rejected\?/), { target: { value: 'no_answer' } });
-    fireEvent.click(save);
-    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith(
-      'iv1', 'r1', { status: 'rejected', statusNote: '', statusReason: 'no_answer' },
-    ));
-    await waitFor(() => expect(screen.queryByText(/Needs your input/)).toBeNull());
+    fireEvent.click(within(await section()).getByRole('button', { name: 'Completed' }));
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv1', 'r1', { status: 'completed' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await gone();
   });
 
-  it('a result row saved as Passed needs no reason', async () => {
+  it.each([['outcome', item()], ['follow_up', followUpItem], ['heard_back', heardBackItem]])(
+    'Rejected on a %s row asks the reason before saving, then the row leaves the list',
+    async (_need, row) => {
+      mocks.getNeedsInput.mockResolvedValueOnce(feed([row]));
+      mocks.updateInterviewStage.mockResolvedValue({});
+      renderPage();
+      fireEvent.click(within(await section()).getByRole('button', { name: 'Rejected' }));
+      const dialog = await screen.findByRole('dialog', { name: /Reject round/ });
+      const save = within(dialog).getByRole('button', { name: 'Save as Rejected' }) as HTMLButtonElement;
+      expect(save.disabled).toBe(true);
+      fireEvent.click(save);
+      expect(mocks.updateInterviewStage).not.toHaveBeenCalled();
+      fireEvent.change(within(dialog).getByLabelText(/Why was it rejected\?/), { target: { value: 'experience' } });
+      fireEvent.click(save);
+      await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith(
+        row.interviewId, row.roundId, { status: 'rejected', statusNote: '', statusReason: 'experience' },
+      ));
+      await gone();
+    },
+  );
+
+  it('Canceled asks the reason before saving', async () => {
     mocks.getNeedsInput.mockResolvedValueOnce(feed([item()]));
+    mocks.updateInterviewStage.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(within(await section()).getByRole('button', { name: 'Canceled' }));
+    const dialog = await screen.findByRole('dialog', { name: /Cancel round/ });
+    const save = within(dialog).getByRole('button', { name: 'Save as Canceled' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText(/Why was it canceled\?/), { target: { value: 'company' } });
+    fireEvent.click(save);
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith(
+      'iv1', 'r1', { status: 'canceled', statusNote: '', statusReason: 'company' },
+    ));
+  });
+
+  it('Passed opens the optional feedback dialog and needs no reason', async () => {
+    mocks.getNeedsInput.mockResolvedValueOnce(feed([followUpItem]));
     mocks.updateInterviewStage.mockResolvedValue({});
     renderPage();
     fireEvent.click(within(await section()).getByRole('button', { name: 'Passed' }));
-    const dialog = await screen.findByRole('dialog', { name: /Passed to next round · Acme Corp/ });
+    const dialog = await screen.findByRole('dialog', { name: /Passed to next round · Globex/ });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save as Passed' }));
-    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv1', 'r1', { status: 'passed', statusNote: '' }));
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv2', 'r2', { status: 'passed', statusNote: '' }));
+  });
+
+  it('Rescheduled opens the Change time dialog and sends the new time with the reason', async () => {
+    mocks.getNeedsInput.mockResolvedValueOnce(feed([item()]));
+    mocks.updateInterviewStage.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(within(await section()).getByRole('button', { name: 'Rescheduled' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Change time · Tech round 1' });
+    expect((within(dialog).getByLabelText('Date') as HTMLInputElement).value).toMatch(/^2026-11-1[01]$/);
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-11-25' } });
+    const save = within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText(/Why was it rescheduled\?/), { target: { value: 'technical' } });
+    fireEvent.click(save);
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv1', 'r1', {
+      scheduledAt: expect.stringMatching(/^2026-11-2[456]T/), rescheduleReason: 'technical', rescheduleNote: '',
+    }));
+    expect(mocks.getInterview).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await gone();
+  });
+
+  it('"I followed up" records the follow-up and the row leaves the list', async () => {
+    mocks.getNeedsInput.mockResolvedValueOnce(feed([followUpItem]));
+    mocks.followUpInterviewStage.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(within(await section()).getByRole('button', { name: 'I followed up' }));
+    await waitFor(() => expect(mocks.followUpInterviewStage).toHaveBeenCalledWith('iv2', 'r2'));
+    expect(mocks.updateInterviewStage).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await gone();
+  });
+
+  it('"No, close as rejected" saves rejected with "No answer from the company" in one click', async () => {
+    mocks.getNeedsInput.mockResolvedValueOnce(feed([heardBackItem]));
+    mocks.updateInterviewStage.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(within(await section()).getByRole('button', { name: 'No, close as rejected' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith(
+      'iv3', 'r3', { status: 'rejected', statusReason: 'no_answer' },
+    ));
+    await gone();
+  });
+
+  it("a row's buttons are disabled while its save is in flight, the other rows stay usable", async () => {
+    mocks.getNeedsInput.mockResolvedValue(feed([item(), followUpItem]));
+    let done: (v: unknown) => void = () => {};
+    mocks.updateInterviewStage.mockReturnValue(new Promise((resolve) => { done = resolve; }));
+    renderPage();
+    const rows = within(await section()).getAllByRole('listitem');
+    const disabled = (el: HTMLElement) => within(el).getAllByRole('button').map((b) => (b as HTMLButtonElement).disabled);
+    fireEvent.click(within(rows[0]).getByRole('button', { name: 'Completed' }));
+    await waitFor(() => expect(disabled(rows[0])).toEqual([true, true, true, true, true]));
+    expect(disabled(rows[1])).toEqual([false, false, false]);
+    fireEvent.click(within(rows[0]).getByRole('button', { name: 'Completed' }));
+    expect(mocks.updateInterviewStage).toHaveBeenCalledTimes(1);
+    done({});
+    await waitFor(() => expect(disabled(within(screen.getByRole('region', { name: /Needs your input/ })).getAllByRole('listitem')[0]))
+      .toEqual([false, false, false, false, false]));
+  });
+
+  it('a failed save keeps the row and gives its buttons back', async () => {
+    mocks.getNeedsInput.mockResolvedValue(feed([followUpItem]));
+    mocks.followUpInterviewStage.mockRejectedValue(new Error('nope'));
+    renderPage();
+    const button = within(await section()).getByRole('button', { name: 'I followed up' }) as HTMLButtonElement;
+    fireEvent.click(button);
+    await waitFor(() => expect(mocks.followUpInterviewStage).toHaveBeenCalled());
+    await waitFor(() => expect(button.disabled).toBe(false));
+    expect(within(await section()).getAllByRole('listitem')).toHaveLength(1);
   });
 
   it('a reason row opens the reason dialog and sends only the reason, keeping the round status and note', async () => {
@@ -383,11 +526,11 @@ describe('Interviews page: Needs your input', () => {
     mocks.updateInterviewStage.mockResolvedValue({});
     renderPage();
     fireEvent.click(within(await section()).getByRole('button', { name: 'Add reason' }));
-    const dialog = await screen.findByRole('dialog', { name: /Globex · Tech round 1/ });
+    const dialog = await screen.findByRole('dialog', { name: /Umbrella · Tech round 1/ });
     fireEvent.change(within(dialog).getByLabelText(/Why was it canceled\?/), { target: { value: 'company' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save as Canceled' }));
-    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv2', 'r2', { statusReason: 'company' }));
-    await waitFor(() => expect(screen.queryByText(/Needs your input/)).toBeNull());
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv4', 'r4', { statusReason: 'company' }));
+    await gone();
   });
 
   it('backing out of the dialog saves nothing and keeps the row', async () => {
@@ -403,10 +546,10 @@ describe('Interviews page: Needs your input', () => {
   it('an admin sees the owner on each row, for the user picked in the filter', async () => {
     mocks.role = 'admin';
     mocks.lookupUsers.mockResolvedValue({ users: [{ _id: 't1', name: 'ben' }] });
-    mocks.getNeedsInput.mockResolvedValue(feed([item()]));
+    mocks.getNeedsInput.mockResolvedValue(feed([item(), followUpItem, heardBackItem, reasonItem]));
     renderPage();
     const box = await section();
-    expect(within(box).getByText('Maya Owner')).toBeTruthy();
+    expect(within(box).getAllByText('Maya Owner')).toHaveLength(4);
     expect(mocks.getNeedsInput.mock.calls.every(([u]) => u === 't1')).toBe(true);
   });
 

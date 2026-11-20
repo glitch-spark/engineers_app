@@ -22,7 +22,8 @@ export default function RescheduleDialog({
   onSaved,
 }: {
   open: boolean;
-  interview: Interview;
+  /** Only the id and the round are read, so a caller without the whole interview can pass just those. */
+  interview: Pick<Interview, '_id' | 'stageHistory'>;
   roundId: string;
   tz: string;
   onClose: () => void;
@@ -56,7 +57,7 @@ function RescheduleForm({
   onClose,
   onSaved,
 }: {
-  interview: Interview;
+  interview: Pick<Interview, '_id'>;
   roundId: string;
   scheduledAt?: string | null;
   scheduled: boolean;
