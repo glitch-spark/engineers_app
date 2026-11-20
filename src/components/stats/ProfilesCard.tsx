@@ -89,7 +89,6 @@ export default function ProfilesCard({ params, user, onShowLastMonth }: { params
         <h3 className="font-semibold">{own ? 'Your profiles' : `${data.subject.name}'s profiles`}</h3>
         <p className="text-xs text-muted">
           {`Bids made in ${data.label} that had ${w.matured_days}+ days to work ("matured"), what became of them, and how fast.`}
-          {w.thin && ` Not enough interviews yet to measure the team's response time, so ${w.matured_days} days is used.`}
         </p>
         {profiles.some((p) => p.bidsSelf + p.bidsBidder > 0) && profiles.every((p) => p.matured === 0) && (
           <NoMaturedNote days={w.matured_days} onShowLastMonth={onShowLastMonth} />

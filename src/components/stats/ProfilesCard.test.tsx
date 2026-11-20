@@ -119,11 +119,11 @@ describe('ProfilesCard', () => {
     expect(screen.queryByText(/team median/)).toBeNull();
   });
 
-  it('shows the thin-window note', async () => {
+  it('states the fixed matured days even when the window is thin', async () => {
     load(report({ window: { median: null, p90: 14, matured_days: 14, n: 14, thin: true } }));
     show();
-    expect(await screen.findByText(/Not enough interviews yet to measure the team's response time, so 14 days is used\./)).toBeTruthy();
-    expect(screen.getByText(/Bids made in May 3 – Nov 20, 2026 that had 14\+ days to work/)).toBeTruthy();
+    expect(await screen.findByText(/Bids made in May 3 – Nov 20, 2026 that had 14\+ days to work/)).toBeTruthy();
+    expect(screen.queryByText(/Not enough interviews yet/)).toBeNull();
   });
 
   it('shows the empty state', async () => {

@@ -42,7 +42,7 @@ const g = (key: string, label: string, over: Partial<ConversionGroup> = {}): Con
 const report: ConversionReport = {
   label: 'Oct 6 – Nov 19, 2026', startClamped: true, scope: 'me',
   window: { median: null, p90: 14, matured_days: 14, n: 0, thin: true },
-  totals: { bids: 9840, matured: 6120, interviews: 41, interviewsAll: 44, inPlay: 3720, rate: 0.7, untied: 0 },
+  totals: { bids: 9840, matured: 6120, interviews: 41, interviewsAll: 44, interviewOnly: 0, inPlay: 3720, rate: 0.7, untied: 0 },
   byWho: [g('self', 'Self'), g('bidder', 'Bidder')],
   byBidder: [g('self', 'Self'), g('b1', 'Ana', { matured: 12, rate: 8.3, few: true })],
   bySite: [g('lever', 'Lever')], byScore: [g('80', '80+', { rate: null, matured: 0 })], byArea: [g('be', 'Backend')], byAge: [g('new', 'Under 30 days')],
@@ -69,11 +69,17 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('ConversionTab', () => {
-  it('shows untied interviews and the interview-only note', async () => {
-    getConversion.mockResolvedValue({ ...report, totals: { ...report.totals, untied: 5 } });
+  it('shows untied interviews and the interview-only note with its counts', async () => {
+    getConversion.mockResolvedValue({ ...report, totals: { ...report.totals, untied: 5, interviewOnly: 20 } });
     show();
     expect(await screen.findByText(/0\.7% · 3,720 in play · 5 more interviews not tied to a bid$/)).toBeTruthy();
-    expect(screen.getByText('Includes applications known only from their interview (no tracked bid), so rates can read a little high.')).toBeTruthy();
+    expect(screen.getByText('20 of these 44 interviews are from applications known only from their interview (no tracked bid), so rates can read high.')).toBeTruthy();
+  });
+
+  it('has no interview-only note when none', async () => {
+    show();
+    await screen.findByText(/0\.7% · 3,720 in play/);
+    expect(screen.queryByText(/known only from their interview/)).toBeNull();
   });
 
   it('omits the untied part when untied is 0', async () => {
@@ -217,7 +223,7 @@ describe('ConversionTab', () => {
 
   it('empty clamped report message', async () => {
     getConversion.mockResolvedValue({ ...report, label: 'Sep 2026', startClamped: true,
-      totals: { bids: 0, matured: 0, interviews: 0, interviewsAll: 0, inPlay: 0, rate: null },
+      totals: { bids: 0, matured: 0, interviews: 0, interviewsAll: 0, interviewOnly: 0, inPlay: 0, rate: null },
       byBidder: [], bySite: [], byScore: [], byArea: [], byAge: [] });
     show('/statistics?range=last_month');
     expect(await screen.findByText('No data before Oct 6, 2026 — pick a later period.')).toBeTruthy();

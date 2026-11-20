@@ -3331,7 +3331,7 @@ export interface ConversionGroup {
 export interface ConversionReport {
   label: string; startClamped: boolean; scope: ConversionScope;
   window: { median: number | null; p90: number | null; matured_days: number; n: number; thin: boolean };
-  totals: { bids: number; matured: number; interviews: number; interviewsAll: number; inPlay: number; untied: number; rate: number | null };
+  totals: { bids: number; matured: number; interviews: number; interviewsAll: number; interviewOnly: number; inPlay: number; untied: number; rate: number | null };
   /** The team's interviews per 100 matured bids (one decimal); null with no team baseline. */
   teamRate?: number | null;
   /** Absent for scope=team. */

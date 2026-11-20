@@ -60,7 +60,9 @@ function Breakdown({ d, onShowLastMonth }: { d: ConversionReport; onShowLastMont
         {`${d.label} · ${n(t.bids)} bids · ${n(t.matured)} matured · ${n(t.interviews)} interviews from matured bids (${n(t.interviewsAll)} in all) · ${pct(t.rate)} · ${n(t.inPlay)} in play${t.untied > 0 ? ` · ${n(t.untied)} more interviews not tied to a bid` : ''}`}
       </p>
       <p className="text-xs text-muted">{`Rate = interviews per 100 bids that had ${d.window.matured_days}+ days to work ("matured").`}</p>
-      <p className="text-xs text-muted">Includes applications known only from their interview (no tracked bid), so rates can read a little high.</p>
+      {t.interviewOnly > 0 && (
+        <p className="text-xs text-muted">{`${n(t.interviewOnly)} of these ${n(t.interviewsAll)} interviews are from applications known only from their interview (no tracked bid), so rates can read high.`}</p>
+      )}
       {t.matured === 0 && t.bids > 0 && <NoMaturedNote days={d.window.matured_days} onShowLastMonth={onShowLastMonth} />}
       <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
         {tables.map(([title, rows]) => rows && <ConversionTable key={title} title={title} rows={rows} teamRate={d.teamRate} note={title === 'By resume score' ? SCORE_NOTE : undefined} />)}
