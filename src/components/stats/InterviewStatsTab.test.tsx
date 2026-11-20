@@ -63,7 +63,6 @@ const report: InterviewStatsReport = {
     g('tech1', 'Tech round 1', { rounds: 29, held: 26, decided: 22, passed: 13, rejected: 6, noAnswer: 3, waiting: 4, canceled: 1, rate: 59.1, mark: 'best' }),
     g('final', 'Final', { rounds: 7, held: 6, decided: 6, passed: 2, rejected: 4, noAnswer: 0, waiting: 0, canceled: 0, rate: 33.3, few: true }),
   ],
-  byWho: [g('self', 'Self', { rate: 21.9 }), g('caller', 'Caller', { rate: 29.2 })],
   byCaller: [
     g('c1', 'Muhammad', { rate: 39.5, mark: 'best' }),
     g('other', 'Other callers', { rounds: 16, decided: 6, passed: 1, rate: 16.7, few: true, memberCount: 6,
@@ -182,7 +181,7 @@ describe('InterviewStatsTab', () => {
           },
           everyone: [],
         },
-        findings: [], byStage: [], byWho: [], byCaller: [],
+        findings: [], byStage: [], byCaller: [],
         reasons: { canceled: [], rescheduled: [], rejected: [] },
         byProfile: [], byRegion: [], byArea: [], byScore: [], byAppliedBy: [], byWeekday: [], byHour: [],
       });
@@ -320,24 +319,24 @@ describe('InterviewStatsTab', () => {
   });
 
   describe('breakdown tables', () => {
-    it('Self vs caller shows Canceled; the others Group · Rounds · Decided · Passed · Pass rate', async () => {
+    it('every table has Group · Rounds · Decided · Passed · Pass rate (By caller: Caller); there is no Self vs caller table', async () => {
       show();
-      expect(heads(await table('Self vs caller'))).toEqual(['Group', 'Rounds', 'Canceled', 'Decided', 'Passed', 'Pass rate']);
-      expect(heads(screen.getByRole('table', { name: 'By caller' }))).toEqual(['Caller', 'Rounds', 'Decided', 'Passed', 'Pass rate']);
+      expect(heads(await table('By caller'))).toEqual(['Caller', 'Rounds', 'Decided', 'Passed', 'Pass rate']);
       for (const name of ['By time of day', 'By who applied', 'By weekday', 'By resume score', 'By job area', 'By profile', 'By region']) {
         expect(heads(screen.getByRole('table', { name }))).toEqual(['Group', 'Rounds', 'Decided', 'Passed', 'Pass rate']);
       }
-      expect(cells(within(screen.getByRole('table', { name: 'Self vs caller' })).getByText('Self').closest('tr')!))
-        .toEqual(['Self', '100', '15', '60', '15', '21.9%']);
+      expect(screen.queryByText('Self vs caller')).toBeNull();
     });
 
-    it('the bar colour legend with the team rate appears once, under the first table', async () => {
+    it('the bar colour legend with the team rate appears once: under By stage, below the pass-rate definition', async () => {
       show();
       const legend = await screen.findAllByText('Green = clearly above the team rate (23.9%), red = clearly below, grey = about the same or too few to tell.');
       expect(legend).toHaveLength(1);
-      const first = screen.getByRole('table', { name: 'Self vs caller' });
-      expect(first.compareDocumentPosition(legend[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(legend[0].compareDocumentPosition(screen.getByRole('table', { name: 'By caller' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const after = (a: Node, b: Node) => expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      after(screen.getByRole('table', { name: 'By stage' }), legend[0]);
+      after(screen.getByText(/^Pass rate = passed ÷/), legend[0]);
+      expect(legend[0].previousElementSibling).toBe(screen.getByText(/^Pass rate = passed ÷/).parentElement);
+      after(legend[0], screen.getByRole('table', { name: 'By caller' }));
     });
 
     it('"Other callers" expands to its members', async () => {
@@ -353,23 +352,6 @@ describe('InterviewStatsTab', () => {
       expect(within(t).getByText('Rui')).toBeTruthy();
       fireEvent.click(btn);
       expect(within(t).queryByText('Jamil')).toBeNull();
-    });
-
-    it('"Caller not assigned" in Self vs caller is muted with its counts, no bar and no say in the bar scale', async () => {
-      getInterviewsReport.mockResolvedValue({ ...report, byWho: [
-        g('self', 'Self', { rate: 21.9 }), g('caller', 'Caller', { rate: 29.2 }),
-        g('unassigned', 'Caller not assigned', { rounds: 30, canceled: 4, decided: 25, passed: 20, rate: 80 }),
-      ] });
-      show();
-      const t = await table('Self vs caller');
-      expect(within(t).getAllByRole('row').slice(1).map((r) => (r as HTMLTableRowElement).cells[0].textContent)).toEqual(['Self', 'Caller', 'Caller not assigned']);
-      const row = within(t).getByText('Caller not assigned').closest('tr')!;
-      expect(cells(row)).toEqual(['Caller not assigned', '30', '4', '25', '20', '80%']);
-      expect(row.className).toContain('text-muted');
-      expect(row.querySelector('[data-bar="fill"]')).toBeNull();
-      const fill = within(t).getByText('Caller').closest('tr')!.querySelector('[data-bar="fill"]') as HTMLElement;
-      expect(fill.style.width).toBe('100%'); // scaled to 29.2, not 80
-      expect(fill.getAttribute('data-tone')).toBe('same');
     });
 
     it('an Unknown group is muted, with no bar and no say in the bar scale', async () => {
@@ -446,7 +428,6 @@ describe('InterviewStatsTab', () => {
       screen.getByRole('table', { name: 'Everyone' }),
       screen.getByRole('region', { name: 'Key findings' }),
       screen.getByRole('table', { name: 'By stage' }),
-      screen.getByRole('table', { name: 'Self vs caller' }),
       screen.getByRole('table', { name: 'By caller' }),
       screen.getByRole('table', { name: 'Why rounds were rejected' }),
       screen.getByRole('table', { name: 'Why rounds were canceled' }),

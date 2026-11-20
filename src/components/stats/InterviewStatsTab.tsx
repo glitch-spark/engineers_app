@@ -7,7 +7,7 @@ import { ServerUpdateNote } from '../statistics/rateShared';
 import { StatsFilterBar } from '../statistics/statsFilters';
 import { CARDS_LABEL, Card, EveryoneList, KeyFindings, Muted, VsMedian, rankText, type EveryoneMetric } from './ConversionSummary';
 import { ScopeSwitch, useConversionFilters } from './ConversionTab';
-import ConversionTable, { type RateTableSpec } from './ConversionTable';
+import ConversionTable, { rateLegend, type RateTableSpec } from './ConversionTable';
 
 const n = (v: number) => v.toLocaleString();
 const pct = (v: number | null) => (v == null ? '—' : `${v}%`);
@@ -59,9 +59,8 @@ const EVERYONE: EveryoneMetric<Person>[] = [
   { key: 'offers', label: 'Offers', head: 'Offers', value: (r) => r.offers, cell: (r) => n(r.offers) },
 ];
 
-/** A group can be compared (bar, bar scale) when it has enough decided rounds and is not a catch-all: "Unknown", or
- * Self vs caller's "Caller not assigned" (a caller was asked for but nobody was assigned). */
-const comparable = (g: InterviewGroup) => !g.few && g.key !== 'unknown' && g.key !== 'unassigned';
+/** A group can be compared (bar, bar scale) when it has enough decided rounds and is not the "Unknown" catch-all. */
+const comparable = (g: InterviewGroup) => !g.few && g.key !== 'unknown';
 const col = (head: string, f: (g: InterviewGroup) => number) => ({ head, cell: (g: InterviewGroup) => n(f(g)) });
 const ROUNDS = col('Rounds', (g) => g.rounds);
 const CANCELED = col('Canceled', (g) => g.canceled);
@@ -109,7 +108,6 @@ const STAGE_SPEC: RateTableSpec<InterviewGroup> = {
     col('Waiting', (g) => g.waiting), CANCELED,
   ],
 };
-const WHO_SPEC: RateTableSpec<InterviewGroup> = { ...GROUP_SPEC, columns: [ROUNDS, CANCELED, DECIDED, PASSED] };
 const CALLER_SPEC: RateTableSpec<InterviewGroup> = { ...GROUP_SPEC, groupHead: 'Caller' };
 const PASS_RATE_NOTE = 'Pass rate = passed ÷ (passed + rejected + no answer). "No answer" = closed as no answer, or silent for 14 days. Waiting rounds are not counted yet.';
 
@@ -206,8 +204,9 @@ function FollowUps({ rows = [] }: { rows?: InterviewStatsReport['followUps'] }) 
 function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; onPick?: (userId: string) => void }) {
   const s = d.summary;
   const teamRate = s.cards.passRate.teamRate ?? d.totals.rate;
-  const table = (title: string, rows: InterviewGroup[] | undefined, spec = GROUP_SPEC, legend = false) => (
-    <Panel key={title}><ConversionTable title={title} rows={rows ?? []} teamRate={teamRate} spec={spec} legend={legend} /></Panel>
+  // the bar colour legend is said once, under By stage (the first table with bars), not under every table
+  const table = (title: string, rows: InterviewGroup[] | undefined, spec = GROUP_SPEC) => (
+    <Panel key={title}><ConversionTable title={title} rows={rows ?? []} teamRate={teamRate} spec={spec} legend={false} /></Panel>
   );
   return (
     <>
@@ -219,10 +218,10 @@ function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; o
       <Panel>
         <ConversionTable title="By stage" rows={d.byStage ?? []} teamRate={teamRate} spec={STAGE_SPEC} legend={false}
           above={OutcomeLegend} note={PASS_RATE_NOTE} />
+        {teamRate != null && !!d.byStage?.length && <p className="mt-1 text-xs text-muted">{rateLegend(teamRate)}</p>}
       </Panel>
+      {table('By caller', d.byCaller, CALLER_SPEC)}
       <div className={GRID}>
-        {table('Self vs caller', d.byWho, WHO_SPEC, true)}
-        {table('By caller', d.byCaller, CALLER_SPEC)}
         <Panel><Reasons what="rejected" rows={d.reasons?.rejected} /></Panel>
         <Panel>
           <Reasons what="canceled" rows={d.reasons?.canceled} />
@@ -245,7 +244,7 @@ function Report({ d, team, onPick }: { d: InterviewStatsReport; team: boolean; o
 }
 
 /** Statistics → Interviews (spec 2026-11-20): what happens to interview rounds after they are scheduled. The same
- * filters (and URL keys) as Job applies, then cards, Everyone, key findings, By stage, self vs caller, the
+ * filters (and URL keys) as Job applies, then cards, Everyone, key findings, By stage, By caller, the
  * reasons, the pass-rate breakdowns and follow-ups. */
 export default function InterviewStatsTab() {
   const f = useConversionFilters();

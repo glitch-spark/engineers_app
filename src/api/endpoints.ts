@@ -3453,7 +3453,7 @@ export interface InterviewStatsReport {
     }[];
   };
   findings: { kind: 'best' | 'weak' | 'reason' | 'no_answer' | 'none'; text: string }[];
-  byStage: InterviewGroup[]; byWho: InterviewGroup[]; byCaller: InterviewGroup[]; byProfile: InterviewGroup[];
+  byStage: InterviewGroup[]; byCaller: InterviewGroup[]; byProfile: InterviewGroup[];
   byRegion: InterviewGroup[]; byArea: InterviewGroup[]; byScore: InterviewGroup[]; byAppliedBy: InterviewGroup[];
   byWeekday: InterviewGroup[]; byHour: InterviewGroup[];
   reasons: {

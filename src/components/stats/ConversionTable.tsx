@@ -59,6 +59,9 @@ function toneOf(g: { few: boolean; rate: number | null }, teamRate?: number | nu
   return g.rate >= 1.5 * teamRate ? 'good' : g.rate <= 0.5 * teamRate ? 'bad' : 'same';
 }
 
+/** What the bar colours mean, for under a table. */
+export const rateLegend = (teamRate: number) => `Green = clearly above the team rate (${teamRate}%), red = clearly below, grey = about the same or too few to tell.`;
+
 /** Rate bar: width relative to the table's highest rate, coloured by the gap to the team rate (user, 2026-11-19). */
 function RateBar({ rate, max, tone }: { rate: number; max: number; tone: Tone }) {
   return (
@@ -171,7 +174,7 @@ export default function ConversionTable<T extends RateRow<T> = ConversionGroup>(
           </tbody>
         </table>
       </div>
-      {legend && teamRate != null && rows.length > 0 && <p className="mt-1 text-xs text-muted">{`Green = clearly above the team rate (${teamRate}%), red = clearly below, grey = about the same or too few to tell.`}</p>}
+      {legend && teamRate != null && rows.length > 0 && <p className="mt-1 text-xs text-muted">{rateLegend(teamRate)}</p>}
       {note && <p className="mt-1 text-xs text-muted">{note}</p>}
     </div>
   );
