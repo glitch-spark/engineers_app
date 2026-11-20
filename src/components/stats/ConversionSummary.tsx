@@ -34,7 +34,7 @@ export function ConversionCards({ cards, team }: { cards: ConversionSummary['car
   const median = (m: number | null) => (team && m != null ? <Muted>{`median per person ${n(m)}`}</Muted> : null);
   const rate = per100.value;
   return (
-    <section aria-label="Your numbers" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <section aria-label={team ? 'Team numbers' : 'Your numbers'} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <Card title="Bids" value={n(bids.value)} rank={rank(bids)}>
         <VsMedian v={bids.vsMedian} median={bids.median} />
         {median(bids.median)}
@@ -47,7 +47,7 @@ export function ConversionCards({ cards, team }: { cards: ConversionSummary['car
       </Card>
       <Card title="Interviews per 100 bids" value={rate == null ? '—' : rate.toFixed(1)} rank={rank(per100)}>
         {!team && per100.rank == null && per100.of != null && <Muted>not ranked (under 30 bids)</Muted>}
-        {!team && rate != null && per100.teamRate != null && rate !== per100.teamRate && (
+        {!team && per100.rank != null && rate != null && per100.teamRate != null && rate !== per100.teamRate && (
           <p className={rate > per100.teamRate ? GOOD : BAD}>{`${rate > per100.teamRate ? '▲' : '▼'} team ${per100.teamRate.toFixed(1)}`}</p>
         )}
         <Muted>{`${n(interviews.value)} interviews from ${n(bids.value)} bids`}</Muted>
@@ -114,9 +114,9 @@ export function EveryoneList({ rows, onPick }: { rows: ConversionSummary['everyo
 }
 
 const ICON: Record<ConversionFinding['kind'], ReactNode> = {
-  best: <span className="text-yellow-600 dark:text-yellow-400">★</span>,
-  weak: <span className="text-amber-600 dark:text-amber-400">⚠</span>,
-  gap: <span className="text-amber-600 dark:text-amber-400">⚠</span>,
+  best: <span role="img" aria-label="Works" className="text-yellow-600 dark:text-yellow-400">★</span>,
+  weak: <span role="img" aria-label="Doesn't work" className="text-amber-600 dark:text-amber-400">⚠</span>,
+  gap: <span role="img" aria-label="Doesn't work" className="text-amber-600 dark:text-amber-400">⚠</span>,
   none: null,
 };
 

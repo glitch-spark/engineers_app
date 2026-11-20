@@ -242,18 +242,26 @@ describe('ConversionTab', () => {
     it('per 100 under 30 bids reads "not ranked"', async () => {
       getConversion.mockResolvedValue({ ...report, summary: { ...meSummary, cards: { ...meSummary.cards, per100: { value: 25, rank: null, of: 4, teamRate: 1.2 } } } });
       show('/statistics?scope=me');
-      expect(await screen.findByText('not ranked (under 30 bids)')).toBeTruthy();
+      const c = within(await screen.findByRole('region', { name: 'Your numbers' }));
+      expect(c.getByText('not ranked (under 30 bids)')).toBeTruthy();
+      expect(c.queryByText(/team 1\.2/)).toBeNull(); // no coloured arrow for an unranked person
     });
 
     it('Whole team: cards show team totals, no rank, the median per person', async () => {
       show('/statistics');
-      const c = within(await screen.findByRole('region', { name: 'Your numbers' }));
+      const c = within(await screen.findByRole('region', { name: 'Team numbers' }));
       expect(c.getByText('42,458')).toBeTruthy();
       expect(c.getByText('233')).toBeTruthy();
       expect(c.getByText('median per person 3,504')).toBeTruthy();
       expect(c.getByText('median per person 32')).toBeTruthy();
       expect(c.queryByText(/^#/)).toBeNull();
       expect(c.getByText('233 interviews from 42,458 bids')).toBeTruthy();
+    });
+
+    it('Whole team cards are labelled "Team numbers"', async () => {
+      show('/statistics');
+      expect(await screen.findByRole('region', { name: 'Team numbers' })).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Your numbers' })).toBeNull();
     });
 
     it('Everyone: Interviews by default, the switch re-sorts by rank (nulls last), subject highlighted', async () => {
@@ -285,6 +293,8 @@ describe('ConversionTab', () => {
       const box = within(await screen.findByRole('region', { name: 'Key findings' }));
       expect(box.getByText(findings[0].text).parentElement!.textContent).toBe(`★ ${findings[0].text}`);
       expect(box.getByText(findings[1].text).parentElement!.textContent).toBe(`⚠ ${findings[1].text}`);
+      expect(box.getByRole('img', { name: 'Works' }).textContent).toBe('★');
+      expect(box.getByRole('img', { name: "Doesn't work" }).textContent).toBe('⚠');
       cleanup();
       getConversion.mockResolvedValue({ ...report, findings: [{ kind: 'none', text: 'No clear pattern yet in this period — try a longer date range.', evidence: {} }] });
       show();
