@@ -29,6 +29,8 @@ export default function ItemRow({
       {item.kind === 'check' ? (note ? null : week.done ? '✓ this week' : 'Not yet this week') : <>{week.value}{week.target ? ` / ${week.target}` : ''} this week</>}
     </span>
   );
+  const showTarget = !!target && !week;
+  const reached = showTarget && (result.value ?? 0) >= target!;
   if (item.kind === 'check') {
     return (
       <li className="rounded-lg px-1 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
@@ -57,22 +59,39 @@ export default function ItemRow({
         checked={result.done}
         onChange={(e) => onChange({ done: e.target.checked, value: result.value })}
       />
-      <span className={`min-w-0 flex-1 ${cls}`}>{item.text}{removed}</span>
-      <input
-        aria-label={item.text}
-        type="number"
-        min={0}
-        step={item.kind === 'hours' ? 'any' : 1}
-        className={`input !w-16 shrink-0 text-right tabular-nums ${compact ? '!rounded-lg !px-2 !py-1' : ''}`}
-        disabled={disabled || valueLocked}
-        value={result.value ?? ''}
-        onChange={(e) => {
-          const value = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
-          const reaches = value !== null && (target ? value >= target : value > 0);
-          onChange({ done: result.done || reaches, value });
-        }}
-      />
-      {target && !week ? <span className="text-xs tabular-nums text-muted">/ {target}</span> : null}
+      <span className={`min-w-0 ${cls}`}>{item.text}{removed}</span>
+      {/* the number and its target share one box, next to the text they belong to (user, 2026-11-20) */}
+      <span
+        data-count-box
+        className="inline-flex shrink-0 items-center rounded-lg border border-zinc-300 bg-white pr-2 focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500 dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        <input
+          aria-label={item.text}
+          type="number"
+          min={0}
+          step={item.kind === 'hours' ? 'any' : 1}
+          placeholder="0"
+          className={`w-12 bg-transparent pl-2 text-right tabular-nums outline-none disabled:opacity-60 ${compact ? 'py-0.5' : 'py-1'}`}
+          disabled={disabled || valueLocked}
+          value={result.value ?? ''}
+          onChange={(e) => {
+            const value = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
+            const reaches = value !== null && (target ? value >= target : value > 0);
+            onChange({ done: result.done || reaches, value });
+          }}
+        />
+        {showTarget ? <span className="ml-1 text-xs tabular-nums text-muted">/ {target}</span> : null}
+      </span>
+      {showTarget && (
+        <span aria-hidden className="hidden h-1.5 w-20 shrink-0 overflow-hidden rounded bg-zinc-100 sm:block dark:bg-zinc-800">
+          <span
+            data-count-bar
+            className={`block h-full rounded ${reached ? 'bg-green-500 dark:bg-green-400' : 'bg-sky-500 dark:bg-sky-400'}`}
+            style={{ width: `${Math.min(100, Math.round(((result.value ?? 0) / target!) * 100))}%` }}
+          />
+        </span>
+      )}
+      <span className="flex-1" />
       {progress}
       {note && <span className="text-xs text-muted">{note}</span>}
     </li>

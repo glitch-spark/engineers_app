@@ -38,3 +38,31 @@ describe('ItemRow count', () => {
     expect(screen.getByText('Outreach').className).toContain('line-through');
   });
 });
+
+describe('ItemRow: a counted item', () => {
+  const count = { id: 'c1', text: 'Send emails', kind: 'count', scope: 'routine', target: 50, archived: false, result: null } as never;
+  const show = (value: number | null, done = false) => render(
+    <ul><ItemRow item={count} result={{ done, value }} disabled={false} onChange={() => {}} /></ul>,
+  );
+
+  it('keeps the number and its target together in one box, right after the text, with a 0 placeholder', () => {
+    show(null);
+    const box = screen.getByRole('spinbutton', { name: 'Send emails' });
+    const group = box.closest('[data-count-box]')!;
+    expect(group.textContent).toContain('/ 50');
+    expect(box.getAttribute('placeholder')).toBe('0');
+    expect(screen.getByText('Send emails').nextElementSibling).toBe(group);
+  });
+
+  it('shows how far along the number is, and green once the target is reached', () => {
+    const { unmount } = show(20);
+    let bar = document.querySelector('[data-count-bar]') as HTMLElement;
+    expect(bar.style.width).toBe('40%');
+    expect(bar.className).not.toContain('green');
+    unmount();
+    show(60, true);
+    bar = document.querySelector('[data-count-bar]') as HTMLElement;
+    expect(bar.style.width).toBe('100%');
+    expect(bar.className).toContain('green');
+  });
+});
