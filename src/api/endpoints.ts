@@ -578,6 +578,11 @@ export interface DayPlan {
   selfOtherByProfile?: Record<string, number>;
   /** Whether the day's week has a saved weekly plan (draft saves need one). */
   weekSaved: boolean;
+  /**
+   * Interview follow-ups for the standup, read-only: the companies followed up on that day, in the order done, and
+   * how many rounds still wait for a follow-up or its answer. Missing from an older server.
+   */
+  followUps?: { doneToday: string[]; toDo: number };
 }
 
 /** A day's follow-up: results per item, bids done, notes (posts to Slack). */

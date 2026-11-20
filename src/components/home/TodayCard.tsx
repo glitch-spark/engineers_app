@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import { todayInputValue } from '../../lib/week';
-import type { DayItem } from '../../api/endpoints';
+import type { DayItem, NeedsInputItem } from '../../api/endpoints';
+import { useAuth } from '../../auth/useAuth';
+import { stageLabel } from '../../lib/stageBadge';
+import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
+import { daysWithoutResult, needsInputKey, shortDay, useNeedsInputActions } from '../interview/useNeedsInputActions';
 import ItemRow, { kept } from '../report/ItemRow';
 
 type Result = { done: boolean; value: number | null };
@@ -165,6 +169,93 @@ export default function TodayCard() {
       )}
       {section('Daily', daily)}
       {section('This week', weekly, daysLeft)}
+      <WaitingInterviews onSaved={() => mutate()} />
     </section>
+  );
+}
+
+const WAITING_ROWS = 5;
+
+/**
+ * The signed-in person's rounds that wait on them. Follow-ups and their answers are handled here; rounds that need
+ * their outcome or a reason are only counted, with a link to the Interviews page. Hidden when nothing waits.
+ * `onSaved` refetches the day (its standup line counts the follow-ups).
+ */
+function WaitingInterviews({ onSaved }: { onSaved: () => unknown }) {
+  const { user } = useAuth();
+  const { tz } = useInterviewTimezone();
+  // Same key as the Interviews page's own list, so a save on either refreshes both.
+  const { data, mutate } = useSWR(['interviews-needs-input', ''], () => api.getNeedsInput());
+  const { dialog, isSaving, followUp, resultButtons } = useNeedsInputActions(() => Promise.all([mutate(), onSaved()]));
+  // Asked without a user, an admin gets the whole team's rounds: keep only their own.
+  const items = (data?.items ?? []).filter((row) => user?.role !== 'admin' || row.ownerId === user.id);
+  if (!items.length) return dialog;
+
+  const count = (need: NeedsInputItem['need']) => items.filter((row) => row.need === need).length;
+  const outcomes = count('outcome');
+  const reasons = count('reason');
+  const others = [
+    outcomes > 0 && `${outcomes} ${outcomes === 1 ? 'round needs' : 'rounds need'} "How did it go?"`,
+    reasons > 0 && `${reasons} ${reasons === 1 ? 'needs' : 'need'} a reason`,
+  ].filter(Boolean).join(' · ');
+  const rows = items
+    .filter((row) => row.need === 'follow_up' || row.need === 'heard_back')
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)); // oldest first
+  const more = rows.length - WAITING_ROWS;
+  const line = 'flex flex-wrap items-center gap-x-2 gap-y-1.5 px-1 py-1.5 text-sm text-body';
+
+  return (
+    <div role="group" aria-labelledby="waiting-interviews-title">
+      {dialog}
+      <div id="waiting-interviews-title" className="mt-3 text-[11px] font-medium uppercase tracking-wider text-muted">
+        Interviews waiting on you ({items.length})
+      </div>
+      <ul className="space-y-0.5">
+        {rows.slice(0, WAITING_ROWS).map((row) => {
+          const company = row.companyName || 'the company';
+          const round = [stageLabel(row.stage), shortDay(row.scheduledAt, tz)].filter(Boolean).join(', ');
+          const days = daysWithoutResult(row);
+          const followedUp = shortDay(row.followedUpAt, tz);
+          const waiting = row.need === 'follow_up'
+            ? (days === null ? 'no result yet' : `no result for ${days} days`)
+            : `followed up${followedUp ? ` ${followedUp}` : ''}`;
+          return (
+            <li key={needsInputKey(row)} className={line}>
+              {row.need === 'follow_up' ? (
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0"
+                  aria-label={`I followed up with ${company}`}
+                  // Stays ticked while it saves; a saved row leaves the list, a failed one comes back unticked.
+                  checked={isSaving(row)}
+                  disabled={isSaving(row)}
+                  onChange={() => followUp(row)}
+                />
+              ) : <span className="w-4 shrink-0" />}
+              <span className="min-w-0 flex-1 basis-52">
+                <span className="font-medium text-strong">
+                  {row.need === 'follow_up' ? `Follow up with ${company}` : `Did you hear back? ${row.companyName || ''}`.trim()}
+                </span>
+                <span className="text-xs text-muted"> · {round} · {waiting}</span>
+              </span>
+              <div className="flex flex-wrap gap-2">{resultButtons(row)}</div>
+            </li>
+          );
+        })}
+        {more > 0 && (
+          <li className={line}>
+            <span className="w-4 shrink-0" />
+            <Link to="/interviews" className="text-xs underline">…and {more} more → Interviews</Link>
+          </li>
+        )}
+        {others && (
+          <li className={line}>
+            <span className="w-4 shrink-0" />
+            <span className="min-w-0 flex-1 text-xs text-muted">{others}</span>
+            <Link to="/interviews" className="text-xs underline">Interviews →</Link>
+          </li>
+        )}
+      </ul>
+    </div>
   );
 }

@@ -4,9 +4,8 @@ import * as api from '../../api/endpoints';
 import type { NeedsInputItem } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import RescheduleDialog from '../../components/interview/RescheduleDialog';
-import { useStatusNotePrompt } from '../../components/interview/StatusNoteDialog';
+import { daysWithoutResult, needsInputKey, shortDay, useNeedsInputActions } from '../../components/interview/useNeedsInputActions';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
-import { notify } from '../../lib/notify';
 import { interviewStatusLabel, stageBadgeClass, stageLabel } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 
@@ -17,9 +16,6 @@ const GROUPS: { need: NeedsInputItem['need']; title: string }[] = [
   { need: 'heard_back', title: 'Did you hear back?' },
   { need: 'reason', title: 'Add the reason' },
 ];
-
-const DAY_MS = 86400000;
-const rowKey = (row: NeedsInputItem) => `${row.interviewId}:${row.roundId}`;
 
 /**
  * Every reminder about a round, for its owner: how a round went, the follow-up with the company a week after a held
@@ -33,40 +29,9 @@ export default function NeedsInput({ filterUser, onSaved }: { filterUser: string
   const isAdmin = user?.role === 'admin';
   const userId = isAdmin && filterUser && filterUser !== 'all' ? filterUser : undefined;
   const { data } = useSWR(['interviews-needs-input', userId ?? ''], () => api.getNeedsInput(userId));
-  const { prompt, dialog } = useStatusNotePrompt();
-  const [saving, setSaving] = useState<string[]>([]);
+  const { dialog, setStatus, followUp, ask, button, resultButtons } = useNeedsInputActions(onSaved);
   const [moving, setMoving] = useState<NeedsInputItem | null>(null);
   const items = data?.items ?? [];
-
-  const run = async (row: NeedsInputItem, send: () => Promise<unknown>) => {
-    const key = rowKey(row);
-    setSaving((keys) => [...keys, key]);
-    try {
-      try {
-        await send();
-      } catch (err) {
-        notify.error(err, 'Failed to save');
-        return;
-      }
-      notify.success('Saved');
-      await onSaved();
-    } finally {
-      setSaving((keys) => keys.filter((k) => k !== key));
-    }
-  };
-
-  const setStatus = (row: NeedsInputItem, body: api.InterviewStageInput) =>
-    run(row, () => api.updateInterviewStage(row.interviewId, row.roundId, body));
-
-  /** Passed asks for optional feedback; Rejected / Canceled for the reason. */
-  const ask = async (row: NeedsInputItem, status: string) => {
-    const answer = await prompt(status, `${row.companyName || 'Interview'} · ${stageLabel(row.stage)}`);
-    if (!answer) return;
-    await setStatus(row, row.need === 'reason'
-      // The round keeps its status, and its note unless details were typed here.
-      ? { statusReason: answer.reason, ...(answer.note ? { statusNote: answer.note } : {}) }
-      : { status, statusNote: answer.note, ...(answer.reason ? { statusReason: answer.reason } : {}) });
-  };
 
   const overlays = (
     <>
@@ -94,35 +59,23 @@ export default function NeedsInput({ filterUser, onSaved }: { filterUser: string
   if (!items.length) return overlays;
 
   const buttons = (row: NeedsInputItem) => {
-    const disabled = saving.includes(rowKey(row));
-    const button = (label: string, onClick: () => unknown) => (
-      <button key={label} type="button" className="btn-outline btn-sm" disabled={disabled} onClick={onClick}>{label}</button>
-    );
-    const passed = button('Passed', () => ask(row, 'passed'));
-    const rejected = button('Rejected', () => ask(row, 'rejected'));
     switch (row.need) {
-      case 'outcome':
+      case 'outcome': {
+        const [passed, rejected] = resultButtons(row);
         return [
-          button('Completed', () => setStatus(row, { status: 'completed' })),
+          button(row, 'Completed', () => setStatus(row, { status: 'completed' })),
           passed,
           rejected,
-          button('Rescheduled', () => setMoving(row)),
-          button('Canceled', () => ask(row, 'canceled')),
+          button(row, 'Rescheduled', () => setMoving(row)),
+          button(row, 'Canceled', () => ask(row, 'canceled')),
         ];
+      }
       case 'follow_up':
-        return [
-          button('I followed up', () => run(row, () => api.followUpInterviewStage(row.interviewId, row.roundId))),
-          passed,
-          rejected,
-        ];
+        return [button(row, 'I followed up', () => followUp(row)), ...resultButtons(row)];
       case 'heard_back':
-        return [
-          button('No, close as rejected', () => setStatus(row, { status: 'rejected', statusReason: 'no_answer' })),
-          passed,
-          rejected,
-        ];
+        return resultButtons(row);
       default:
-        return [button('Add reason', () => ask(row, row.status))];
+        return [button(row, 'Add reason', () => ask(row, row.status))];
     }
   };
 
@@ -142,7 +95,7 @@ export default function NeedsInput({ filterUser, onSaved }: { filterUser: string
                 {rows.map((row) => {
                   const missing = missingText(row, tz);
                   return (
-                    <li key={rowKey(row)} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2 text-sm">
+                    <li key={needsInputKey(row)} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2 text-sm">
                       <div className="min-w-0 flex-1 basis-56">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="font-medium text-strong">{row.companyName || 'Untitled company'}</span>
@@ -173,14 +126,12 @@ export default function NeedsInput({ filterUser, onSaved }: { filterUser: string
 /** What the row is waiting for, in words; nothing for a round that only needs its outcome. */
 function missingText(row: NeedsInputItem, tz: string): string {
   if (row.need === 'follow_up') {
-    const days = Math.floor((Date.now() - parseServerTime(row.endsAt || row.scheduledAt).getTime()) / DAY_MS);
-    return isNaN(days) ? 'No result yet' : `No result for ${days} days`;
+    const days = daysWithoutResult(row);
+    return days === null ? 'No result yet' : `No result for ${days} days`;
   }
   if (row.need === 'heard_back') {
-    const d = row.followedUpAt ? parseServerTime(row.followedUpAt) : null;
-    return d && !isNaN(d.getTime())
-      ? `Followed up on ${formatInZone(d, tz, { month: 'short', day: 'numeric' })}, no result yet`
-      : 'Followed up, no result yet';
+    const day = shortDay(row.followedUpAt, tz);
+    return day ? `Followed up on ${day}, no result yet` : 'Followed up, no result yet';
   }
   if (row.need === 'reason') return `${interviewStatusLabel(row.status)}, no reason`;
   return '';

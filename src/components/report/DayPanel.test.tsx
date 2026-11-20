@@ -118,4 +118,29 @@ describe('DayPanel', () => {
     expect(body.results).toEqual({ a1: { done: true, value: 6 } });
     expect(body.focus).toEqual(['g2']);
   });
+
+  it.each([
+    [{ doneToday: ['Acme', 'Globex'], toDo: 3 }, 'Follow-ups · done today: Acme, Globex · still to do: 3'],
+    [{ doneToday: [], toDo: 3 }, 'Follow-ups · still to do: 3'],
+    [{ doneToday: ['Acme', 'Globex'], toDo: 0 }, 'Follow-ups · done today: Acme, Globex'],
+    [{ doneToday: ['A', 'B', 'C', 'D', 'E', 'F', 'G'], toDo: 1 }, 'Follow-ups · done today: A, B, C, D, E +2 · still to do: 1'],
+  ])('shows the read-only follow-ups line: %#', async (followUps, line) => {
+    setup(plan({ followUps }));
+    await screen.findByText('Check inbox');
+    expect(screen.getByText('Follow-ups').parentElement?.textContent).toBe(line);
+  });
+
+  it.each([[{ doneToday: [], toDo: 0 }], [undefined]])('leaves the follow-ups line out when there is nothing: %#', async (followUps) => {
+    setup(plan({ followUps }));
+    await screen.findByText('Check inbox');
+    expect(screen.queryByText(/Follow-ups/)).toBeNull();
+  });
+
+  it('saving the day does not send the follow-ups', async () => {
+    setup(plan({ followUps: { doneToday: ['Acme'], toDo: 2 } }));
+    await screen.findByText('Check inbox');
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+    await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+    expect(vi.mocked(api.putDayPlan).mock.calls[0][1]).not.toHaveProperty('followUps');
+  });
 });
