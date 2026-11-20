@@ -112,7 +112,7 @@ describe('ConversionTab', () => {
     expect(await screen.findByText('Your profiles')).toBeTruthy();
     expect(screen.getByText('What to change')).toBeTruthy();
     expect(await screen.findByText('When to bid')).toBeTruthy();
-    expect(screen.getByText('Bidder quality')).toBeTruthy();
+    expect(screen.queryByText('Bidder quality')).toBeNull();
   });
 
   it('score table carries the undercount caption, other tables do not', async () => {

@@ -31,34 +31,9 @@ describe('TimingSection', () => {
     expect(screen.getByText('Tue')).toBeTruthy();
     expect(screen.getByText('21–24')).toBeTruthy();
     expect(screen.getAllByText('too few').length).toBeGreaterThan(0);
-    expect(screen.getByText('Bidder quality')).toBeTruthy();
+    expect(screen.queryByText('Bidder quality')).toBeNull(); // removed (user, 2026-11-19)
     expect(getTiming).toHaveBeenCalledTimes(1);
     expect(getTiming).toHaveBeenCalledWith({ ...params, user: 'u7' });
-  });
-
-  it('renders bidders, unnamed fallback, red rejected >= 20% and the pooled team bidder rate', async () => {
-    getTiming.mockResolvedValue(report());
-    show();
-    expect(await screen.findByText('Your bidders\' bids in this period: how many, how they convert, and how many Bid Track rejected.')).toBeTruthy();
-    const t = within(screen.getByRole('table', { name: 'Bidders' }));
-    expect(t.getByText('Bo')).toBeTruthy();
-    expect(t.getByText('Unnamed bidder')).toBeTruthy();
-    expect(t.getByText('5%').className).not.toMatch(/text-red/);
-    expect(t.getByText('25%').className).toMatch(/text-red/);
-    expect(screen.getByText('Team bidders overall: 0.4 per 100 (12 interviews from 3,000 matured bids).')).toBeTruthy();
-  });
-
-  it('says not enough data when the team bidders have no matured bids', async () => {
-    getTiming.mockResolvedValue(report({ teamBidder: { per100: null, matured: 0, interviews: 0 } }));
-    show();
-    expect(await screen.findByText('Team bidders overall: not enough data yet.')).toBeTruthy();
-  });
-
-  it('hides Bidder quality when there are no bidders', async () => {
-    getTiming.mockResolvedValue(report({ bidders: [] }));
-    show();
-    expect(await screen.findByText('When to bid')).toBeTruthy();
-    expect(screen.queryByText('Bidder quality')).toBeNull();
   });
 
   it('shows an error', async () => {
@@ -92,16 +67,13 @@ describe('TimingSection immature period', () => {
     bidders: [bidder({ bids: 300, matured: 0, interviews: 0, per100: null, tooFew: true }), bidder({ bidderId: 'b2', name: 'Cy', bids: 5, matured: 0, per100: null, tooFew: true })], ...o });
   const showWith = (fn?: () => void) => render(<SWRConfig value={{ provider: () => new Map() }}><TimingSection params={params} user="" onShowLastMonth={fn} /></SWRConfig>);
 
-  it('note + button, and bidder Per 100 is in play at 30+ bids, too few under', async () => {
+  it('note + button', async () => {
     getTiming.mockResolvedValue(imm());
     const fn = vi.fn();
     showWith(fn);
     expect(await screen.findByText(/None of these bids have had 27 days to get an interview yet/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Show last month' }));
     expect(fn).toHaveBeenCalledTimes(1);
-    const t = screen.getByRole('table', { name: 'Bidders' });
-    expect(within(within(t).getByText('Bo').closest('tr')!).getByText('in play')).toBeTruthy();
-    expect(within(within(t).getByText('Cy').closest('tr')!).getByText('too few')).toBeTruthy();
   });
 
   it('no note when something matured', async () => {

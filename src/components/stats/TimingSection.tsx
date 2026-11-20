@@ -1,9 +1,8 @@
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import RateTable, { NoMaturedNote, noneMatured, RateText } from './RateTable';
+import RateTable, { NoMaturedNote, noneMatured } from './RateTable';
 
 const tzLabel = (tz: string) => `${(tz.split('/').pop() ?? tz).replace(/_/g, ' ')} time`;
-const one = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function TimingCard({ d, team, onShowLastMonth }: { d: api.TimingReport; team: boolean; onShowLastMonth?: () => void }) {
   return (
@@ -19,45 +18,7 @@ function TimingCard({ d, team, onShowLastMonth }: { d: api.TimingReport; team: b
   );
 }
 
-function teamLine(t: api.TimingReport['teamBidder'] | undefined) { // undefined: an older API during a deploy
-  if (t?.per100 == null || !t.matured) return 'Team bidders overall: not enough data yet.';
-  return `Team bidders overall: ${one(t.per100)} per 100 (${t.interviews.toLocaleString()} interviews from ${t.matured.toLocaleString()} matured bids).`;
-}
-
-function BiddersCard({ d }: { d: api.TimingReport }) {
-  return (
-    <div className="panel p-4">
-      <h3 className="font-semibold">Bidder quality</h3>
-      <p className="text-xs text-muted">Your bidders' bids in this period: how many, how they convert, and how many Bid Track rejected.</p>
-      <div className="mt-2 overflow-x-auto">
-        <table aria-label="Bidders" className="w-full text-left text-sm">
-          <thead>
-            <tr className="text-xs text-muted">
-              {['Bidder', 'Bids', 'Matured', 'Interviews', 'Per 100', 'Rejected'].map((h) => <th key={h} className="pb-1 pr-3 font-normal">{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {d.bidders.map((b) => (
-              <tr key={b.bidderId} className="border-t border-zinc-200 dark:border-zinc-800">
-                <td className="py-1 pr-3">{b.name ?? 'Unnamed bidder'}</td>
-                <td className="py-1 pr-3 tabular-nums">{b.bids}</td>
-                <td className="py-1 pr-3 tabular-nums">{b.matured}</td>
-                <td className="py-1 pr-3 tabular-nums">{b.interviews}</td>
-                <td className="whitespace-nowrap py-1 pr-3 tabular-nums"><RateText c={b} /></td>
-                <td className={`py-1 tabular-nums ${b.rejectedShare >= 20 ? 'font-medium text-red-700 dark:text-red-400' : ''}`}>{`${b.rejectedShare}%`}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-2 text-xs text-muted">
-        {teamLine(d.teamBidder)}
-      </p>
-    </div>
-  );
-}
-
-/** One request feeding the "When to bid" and "Bidder quality" cards. */
+/** The "When to bid" card (Bidder quality was removed, user 2026-11-19). */
 export default function TimingSection({ params, user, onShowLastMonth }: { onShowLastMonth?: () => void; params: api.ConversionParams | null; user: string }) {
   const { data, error, isLoading } = useSWR(
     params ? ['stats-timing', params.period, params.date, params.to, params.region, params.scope, params.profile, user] : null,
@@ -76,7 +37,6 @@ export default function TimingSection({ params, user, onShowLastMonth }: { onSho
   return (
     <>
       <TimingCard d={data} team={params.scope === 'team'} onShowLastMonth={onShowLastMonth} />
-      {params.scope !== 'team' && data.bidders.length > 0 && <BiddersCard d={data} />}
     </>
   );
 }
