@@ -12,7 +12,7 @@ vi.mock('../api/endpoints', () => ({ getTeamToday: vi.fn(), lookupUsers: vi.fn()
 vi.mock('../components/home/TodayCard', () => ({ default: () => <div>today-stub</div> }));
 vi.mock('../components/home/WeekCard', () => ({ default: () => <div>week-stub</div> }));
 vi.mock('../components/home/MetricsCard', () => ({ default: () => <div>metrics-stub</div> }));
-vi.mock('../components/dashboard/TeamOverview', () => ({ default: () => <div>team-stub</div> }));
+vi.mock('../components/dashboard/TeamOverview', () => ({ default: () => <div>team-stub</div> })); // not rendered now; kept so a return is caught
 vi.mock('../components/home/PersonPage', () => ({
   default: (p: { userId: string; name: string; day: string; today: string }) => <div data-testid="person">{`${p.userId}|${p.name}|${p.day}|${p.today}`}</div>,
 }));
@@ -73,7 +73,7 @@ describe('Home', () => {
     expect(screen.queryByRole('radio', { name: 'Me' })).toBeNull();
     expect(screen.queryByRole('radio', { name: 'Team' })).toBeNull();
     expect(screen.queryByText('today-stub')).toBeNull();
-    expect(screen.getByText('team-stub')).toBeTruthy();
+    expect(screen.queryByText('team-stub')).toBeNull(); // the Team totals table is off for now
     expect(screen.getByText('Fri, Nov 20')).toBeTruthy();
   });
 

@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import * as api from '../api/endpoints';
 import PageHeader from '../components/PageHeader';
@@ -8,7 +8,6 @@ import WeekCard from '../components/home/WeekCard';
 import MetricsCard from '../components/home/MetricsCard';
 import PersonPage from '../components/home/PersonPage';
 import TeamList, { type Person } from '../components/home/TeamList';
-import TeamOverview from '../components/dashboard/TeamOverview';
 import { useAuth } from '../auth/useAuth';
 import { todayInputValue } from '../lib/week';
 import { teamMembersAZ, useTeamLookup } from '../lib/useFirstTeamMember';
@@ -43,10 +42,10 @@ function MyHome() {
  * An admin's Home is always the team, one person at a time (user, 2026-11-21: no Me / Team switch). The names show
  * at once from the shared team lookup; nobody is picked on arrival, and a person's page is read only when they are
  * picked. Each name's dot, pending count and bids are filled in when the day's summary arrives, with no loading
- * state: that read is slow the first time. The person (`?user=`) and the day (`?day=yesterday`) sit in the URL.
+ * state: that read is slow the first time. The Team totals table (TeamOverview) is off for now (user, 2026-11-21).
+ * The person (`?user=`) and the day (`?day=yesterday`) sit in the URL.
  */
 function AdminHome() {
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const today = todayInputValue();
   const yesterday = params.get('day') === 'yesterday';
@@ -96,7 +95,6 @@ function AdminHome() {
           <p className="panel p-6 text-sm text-muted">Pick a person to see their bids, interviews, to-dos, goals and pending items.</p>
         )}
       </div>
-      <TeamOverview onPick={(id) => navigate(`/transactions?user=${encodeURIComponent(id)}`)} />
     </>
   );
 }
