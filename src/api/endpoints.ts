@@ -587,6 +587,12 @@ export interface DayPlan {
   todayInterviews?: TodayInterview[];
   /** How many of the day's rounds have an answer. Missing from an older server. */
   interviewsMarked?: { marked: number; total: number };
+  /** The day's bids per region the person works in (self target null when unset). Missing from an older server. */
+  bidsByRegion?: { region: 'US' | 'EU' | 'Latam'; self: number; selfTarget: number | null; bidder: number; total: number }[];
+  /** The day's bids over every region; a target is null when unset. Missing from an older server. */
+  bidsTotals?: {
+    self: number; selfTarget: number | null; bidder: number; bidderTarget: number | null; total: number; target: number | null;
+  };
 }
 
 /**
@@ -1025,6 +1031,27 @@ export const getNeedsInput = (userId?: string) =>
     `/interviews/needs-input${qs({ userId })}`,
   );
 
+/**
+ * An interview that is still open. `at`: its latest round's start (`upcoming` when ahead). `status`: `scheduled`,
+ * `waiting` (held under 7 days ago), `no_result` (7+ days, see `days`), `followed_up` (see `followedUpAt`) or
+ * `passed` with no later round set.
+ */
+export interface PipelineItem {
+  interviewId: string;
+  companyName: string | null;
+  profileName: string | null;
+  stage: string;
+  at: string;
+  upcoming: boolean;
+  status: 'scheduled' | 'waiting' | 'no_result' | 'followed_up' | 'passed';
+  days: number | null;
+  followedUpAt: string | null;
+}
+
+/** Own interviews; an admin may pass `userId`. Soonest upcoming first, then most recent. */
+export const getInterviewPipeline = (userId?: string) =>
+  apiFetch<{ items: PipelineItem[] }>(`/interviews/pipeline${qs({ userId })}`);
+
 /** Records "I followed up with the company" on a completed round. */
 export const followUpInterviewStage = (id: string, stageId: string) =>
   apiFetch<Record<string, unknown>>(`/interviews/${id}/stages/${stageId}/follow-up`, { method: 'POST' });
@@ -1187,6 +1214,8 @@ export interface DashboardWeek {
     percentile: DashboardPercentile | null;
     /** Mon–Fri, each day's bids and daily target. Missing from an older server. */
     byDay?: { date: string; done: number; target: number | null }[];
+    /** Mon–Fri only (`total` above also counts the weekend); a target is the week's sum of the day targets, null when unset. Missing from an older server. */
+    week?: { self: number; selfTarget: number | null; bidder: number; bidderTarget: number | null; total: number; target: number | null };
   };
   interviews: {
     /** Rounds held this week: `self` the owner took, `caller` a caller took. */
@@ -1200,6 +1229,11 @@ export interface DashboardWeek {
     outcomes?: {
       held: number; passed: number; rejected: number; noAnswer: number; waiting: number; canceled: number; scheduled: number;
     };
+    /**
+     * Mon–Fri. `scheduled` = not held yet: still to come on today or a later day, ended and never marked on a day
+     * before today. Missing from an older server.
+     */
+    byDay?: { date: string; held: number; canceled: number; scheduled: number }[];
   };
   stages: { key: string; label: string; count: number }[];
   streak: number;
@@ -1247,11 +1281,64 @@ export interface DashboardMonthInterviews {
   passRate: { value: number | null; passed: number; decided: number; few: boolean; teamRate: number | null };
 }
 
-export const getDashboardWeek = (params: { userId?: string; today?: string }) =>
+/**
+ * `today` is the real current date (day states and pace are judged against it); `weekOf` is any date in the wanted
+ * week (absent = the week of `today`; a later week is refused).
+ */
+export const getDashboardWeek = (params: { userId?: string; today?: string; weekOf?: string }) =>
   apiFetch<DashboardWeek>(`/dashboard/week${qs(params)}`);
 
 export const getDashboardMonthInterviews = (params: { userId?: string; today?: string }) =>
   apiFetch<DashboardMonthInterviews>(`/dashboard/month-interviews${qs(params)}`);
+
+/** Admin: everyone's day at a glance, people who most need attention first. `pending` = their pending items. */
+export interface TeamToday {
+  day: string;
+  people: {
+    userId: string;
+    name: string;
+    bids: { done: number; target: number | null };
+    todos: { done: number; total: number };
+    pending: number;
+    /** red = something overdue, amber = behind on bids or to-dos for the day, green = otherwise. */
+    state: 'red' | 'amber' | 'green';
+  }[];
+}
+
+export const getTeamToday = (day: string) => apiFetch<TeamToday>(`/dashboard/team-today${qs({ day })}`);
+
+/** A profile that needs attention: no interview in the last 2 weeks, or no bids in 3 weeks. */
+export interface PendingProfile {
+  accountId: string;
+  name: string;
+  kind: 'no_interviews' | 'no_bids';
+  idleDays: number;
+  /** `idleDays` is a floor: the real number is at least that. */
+  capped: boolean;
+  bids: number | null;
+  tailorScore: number | null;
+}
+
+/** A bidder that stopped bidding (`days` working days) or slowed down (`recent`: the last 3 working days; `before`: a day's average before them). */
+export interface PendingBidder {
+  bidderId: string;
+  name: string;
+  kind: 'not_bidding' | 'slowing';
+  days: number | null;
+  recent: number[] | null;
+  before: number | null;
+}
+
+/** What waits on one person: their interviews that need input, and the flags on their profiles and bidders. */
+export interface DashboardPending {
+  interviews: NeedsInputItem[];
+  profiles: PendingProfile[];
+  bidders: PendingBidder[];
+  counts: { interviews: number; profiles: number; bidders: number; total: number };
+}
+
+/** Own items; an admin may pass `userId`. */
+export const getDashboardPending = (userId?: string) => apiFetch<DashboardPending>(`/dashboard/pending${qs({ userId })}`);
 
 export const getDashboardNetMonthly = (params: { userId?: string; today?: string }) =>
   apiFetch<DashboardNetMonthly>(`/dashboard/net-monthly${qs(params)}`);
