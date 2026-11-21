@@ -5,7 +5,7 @@ import type { InterviewRoundRow } from '../../api/endpoints';
 import NameWithAvatar from '../../components/NameWithAvatar';
 import type { Interview } from '../../components/interview/types';
 import { CALLER_METHOD_OPTIONS } from '../../components/interview/types';
-import { callerRoundsQuery, type InterviewFilters } from '../../lib/interviewFilters';
+import { callerRoundsQuery, summaryQuery, type InterviewFilters } from '../../lib/interviewFilters';
 import { MessageSquareText } from 'lucide-react';
 import {
   interviewStatusBadgeClass, interviewStatusLabel, normalizeInterviewStatus, stageBadgeClass, stageLabel, statusWhy,
@@ -16,6 +16,7 @@ import Pagination from '../../components/Pagination';
 import { useCallers } from '../../lib/useCallers';
 import { CALLER_DOT, UNASSIGNED_CHIP, callerLabel, isUnassigned } from '../../lib/callerColors';
 import RoundTrail from './RoundTrail';
+import InterviewTotals from './InterviewTotals';
 import { ResumeScoreCell } from '../../components/interview/LinkedResumeCard';
 
 /** Caller interviews tab, List: every user's caller rounds, one row per round; click a row to open its interview in the side pane,
@@ -100,6 +101,7 @@ export default function CallerRoundsList({
 
   return (
     <div className="space-y-3">
+      <InterviewTotals query={summaryQuery(query, { callers: true })} status={filters.status} onStatus={(status) => update({ status })} />
       <div className="relative" aria-busy={isLoading}>
         <div className="table-wrap hidden sm:block">
           <table className="min-w-full text-sm">

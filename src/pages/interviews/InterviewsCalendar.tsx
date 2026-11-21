@@ -11,11 +11,13 @@ import {
   filtersForCalendar,
   roundsQuery,
   stepCalendar,
+  summaryQuery,
   type InterviewFilters,
 } from '../../lib/interviewFilters';
 import CalendarAgenda from './CalendarAgenda';
 import CalendarMonth from './CalendarMonth';
 import CalendarWeek from './CalendarWeek';
+import InterviewTotals from './InterviewTotals';
 import { parseLocalDate, rangeLabel, toEvents } from './calendarShared';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { toWall } from '../../lib/interviewTimezone';
@@ -71,6 +73,8 @@ export default function InterviewsCalendar({
 
   return (
     <div className="space-y-3">
+      {/* The same days and filters as the grid below (a month counts its whole 6-week grid). */}
+      <InterviewTotals query={summaryQuery(valid ? query : null, { callers, exclusiveTo: true })} status={filters.status} onStatus={(status) => update({ status })} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           <button type="button" className="btn-icon" onClick={() => go(-1)} aria-label={`Previous ${view}`}><ChevronLeft size={16} aria-hidden /></button>

@@ -8,7 +8,7 @@ import * as api from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
 import { formatProfileLabel } from '../../lib/countries';
 import { archivedLabel, filterProfiles } from '../../lib/profileArchive';
-import { INTERVIEW_PRESETS, type InterviewFilters as Filters } from '../../lib/interviewFilters';
+import { INTERVIEW_PRESETS, INTERVIEW_REGION_OPTIONS, type InterviewFilters as Filters } from '../../lib/interviewFilters';
 import { INTERVIEW_STAGE_ORDER, INTERVIEW_STATUSES, stageLabel } from '../../lib/stageBadge';
 import { useCallers } from '../../lib/useCallers';
 import { useTeamLookup } from '../../lib/useFirstTeamMember';
@@ -16,7 +16,7 @@ import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { zonedDateKey } from '../../lib/interviewTimezone';
 
 /**
- * The one filter bar for List and Calendar, on the Self interviews and Caller interviews tabs: who, Stage, Status, search,
+ * The one filter bar for List and Calendar, on the Self interviews and Caller interviews tabs: who, Region, Stage, Status, search,
  * Date range, Clear. The Date range may reach the future (it offers Next week), and it also picks the calendar's period.
  * `callers`: Caller interviews shows every user's caller rounds, so a Caller filter replaces User and Profile. Self interviews has no Self / Caller filter: it is always self rounds.
  */
@@ -101,6 +101,9 @@ export default function InterviewFilters({
           </FilterField>
         </>
       )}
+      <FilterField label="Region" htmlFor={id('region')} width="w-36">
+        <Select id={id('region')} value={filters.region} onChange={(v) => update({ region: v })} options={INTERVIEW_REGION_OPTIONS} />
+      </FilterField>
       <FilterField label="Stage" htmlFor={id('stage')} width="w-40">
         <Select id={id('stage')} value={filters.stage} onChange={(v) => update({ stage: v })} options={stageOptions} />
       </FilterField>

@@ -11,7 +11,8 @@ import {
 } from './dateRange';
 import { browserZone, toWall, zonedDayBounds } from './interviewTimezone';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/Pagination';
-import type { CallType, listCallerRounds } from '../api/endpoints';
+import type { CallType, InterviewSummaryParams, listCallerRounds } from '../api/endpoints';
+import { PROFILE_REGIONS } from './countries';
 
 export type ListSort = 'latest' | 'company' | 'stage' | 'status';
 export type SortDir = 'asc' | 'desc';
@@ -25,6 +26,8 @@ export type InterviewFilters = {
   /** Owner id, or 'all' for every user. */
   user: string;
   profile: string;
+  /** The profile's region: one of PROFILE_REGIONS, 'none' (no region), or '' for every region. */
+  region: string;
   stage: string;
   status: string;
   /** Callers calendar: a caller id, 'unassigned', or '' for every caller. */
@@ -56,7 +59,7 @@ export function defaultInterviewUser(a: { isAdmin: boolean; userId: string | und
 
 /** Every URL key this page owns (the values are all strings in the URL). Other keys (`panel`, `round`, `brief`, `zone`) are not ours. */
 export type InterviewKey =
-  | 'user' | 'profile' | 'stage' | 'status' | 'caller' | 'owner' | 'q'
+  | 'user' | 'profile' | 'region' | 'stage' | 'status' | 'caller' | 'owner' | 'q'
   | 'range' | 'from' | 'to' | 'sort' | 'dir' | 'page' | 'size';
 export type InterviewUrlValues = Record<InterviewKey, string>;
 
@@ -65,6 +68,7 @@ export function interviewUrlDefaults(d: FilterDefaults): InterviewUrlValues {
   return {
     user: d.userId,
     profile: '',
+    region: '',
     stage: '',
     status: '',
     caller: '',
@@ -83,9 +87,16 @@ export function interviewUrlDefaults(d: FilterDefaults): InterviewUrlValues {
 /** The keys each tab's filter bar shows: what Clear resets and what makes Clear appear. */
 export function barKeys(callersView: boolean): InterviewKey[] {
   return callersView
-    ? ['owner', 'caller', 'stage', 'status', 'q', 'range', 'from', 'to']
-    : ['user', 'profile', 'stage', 'status', 'q', 'range', 'from', 'to'];
+    ? ['owner', 'caller', 'region', 'stage', 'status', 'q', 'range', 'from', 'to']
+    : ['user', 'profile', 'region', 'stage', 'status', 'q', 'range', 'from', 'to'];
 }
+
+/** The Region filter, both tabs: an interview's region is its profile's; `none` = the profile has none. */
+export const INTERVIEW_REGION_OPTIONS = [
+  { value: '', label: 'All regions' },
+  ...PROFILE_REGIONS.map((r) => ({ value: r as string, label: r as string })),
+  { value: 'none', label: 'No region' },
+];
 
 const SORTS: ListSort[] = ['latest', 'company', 'stage', 'status'];
 const KNOWN_PRESETS = INTERVIEW_PRESETS.map((o) => o.value as string);
@@ -107,6 +118,7 @@ export function parseInterviewValues(values: InterviewUrlValues, d: FilterDefaul
   return {
     user: values.user || d.userId,
     profile: values.profile,
+    region: INTERVIEW_REGION_OPTIONS.some((o) => o.value === values.region) ? values.region : '',
     stage: values.stage,
     status: values.status,
     caller: values.caller,
@@ -135,7 +147,7 @@ export function patchToUrl(patch: Partial<InterviewFilters>): Partial<InterviewU
 
 /** Whether anything the tab's bar shows differs from its default (the Clear button). */
 export function barDiffers(f: InterviewFilters, d: FilterDefaults, callersView: boolean): boolean {
-  if (f.stage || f.status || f.q.trim()) return true;
+  if (f.region || f.stage || f.status || f.q.trim()) return true;
   if (f.range !== DEFAULT_RANGE) return true;
   return callersView ? !!(f.owner || f.caller) : f.user !== d.userId || !!f.profile;
 }
@@ -241,6 +253,7 @@ export function listQuery(
   q.to = dayEnd(days.to, tz);
   if (f.user && f.user !== 'all') q.creatorId = f.user;
   if (f.profile) q.accountId = f.profile;
+  if (f.region) q.region = f.region;
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
   q.callType = 'self';
@@ -260,6 +273,7 @@ export function callerRoundsQuery(
   const q: Parameters<typeof listCallerRounds>[0] = { page: f.page, limit, dir: f.dir };
   q.from = dayStart(days.from, tz);
   q.to = dayEnd(days.to, tz);
+  if (f.region) q.region = f.region;
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
   if (f.caller) q.callerId = f.caller;
@@ -273,6 +287,7 @@ export type RoundsQuery = {
   to: string;
   creatorId?: string;
   accountId?: string;
+  region?: string;
   stage?: string;
   status?: string;
   callerOnly?: string;
@@ -299,9 +314,28 @@ export function roundsQuery(
     if (f.profile) q.accountId = f.profile;
     q.callType = 'self';
   }
+  if (f.region) q.region = f.region;
   if (f.stage) q.stage = f.stage;
   if (f.status) q.status = f.status;
   if (searchText(f)) q.q = searchText(f);
+  return q;
+}
+
+/**
+ * The totals strip's request: the request of the view under it (`listQuery`, `callerRoundsQuery` or `roundsQuery`)
+ * without paging and sorting, so both count the same rounds. Null while the view has nothing to ask for.
+ * `callers`: the Caller interviews tab (caller rounds only). `exclusiveTo`: the calendar's `to` is the midnight after
+ * its last day, while the summary's `to` is inclusive, so it is moved to the last instant shown.
+ */
+export function summaryQuery(
+  view: object | null,
+  { callers = false, exclusiveTo = false }: { callers?: boolean; exclusiveTo?: boolean } = {},
+): InterviewSummaryParams | null {
+  if (!view) return null;
+  const { page, limit, sort, dir, callerOnly, ...rest } = view as Record<string, unknown>;
+  const q = rest as InterviewSummaryParams;
+  if (callers) q.callerOnly = true;
+  if (exclusiveTo && q.to) q.to = new Date(Date.parse(q.to) - 1).toISOString();
   return q;
 }
 

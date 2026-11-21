@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   listInterviews: vi.fn(),
   getNeedsInput: vi.fn(),
   followUpInterviewStage: vi.fn(),
+  getInterviewSummary: vi.fn(),
+  listInterviewRounds: vi.fn(),
   role: 'staff',
 }));
 
@@ -31,6 +33,8 @@ vi.mock('../../api/endpoints', async () => ({
   listInterviews: mocks.listInterviews,
   getNeedsInput: mocks.getNeedsInput,
   followUpInterviewStage: mocks.followUpInterviewStage,
+  getInterviewSummary: mocks.getInterviewSummary,
+  listInterviewRounds: mocks.listInterviewRounds,
 }));
 
 vi.mock('../../auth/useAuth', () => ({
@@ -45,6 +49,8 @@ beforeEach(() => {
   mocks.listInterviews.mockResolvedValue({ interviews: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } });
   mocks.listCallerRounds.mockResolvedValue({ rounds: [], interviews: {}, pagination: { page: 1, limit: 25, total: 0, pages: 0 } });
   mocks.getNeedsInput.mockResolvedValue({ items: [], counts: { outcome: 0, follow_up: 0, heard_back: 0, reason: 0 } });
+  mocks.getInterviewSummary.mockResolvedValue({ total: 0, byStatus: { scheduled: 0, completed: 0, passed: 0, rejected: 0, canceled: 0 } });
+  mocks.listInterviewRounds.mockResolvedValue({ rounds: [], interviews: {} });
 });
 afterEach(() => {
   cleanup();
@@ -567,5 +573,179 @@ describe('Interviews page: Needs your input', () => {
     await waitFor(() => expect(mocks.listCallerRounds).toHaveBeenCalled());
     expect(screen.queryByText(/Needs your input/)).toBeNull();
     expect(mocks.getNeedsInput).not.toHaveBeenCalled();
+  });
+});
+
+describe('Interviews page: Region filter and the totals strip', () => {
+  function Search() {
+    return <p data-testid="search">{useLocation().search}</p>;
+  }
+  function renderPage(url: string) {
+    const page = (view: 'list' | 'calendar', callers = false) => <><InterviewsPage view={view} callers={callers} /><Search /></>;
+    return render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <MemoryRouter initialEntries={[url]}>
+          <Routes>
+            <Route path="/interviews" element={page('list')} />
+            <Route path="/interviews/calendar" element={page('calendar')} />
+            <Route path="/interviews/callers" element={page('list', true)} />
+            <Route path="/interviews/callers/calendar" element={page('calendar', true)} />
+          </Routes>
+        </MemoryRouter>
+      </SWRConfig>,
+    );
+  }
+  const search = () => screen.getByTestId('search').textContent;
+  const strip = () => screen.findByRole('group', { name: 'Round totals' });
+  const last = (fn: { mock: { calls: unknown[][] } }) => fn.mock.calls.at(-1)![0] as Record<string, unknown>;
+  const labels = () => within(screen.getByRole('group', { name: 'Filters' })).getAllByText(/./, { selector: 'label' }).map((l) => l.textContent);
+  const summary = { total: 1234, byStatus: { scheduled: 1000, completed: 200, passed: 30, rejected: 3, canceled: 1 } };
+
+  it('Self interviews: Region sits after Profile, goes to the URL and to the list request', async () => {
+    renderPage('/interviews?page=2');
+    await waitFor(() => expect(mocks.listInterviews).toHaveBeenCalled());
+    expect('region' in last(mocks.listInterviews)).toBe(false);
+    expect(labels().slice(0, 3)).toEqual(['User', 'Profile', 'Region']);
+    const region = screen.getByLabelText('Region') as HTMLSelectElement;
+    expect([...region.options].map((o) => [o.value, o.text])).toEqual([
+      ['', 'All regions'], ['Latam', 'Latam'], ['EU', 'EU'], ['Canada', 'Canada'], ['US', 'US'], ['Asia', 'Asia'], ['none', 'No region'],
+    ]);
+    fireEvent.change(region, { target: { value: 'EU' } });
+    await waitFor(() => expect(search()).toBe('?region=EU'));
+    await waitFor(() => expect(last(mocks.listInterviews)).toMatchObject({ region: 'EU', page: 1 }));
+    expect(screen.getByRole('link', { name: 'Calendar' }).getAttribute('href')).toBe('/interviews/calendar?region=EU');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    await waitFor(() => expect(search()).toBe(''));
+  });
+
+  it('Caller interviews: Region sits after Caller and goes to the caller rounds request', async () => {
+    renderPage('/interviews/callers?region=none');
+    await waitFor(() => expect(mocks.listCallerRounds).toHaveBeenCalled());
+    expect(labels().slice(0, 3)).toEqual(['User', 'Caller', 'Region']);
+    expect((screen.getByLabelText('Region') as HTMLSelectElement).value).toBe('none');
+    expect(last(mocks.listCallerRounds).region).toBe('none');
+  });
+
+  it('the calendar sends the region, and the strip counts the days the calendar shows', async () => {
+    renderPage('/interviews/calendar?region=Asia&stage=intro');
+    await waitFor(() => expect(mocks.listInterviewRounds).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.getInterviewSummary).toHaveBeenCalled());
+    const { from, to, ...rest } = last(mocks.listInterviewRounds);
+    expect(rest).toEqual({ creatorId: 'me', callType: 'self', region: 'Asia', stage: 'intro' });
+    // The calendar's `to` is the midnight after its last day; the summary's is inclusive.
+    expect(last(mocks.getInterviewSummary)).toEqual({ ...rest, from, to: new Date(Date.parse(to as string) - 1).toISOString() });
+    await strip();
+  });
+
+  it('shows the total and every status count, and says it counts rounds', async () => {
+    mocks.getInterviewSummary.mockResolvedValue(summary);
+    renderPage('/interviews');
+    const el = await strip();
+    expect(within(el).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Total 1,234 rounds', 'Scheduled 1,000', 'Completed 200', 'Passed 30', 'Rejected 3', 'Canceled 1',
+    ]);
+    expect(within(el).getByText('counts rounds, not companies')).toBeTruthy();
+  });
+
+  it('marks the active status; a status sets the filter, the same one again or Total clears it', async () => {
+    mocks.getInterviewSummary.mockResolvedValue(summary);
+    renderPage('/interviews?status=passed&page=3');
+    const btn = async (name: RegExp) => within(await strip()).getByRole('button', { name });
+    const pressed = async () => within(await strip()).getAllByRole('button', { pressed: true }).map((b) => b.textContent);
+    expect(await pressed()).toEqual(['Passed 30']);
+    expect((await btn(/^Total/)).hasAttribute('aria-pressed')).toBe(false);
+    fireEvent.click(await btn(/^Scheduled/));
+    await waitFor(() => expect(search()).toBe('?status=scheduled'));
+    expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('scheduled');
+    expect(await pressed()).toEqual(['Scheduled 1,000']);
+    fireEvent.click(await btn(/^Scheduled/));
+    await waitFor(() => expect(search()).toBe(''));
+    fireEvent.click(await btn(/^Rejected/));
+    await waitFor(() => expect(search()).toBe('?status=rejected'));
+    fireEvent.click(await btn(/^Total/));
+    await waitFor(() => expect(search()).toBe(''));
+  });
+
+  it('Self interviews: the strip sends the filters the list sends', async () => {
+    renderPage('/interviews?user=all&profile=a1&region=EU&stage=intro&status=passed&q=acme&range=next_week&page=2&sort=company');
+    await waitFor(() => expect(mocks.getInterviewSummary).toHaveBeenCalled());
+    const { page, limit, sort, dir, ...filters } = last(mocks.listInterviews);
+    expect(filters).toMatchObject({ accountId: 'a1', region: 'EU', stage: 'intro', status: 'passed', q: 'acme', callType: 'self' });
+    expect(filters.from && filters.to).toBeTruthy();
+    expect(last(mocks.getInterviewSummary)).toEqual(filters);
+  });
+
+  it('Caller interviews: the strip sends the filters the list sends, for caller rounds only', async () => {
+    renderPage('/interviews/callers?owner=u2&caller=c1&region=EU&stage=intro&q=acme');
+    await waitFor(() => expect(mocks.getInterviewSummary).toHaveBeenCalled());
+    const { page, limit, dir, ...filters } = last(mocks.listCallerRounds);
+    expect(filters).toMatchObject({ creatorId: 'u2', callerId: 'c1', region: 'EU', stage: 'intro', q: 'acme' });
+    expect(last(mocks.getInterviewSummary)).toEqual({ ...filters, callerOnly: true });
+    await strip();
+  });
+
+  it('the Caller interviews calendar counts caller rounds only', async () => {
+    renderPage('/interviews/callers/calendar?caller=c1');
+    await waitFor(() => expect(mocks.getInterviewSummary).toHaveBeenCalled());
+    expect(last(mocks.getInterviewSummary)).toMatchObject({ callerOnly: true, callerId: 'c1' });
+    expect('callType' in last(mocks.getInterviewSummary)).toBe(false);
+  });
+
+  it('shows a skeleton while the totals load', async () => {
+    mocks.getInterviewSummary.mockReturnValue(new Promise(() => {}));
+    renderPage('/interviews');
+    expect(await screen.findByTestId('interview-totals-loading')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Round totals' })).toBeNull();
+  });
+
+  it('a failed totals request shows nothing, is logged once, and the list still works', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = new Error('boom');
+    mocks.getInterviewSummary.mockRejectedValue(failure);
+    mocks.listInterviews.mockResolvedValue({
+      interviews: [{ _id: 'iv1', companyName: 'Acme Corp', createdBy: 'me', stageHistory: [] }],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1, hasNext: false, hasPrev: false },
+    });
+    renderPage('/interviews');
+    await waitFor(() => expect(logged).toHaveBeenCalledWith('Interview totals failed to load', failure));
+    expect((await screen.findAllByText('Acme Corp')).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('group', { name: 'Round totals' })).toBeNull();
+    expect(screen.queryByTestId('interview-totals-loading')).toBeNull();
+    expect(logged.mock.calls.filter(([m]) => m === 'Interview totals failed to load')).toHaveLength(1);
+    logged.mockRestore();
+  });
+
+  it('refetches the totals when an edit refreshes the list', async () => {
+    mocks.getNeedsInput.mockResolvedValueOnce({
+      items: [{
+        interviewId: 'iv1', roundId: 'r1', companyName: 'Acme Corp', profileName: 'John D', ownerId: 'me', ownerName: 'Maya Owner',
+        stage: 'tech1', status: 'scheduled', scheduledAt: '2026-11-10T15:00:00Z', need: 'outcome',
+      }],
+      counts: { outcome: 1, follow_up: 0, heard_back: 0, reason: 0 },
+    });
+    mocks.updateInterviewStage.mockResolvedValue({});
+    renderPage('/interviews');
+    await strip();
+    const before = mocks.getInterviewSummary.mock.calls.length;
+    fireEvent.click(within(await screen.findByRole('region', { name: /Needs your input/ })).getByRole('button', { name: 'Completed' }));
+    await waitFor(() => expect(mocks.getInterviewSummary.mock.calls.length).toBeGreaterThan(before));
+  });
+
+  it('refetches the totals when a status is changed in a list row', async () => {
+    mocks.listInterviews.mockResolvedValue({
+      interviews: [{
+        _id: 'iv1', companyName: 'Acme Corp', createdBy: 'me', status: 'scheduled',
+        stageHistory: [{ id: 'r1', stage: 'intro', status: 'scheduled', scheduledAt: '2030-01-01T10:00:00Z' }],
+      }],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1, hasNext: false, hasPrev: false },
+    });
+    mocks.updateInterviewStage.mockResolvedValue({});
+    renderPage('/interviews');
+    await strip();
+    const select = (await screen.findAllByLabelText('Status of Acme Corp'))[0];
+    const before = mocks.getInterviewSummary.mock.calls.length;
+    fireEvent.change(select, { target: { value: 'completed' } });
+    await waitFor(() => expect(mocks.updateInterviewStage).toHaveBeenCalledWith('iv1', 'r1', { status: 'completed' }));
+    await waitFor(() => expect(mocks.getInterviewSummary.mock.calls.length).toBeGreaterThan(before));
   });
 });

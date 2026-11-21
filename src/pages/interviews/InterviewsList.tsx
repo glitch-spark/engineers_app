@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import { PhoneCall } from 'lucide-react';
 import { NoCallerBadge, isUpcomingScheduled } from '../../components/interview/NoCallerBadge';
 import * as api from '../../api/endpoints';
@@ -10,7 +10,7 @@ import ActionMenu from '../../components/ActionMenu';
 import type { Interview } from '../../components/interview/types';
 import type { PanelMode } from '../../components/interview/InterviewPanel';
 import { formatProfileLabel } from '../../lib/countries';
-import { listQuery, type InterviewFilters, type ListSort } from '../../lib/interviewFilters';
+import { listQuery, summaryQuery, type InterviewFilters, type ListSort } from '../../lib/interviewFilters';
 import Pagination from '../../components/Pagination';
 import { notify } from '../../lib/notify';
 import {
@@ -24,6 +24,7 @@ import {
 } from '../../lib/stageBadge';
 import { useStatusNotePrompt } from '../../components/interview/StatusNoteDialog';
 import RoundTrail from './RoundTrail';
+import InterviewTotals, { isSummaryKey } from './InterviewTotals';
 import { ResumeScoreCell } from '../../components/interview/LinkedResumeCard';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { formatInZone, zoneAbbrev } from '../../lib/interviewTimezone';
@@ -62,6 +63,7 @@ export default function InterviewsList({
     keepPreviousData: true,
   });
   // SWR keeps the last page of rows when the key goes null; an invalid range shows none.
+  const { mutate: mutateAll } = useSWRConfig();
   const rows = (query ? (data?.interviews as Interview[] | undefined) : undefined) ?? [];
   const pagination = query ? data?.pagination : undefined;
   const emptyText = query ? 'No interviews match these filters.' : 'Pick a valid date range to see interviews.';
@@ -90,6 +92,7 @@ export default function InterviewsList({
       await api.updateInterviewStage(iv._id, tip.id, body);
       notify.success('Status updated');
       mutate();
+      mutateAll(isSummaryKey);
     } catch (err) {
       notify.error(err, 'Failed to update status');
     }
@@ -176,6 +179,7 @@ export default function InterviewsList({
   return (
     <div className="space-y-3">
       {statusNoteDialog}
+      <InterviewTotals query={summaryQuery(query)} status={filters.status} onStatus={(status) => update({ status })} />
       <div className="table-wrap hidden sm:block">
         <table className="min-w-full text-sm">
           <caption className="sr-only">Interviews</caption>
