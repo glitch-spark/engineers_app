@@ -53,7 +53,7 @@ export default function SetupGrid({ week }: { week: string }) {
   const [menuError, setMenuError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ItemFormMode | null>(null);
-  // Rows whose save failed: kept as edited when the week is re-read.
+  // Rows whose save failed: kept as edited by the one re-read right after Publish, then forgotten.
   const keep = useRef<Set<string>>(new Set());
 
   const dirty = !!state && JSON.stringify(state) !== snapshot;
@@ -68,8 +68,9 @@ export default function SetupGrid({ week }: { week: string }) {
     // Pin the loaded columns: unticking cells must not turn a column into chips before the save.
     const base = columns({ users, pinned: [] });
     setSnapshot(JSON.stringify({ users, pinned: base }));
+    const ids = keep.current;
+    keep.current = new Set();
     setState((s) => {
-      const ids = keep.current;
       if (!ids.size || !s) return { users, pinned: base };
       const kept = (u: TeamWeekUser) => (ids.has(u.userId) && s.users.find((x) => x.userId === u.userId)) || u;
       return { users: users.map(kept), pinned: [...base, ...s.pinned.filter((p) => !base.some((b) => b.key === p.key))] };
@@ -181,7 +182,9 @@ export default function SetupGrid({ week }: { week: string }) {
       );
       keep.current = new Set(Object.keys(failed));
       setErrors(failed);
-      await cur.mutate();
+      const fresh = await cur.mutate();
+      // An unchanged (or failed) re-read never reaches the effect: the edited rows are still in place, so forget them.
+      if (!fresh || JSON.stringify(fresh.users) === JSON.stringify(saved)) keep.current = new Set();
     } catch {
       setPublishError(true);
     } finally {
@@ -262,108 +265,111 @@ export default function SetupGrid({ week }: { week: string }) {
 
       {publishError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">Could not publish the week.</p>}
       {menuError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{menuError}</p>}
-      {form && (
-        <SetupItemForm key={JSON.stringify(form)} form={form} people={people} onSubmit={submitForm} onCancel={() => setForm(null)} />
-      )}
+      {/* Locked while publishing: the re-read replaces every saved row, so later typing would be lost. */}
+      <fieldset disabled={saving} className="m-0 min-w-0 space-y-3 border-0 p-0">
+        {form && (
+          <SetupItemForm key={JSON.stringify(form)} form={form} people={people} onSubmit={submitForm} onCancel={() => setForm(null)} />
+        )}
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse text-sm">
-          <thead className="bg-zinc-50 text-muted dark:bg-zinc-900">
-            <tr>
-              <th scope="col" rowSpan={2} className={`${TH} ${STICKY}`}>Person</th>
-              <th scope="col" rowSpan={2} className={TH}>Plans own week</th>
-              <th scope="colgroup" colSpan={TARGETS.length} className={`${TH} uppercase tracking-wide`}>Week targets</th>
-              {routineCols.length > 0 && (
-                <th scope="colgroup" colSpan={routineCols.length} className={`${TH} uppercase tracking-wide`}>Daily routines</th>
-              )}
-              {goalCols.length > 0 && (
-                <th scope="colgroup" colSpan={goalCols.length} className={`${TH} uppercase tracking-wide`}>Weekly goals</th>
-              )}
-              <th scope="col" rowSpan={2} className={TH}>Only this person</th>
-              <th scope="col" rowSpan={2} className={TH}>
-                <button type="button" className="btn-outline whitespace-nowrap text-xs" onClick={() => openForm({ mode: 'add', userId: null })}>
-                  + item
-                </button>
-              </th>
-            </tr>
-            <tr>
-              {TARGETS.map((t) => <th key={t.key} scope="col" className={`${TH} text-strong`}>{t.label}</th>)}
-              {itemCols.map(header)}
-            </tr>
-          </thead>
-          <tbody>
-            {state.users.map((u) => {
-              const name = nameOf(u);
-              return (
-                <tr key={u.userId}>
-                  <th scope="row" className={`${TD} ${STICKY} whitespace-nowrap px-3 font-medium text-strong`}>
-                    {name}
-                    {errors[u.userId] && (
-                      <p className="whitespace-normal text-xs font-normal text-red-600 dark:text-red-400" role="alert">{errors[u.userId]}</p>
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-collapse text-sm">
+            <thead className="bg-zinc-50 text-muted dark:bg-zinc-900">
+              <tr>
+                <th scope="col" rowSpan={2} className={`${TH} ${STICKY}`}>Person</th>
+                <th scope="col" rowSpan={2} className={TH}>Plans own week</th>
+                <th scope="colgroup" colSpan={TARGETS.length} className={`${TH} uppercase tracking-wide`}>Week targets</th>
+                {routineCols.length > 0 && (
+                  <th scope="colgroup" colSpan={routineCols.length} className={`${TH} uppercase tracking-wide`}>Daily routines</th>
+                )}
+                {goalCols.length > 0 && (
+                  <th scope="colgroup" colSpan={goalCols.length} className={`${TH} uppercase tracking-wide`}>Weekly goals</th>
+                )}
+                <th scope="col" rowSpan={2} className={TH}>Only this person</th>
+                <th scope="col" rowSpan={2} className={TH}>
+                  <button type="button" className="btn-outline whitespace-nowrap text-xs" onClick={() => openForm({ mode: 'add', userId: null })}>
+                    + item
+                  </button>
+                </th>
+              </tr>
+              <tr>
+                {TARGETS.map((t) => <th key={t.key} scope="col" className={`${TH} text-strong`}>{t.label}</th>)}
+                {itemCols.map(header)}
+              </tr>
+            </thead>
+            <tbody>
+              {state.users.map((u) => {
+                const name = nameOf(u);
+                return (
+                  <tr key={u.userId}>
+                    <th scope="row" className={`${TD} ${STICKY} whitespace-nowrap px-3 font-medium text-strong`}>
+                      {name}
+                      {errors[u.userId] && (
+                        <p className="whitespace-normal text-xs font-normal text-red-600 dark:text-red-400" role="alert">{errors[u.userId]}</p>
+                      )}
+                    </th>
+                    <td className={TD}>
+                      <input type="checkbox" aria-label={`${name} plans own week`} checked={u.plansOwnWeek}
+                        onChange={(e) => setState(setOwnWeek(state, u.userId, e.target.checked))} />
+                    </td>
+                    {TARGETS.map((t) => (
+                      <Td key={t.key} was={changed(prevUsers, state, u.userId, t.key)?.was}>
+                        {numberInput(`${name} ${t.label}`, u.goal[t.key] || null, (n) => setState(setTarget(state, u.userId, t.key, n ?? 0)))}
+                      </Td>
+                    ))}
+                    {itemCols.map((c) => itemCell(u, c))}
+                    <td className={`${TD} min-w-[14rem] text-left`}>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {ownItems(state, u.userId).map((o) => (
+                          <span key={`${o.scope}${o.index}`} className={o.scope === 'routine' ? 'badge-info' : 'badge-neutral'}>
+                            {o.item.text}
+                            {o.item.target != null && ` · ${o.item.target}`}
+                            <span className="text-muted"> · {o.scope === 'routine' ? 'daily' : 'week'}</span>
+                            <button type="button" className="ml-1 text-muted hover:text-red-600" aria-label={`Remove ${o.item.text} from ${name}`}
+                              onClick={() => setState(removeOwnItem(state, u.userId, o.scope, o.index))}>
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                        <button type="button" className="text-xs underline" aria-label={`Add item for ${name}`}
+                          onClick={() => openForm({ mode: 'add', userId: u.userId })}>
+                          + add
+                        </button>
+                      </div>
+                    </td>
+                    <td className={TD} />
+                  </tr>
+                );
+              })}
+              <tr className="bg-amber-50/60 dark:bg-amber-900/10">
+                <th scope="row" className={`${TD} ${STICKY} px-3 font-medium text-amber-800 dark:text-amber-300`}>Fill all ↓</th>
+                <td className={TD} />
+                {TARGETS.map((t) => (
+                  <td key={t.key} className={TD}>
+                    <input type="number" min={0} aria-label={`Fill all ${t.label}`} className={NUM}
+                      onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillTarget(state, t.key, n ?? 0)); }} />
+                  </td>
+                ))}
+                {itemCols.map((c) => (
+                  <td key={c.key} className={TD}>
+                    {isBox(c.kind) ? (
+                      <input type="checkbox" aria-label={`Fill all ${c.text}`}
+                        onChange={(e) => setState(fillColumn(state, c, { has: e.target.checked, target: null }))} />
+                    ) : (
+                      <input type="number" min={0} step={c.kind === 'hours' ? 'any' : 1} aria-label={`Fill all ${c.text}`} className={NUM}
+                        onChange={(e) => {
+                          const n = parseNum(e.target.value);
+                          if (n !== undefined) setState(fillColumn(state, c, { has: n !== null, target: n }));
+                        }} />
                     )}
-                  </th>
-                  <td className={TD}>
-                    <input type="checkbox" aria-label={`${name} plans own week`} checked={u.plansOwnWeek}
-                      onChange={(e) => setState(setOwnWeek(state, u.userId, e.target.checked))} />
                   </td>
-                  {TARGETS.map((t) => (
-                    <Td key={t.key} was={changed(prevUsers, state, u.userId, t.key)?.was}>
-                      {numberInput(`${name} ${t.label}`, u.goal[t.key] || null, (n) => setState(setTarget(state, u.userId, t.key, n ?? 0)))}
-                    </Td>
-                  ))}
-                  {itemCols.map((c) => itemCell(u, c))}
-                  <td className={`${TD} min-w-[14rem] text-left`}>
-                    <div className="flex flex-wrap items-center gap-1">
-                      {ownItems(state, u.userId).map((o) => (
-                        <span key={`${o.scope}${o.index}`} className={o.scope === 'routine' ? 'badge-info' : 'badge-neutral'}>
-                          {o.item.text}
-                          {o.item.target != null && ` · ${o.item.target}`}
-                          <span className="text-muted"> · {o.scope === 'routine' ? 'daily' : 'week'}</span>
-                          <button type="button" className="ml-1 text-muted hover:text-red-600" aria-label={`Remove ${o.item.text} from ${name}`}
-                            onClick={() => setState(removeOwnItem(state, u.userId, o.scope, o.index))}>
-                            ✕
-                          </button>
-                        </span>
-                      ))}
-                      <button type="button" className="text-xs underline" aria-label={`Add item for ${name}`}
-                        onClick={() => openForm({ mode: 'add', userId: u.userId })}>
-                        + add
-                      </button>
-                    </div>
-                  </td>
-                  <td className={TD} />
-                </tr>
-              );
-            })}
-            <tr className="bg-amber-50/60 dark:bg-amber-900/10">
-              <th scope="row" className={`${TD} ${STICKY} px-3 font-medium text-amber-800 dark:text-amber-300`}>Fill all ↓</th>
-              <td className={TD} />
-              {TARGETS.map((t) => (
-                <td key={t.key} className={TD}>
-                  <input type="number" min={0} aria-label={`Fill all ${t.label}`} className={NUM}
-                    onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillTarget(state, t.key, n ?? 0)); }} />
-                </td>
-              ))}
-              {itemCols.map((c) => (
-                <td key={c.key} className={TD}>
-                  {isBox(c.kind) ? (
-                    <input type="checkbox" aria-label={`Fill all ${c.text}`}
-                      onChange={(e) => setState(fillColumn(state, c, { has: e.target.checked, target: null }))} />
-                  ) : (
-                    <input type="number" min={0} step={c.kind === 'hours' ? 'any' : 1} aria-label={`Fill all ${c.text}`} className={NUM}
-                      onChange={(e) => {
-                        const n = parseNum(e.target.value);
-                        if (n !== undefined) setState(fillColumn(state, c, { has: n !== null, target: n }));
-                      }} />
-                  )}
-                </td>
-              ))}
-              <td className={TD} />
-              <td className={TD} />
-            </tr>
-          </tbody>
-        </table>
-      </div>
+                ))}
+                <td className={TD} />
+                <td className={TD} />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </fieldset>
       <p className="text-xs text-muted">
         Highlighted: new or changed since last week. Plans own week on = that person edits their own week; off = view-only for them.
         Click a column header to rename, re-type or remove it for this week.

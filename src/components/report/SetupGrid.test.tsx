@@ -28,7 +28,7 @@ const serve = (now: TeamWeekUser[], prev: TeamWeekUser[] = team()) =>
 
 const show = () =>
   render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, focusThrottleInterval: 0 }}>
       <SetupGrid week={WEEK} />
     </SWRConfig>,
   );
@@ -206,6 +206,48 @@ describe('SetupGrid', () => {
     fireEvent.click(publishBtn());
     await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(2));
     expect(putTeamWeek.mock.calls[1][1].map((r) => r.userId)).toEqual(['Ben']);
+  });
+
+  for (const anaSaves of [true, false]) {
+    it(`a failed row is kept only for the re-read after Publish, not on a later reload (Ana ${anaSaves ? 'saved' : 'untouched'})`, async () => {
+      show();
+      await ready();
+      if (anaSaves) type('Ana Bids self', '650');
+      type('Ben Bids self', '70');
+      putTeamWeek.mockResolvedValueOnce({ results: [
+        ...(anaSaves ? [{ userId: 'Ana', ok: true, error: null }] : []), { userId: 'Ben', ok: false, error: 'Too many items' },
+      ] });
+      const after = team();
+      if (anaSaves) after[0].goal.bidsSelf = 650;
+      serve(after);
+      fireEvent.click(publishBtn());
+      await within(screen.getByRole('rowheader', { name: /Ben/ })).findByRole('alert');
+      await waitFor(() => expect(getTeamWeek.mock.calls.filter(([x]) => x === WEEK).length).toBe(2));
+      expect(input('Ben Bids self').value).toBe('70');
+      // The admin puts Ben back; Ben then edits his own week; the grid reloads on focus.
+      type('Ben Bids self', '');
+      const later = team();
+      if (anaSaves) later[0].goal.bidsSelf = 650;
+      later[1].goal.bidsSelf = 55;
+      serve(later);
+      window.dispatchEvent(new Event('focus'));
+      await waitFor(() => expect(input('Ben Bids self').value).toBe('55'));
+      expect(publishBtn().disabled).toBe(true);
+    });
+  }
+
+  it('the grid is disabled while Publish is in flight', async () => {
+    show();
+    await ready();
+    type('Ana Bids self', '650');
+    putTeamWeek.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(publishBtn());
+    // A disabled <fieldset> disables its controls (`:disabled`); their own `disabled` property stays false.
+    const off = (el: Element) => el.matches(':disabled');
+    await waitFor(() => expect(off(input('Ben Bids self'))).toBe(true));
+    expect(off(input('Ana Email'))).toBe(true);
+    expect(off(input('Fill all Proposals'))).toBe(true);
+    expect(off(screen.getByRole('button', { name: '+ item' }))).toBe(true);
   });
 
   it('a thrown publish error shows "Could not publish the week."', async () => {
