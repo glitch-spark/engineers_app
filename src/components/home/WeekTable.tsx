@@ -1,9 +1,25 @@
-import type { DashboardWeek } from '../../api/endpoints';
+import type { DashboardRoutineRow, DashboardWeek } from '../../api/endpoints';
 import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
 import { stageLabel } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { dayDate, weekdayShort } from '../../lib/week';
-import { dayCell } from './RoutinesGrid';
+
+type RoutineDay = DashboardRoutineRow['days'][number];
+/** What a day's cell shows, what it is called for a screen reader, and its colour. */
+function dayCell(d: RoutineDay): [string, string, string] {
+  switch (d.state) {
+    case 'done': return ['✓', 'done', 'font-bold text-emerald-600 dark:text-emerald-400'];
+    case 'missed': return ['✗', 'missed', 'font-bold text-red-600 dark:text-red-400'];
+    case 'short':
+      return d.target
+        ? [`${d.value ?? 0} / ${d.target}`, `${d.value ?? 0} of ${d.target}, short of the target`, 'font-semibold text-amber-600 dark:text-amber-400']
+        : [`${d.value ?? 0}`, `${d.value ?? 0}, short of the target`, 'font-semibold text-amber-600 dark:text-amber-400'];
+    case 'today': return ['·', 'today, not done yet', 'text-muted'];
+    case 'future': return ['', 'still to come', ''];
+    default: return ['', 'not planned', ''];
+  }
+}
+
 
 type BidDay = NonNullable<DashboardWeek['bids']['byDay']>[number];
 

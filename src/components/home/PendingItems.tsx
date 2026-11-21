@@ -33,9 +33,10 @@ const FIRST = 5;
  * The reads behind Pending items and what they add up to: the interview rows in tag order, the profile and bidder
  * flags, and the total. Shared with the admin's person page, whose Pending tile shows the same numbers (same SWR
  * keys, so nothing is read twice). `loading` until the first answer; `failed` when neither read answered.
- * `owner`: the follow-up rows are not in `rows` or the total but in `followUps`: the person's Home lists them in Today.
+ * `apart` (the owner's Home, and the admin's view of a person on today): the day block lists `today`'s unmarked
+ * rounds and the follow-ups, so they are not in `rows` or the total; the follow-up rows come back as `followUps`.
  */
-export function usePending(mode: 'owner' | 'admin', userId: string | undefined, today: TodayInterview[]) {
+export function usePending(mode: 'owner' | 'admin', userId: string | undefined, today: TodayInterview[], apart = mode === 'owner') {
   const { user } = useAuth();
   const now = useNow();
   const pending = useSWR(['home-pending', userId ?? ''], () => api.getDashboardPending(userId), { shouldRetryOnError: false });
@@ -50,10 +51,10 @@ export function usePending(mode: 'owner' | 'admin', userId: string | undefined, 
     // person by id, the rows are that person's).
     .filter((row) => mode === 'admin' || !!userId || user?.role !== 'admin' || row.ownerId === user.id);
   const known = new Set(waiting.map(needsInputKey));
-  const interviews = mode === 'owner'
+  const interviews = apart
     ? waiting.filter((row) => !(row.need === 'outcome' && todayKeys.has(needsInputKey(row))))
     : [...waiting, ...unmarkedToday.filter((r) => !known.has(roundKey(r))).map(asNeedsInput)];
-  const followUps = mode === 'owner' ? interviews.filter((row) => row.need === 'follow_up') : [];
+  const followUps = apart ? interviews.filter((row) => row.need === 'follow_up') : [];
   const rows = NEEDS.flatMap((n) => interviews.filter((row) => row.need === n.need && !followUps.includes(row)).map((row) => ({ row, ...n })));
   const profiles = pending.data?.profiles ?? [];
   const bidders = pending.data?.bidders ?? [];
@@ -75,17 +76,19 @@ export function usePending(mode: 'owner' | 'admin', userId: string | undefined, 
  * `interviews-needs-input`). An older server without the pending read still gives the interviews.
  */
 export default function PendingItems({
-  mode, userId, name, today, onSaved,
+  mode, userId, name, today, apart, onSaved,
 }: {
   mode: 'owner' | 'admin';
   userId?: string;
   name?: string;
   today: TodayInterview[];
+  /** See `usePending`; default: the owner's Home. */
+  apart?: boolean;
   onSaved: () => unknown;
 }) {
   const id = useId();
   const { tz } = useInterviewTimezone();
-  const { rows, profiles, bidders, unmarkedToday, total } = usePending(mode, userId, today);
+  const { rows, profiles, bidders, unmarkedToday, total } = usePending(mode, userId, today, apart);
   const { dialog, ask, button, resultButtons, outcomeButtons } = useNeedsInputActions(onSaved);
   const [open, setOpen] = useState(mode === 'admin'); // the owner's block starts folded
   // admin only: the groups folded, and the groups shown past their first rows

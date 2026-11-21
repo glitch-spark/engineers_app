@@ -9,17 +9,18 @@ import DashboardPage from './Dashboard';
 let role = 'staff';
 vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'boss', role } }) }));
 vi.mock('../api/endpoints', () => ({ getTeamToday: vi.fn(), lookupUsers: vi.fn() }));
-vi.mock('../components/home/MyHome', () => ({ default: (p: { userId?: string; name?: string }) => <div>{`my-home-stub${p.userId ? `|${p.userId}|${p.name}` : ''}`}</div> }));
+// own Home: no props; the admin's view of a person: who, and the picked day beside the real today
+vi.mock('../components/home/MyHome', async () => {
+  const { todayInputValue } = await import('../lib/week');
+  return {
+    default: (p: { userId?: string; name?: string; day?: string }) => (
+      p.userId ? <div data-testid="person">{`${p.userId}|${p.name}|${p.day}|${todayInputValue()}`}</div> : <div>my-home-stub</div>
+    ),
+  };
+});
 vi.mock('../components/home/MetricsCard', () => ({ default: () => <div>metrics-stub</div> }));
 vi.mock('../components/dashboard/TeamOverview', () => ({ default: () => <div>team-stub</div> })); // not rendered now; kept so a return is caught
-vi.mock('../components/home/PersonPage', () => ({
-  default: (p: { userId: string; name: string; day: string; today: string; onPickDay: (day: string) => void }) => (
-    <div>
-      <div data-testid="person">{`${p.userId}|${p.name}|${p.day}|${p.today}`}</div>
-      <button type="button" onClick={() => p.onPickDay('2026-11-17')}>pick-tuesday</button>
-    </div>
-  ),
-}));
+
 
 const users = [
   { _id: 'u1', name: 'Yuari', email: null, role: 'staff', isActive: true },
@@ -67,25 +68,11 @@ describe('Home', () => {
     expect(api.lookupUsers).not.toHaveBeenCalled();
   });
 
-  it("an admin switches a picked person between the admin view and the person's own Home, kept in the URL", async () => {
-    renderIt('/dashboard?user=u2');
-    await person();
-    const view = screen.getByRole('radiogroup', { name: 'View' });
-    expect(within(view).getByRole('radio', { name: 'Admin view' }).getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(within(view).getByRole('radio', { name: "User's view" }));
-    expect(await screen.findByText('my-home-stub|u2|Puma')).toBeTruthy();
-    expect(screen.queryByTestId('person')).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Week' })).toBeNull(); // the person's Home is today and this week only
-    expect(screen.getByTestId('where').textContent).toBe('?user=u2&view=user');
-    fireEvent.click(screen.getByRole('radio', { name: 'Admin view' }));
-    await person();
-    expect(screen.getByTestId('where').textContent).toBe('?user=u2');
-  });
-
-  it('the view switch shows only once a person is picked', async () => {
-    renderIt();
-    await picker();
+  it("an admin sees the picked person's own Home on the picked day: one view, no switch", async () => {
+    renderIt('/dashboard?user=u2&view=user'); // an old link's view is ignored
+    expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
     expect(screen.queryByRole('radiogroup', { name: 'View' })).toBeNull();
+    expect(screen.getByRole('group', { name: 'Week' })).toBeTruthy();
   });
 
   it('an admin gets a User filter at the top like other pages: the names at once, nobody picked, no cards of their own', async () => {
@@ -172,14 +159,6 @@ describe('Home', () => {
     expect(where()).toBe('?user=u1');
     expect(shown()).toBe('2026-11-20|2026-11-20');
     expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
-  });
-
-  it("a day picked on the person's page (a bar, a to-dos column) lands in the URL too", async () => {
-    renderIt('/dashboard?user=u1');
-    await person();
-    fireEvent.click(button('pick-tuesday'));
-    expect(where()).toBe('?user=u1&day=2026-11-17');
-    expect(shown()).toBe('2026-11-17|2026-11-20');
   });
 
   it('Previous week picks that week\'s Friday, any number of weeks back; Next week comes back and picks today in the current week', async () => {

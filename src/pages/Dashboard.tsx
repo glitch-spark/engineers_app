@@ -1,11 +1,9 @@
 import { useId } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
-import Segmented from '../components/Segmented';
 import Select from '../components/Select';
 import FilterBar, { FilterField } from '../components/filters/FilterBar';
 import MyHome from '../components/home/MyHome';
-import PersonPage from '../components/home/PersonPage';
 import { useAuth } from '../auth/useAuth';
 import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../lib/week';
 import { teamMembersAZ, useTeamLookup } from '../lib/useFirstTeamMember';
@@ -117,12 +115,11 @@ function AdminHome() {
   const lookup = useTeamLookup();
   const people = teamMembersAZ(lookup.data?.users).map((u) => ({ value: u._id, label: u.name?.trim() || u.email?.trim() || 'Unnamed' }));
   const picked = params.get('user') || '';
-  const asUser = !!picked && params.get('view') === 'user'; // the person's own Home, read for them
   const pickedName = people.find((p) => p.value === picked)?.label ?? '';
 
   return (
     <>
-      <FilterBar canClear={!!picked || day !== home} onClear={() => patch({ user: null, day: null, view: null })}>
+      <FilterBar canClear={!!picked || day !== home} onClear={() => patch({ user: null, day: null })}>
         <FilterField label="User" htmlFor={userId} width="w-52">
           {lookup.error && !lookup.data ? (
             <p className="text-sm text-muted">
@@ -143,18 +140,10 @@ function AdminHome() {
             />
           )}
         </FilterField>
-        {picked && (
-          <Segmented
-            label="View" value={asUser ? 'user' : 'admin'} onChange={(view) => patch({ view: view === 'user' ? 'user' : null })}
-            options={[{ value: 'admin', label: 'Admin view' }, { value: 'user', label: "User's view" }]}
-          />
-        )}
-        {/* the person's Home is today and this week only */}
-        {!asUser && <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />}
+        <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />
       </FilterBar>
-      {asUser ? <MyHome key={picked} userId={picked} name={pickedName} /> : picked ? (
-        <PersonPage key={picked} userId={picked} name={pickedName} day={day} today={today} onPickDay={pickDay} />
-      ) : (
+      {/* the person's own Home, read for them, on the picked day (user, 2026-11-21: one view, no switch) */}
+      {picked ? <MyHome key={picked} userId={picked} name={pickedName} day={day} /> : (
         <p className="panel p-6 text-sm text-muted">Pick a person to see their bids, interviews, to-dos, goals and pending items.</p>
       )}
     </>

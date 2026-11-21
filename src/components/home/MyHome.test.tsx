@@ -385,6 +385,41 @@ describe('MyHome: Interview pipeline', () => {
   });
 });
 
+describe("MyHome as the admin's view of a person", () => {
+  const followUp = { interviewId: 'iv-f', roundId: 'r-f', companyName: 'Acme', profileName: null, ownerId: 'u2', ownerName: 'Puma', stage: 'intro',
+    status: 'completed', scheduledAt: '2026-11-09T16:00:00Z', endsAt: '2026-11-09T17:00:00Z', need: 'follow_up' };
+  const show = (day?: string, p: object = plan()) => {
+    auth.role = 'admin';
+    vi.mocked(api.getDashboardPending).mockResolvedValue({ interviews: [followUp], profiles: [], bidders: [], counts: {} } as never);
+    vi.mocked(api.getDayPlan).mockResolvedValue(p as never);
+    render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><MyHome userId="u2" name="Puma" day={day} /></MemoryRouter></SWRConfig>);
+  };
+
+  it('today: Pending items is open, and the follow-up is a row of the day block, not of Pending', async () => {
+    show(undefined, plan({ todayInterviews: [], interviewsMarked: { marked: 0, total: 0 } }));
+    expect(await screen.findByRole('heading', { name: 'Today · Wed, Nov 18' })).toBeTruthy();
+    expect(await screen.findByRole('checkbox', { name: 'I followed up with Acme' })).toBeTruthy();
+    expect(screen.queryByText(/Pending items/)).toBeNull(); // the follow-up was its only row
+  });
+
+  it('a past day: read for that day and its week, read-only, with the follow-up back in an open Pending items and no result buttons', async () => {
+    const ended = iv({ roundId: 'r-old', state: 'unmarked', status: 'scheduled', scheduledAt: '2026-11-10T16:00:00Z', endsAt: '2026-11-10T16:45:00Z' });
+    show('2026-11-10', plan({ date: '2026-11-10', todayInterviews: [ended], interviewsMarked: { marked: 0, total: 1 } }));
+    expect(await screen.findByRole('heading', { name: 'Tue, Nov 10' })).toBeTruthy();
+    expect(api.getDayPlan).toHaveBeenCalledWith('2026-11-10', 'u2');
+    expect(api.getDashboardWeek).toHaveBeenCalledWith({ today: '2026-11-18', userId: 'u2', weekOf: '2026-11-10' });
+    expect(((await screen.findByLabelText('Bidder Management')) as HTMLInputElement).disabled).toBe(true);
+    const daily = screen.getByRole('list', { name: 'Daily' });
+    expect(within(daily).queryByRole('checkbox', { name: /I followed up/ })).toBeNull();
+    expect(within(daily).queryByRole('button', { name: 'Passed' })).toBeNull(); // the old round is listed, not answered here
+    expect(within(daily).getByText(/Acme/)).toBeTruthy();
+    const pending = await screen.findByRole('group', { name: /Pending items \(1\)/ });
+    expect(within(pending).getByText('Follow-up due')).toBeTruthy();
+    expect(within(pending).getByText(/Things waiting on Puma/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /^Week · / })).toBeTruthy();
+  });
+});
+
 describe('MyHome: Bids and Interviews rows', () => {
   const daily = () => screen.findByRole('list', { name: 'Daily' });
   const rowOf = async (name: string) => within(await daily()).getByText(name).closest('li') as HTMLElement;

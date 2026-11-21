@@ -5,7 +5,7 @@ import * as api from '../../api/endpoints';
 import type { DayItem } from '../../api/endpoints';
 import { stageLabel } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
-import { addDays, dayDate, mondayOf, monthDay, todayInputValue } from '../../lib/week';
+import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../../lib/week';
 import { daysWithoutResult, needsInputKey, useNeedsInputActions } from '../interview/useNeedsInputActions';
 import ItemRow, { kept } from '../report/ItemRow';
 import PendingItems, { usePending } from './PendingItems';
@@ -29,22 +29,31 @@ const WEEK = 'whitespace-nowrap text-xs text-muted';
  * all ticked = good to go), then the week as a read-only table with the weekly goals under it. Fed by the day read,
  * the week read and the pending read; after any save the page reads them again.
  *
- * With `userId` it is an admin looking at that person's Home (`name`): the same page, read for them. Their to-dos,
- * goals and follow-ups are theirs to tick, so those boxes are disabled; the interview result buttons work, as on
- * the admin's own view of the person.
+ * With `userId` it is the admin's view of that person (`name`): the same page, read for them, with Pending items
+ * open. Their to-dos, goals and follow-ups are theirs to tick, so those boxes are disabled. `day` (admin only;
+ * default today) is the day the first block shows and whose week the table shows: a past day lists what was done,
+ * with no follow-ups and no result buttons (those are about now, and stay in Pending items).
  */
-export default function MyHome({ userId, name }: { userId?: string; name?: string }) {
+export default function MyHome({ userId, name, day: picked }: { userId?: string; name?: string; day?: string }) {
   const who = userId ? [userId] : []; // own Home keeps its keys, so nothing it shares a cache with changes
   const today = todayInputValue();
+  const day = picked ?? today;
+  const isToday = day === today;
+  const thisWeek = mondayOf(day) === mondayOf(today);
+  const mode = userId ? 'admin' : 'owner';
   const now = useNow();
   const { tz } = useInterviewTimezone();
   const { mutate: globalMutate } = useSWRConfig();
-  const { data: plan, error, isLoading, mutate } = useSWR(['home-day', today, ...who], () => api.getDayPlan(today, userId), { revalidateOnFocus: false });
-  const week = useSWR(['home-week', today, ...who], () => api.getDashboardWeek({ today, ...(userId ? { userId } : {}) }));
+  const { data: plan, error, isLoading, mutate } = useSWR(['home-day', day, ...who], () => api.getDayPlan(day, userId), { revalidateOnFocus: false });
+  const week = useSWR(
+    ['home-week', today, ...who, ...(thisWeek ? [] : [mondayOf(day)])],
+    () => api.getDashboardWeek({ today, ...(userId ? { userId } : {}), ...(thisWeek ? {} : { weekOf: day }) }),
+  );
   const pipeline = useSWR(['person-pipeline', userId ?? ''], () => api.getInterviewPipeline(userId));
   const [pipelineOpen, setPipelineOpen] = useState(false); // reference, not a to-do: one line until opened
   const rounds = plan?.todayInterviews ?? [];
-  const { followUps } = usePending('owner', userId, rounds);
+  const nowRounds = isToday ? rounds : []; // what the day block answers for Pending items: only today's
+  const { followUps } = usePending(mode, userId, nowRounds, isToday);
   // What the page shows besides the day: the week and the pending items (follow-ups included).
   const refreshRest = () => globalMutate((key) => Array.isArray(key) && ['home-week', 'home-pending', 'interviews-needs-input', 'person-pipeline'].includes(key[0]));
   const refresh = () => Promise.all([mutate(), refreshRest()]);
@@ -122,7 +131,7 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
     save(id, r);
   };
 
-  const dow = dayDate(today).getDay(); // 1 = Mon .. 5 = Fri
+  const dow = thisWeek ? dayDate(today).getDay() : 0; // 1 = Mon .. 5 = Fri; a past week has no days left
   const t = plan.targets;
   const bids = plan.bidsTotals ?? { // an older server: the same numbers from the day's own fields
     self: plan.done.bidsSelf, selfTarget: t.bidsSelf || null, bidder: plan.bidsBidderAuto, bidderTarget: t.bidsBidder || null,
@@ -144,7 +153,7 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
   const weekMet = (i: DayItem) => i.scope === 'goal' && !!plan.progress[i.id]?.done && !plan.progress[i.id]?.doneOn;
   const doneEarlier = (i: DayItem) => {
     const on = plan.progress[i.id]?.doneOn;
-    return i.scope === 'goal' && on && on !== today ? on : null;
+    return i.scope === 'goal' && on && on !== day ? on : null;
   };
   const resultOf = (i: DayItem) => {
     const saved = { done: i.result?.done ?? false, value: i.result?.value ?? null };
@@ -202,10 +211,10 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
   return (
     <>
       {dialog}
-      <PendingItems mode="owner" userId={userId} name={name} today={rounds} onSaved={refresh} />
+      <PendingItems mode={mode} userId={userId} name={name} today={nowRounds} apart={isToday} onSaved={refresh} />
       <section className="panel p-4">
         <header className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-heading">Today · {dayDate(today).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h2>
+          <h2 className="text-base font-semibold text-heading">{isToday ? `Today · ${dayLabel(day)}` : dayLabel(day)}</h2>
           <span className="text-xs text-muted">
             <b className="font-semibold text-body">{boxes.length - toGo} of {boxes.length} done</b>{toGo > 0 && ` · ${toGo} to go`}
           </span>
@@ -239,7 +248,7 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
                 </div>
               )}
             </div>
-            {weekBids && <span className={WEEK}>this week {num(weekBids.total)}{weekBids.target ? ` of ${num(weekBids.target)}` : ''}</span>}
+            {weekBids && <span className={WEEK}>{thisWeek ? 'this week' : 'that week'} {num(weekBids.total)}{weekBids.target ? ` of ${num(weekBids.target)}` : ''}</span>}
           </li>
           {!!plan.bidsByRegion?.length && (
             <li className="border-t-0 pb-2 pl-7"><div className="border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
@@ -281,7 +290,7 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
                 </>
               )}
             </div>
-            {w && <span className={WEEK}>this week {w.interviews.done}{w.interviews.target ? ` of ${w.interviews.target} planned` : ''}</span>}
+            {w && <span className={WEEK}>{thisWeek ? 'this week' : 'that week'} {w.interviews.done}{w.interviews.target ? ` of ${w.interviews.target} planned` : ''}</span>}
           </li>
           {rounds.length > 0 && (
             <li className="border-t-0 pb-2">
@@ -289,7 +298,7 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
                 {rounds.map((iv) => (
                   <TodayRound key={roundKey(iv)} iv={iv} now={now} tz={tz}>
                     {/* an old round with no id of its own can't be answered from here: the Interviews page handles it */}
-                    {roundState(iv, now) === 'unmarked' && !!iv.roundId && (
+                    {isToday && roundState(iv, now) === 'unmarked' && !!iv.roundId && (
                       <div className="mt-1.5 flex flex-wrap gap-2">{outcomeButtons(asNeedsInput(iv))}</div>
                     )}
                   </TodayRound>
@@ -323,13 +332,13 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
         </ul>
         {toGo === 0 && (
           <p role="status" className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
-            <span aria-hidden>✓ </span>{"All done for today. You're good to go."}
+            <span aria-hidden>✓ </span>{userId ? 'All done for the day.' : "All done for today. You're good to go."}
           </p>
         )}
       </section>
       <section className="panel p-4">
         <header className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-heading">This week · {monthDay(monday)} – {monthDay(addDays(monday, 4))}</h2>
+          <h2 className="text-base font-semibold text-heading">{thisWeek ? 'This week' : 'Week'} · {monthDay(monday)} – {monthDay(addDays(monday, 4))}</h2>
           <span className="text-xs text-muted">
             {weekly.length > 0 && <b className="font-semibold text-body">{count(weekly)}</b>}{weekly.length > 0 && daysLeft && ' · '}{daysLeft}
           </span>
