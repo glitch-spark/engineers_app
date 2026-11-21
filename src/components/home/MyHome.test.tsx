@@ -375,7 +375,7 @@ describe('MyHome: Bids and Interviews rows', () => {
     expect(screen.queryByRole('table')).toBeNull(); // no days: no week table
   });
 
-  it('the location table shows only with more than one location', async () => {
+  it('the location table shows whenever the day has a location', async () => {
     const us = { region: 'US', self: 60, selfTarget: 50, bidder: 85, total: 145 };
     setup(plan({ bidsByRegion: [us, { region: 'EU', self: 22, selfTarget: 30, bidder: 35, total: 57 }, { region: 'Latam', self: 10, selfTarget: null, bidder: 0, total: 10 }] }));
     const table = within(await daily()).getByRole('table', { name: 'Bids by location' });
@@ -386,7 +386,10 @@ describe('MyHome: Bids and Interviews rows', () => {
     expect(within(table).getByText('22 / 30').className).toContain('amber');
     expect(within(table).getByText('60 / 50').className).not.toContain('amber');
     cleanup();
-    setup(plan({ bidsByRegion: [us] }));
+    setup(plan({ bidsByRegion: [us] })); // one location: still shown
+    expect(within(within(await daily()).getByRole('table', { name: 'Bids by location' })).getAllByRole('row')).toHaveLength(2);
+    cleanup();
+    setup(plan({ bidsByRegion: [] }));
     await daily();
     expect(screen.queryByRole('table', { name: 'Bids by location' })).toBeNull();
   });
@@ -394,7 +397,7 @@ describe('MyHome: Bids and Interviews rows', () => {
   it('Interviews with none today: says so, counts as ticked, with the week against what is planned', async () => {
     setup(plan({ todayInterviews: [], interviewsMarked: { marked: 0, total: 0 } }));
     const row = await rowOf('Interviews');
-    expect(row.textContent).toContain('none today');
+    expect(row.textContent).toContain('none today · self 0 · caller 0');
     expect((within(row).getByRole('checkbox', { name: AUTO_INTERVIEWS }) as HTMLInputElement).checked).toBe(true);
     expect(await within(row).findByText('this week 3 of 4 planned')).toBeTruthy();
   });

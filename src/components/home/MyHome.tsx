@@ -18,8 +18,8 @@ const DEBOUNCE_MS = 800;
 const num = (n: number) => n.toLocaleString('en-US');
 const UNDER = 'font-semibold text-amber-600 dark:text-amber-400';
 const REACHED = 'font-semibold text-emerald-600 dark:text-emerald-400';
-const LINE = 'flex flex-wrap items-center gap-2 px-1 py-1.5 text-sm text-body';
-const NAME = 'w-20 shrink-0 font-medium text-strong';
+const LINE = 'flex flex-wrap items-center gap-2 px-1 py-2 text-sm text-body';
+const NAME = 'w-24 shrink-0 font-semibold text-strong';
 const AMOUNT = 'min-w-0 flex-1 basis-52 tabular-nums';
 const WEEK = 'whitespace-nowrap text-xs text-muted';
 
@@ -174,16 +174,18 @@ export default function MyHome() {
       </Fragment>
     );
   };
+  // A self-ticking box: the real (disabled) checkbox is kept for screen readers, the drawn one shows green once
+  // ticked and dashed until then, as in the prototype (a disabled native box is always grey).
   const autoBox = (name: string, checked: boolean) => (
-    <input
-      type="checkbox"
-      disabled
-      checked={checked}
-      readOnly
-      aria-label={`${name} — ticks itself`}
-      title="Ticks itself"
-      className={checked ? 'h-4 w-4 shrink-0' : 'h-4 w-4 shrink-0 appearance-none rounded border border-dashed border-zinc-400 dark:border-zinc-500'}
-    />
+    <span className="relative inline-flex h-4 w-4 shrink-0" title="Ticks itself">
+      <input type="checkbox" disabled checked={checked} readOnly aria-label={`${name} — ticks itself`} className="sr-only" />
+      <span
+        aria-hidden
+        className={`flex h-4 w-4 items-center justify-center rounded text-[11px] font-bold leading-none text-white ${checked ? 'bg-success-500' : 'border border-dashed border-zinc-400 dark:border-zinc-500'}`}
+      >
+        {checked && '✓'}
+      </span>
+    </span>
   );
 
   return (
@@ -202,7 +204,7 @@ export default function MyHome() {
             No plan for this week yet — <Link to="/plans" className="underline">Set this week's plan</Link>
           </p>
         )}
-        <ul aria-label="Daily" className="mt-2 space-y-0.5">
+        <ul aria-label="Daily" className="mt-2 divide-y divide-zinc-100 dark:divide-zinc-800">
           <li className={LINE}>
             {autoBox('Bids target reached', bidsOk)}
             <span className={NAME}>Bids</span>
@@ -210,8 +212,8 @@ export default function MyHome() {
               <b className={bids.target ? (bidsOk ? REACHED : UNDER) : 'font-semibold text-strong'}>{num(bids.total)}</b>
               {bids.target ? ` of ${num(bids.target)}` : ''}
               <span className="text-xs text-muted">
-                {' · '}self {num(bids.self)}{bids.selfTarget ? ` / ${num(bids.selfTarget)}` : ''}
-                {' · '}bidder {num(bids.bidder)}{bids.bidderTarget ? ` / ${num(bids.bidderTarget)}` : ''}
+                {' · '}self <b className="text-body">{num(bids.self)}</b>{bids.selfTarget ? ` / ${num(bids.selfTarget)}` : ''}
+                {' · '}bidder <b className="text-body">{num(bids.bidder)}</b>{bids.bidderTarget ? ` / ${num(bids.bidderTarget)}` : ''}
               </span>
               {!!bids.target && (
                 <div
@@ -228,9 +230,9 @@ export default function MyHome() {
             </div>
             {weekBids && <span className={WEEK}>this week {num(weekBids.total)}{weekBids.target ? ` of ${num(weekBids.target)}` : ''}</span>}
           </li>
-          {plan.bidsByRegion && plan.bidsByRegion.length > 1 && (
-            <li className="mb-1 ml-6 border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
-              <table aria-label="Bids by location" className="text-xs tabular-nums text-body">
+          {!!plan.bidsByRegion?.length && (
+            <li className="border-t-0 pb-2 pl-7"><div className="border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+              <table aria-label="Bids by location" className="w-full max-w-md text-xs tabular-nums text-body">
                 <thead>
                   <tr>
                     {['Location', 'Self', 'Bidder', 'Total'].map((h) => (
@@ -251,28 +253,28 @@ export default function MyHome() {
                   ))}
                 </tbody>
               </table>
-            </li>
+            </div></li>
           )}
           <li className={LINE}>
             {marked ? autoBox("Today's interviews all marked", interviewsOk) : <span className="w-4 shrink-0" />}
             <span className={NAME}>Interviews</span>
             <div className={AMOUNT}>
-              {!marked ? `${plan.interviews.self + plan.interviews.caller}${intTarget > 0 ? ` of ${intTarget}` : ''}`
-                : !marked.total ? <span className="text-muted">none today</span>
-                  : (
-                    <>
-                      <b className={interviewsOk ? REACHED : UNDER}>{marked.marked} of {marked.total}</b> marked
-                      <span className="text-xs text-muted">
-                        {' · '}self {rounds.filter((r) => r.who.kind === 'self').length} · caller {rounds.filter((r) => r.who.kind !== 'self').length}
-                      </span>
-                    </>
-                  )}
+              {!marked ? `${plan.interviews.self + plan.interviews.caller}${intTarget > 0 ? ` of ${intTarget}` : ''}` : (
+                <>
+                  {!marked.total ? <span className="text-muted">none today</span>
+                    : <><b className={interviewsOk ? REACHED : UNDER}>{marked.marked} of {marked.total}</b> marked</>}
+                  <span className="text-xs text-muted">
+                    {' · '}self <b className="text-body">{rounds.filter((r) => r.who.kind === 'self').length}</b>
+                    {' · '}caller <b className="text-body">{rounds.filter((r) => r.who.kind !== 'self').length}</b>
+                  </span>
+                </>
+              )}
             </div>
             {w && <span className={WEEK}>this week {w.interviews.done}{w.interviews.target ? ` of ${w.interviews.target} planned` : ''}</span>}
           </li>
           {rounds.length > 0 && (
-            <li>
-              <ul aria-label="Today's interviews" className="mb-1 ml-6 border-l-2 border-zinc-200 dark:border-zinc-700">
+            <li className="border-t-0 pb-2">
+              <ul aria-label="Today's interviews" className="ml-7 divide-y divide-zinc-100 border-l-2 dark:divide-zinc-800 border-zinc-200 dark:border-zinc-700">
                 {rounds.map((iv) => (
                   <TodayRound key={roundKey(iv)} iv={iv} now={now} tz={tz}>
                     {/* an old round with no id of its own can't be answered from here: the Interviews page handles it */}
