@@ -135,6 +135,31 @@ describe('SetupGrid', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/already/);
   });
 
+  it('adding a name only one person has: for everyone it becomes a column with their cell ticked; for another person too; for that person it is refused', async () => {
+    const add = (who: string | null, name: string) => {
+      fireEvent.click(screen.getByRole('button', { name: who ? `Add item for ${who}` : '+ item' }));
+      fireEvent.change(screen.getByLabelText('Item name'), { target: { value: name } });
+      fireEvent.change(screen.getByLabelText('When'), { target: { value: 'goal' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    };
+    show();
+    await ready();
+    add(null, 'Solo');
+    expect(screen.getByRole('button', { name: /^Solo/ })).toBeTruthy();
+    expect(input('Ben Solo').checked).toBe(true);
+    expect(input('Ana Solo').checked).toBe(false);
+    cleanup();
+
+    show();
+    await ready();
+    add('Ben', 'solo');
+    expect(screen.getByRole('alert').textContent).toMatch(/already/);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    add('Ana', 'Solo');
+    expect(input('Ana Solo').checked).toBe(true);
+    expect(input('Ben Solo').checked).toBe(true);
+  });
+
   it('the column menu renames, re-types, switches daily / weekly and removes', async () => {
     show();
     await ready();

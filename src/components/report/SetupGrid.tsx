@@ -5,7 +5,7 @@ import { hasTarget } from '../../api/endpoints';
 import type { PlanItemKind, TeamWeekUser } from '../../api/endpoints';
 import { addDays, dateParam, parseDateParam } from '../../lib/reportWeek';
 import {
-  addColumn, addOwnItem, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, ownItems,
+  addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, ownItems,
   removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, setCell, setOwnWeek, setTarget,
   weekStatus, type Column, type GridState, type Scope, type TargetKey,
 } from '../../lib/teamGrid';
@@ -146,7 +146,7 @@ export default function SetupGrid({ week }: { week: string }) {
     const text = v.text.trim();
     if (form.mode !== 'type' && !text) return 'Enter a name.';
     if (form.mode === 'add') {
-      if (keyTaken(state, columnKey(text, v.kind, v.scope))) return TAKEN;
+      if (addTaken(state, columnKey(text, v.kind, v.scope), v.userId || undefined)) return TAKEN;
       if (!v.userId) setState(addColumn(state, text, v.kind, v.scope));
       else {
         const u = state.users.find((x) => x.userId === v.userId);

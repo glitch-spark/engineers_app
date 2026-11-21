@@ -51,10 +51,16 @@ export function ownItems(s: GridState, userId: string): { scope: Scope; item: Pl
   );
 }
 
-/** A column, or anyone's item, already has this key. */
-export const keyTaken = (s: GridState, key: string): boolean =>
-  columns(s).some((c) => c.key === key) ||
-  s.users.some((u) => SCOPES.some((scope) => u[listKey(scope)].some((i) => itemKey(i, scope) === key)));
+const userHas = (u: TeamWeekUser, key: string) =>
+  SCOPES.some((scope) => u[listKey(scope)].some((i) => itemKey(i, scope) === key));
+const columnTaken = (s: GridState, key: string) => columns(s).some((c) => c.key === key);
+
+/** A column, or anyone's item, already has this key (rename / retype). */
+export const keyTaken = (s: GridState, key: string): boolean => columnTaken(s, key) || s.users.some((u) => userHas(u, key));
+
+/** Adding for everyone: only a column blocks (one person's item becomes the column); for one person: only their item. */
+export const addTaken = (s: GridState, key: string, userId?: string): boolean =>
+  userId ? s.users.some((u) => u.userId === userId && userHas(u, key)) : columnTaken(s, key);
 
 const mapUsers = (s: GridState, f: (u: TeamWeekUser) => TeamWeekUser): GridState => ({ ...s, users: s.users.map(f) });
 const mapUser = (s: GridState, userId: string, f: (u: TeamWeekUser) => TeamWeekUser): GridState =>

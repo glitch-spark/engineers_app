@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanItem, PlanItemKind, TeamWeekUser } from '../api/endpoints';
 import {
   addColumn, addOwnItem, cell, changed, columnKey, columns, fillColumn, isEmptyRow, ownItems, removeColumn,
-  removeOwnItem, renameColumn, retypeColumn, retypeBlocked, keyTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
+  removeOwnItem, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
   type GridState,
 } from './teamGrid';
 
@@ -224,5 +224,16 @@ describe('teamGrid', () => {
     const saved = [user('A', [item('x')]), user('B', [item('y')], [], false)];
     const s = setTarget(st(saved), 'A', 'bidsSelf', 1);
     expect(rowsToSave(saved, s).map((r) => [r.userId, r.exists])).toEqual([['A', true], ['B', false]]);
+  });
+
+  it('addTaken: for everyone only a column blocks; for one person only their own item blocks', () => {
+    const s = addColumn(st([user('A', [item('Solo')]), user('B')]), 'Pin', 'count', 'goal');
+    const solo = columnKey('Solo', 'check', 'routine');
+    expect(addTaken(s, solo)).toBe(false);
+    expect(addTaken(s, columnKey('pin', 'count', 'goal'))).toBe(true);
+    expect(addTaken(s, solo, 'B')).toBe(false);
+    expect(addTaken(s, solo, 'A')).toBe(true);
+    const all = addColumn(s, 'Solo', 'check', 'routine');
+    expect(cell(all, 'A', columns(all).find((c) => c.key === solo)!).has).toBe(true);
   });
 });
