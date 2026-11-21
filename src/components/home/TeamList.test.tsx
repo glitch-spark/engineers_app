@@ -24,7 +24,7 @@ describe('TeamList', () => {
     const [yuari, puma, michael] = rows();
     expect(rows().map((r) => within(r).getByText(/^[A-Z][a-z]+$/).textContent)).toEqual(['Yuari', 'Puma', 'Michael', 'Zed']);
 
-    expect(within(yuari).getByRole('img', { name: 'Something overdue' }).className).toContain('bg-red-500');
+    expect(within(yuari).getByRole('img', { name: 'An interview ended and is not marked' }).className).toContain('bg-red-500');
     expect(within(yuari).getByLabelText('28 pending').textContent).toBe('28');
     expect(within(yuari).getByText('183 / 270 bids · 1 of 4 to-dos')).toBeTruthy();
     const bar = within(yuari).getByRole('progressbar', { name: 'Yuari: bids today' });

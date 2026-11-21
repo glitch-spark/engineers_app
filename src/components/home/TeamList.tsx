@@ -3,7 +3,7 @@ import type { TeamToday } from '../../api/endpoints';
 
 type Person = TeamToday['people'][number];
 const DOT: Record<Person['state'], [string, string]> = {
-  red: ['bg-red-500', 'Something overdue'],
+  red: ['bg-red-500', 'An interview ended and is not marked'],
   amber: ['bg-amber-500', 'Behind today'],
   green: ['bg-success-500', 'On track'],
 };
