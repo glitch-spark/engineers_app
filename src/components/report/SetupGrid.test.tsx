@@ -160,6 +160,19 @@ describe('SetupGrid', () => {
     expect(input('Ben Solo').checked).toBe(true);
   });
 
+  it('reports dirty changes to onDirtyChange', async () => {
+    const onDirtyChange = vi.fn();
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, focusThrottleInterval: 0 }}>
+        <SetupGrid week={WEEK} onDirtyChange={onDirtyChange} />
+      </SWRConfig>,
+    );
+    await ready();
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    type('Ana Bids self', '650');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
   it('the column menu renames, re-types, switches daily / weekly and removes', async () => {
     show();
     await ready();

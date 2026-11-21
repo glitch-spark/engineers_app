@@ -44,7 +44,7 @@ function Td({ was, children }: { was?: string | null; children: ReactNode }) {
 }
 
 /** Admin: every person's week in one grid, published in one save. */
-export default function SetupGrid({ week }: { week: string }) {
+export default function SetupGrid({ week, onDirtyChange }: { week: string; onDirtyChange?: (dirty: boolean) => void }) {
   const prevWeek = dateParam(addDays(parseDateParam(week) ?? new Date(), -7));
   const [state, setState] = useState<GridState | null>(null);
   const [snapshot, setSnapshot] = useState('');
@@ -76,6 +76,8 @@ export default function SetupGrid({ week }: { week: string }) {
       return { users: users.map(kept), pinned: [...base, ...s.pinned.filter((p) => !base.some((b) => b.key === p.key))] };
     });
   }, [cur.data]);
+
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   useEffect(() => {
     if (!dirty) return;

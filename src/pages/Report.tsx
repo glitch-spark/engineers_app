@@ -43,6 +43,10 @@ export default function ReportPage() {
   const today = dateParam(new Date());
   // Admins plan everyone's week in one grid; anyone else asking for it gets their usual page.
   const setup = isAdmin && teamView && params.get('view') === 'setup';
+  const [gridDirty, setGridDirty] = useState(false);
+  // The grid remounts per week and unmounts off setup: unpublished edits would vanish silently.
+  const mayLeave = () =>
+    !setup || !gridDirty || window.confirm('Leave without publishing? Your changes to this week will be lost.');
 
   const setParam = useCallback(
     (patch: Record<string, string | null>) =>
@@ -85,7 +89,7 @@ export default function ReportPage() {
       <PageHeader title="Plans" />
 
       <div className="toolbar flex flex-wrap items-center gap-2">
-        <button type="button" className="btn-icon" aria-label="Previous week" onClick={() => setParam({ week: dateParam(addDays(monday, -7)) })}>
+        <button type="button" className="btn-icon" aria-label="Previous week" onClick={() => mayLeave() && setParam({ week: dateParam(addDays(monday, -7)) })}>
           <ChevronLeft size={18} aria-hidden />
         </button>
         <span className="min-w-[10rem] text-center font-medium text-strong" aria-live="polite">
@@ -96,17 +100,19 @@ export default function ReportPage() {
           className="btn-icon"
           aria-label="Next week"
           disabled={!canGoNext}
-          onClick={() => setParam({ week: dateParam(addDays(monday, 7)) })}
+          onClick={() => mayLeave() && setParam({ week: dateParam(addDays(monday, 7)) })}
         >
           <ChevronRight size={18} aria-hidden />
         </button>
         {week !== dateParam(currentMonday) && (
-          <button type="button" className="btn-outline text-xs" onClick={() => setParam({ week: null })}>
+          <button type="button" className="btn-outline text-xs" onClick={() => mayLeave() && setParam({ week: null })}>
             This week
           </button>
         )}
         {setup ? (
-          <Link to={teamLink} className="ml-auto text-sm underline">← Team</Link>
+          <Link to={teamLink} className="ml-auto text-sm underline" onClick={(e) => mayLeave() || e.preventDefault()}>
+            ← Team
+          </Link>
         ) : isAdmin && teamView ? (
           <Link to={`/plans?week=${week}&view=setup`} className="btn ml-auto text-sm">Plan the week</Link>
         ) : viewUser ? (
@@ -136,7 +142,7 @@ export default function ReportPage() {
       </div>
 
       {setup ? (
-        <SetupGrid key={week} week={week} />
+        <SetupGrid key={week} week={week} onDirtyChange={setGridDirty} />
       ) : !showBoard ? (
         // A row opens that person's board (read-only); the viewer's own row opens their own, editable one.
         <TeamTable week={week} onOpenUser={(id) => setParam({ user: id === user?.id ? null : id, view: null })} />
