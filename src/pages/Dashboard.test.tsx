@@ -151,7 +151,11 @@ describe('Home', () => {
       ['Mon, Nov 16', false, false, null], ['Tue, Nov 17', false, false, null], ['Wed, Nov 18', false, false, null],
       ['Thu, Nov 19', false, false, null], ['Fri, Nov 20', true, false, 'date'],
     ]);
-    expect(within(screen.getByRole('radiogroup', { name: 'Day' })).getByText('today')).toBeTruthy();
+    // one line per button, the same height as the other filters; today's reads "Today" where the others read the weekday
+    const dayTexts = within(screen.getByRole('radiogroup', { name: 'Day' })).getAllByRole('radio').map((r) => r.parentElement!.textContent);
+    expect(dayTexts).toEqual(['Mon16', 'Tue17', 'Wed18', 'Thu19', 'Today20']);
+    expect(screen.getByRole('group', { name: 'Week' }).querySelector('[data-control]')!.className).toContain('h-[38px]');
+    expect(screen.getByRole('radio', { name: 'Mon, Nov 16' }).parentElement!.querySelector('[data-control]')!.className).toContain('h-[38px]');
     expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
     expect(shown()).toBe('2026-11-20|2026-11-20');
     expect(screen.queryByLabelText('Day', { selector: 'select' })).toBeNull(); // the Today / Yesterday select is gone

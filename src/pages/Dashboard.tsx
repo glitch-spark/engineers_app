@@ -38,7 +38,7 @@ function usePickedDay() {
 }
 
 const FIELD_LABEL = 'mb-1 block text-xs text-muted'; // as FilterField's, for a control that is a group of buttons
-const ARROW = 'px-2.5 py-1.5 text-body hover:bg-zinc-50 disabled:text-zinc-300 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:disabled:text-zinc-600';
+const ARROW = 'flex items-center px-2.5 text-body hover:bg-zinc-50 disabled:text-zinc-300 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:disabled:text-zinc-600';
 
 /**
  * The Week and Day filters and Back to today: step back any number of weeks (never past the current one), then one
@@ -54,9 +54,9 @@ function WeekAndDay({ today, home, day, pickDay }: { today: string; home: string
     <>
       <div role="group" aria-labelledby={`${id}w`}>
         <span id={`${id}w`} className={FIELD_LABEL}>Week</span>
-        <div className="inline-flex items-center overflow-hidden rounded-lg border border-zinc-300 bg-white text-sm dark:border-zinc-700 dark:bg-zinc-900">
+        <div data-control className="inline-flex h-[38px] items-stretch overflow-hidden rounded-xl border border-field bg-white text-sm shadow-sm dark:bg-zinc-900">
           <button type="button" aria-label="Previous week" className={`border-r border-zinc-200 dark:border-zinc-700 ${ARROW}`} onClick={() => pickDay(addDays(monday, -3))}>‹</button>
-          <span className="whitespace-nowrap px-3 text-body" aria-live="polite">{monthDay(monday)} – {monthDay(addDays(monday, 4))}</span>
+          <span className="flex items-center whitespace-nowrap px-3 font-medium text-body" aria-live="polite">{monthDay(monday)} – {monthDay(addDays(monday, 4))}</span>
           <button
             type="button" aria-label="Next week" disabled={current} className={`border-l border-zinc-200 dark:border-zinc-700 ${ARROW}`}
             onClick={() => pickDay(nextMonday === mondayOf(home) ? home : addDays(nextMonday, 4))}
@@ -67,7 +67,7 @@ function WeekAndDay({ today, home, day, pickDay }: { today: string; home: string
       </div>
       <div role="radiogroup" aria-labelledby={`${id}d`}>
         <span id={`${id}d`} className={FIELD_LABEL}>Day</span>
-        <div className="flex gap-1">
+        <div className="flex gap-1.5">
           {[0, 1, 2, 3, 4].map((i) => {
             const date = addDays(monday, i);
             return (
@@ -76,10 +76,12 @@ function WeekAndDay({ today, home, day, pickDay }: { today: string; home: string
                   type="radio" name={`${id}day`} value={date} className="peer sr-only" aria-label={dayLabel(date)}
                   aria-current={date === today ? 'date' : undefined} checked={date === day} disabled={date > today} onChange={() => pickDay(date)}
                 />
-                <span className="block min-w-[2.75rem] cursor-pointer rounded-lg border border-zinc-300 bg-white px-2 py-0.5 text-center text-[11px] leading-tight text-muted peer-checked:border-zinc-900 peer-checked:bg-zinc-900 peer-checked:text-zinc-300 peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500 peer-disabled:cursor-default peer-disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:peer-checked:border-zinc-100 dark:peer-checked:bg-zinc-100 dark:peer-checked:text-zinc-600">
-                  {dayDate(date).toLocaleDateString('en-US', { weekday: 'short' })}
-                  <b className="block text-sm">{dayDate(date).getDate()}</b>
-                  {date === today && <i className="block text-[10px] not-italic text-accent-600 dark:text-accent-400">today</i>}
+                <span
+                  data-control
+                  className="flex h-[38px] min-w-[3.25rem] cursor-pointer items-center justify-center gap-1 rounded-xl border border-field bg-white px-2.5 text-xs text-muted shadow-sm dark:bg-zinc-900 peer-checked:border-zinc-900 peer-checked:bg-zinc-900 peer-checked:text-zinc-300 peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500 peer-disabled:cursor-default peer-disabled:opacity-40 dark:peer-checked:border-zinc-100 dark:peer-checked:bg-zinc-100 dark:peer-checked:text-zinc-600"
+                >
+                  {date === today ? 'Today' : dayDate(date).toLocaleDateString('en-US', { weekday: 'short' })}
+                  <b className="text-sm">{dayDate(date).getDate()}</b>
                 </span>
               </label>
             );
