@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
@@ -26,6 +26,42 @@ const num = (n: number) => n.toLocaleString('en-US');
 /** "48, 52 and 40" */
 const listed = (xs: number[]) => (xs.length > 1 ? `${xs.slice(0, -1).map(num).join(', ')} and ${num(xs[xs.length - 1])}` : xs.map(num).join(''));
 
+/** How many rows of a group the admin sees before "… n more". */
+const FIRST = 5;
+
+/**
+ * The reads behind Pending items and what they add up to: the interview rows in tag order, the profile and bidder
+ * flags, and the total. Shared with the admin's person page, whose Pending tile shows the same numbers (same SWR
+ * keys, so nothing is read twice). `loading` until the first answer; `failed` when neither read answered.
+ */
+export function usePending(mode: 'owner' | 'admin', userId: string | undefined, today: TodayInterview[]) {
+  const { user } = useAuth();
+  const now = useNow();
+  const pending = useSWR(['home-pending', userId ?? ''], () => api.getDashboardPending(userId), { shouldRetryOnError: false });
+  // An admin's own rounds are asked for by id (without it the needs-input list is the whole team's).
+  const listFor = userId ?? (user?.role === 'admin' ? user.id : undefined);
+  const list = useSWR(pending.error ? ['interviews-needs-input', listFor ?? ''] : null, () => api.getNeedsInput(listFor));
+
+  const unmarkedToday = today.filter((r) => roundState(r, now) === 'unmarked');
+  const todayKeys = new Set(today.map(roundKey));
+  const waiting = (pending.data?.interviews ?? list.data?.items ?? [])
+    // Guard: an admin's own Home never shows someone else's round, whatever the server returned.
+    .filter((row) => mode === 'admin' || user?.role !== 'admin' || row.ownerId === user.id);
+  const known = new Set(waiting.map(needsInputKey));
+  const interviews = mode === 'owner'
+    ? waiting.filter((row) => !(row.need === 'outcome' && todayKeys.has(needsInputKey(row))))
+    : [...waiting, ...unmarkedToday.filter((r) => !known.has(roundKey(r))).map(asNeedsInput)];
+  const rows = NEEDS.flatMap((n) => interviews.filter((row) => row.need === n.need).map((row) => ({ row, ...n })));
+  const profiles = pending.data?.profiles ?? [];
+  const bidders = pending.data?.bidders ?? [];
+  return {
+    rows, profiles, bidders, unmarkedToday, total: rows.length + profiles.length + bidders.length,
+    loading: !pending.data && (!pending.error || (!list.data && !list.error)),
+    failed: !pending.data && !!pending.error && !list.data && !!list.error,
+    retry: () => pending.mutate(),
+  };
+}
+
 /**
  * What waits on one person: interviews that need an answer, and the flags on their profiles and bidders.
  * `owner`: on the person's own Home (follow-up rows have the "I followed up" checkbox; `today`'s unmarked rounds are
@@ -44,28 +80,12 @@ export default function PendingItems({
   onSaved: () => unknown;
 }) {
   const id = useId();
-  const { user } = useAuth();
   const { tz } = useInterviewTimezone();
-  const now = useNow();
-  const pending = useSWR(['home-pending', userId ?? ''], () => api.getDashboardPending(userId), { shouldRetryOnError: false });
-  // An admin's own rounds are asked for by id (without it the needs-input list is the whole team's).
-  const listFor = userId ?? (user?.role === 'admin' ? user.id : undefined);
-  const list = useSWR(pending.error ? ['interviews-needs-input', listFor ?? ''] : null, () => api.getNeedsInput(listFor));
+  const { rows, profiles, bidders, unmarkedToday, total } = usePending(mode, userId, today);
   const { dialog, isSaving, followUp, ask, button, resultButtons, outcomeButtons } = useNeedsInputActions(onSaved);
-
-  const unmarkedToday = today.filter((r) => roundState(r, now) === 'unmarked');
-  const todayKeys = new Set(today.map(roundKey));
-  const waiting = (pending.data?.interviews ?? list.data?.items ?? [])
-    // Guard: an admin's own Home never shows someone else's round, whatever the server returned.
-    .filter((row) => mode === 'admin' || user?.role !== 'admin' || row.ownerId === user.id);
-  const known = new Set(waiting.map(needsInputKey));
-  const interviews = mode === 'owner'
-    ? waiting.filter((row) => !(row.need === 'outcome' && todayKeys.has(needsInputKey(row))))
-    : [...waiting, ...unmarkedToday.filter((r) => !known.has(roundKey(r))).map(asNeedsInput)];
-  const rows = NEEDS.flatMap((n) => interviews.filter((row) => row.need === n.need).map((row) => ({ row, ...n })));
-  const profiles = pending.data?.profiles ?? [];
-  const bidders = pending.data?.bidders ?? [];
-  const total = rows.length + profiles.length + bidders.length;
+  // admin only: the groups folded, and the groups shown past their first rows
+  const [folded, setFolded] = useState<string[]>([]);
+  const [whole, setWhole] = useState<string[]>([]);
   if (!total) return dialog;
 
   const interviewText = (row: NeedsInputItem) => {
@@ -119,12 +139,36 @@ export default function PendingItems({
       {end}
     </li>
   );
-  const group = (title: string, items: ReactNode[]) => items.length > 0 && (
-    <>
-      <div className={`mt-3 ${LABEL}`}>{title} ({items.length})</div>
-      <ul aria-label={title} className="divide-y divide-zinc-100 dark:divide-zinc-800">{items}</ul>
-    </>
-  );
+  const group = (title: string, items: ReactNode[]) => {
+    if (!items.length) return null;
+    if (mode === 'owner') {
+      return (
+        <>
+          <div className={`mt-3 ${LABEL}`}>{title} ({items.length})</div>
+          <ul aria-label={title} className="divide-y divide-zinc-100 dark:divide-zinc-800">{items}</ul>
+        </>
+      );
+    }
+    // the admin's page: a group folds on its heading and lists its first rows, then "… n more" (user, 2026-11-21)
+    const open = !folded.includes(title);
+    const rest = whole.includes(title) ? 0 : Math.max(0, items.length - FIRST);
+    return (
+      <>
+        <button
+          type="button" aria-expanded={open} className={`mt-3 block w-full text-left ${LABEL}`}
+          onClick={() => setFolded((f) => (open ? [...f, title] : f.filter((t) => t !== title)))}
+        >
+          <span aria-hidden>{open ? '▾ ' : '▸ '}</span>{title} ({items.length})
+        </button>
+        {open && <ul aria-label={title} className="divide-y divide-zinc-100 dark:divide-zinc-800">{rest ? items.slice(0, FIRST) : items}</ul>}
+        {open && rest > 0 && (
+          <button type="button" className="py-1 text-xs text-muted underline" onClick={() => setWhole((w) => [...w, title])}>
+            … {rest} more<span className="sr-only"> {title.toLowerCase()}</span>
+          </button>
+        )}
+      </>
+    );
+  };
   const link = (to: string, text: string) => <Link to={to} className="link-inline whitespace-nowrap text-xs">{text} →</Link>;
 
   return (

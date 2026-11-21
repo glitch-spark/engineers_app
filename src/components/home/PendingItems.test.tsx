@@ -105,6 +105,44 @@ describe('PendingItems', () => {
     expect(within(b2).getByRole('link', { name: /Open bidder/ }).getAttribute('href')).toBe('/bidders?bidder=b2');
   });
 
+  it('admin: each group folds on its heading, open at first', async () => {
+    pending({ interviews: [round()], profiles, bidders });
+    asAdmin();
+    const box = await block();
+    const heads = () => within(box).getAllByRole('button', { name: /^(Interviews|Profiles|Bidders) \(/ }).map((b) => [b.getAttribute('aria-label') ?? b.textContent!.replace(/^[▾▸] /, ''), b.getAttribute('aria-expanded')]);
+    expect(heads()).toEqual([['Interviews (1)', 'true'], ['Profiles (2)', 'true'], ['Bidders (2)', 'true']]);
+    fireEvent.click(within(box).getByRole('button', { name: 'Profiles (2)' }));
+    expect(heads()).toEqual([['Interviews (1)', 'true'], ['Profiles (2)', 'false'], ['Bidders (2)', 'true']]);
+    expect(within(box).queryByRole('list', { name: 'Profiles' })).toBeNull();
+    expect(rowsOf(box, 'Bidders')).toHaveLength(2);
+    expect(within(box).getByRole('heading', { name: 'Pending items (5)' })).toBeTruthy(); // folding hides rows, not the count
+    fireEvent.click(within(box).getByRole('button', { name: 'Profiles (2)' }));
+    expect(rowsOf(box, 'Profiles')).toHaveLength(2);
+  });
+
+  it('admin: a group lists its first 5 rows, then "… n more" shows the rest', async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ ...profiles[1], accountId: `p${i}`, name: `Profile ${i}` }));
+    pending({ profiles: many, bidders });
+    asAdmin();
+    const box = await block();
+    expect(within(box).getByText('Profiles (8)')).toBeTruthy();
+    expect(rowsOf(box, 'Profiles').map((r) => within(r).getByText(/^Profile \d$/).textContent)).toEqual(['Profile 0', 'Profile 1', 'Profile 2', 'Profile 3', 'Profile 4']);
+    expect(within(box).getAllByRole('button', { name: /… \d+ more/ }).map((b) => b.textContent)).toEqual(['… 3 more profiles']); // Bidders has 2: no cut
+    fireEvent.click(within(box).getByRole('button', { name: '… 3 more profiles' }));
+    expect(rowsOf(box, 'Profiles')).toHaveLength(8);
+    expect(within(box).queryByRole('button', { name: /… \d+ more/ })).toBeNull();
+  });
+
+  it('owner: groups do not fold and every row is listed', async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ ...profiles[1], accountId: `p${i}`, name: `Profile ${i}` }));
+    pending({ profiles: many });
+    show();
+    const box = await block();
+    expect(rowsOf(box, 'Profiles')).toHaveLength(8);
+    expect(within(box).queryByRole('button')).toBeNull();
+    expect(within(box).getByText('Profiles (8)').tagName).toBe('DIV');
+  });
+
   it('a group with nothing in it is left out', async () => {
     pending({ profiles: [profiles[1]] });
     asAdmin();
