@@ -1,0 +1,191 @@
+import { hasTarget } from '../api/endpoints';
+import type { PlanItem, PlanItemIn, PlanItemKind, TeamWeekRowIn, TeamWeekUser } from '../api/endpoints';
+
+export type Scope = 'routine' | 'goal';
+export type TargetKey = 'bidsSelf' | 'bidsBidder' | 'interviewsSelf';
+export interface Column { key: string; text: string; kind: PlanItemKind; scope: Scope }
+/** pinned = columns added in this session (kept even if fewer than two people have them). */
+export interface GridState { users: TeamWeekUser[]; pinned: Column[] }
+
+const MAX_ITEMS = 20;
+type Cell = { has: boolean; target: number | null };
+type ListKey = 'routines' | 'weeklyGoals';
+
+const listKey = (scope: Scope): ListKey => (scope === 'routine' ? 'routines' : 'weeklyGoals');
+const norm = (t: string) => t.trim().replace(/\s+/g, ' ');
+const tidy = (t: string) => norm(t);
+
+export const columnKey = (text: string, kind: PlanItemKind, scope: Scope): string =>
+  `${scope}|${kind}|${norm(text).toLowerCase()}`;
+
+const itemKey = (i: PlanItemIn, scope: Scope) => columnKey(i.text, i.kind, scope);
+const SCOPES: Scope[] = ['routine', 'goal'];
+
+export function columns(s: GridState): Column[] {
+  const out: Column[] = [];
+  for (const scope of SCOPES) {
+    const seen = new Map<string, { col: Column; users: Set<string> }>();
+    for (const u of s.users) {
+      for (const i of u[listKey(scope)]) {
+        const key = itemKey(i, scope);
+        const e = seen.get(key) ?? { col: { key, text: tidy(i.text), kind: i.kind, scope }, users: new Set() };
+        e.users.add(u.userId);
+        seen.set(key, e);
+      }
+    }
+    const pinned = s.pinned.filter((p) => p.scope === scope);
+    for (const p of pinned) if (!seen.has(p.key)) seen.set(p.key, { col: p, users: new Set() });
+    const pinKeys = new Set(pinned.map((p) => p.key));
+    for (const e of seen.values()) if (e.users.size >= 2 || pinKeys.has(e.col.key)) out.push(e.col);
+  }
+  return out;
+}
+
+export function ownItems(s: GridState, userId: string): { scope: Scope; item: PlanItemIn }[] {
+  const u = s.users.find((x) => x.userId === userId);
+  if (!u) return [];
+  const shared = new Set(columns(s).map((c) => c.key));
+  return SCOPES.flatMap((scope) =>
+    u[listKey(scope)].filter((i) => !shared.has(itemKey(i, scope))).map((item) => ({ scope, item })),
+  );
+}
+
+const mapUsers = (s: GridState, f: (u: TeamWeekUser) => TeamWeekUser): GridState => ({ ...s, users: s.users.map(f) });
+const mapUser = (s: GridState, userId: string, f: (u: TeamWeekUser) => TeamWeekUser): GridState =>
+  mapUsers(s, (u) => (u.userId === userId ? f(u) : u));
+
+const findItem = (u: TeamWeekUser, c: Column) => u[listKey(c.scope)].find((i) => itemKey(i, c.scope) === c.key);
+
+export function cell(s: GridState, userId: string, c: Column): Cell {
+  const u = s.users.find((x) => x.userId === userId);
+  const i = u && findItem(u, c);
+  return { has: !!i, target: i && hasTarget(c.kind) ? i.target : null };
+}
+
+const applyCell = (u: TeamWeekUser, c: Column, v: Cell): TeamWeekUser => {
+  const k = listKey(c.scope);
+  const list = u[k];
+  const present = list.some((i) => itemKey(i, c.scope) === c.key);
+  const target = hasTarget(c.kind) ? v.target : null;
+  if (!v.has) return present ? { ...u, [k]: list.filter((i) => itemKey(i, c.scope) !== c.key) } : u;
+  if (present) {
+    if (!hasTarget(c.kind)) return u;
+    return { ...u, [k]: list.map((i) => (itemKey(i, c.scope) === c.key ? { ...i, target } : i)) };
+  }
+  if (list.length >= MAX_ITEMS) return u;
+  return { ...u, [k]: [...list, { text: c.text, kind: c.kind, target, archived: false }] };
+};
+
+export const setCell = (s: GridState, userId: string, c: Column, v: Cell): GridState =>
+  mapUser(s, userId, (u) => applyCell(u, c, v));
+
+export const fillColumn = (s: GridState, c: Column, v: Cell): GridState => mapUsers(s, (u) => applyCell(u, c, v));
+
+export const setTarget = (s: GridState, userId: string, k: TargetKey, n: number): GridState =>
+  mapUser(s, userId, (u) => ({ ...u, goal: { ...u.goal, [k]: n } }));
+
+export const fillTarget = (s: GridState, k: TargetKey, n: number): GridState =>
+  mapUsers(s, (u) => ({ ...u, goal: { ...u.goal, [k]: n } }));
+
+export function addColumn(s: GridState, text: string, kind: PlanItemKind, scope: Scope): GridState {
+  const key = columnKey(text, kind, scope);
+  if (s.pinned.some((p) => p.key === key)) return s;
+  return { ...s, pinned: [...s.pinned, { key, text: tidy(text), kind, scope }] };
+}
+
+export const addOwnItem = (
+  s: GridState, userId: string, text: string, kind: PlanItemKind, scope: Scope, target: number | null,
+): GridState => {
+  const k = listKey(scope);
+  const u = s.users.find((x) => x.userId === userId);
+  if (!u || u[k].length >= MAX_ITEMS) return s;
+  const item: PlanItemIn = { text: tidy(text), kind, target: hasTarget(kind) ? target : null, archived: false };
+  return mapUser(s, userId, (x) => ({ ...x, [k]: [...x[k], item] }));
+};
+
+/** `index` is the position within that user's list for `scope`. */
+export const removeOwnItem = (s: GridState, userId: string, scope: Scope, index: number): GridState => {
+  const k = listKey(scope);
+  return mapUser(s, userId, (u) => ({ ...u, [k]: u[k].filter((_, i) => i !== index) }));
+};
+
+const rewritePinned = (s: GridState, c: Column, next: Column | null): Column[] =>
+  s.pinned.flatMap((p) => (p.key !== c.key ? [p] : next ? [next] : []));
+
+export function renameColumn(s: GridState, c: Column, text: string): GridState {
+  const next = { ...c, text: tidy(text), key: columnKey(text, c.kind, c.scope) };
+  const k = listKey(c.scope);
+  const users = s.users.map((u) => ({
+    ...u,
+    [k]: u[k].map((i) => (itemKey(i, c.scope) === c.key ? { ...i, text: next.text } : i)),
+  }));
+  return { users, pinned: rewritePinned(s, c, next) };
+}
+
+export function retypeColumn(s: GridState, c: Column, kind: PlanItemKind, scope: Scope): GridState {
+  const next = { ...c, kind, scope, key: columnKey(c.text, kind, scope) };
+  const from = listKey(c.scope);
+  const to = listKey(scope);
+  const users = s.users.map((u) => {
+    const hit = u[from].some((i) => itemKey(i, c.scope) === c.key);
+    if (!hit) return u;
+    const kept = { ...u, [from]: u[from].filter((i) => itemKey(i, c.scope) !== c.key) };
+    if (kept[to].length >= MAX_ITEMS) return kept;
+    // no id: the server archives the old item and creates this one
+    return { ...kept, [to]: [...kept[to], { text: c.text, kind, target: null, archived: false }] };
+  });
+  return { users, pinned: rewritePinned(s, c, next) };
+}
+
+export const removeColumn = (s: GridState, c: Column): GridState => ({
+  users: s.users.map((u) => applyCell(u, c, { has: false, target: null })),
+  pinned: rewritePinned(s, c, null),
+});
+
+export const setOwnWeek = (s: GridState, userId: string, on: boolean): GridState =>
+  mapUser(s, userId, (u) => ({ ...u, plansOwnWeek: on }));
+
+export const isEmptyRow = (u: TeamWeekUser): boolean =>
+  u.goal.bidsSelf === 0 && u.goal.bidsBidder === 0 && u.goal.interviewsSelf === 0 &&
+  u.routines.length === 0 && u.weeklyGoals.length === 0;
+
+const toItems = (l: (PlanItem | PlanItemIn)[]): PlanItemIn[] =>
+  l.map((i) => ({ ...('id' in i && i.id ? { id: i.id } : {}), text: i.text, kind: i.kind, target: i.target, archived: i.archived }));
+
+const toRow = (u: TeamWeekUser): TeamWeekRowIn => ({
+  userId: u.userId,
+  plansOwnWeek: u.plansOwnWeek,
+  goal: { bidsSelf: u.goal.bidsSelf, bidsBidder: u.goal.bidsBidder, interviewsSelf: u.goal.interviewsSelf },
+  routines: toItems(u.routines),
+  weeklyGoals: toItems(u.weeklyGoals),
+});
+
+export function rowsToSave(saved: TeamWeekUser[], s: GridState): TeamWeekRowIn[] {
+  const out: TeamWeekRowIn[] = [];
+  for (const u of s.users) {
+    if (!u.exists && isEmptyRow(u)) continue; // server skips a plan-less empty row
+    const row = toRow(u);
+    const was = saved.find((x) => x.userId === u.userId);
+    if (!u.exists || !was || JSON.stringify(toRow(was)) !== JSON.stringify(row)) out.push(row);
+  }
+  return out;
+}
+
+export function changed(
+  prev: TeamWeekUser[] | undefined, s: GridState, userId: string, c: Column | TargetKey,
+): { was: string } | null {
+  const p = prev?.find((u) => u.userId === userId);
+  const cur = s.users.find((u) => u.userId === userId);
+  if (!p || !cur) return null;
+  if (typeof c === 'string') return p.goal[c] === cur.goal[c] ? null : { was: String(p.goal[c]) };
+  const was = cell({ users: [p], pinned: [] }, userId, c);
+  const now = cell(s, userId, c);
+  if (was.has === now.has && was.target === now.target) return null;
+  return { was: !was.has ? '—' : hasTarget(c.kind) && was.target !== null ? String(was.target) : '✓' };
+}
+
+export function weekStatus(saved: TeamWeekUser[], s: GridState): 'published' | 'draft' | 'none' {
+  if (s.users.every(isEmptyRow) && !s.users.some((u) => u.exists)) return 'none';
+  const ok = s.users.filter((u) => !isEmptyRow(u)).every((u) => u.exists);
+  return ok && rowsToSave(saved, s).length === 0 ? 'published' : 'draft';
+}
