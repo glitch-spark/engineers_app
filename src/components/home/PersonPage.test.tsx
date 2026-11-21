@@ -162,7 +162,7 @@ describe('PersonPage', () => {
     const table = within(box).getByRole('table', { name: 'In pipeline' });
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Company', 'Stage', 'Next / last round', 'Status']);
     // grouped by where each interview stands, each group a button that folds it; only Scheduled starts open
-    const groups = () => within(table).getAllByRole('button').map((b) => [b.textContent, b.getAttribute('aria-expanded')]);
+    const groups = () => within(table).getAllByRole('button').map((b) => [b.textContent!.replace(/^[▾▸] /, ''), b.getAttribute('aria-expanded')]);
     expect(groups()).toEqual([
       ['Scheduled (2)', 'true'], ['Waiting for a result (1)', 'false'], ['No result for a week or more (1)', 'false'],
       ['Followed up (1)', 'false'], ['Passed, next round not set (1)', 'false'],
@@ -184,7 +184,7 @@ describe('PersonPage', () => {
     vi.mocked(api.getInterviewPipeline).mockResolvedValue({ items: pipeline.slice(0, 2) } as never);
     show();
     const table = await within(await card('Interviews')).findByRole('table', { name: 'In pipeline' });
-    expect(within(table).getAllByRole('button').map((b) => b.textContent)).toEqual(['Scheduled (2)']);
+    expect(within(table).getAllByRole('button').map((b) => b.textContent!.replace(/^[▾▸] /, ''))).toEqual(['Scheduled (2)']);
   });
 
   it('Interviews with none that day and nothing in the pipeline', async () => {
