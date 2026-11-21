@@ -110,7 +110,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
 const onPickDay = vi.fn();
 const page = (props: object = {}) => (
   <SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false }}>
-    <MemoryRouter><PersonPage userId="u7" name="Puma" day="2026-11-20" today="2026-11-20" onPickDay={onPickDay} {...props} /></MemoryRouter>
+    <MemoryRouter><PersonPage mode="admin" userId="u7" name="Puma" day="2026-11-20" today="2026-11-20" onPickDay={onPickDay} {...props} /></MemoryRouter>
   </SWRConfig>
 );
 const show = (props: object = {}) => render(page(props));
@@ -503,6 +503,31 @@ describe('PersonPage', () => {
     expect(within(box).getByText(/✓ done · ✗ missed/)).toBeTruthy();
     expect(within(box).queryByRole('checkbox')).toBeNull();
     expect(within(box).queryByRole('spinbutton')).toBeNull();
+  });
+
+  it('Daily to-dos grid: one line per routine with every kind of day named, and the legend', async () => {
+    const days = (states: (string | [string, number, number])[]) => states.map((s, i) => (
+      typeof s === 'string' ? { date: DATES[i], state: s, value: null, target: null } : { date: DATES[i], state: s[0], value: s[1], target: s[2] }
+    ));
+    vi.mocked(api.getDashboardWeek).mockResolvedValue(week({ routines: { done: 8, expected: 15, rows: [
+      { id: 'a', text: 'Send 50 emails', days: days(['done', 'missed', ['short', 30, 50], 'future', 'future']), doneDays: 1, totalDays: 5 },
+      { id: 'b', text: 'Talk with callers', days: days(['off', 'done', 'today', 'future', 'future']), doneDays: 1, totalDays: 4 },
+    ] } }) as never);
+    show({ today: '2026-11-18', day: '2026-11-18' });
+    const table = await within(await card('Daily to-dos')).findByRole('table', { name: 'Routines this week' });
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Routine', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Days done']);
+    const [, a, b] = within(table).getAllByRole('row');
+    const named = (row: HTMLElement) => within(row).getAllByRole('cell').map((c) => [c.getAttribute('aria-label'), c.textContent]);
+    expect(within(a).getByRole('rowheader').textContent).toBe('Send 50 emails');
+    expect(named(a)).toEqual([
+      ['Mon: done', '✓'], ['Tue: missed', '✗'], ['Wed: 30 of 50, short of the target', '30 / 50'],
+      ['Thu: still to come', ''], ['Fri: still to come', ''], [null, '1 of 5 days'],
+    ]);
+    expect(named(b)).toEqual([
+      ['Mon: not planned', ''], ['Tue: done', '✓'], ['Wed: today, not done yet', '·'],
+      ['Thu: still to come', ''], ['Fri: still to come', ''], [null, '1 of 4 days'],
+    ]);
+    expect(screen.getByText("✓ done · ✗ missed · a number = short of that day's target · · = today, not done yet")).toBeTruthy();
   });
 
   it("Daily to-dos: a weekday's column head picks that day; days still to come cannot be picked", async () => {

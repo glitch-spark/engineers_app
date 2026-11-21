@@ -26,15 +26,17 @@ const num = (n: number) => n.toLocaleString('en-US');
 /** "48, 52 and 40" */
 const listed = (xs: number[]) => (xs.length > 1 ? `${xs.slice(0, -1).map(num).join(', ')} and ${num(xs[xs.length - 1])}` : xs.map(num).join(''));
 
-/** How many rows of a group the admin sees before "… n more". */
+/** How many rows of a group show before "… n more". */
 const FIRST = 5;
 
 /**
  * The reads behind Pending items and what they add up to: the interview rows in tag order, the profile and bidder
  * flags, and the total. Shared with the admin's person page, whose Pending tile shows the same numbers (same SWR
  * keys, so nothing is read twice). `loading` until the first answer; `failed` when neither read answered.
+ * `listToday`: `today`'s unmarked rounds are listed here (else they are answered in a list of today's rounds above
+ * and left out).
  */
-export function usePending(mode: 'owner' | 'admin', userId: string | undefined, today: TodayInterview[]) {
+export function usePending(mode: 'owner' | 'admin', userId: string | undefined, today: TodayInterview[], listToday = mode === 'admin') {
   const { user } = useAuth();
   const now = useNow();
   const pending = useSWR(['home-pending', userId ?? ''], () => api.getDashboardPending(userId), { shouldRetryOnError: false });
@@ -48,7 +50,7 @@ export function usePending(mode: 'owner' | 'admin', userId: string | undefined, 
     // Guard: an admin's own Home never shows someone else's round, whatever the server returned.
     .filter((row) => mode === 'admin' || user?.role !== 'admin' || row.ownerId === user.id);
   const known = new Set(waiting.map(needsInputKey));
-  const interviews = mode === 'owner'
+  const interviews = !listToday
     ? waiting.filter((row) => !(row.need === 'outcome' && todayKeys.has(needsInputKey(row))))
     : [...waiting, ...unmarkedToday.filter((r) => !known.has(roundKey(r))).map(asNeedsInput)];
   const rows = NEEDS.flatMap((n) => interviews.filter((row) => row.need === n.need).map((row) => ({ row, ...n })));
@@ -63,27 +65,30 @@ export function usePending(mode: 'owner' | 'admin', userId: string | undefined, 
 }
 
 /**
- * What waits on one person: interviews that need an answer, and the flags on their profiles and bidders.
- * `owner`: on the person's own Home (follow-up rows have the "I followed up" checkbox; `today`'s unmarked rounds are
- * answered in the Today list above, so they are not repeated). `admin`: on the admin's page for `userId` (`name`),
- * where the result buttons work but following up stays with the owner, and `today`'s unmarked rounds are listed.
+ * What waits on one person: interviews that need an answer, and the flags on their profiles and bidders. Each group
+ * folds on its heading and lists its first rows, then "… n more".
+ * `owner`: the person's own page (follow-up rows have the "I followed up" checkbox). `admin`: the admin's page for
+ * `userId` (`name`), where the result buttons work but following up stays with the owner.
+ * `listToday` (default: admin yes, owner no): `today`'s unmarked rounds are listed as Status unknown; without it
+ * they are answered in the list of today's rounds above, so they are not repeated.
  * Hidden when nothing waits. `onSaved` refetches whatever the page shows, this list included (`home-pending`,
  * `interviews-needs-input`). An older server without the pending read still gives the interviews.
  */
 export default function PendingItems({
-  mode, userId, name, today, onSaved,
+  mode, userId, name, today, listToday, onSaved,
 }: {
   mode: 'owner' | 'admin';
   userId?: string;
   name?: string;
   today: TodayInterview[];
+  listToday?: boolean;
   onSaved: () => unknown;
 }) {
   const id = useId();
   const { tz } = useInterviewTimezone();
-  const { rows, profiles, bidders, unmarkedToday, total } = usePending(mode, userId, today);
+  const { rows, profiles, bidders, unmarkedToday, total } = usePending(mode, userId, today, listToday);
   const { dialog, isSaving, followUp, ask, button, resultButtons, outcomeButtons } = useNeedsInputActions(onSaved);
-  // admin only: the groups folded, and the groups shown past their first rows
+  // the groups folded, and the groups shown past their first rows
   const [folded, setFolded] = useState<string[]>([]);
   const [whole, setWhole] = useState<string[]>([]);
   if (!total) return dialog;
@@ -141,15 +146,7 @@ export default function PendingItems({
   );
   const group = (title: string, items: ReactNode[]) => {
     if (!items.length) return null;
-    if (mode === 'owner') {
-      return (
-        <>
-          <div className={`mt-3 ${LABEL}`}>{title} ({items.length})</div>
-          <ul aria-label={title} className="divide-y divide-zinc-100 dark:divide-zinc-800">{items}</ul>
-        </>
-      );
-    }
-    // the admin's page: a group folds on its heading and lists its first rows, then "… n more" (user, 2026-11-21)
+    // a group folds on its heading and lists its first rows, then "… n more" (user, 2026-11-21)
     const open = !folded.includes(title);
     const rest = whole.includes(title) ? 0 : Math.max(0, items.length - FIRST);
     return (
@@ -172,10 +169,10 @@ export default function PendingItems({
   const link = (to: string, text: string) => <Link to={to} className="link-inline whitespace-nowrap text-xs">{text} →</Link>;
 
   return (
-    <div role="group" aria-labelledby={id} className={mode === 'admin' ? 'panel p-4' : 'mt-4'}>
+    <div role="group" aria-labelledby={id} className="panel p-4">
       {dialog}
       <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-        <h3 id={id} className={mode === 'admin' ? 'card-title' : LABEL}>Pending items ({total})</h3>
+        <h3 id={id} className="card-title">Pending items ({total})</h3>
         <span className="text-xs text-muted">Things waiting on {mode === 'admin' ? name || 'this person' : 'you'}</span>
       </div>
       {group('Interviews', rows.map(({ row, tag, color }) => line(
