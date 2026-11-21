@@ -3,8 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import FilterBar, { FilterField } from '../components/filters/FilterBar';
-import TodayCard from '../components/home/TodayCard';
-import WeekCard from '../components/home/WeekCard';
+import MyHome from '../components/home/MyHome';
 import PersonPage from '../components/home/PersonPage';
 import { useAuth } from '../auth/useAuth';
 import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../lib/week';
@@ -102,16 +101,6 @@ export default function DashboardPage() {
       <PageHeader title="Home" />
       {user?.role === 'admin' ? <AdminHome /> : <MyHome />}
     </div>
-  );
-}
-
-/** A person's own Home: today's to-do list, then the week (user, 2026-11-21: no This month card). */
-function MyHome() {
-  return (
-    <>
-      <TodayCard />
-      <WeekCard />
-    </>
   );
 }
 

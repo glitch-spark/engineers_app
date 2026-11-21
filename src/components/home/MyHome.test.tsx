@@ -2,12 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import useSWR, { SWRConfig, unstable_serialize } from 'swr';
+import { SWRConfig, unstable_serialize } from 'swr';
 import * as api from '../../api/endpoints';
-import TodayCard from './TodayCard';
+import MyHome from './MyHome';
 
 vi.mock('../../api/endpoints', () => ({
-  getDayPlan: vi.fn(), putDayProgress: vi.fn(), getNeedsInput: vi.fn(), getDashboardPending: vi.fn(), followUpInterviewStage: vi.fn(), updateInterviewStage: vi.fn(),
+  getDayPlan: vi.fn(), putDayProgress: vi.fn(), getDashboardWeek: vi.fn(), getNeedsInput: vi.fn(), getDashboardPending: vi.fn(), followUpInterviewStage: vi.fn(), updateInterviewStage: vi.fn(),
 }));
 const auth = vi.hoisted(() => ({ role: 'staff' }));
 vi.mock('../../lib/useInterviewTimezone', () => ({ useInterviewTimezone: () => ({ tz: 'America/Chicago' }) }));
@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-11-18T19:00:00-06:00'));
   auth.role = 'staff';
   vi.mocked(api.getNeedsInput).mockResolvedValue({ items: [], counts: {} } as never);
+  vi.mocked(api.getDashboardWeek).mockResolvedValue(week() as never);
   vi.mocked(api.getDashboardPending).mockResolvedValue({ interviews: [], profiles: [], bidders: [], counts: {} } as never);
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
@@ -44,6 +45,20 @@ const iv = (o: object = {}) => ({
   steps: [{ stage: 'intro', state: 'passed' }, { stage: 'tech1', state: 'today' }], ...o,
 });
 
+const DATES = ['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20'];
+/** The week of Nov 16 (today is Wed, Nov 18). */
+const week = (o: object = {}) => ({
+  week: { start: '2026-11-16', end: '2026-11-21' },
+  bids: {
+    self: 440, bidder: 494, total: 934, target: 2100, pace: null, percentile: null,
+    byDay: DATES.map((date, i) => ({ date, done: [410, 380, 124, 0, 0][i], target: 400, self: 0, bidder: 0 })),
+    week: { self: 440, selfTarget: 1000, bidder: 474, bidderTarget: 1000, total: 914, target: 2000 },
+  },
+  interviews: { done: 3, self: 2, caller: 1, target: 4, pace: null, percentile: null, rounds: [] },
+  stages: [], streak: 0, hasWeeklyPlan: true, routines: { done: 0, expected: 0, rows: [] }, weeklyGoals: [], ...o,
+});
+const head = (name: RegExp) => screen.getByRole('heading', { name }).parentElement?.textContent;
+
 let cache = new Map<string, unknown>();
 let unmountCard = () => {};
 function setup(p: object) {
@@ -52,14 +67,14 @@ function setup(p: object) {
   vi.mocked(api.putDayProgress).mockResolvedValue(p as never);
   const ui = (card: boolean) => (
     <SWRConfig value={{ provider: () => cache as never }}>
-      <MemoryRouter>{card && <TodayCard />}</MemoryRouter>
+      <MemoryRouter>{card && <MyHome />}</MemoryRouter>
     </SWRConfig>
   );
   const { rerender } = render(ui(true));
   unmountCard = () => rerender(ui(false)); // keep the SWR provider, drop only the card (as navigating away does)
 }
 
-describe('TodayCard', () => {
+describe('MyHome', () => {
   it('ticking a routine saves a draft once after the pause', async () => {
     setup(plan());
     fireEvent.click(await screen.findByLabelText('Bidder Management'));
@@ -132,21 +147,14 @@ describe('TodayCard', () => {
     err.mockRestore();
   });
 
-  it('revalidates the week after a save', async () => {
-    const weekFetch = vi.fn().mockResolvedValue({});
-    const Probe = () => { useSWR(['home-week', '2026-11-18'], weekFetch, { revalidateOnFocus: false }); return null; };
-    vi.mocked(api.getDayPlan).mockResolvedValue(plan() as never);
-    vi.mocked(api.putDayProgress).mockResolvedValue(plan() as never);
-    cache = new Map();
-    render(
-      <SWRConfig value={{ provider: () => cache as never }}>
-        <MemoryRouter><TodayCard /><Probe /></MemoryRouter>
-      </SWRConfig>,
-    );
+  it('refetches the week and the pending items after a save', async () => {
+    setup(plan());
     fireEvent.click(await screen.findByLabelText('Bidder Management'));
     await act(async () => { vi.advanceTimersByTime(800); });
-    await act(async () => {});
-    expect(weekFetch).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(api.getDashboardWeek).toHaveBeenCalledTimes(2));
+    expect(api.getDashboardWeek).toHaveBeenCalledWith({ today: '2026-11-18' });
+    expect(api.getDashboardPending).toHaveBeenCalledTimes(2);
+    expect(api.getDayPlan).toHaveBeenCalledTimes(1); // the save's answer is the day
   });
 
   it('shows a skeleton while loading and a retry on error', async () => {
@@ -154,14 +162,14 @@ describe('TodayCard', () => {
     cache = new Map();
     render(
       <SWRConfig value={{ provider: () => cache as never, shouldRetryOnError: false }}>
-        <MemoryRouter><TodayCard /></MemoryRouter>
+        <MemoryRouter><MyHome /></MemoryRouter>
       </SWRConfig>,
     );
     expect(document.querySelector('.skeleton')).toBeTruthy();
     expect(await screen.findByText(/Couldn.t load today/)).toBeTruthy();
     vi.mocked(api.getDayPlan).mockResolvedValue(plan() as never);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect((await screen.findByRole('list', { name: 'Daily' })).textContent).toContain('Bids · 138 of 200 · 62 to go');
+    expect((await screen.findByRole('list', { name: 'Daily' })).textContent).toContain('138 of 200 · self 52 / 80 · bidder 86 / 120');
   });
 
   it('has no chips and no update links', async () => {
@@ -193,18 +201,50 @@ describe('TodayCard', () => {
     expect(screen.getByLabelText(/Goal two/)).toBeTruthy();
   });
 
-  it('section counts', async () => {
+  it('the headers count: today the rows with a box and what is left, the week its goals and the days left', async () => {
     setup(goals());
-    // The heading counts the daily rows with a box: the Bids row (it has a target) and the three routines.
-    expect(await screen.findByText('1 of 4 done')).toBeTruthy();
-    expect(screen.getByText('3 days left · 0 of 2 done')).toBeTruthy();
+    await screen.findByLabelText(/Goal one/);
+    // The Bids row (under its target) and the three routines; the old response has no Interviews box.
+    expect(head(/^Today/)).toBe('Today · Wed, Nov 181 of 4 done · 3 to go');
+    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 200 of 2 done · 3 days left');
+    expect(screen.getByText('Weekly goals').parentElement?.textContent).toBe('Weekly goals · 0 of 2 done');
+  });
+
+  it('This week: the read-only table sits above the weekly goals', async () => {
+    setup(goals());
+    const table = await screen.findByRole('table', { name: 'This week' });
+    expect(within(table).getByRole('rowheader', { name: 'Bids' })).toBeTruthy();
+    const goal = screen.getByLabelText(/Goal one/);
+    expect(table.compareDocumentPosition(goal) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(table.closest('section')).toBe(goal.closest('section'));
+    expect(screen.queryByRole('radio')).toBeNull(); // no Week / Day picker
+    expect(screen.queryByText(/This month/)).toBeNull();
+  });
+
+  it('a week that cannot be read: a retry in its card, today and the goals still work', async () => {
+    vi.mocked(api.getDashboardWeek).mockRejectedValue(new Error('boom'));
+    cache = new Map();
+    vi.mocked(api.getDayPlan).mockResolvedValue(goals() as never);
+    render(
+      <SWRConfig value={{ provider: () => cache as never, shouldRetryOnError: false }}>
+        <MemoryRouter><MyHome /></MemoryRouter>
+      </SWRConfig>,
+    );
+    expect(await screen.findByText(/Couldn.t load this week/)).toBeTruthy();
+    expect(screen.getByLabelText(/Goal one/)).toBeTruthy();
+    expect(head(/^This week/)).toContain('This week · Nov 16 – Nov 20');
+    expect(screen.queryByText(/this week \d/)).toBeNull();
+    vi.mocked(api.getDashboardWeek).mockResolvedValue(week() as never);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('table', { name: 'This week' })).toBeTruthy();
   });
 
   it('unticks a goal done on an earlier day on that day', async () => {
     const p = goals() as ReturnType<typeof goals> & { progress: Record<string, unknown>; items: unknown[] };
     p.progress.g1 = { value: 0, done: true, target: null, doneOn: '2026-11-16' };
     setup(p);
-    expect(await screen.findByText('1 of 2 done', { exact: false })).toBeTruthy();
+    await screen.findByLabelText(/Goal one/);
+    expect(head(/^This week/)).toContain('1 of 2 done');
     expect(screen.getByText('done Mon')).toBeTruthy();
     const box = screen.getByLabelText(/Goal one/) as HTMLInputElement;
     expect(box.checked).toBe(true);
@@ -247,7 +287,7 @@ describe('TodayCard', () => {
     expect(box.disabled).toBe(true);
     expect((screen.getByLabelText('Contact') as HTMLInputElement).disabled).toBe(false);
     expect(screen.getByText('week target met')).toBeTruthy();
-    expect(screen.getByText('1 of 2 done', { exact: false, selector: 'span' })).toBeTruthy();
+    expect(head(/^This week/)).toContain('1 of 2 done');
   });
 
   it('shows the un-tick immediately and locks the box while saving', async () => {
@@ -268,61 +308,104 @@ describe('TodayCard', () => {
   it('weekend: no days left', async () => {
     vi.setSystemTime(new Date('2026-11-21T10:00:00-06:00'));
     setup(goals());
-    expect(await screen.findByText('0 of 2 done')).toBeTruthy();
+    await screen.findByLabelText(/Goal one/);
+    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 200 of 2 done');
     expect(screen.queryByText(/days left|last day/)).toBeNull();
   });
 
   it('friday: last day', async () => {
     vi.setSystemTime(new Date('2026-11-20T10:00:00-06:00'));
     setup(goals());
-    expect(await screen.findByText('last day · 0 of 2 done')).toBeTruthy();
+    await screen.findByLabelText(/Goal one/);
+    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 200 of 2 done · last day');
   });
 });
 
-describe('TodayCard: Bids and Interviews rows', () => {
+describe('MyHome: Bids and Interviews rows', () => {
   const daily = () => screen.findByRole('list', { name: 'Daily' });
   const rowOf = async (name: string) => within(await daily()).getByText(name).closest('li') as HTMLElement;
   const AUTO_BIDS = 'Bids target reached — ticks itself';
   const AUTO_INTERVIEWS = "Today's interviews all marked — ticks itself";
+  const DONE = "All done for today. You're good to go.";
 
-  it('Bids with a target: done of target, what is left, a bar and an unticked box that cannot be ticked', async () => {
+  it('Bids under the target: total of target, self and bidder against theirs, a bar, the week, and an unticked box that cannot be ticked', async () => {
     setup(plan({ targets: { ...c, bidsSelf: 80, bidsBidder: 195 }, done: { ...c, bidsSelf: 38 }, bidsBidderAuto: 86 }));
     const row = await rowOf('Bids');
-    expect(row.textContent).toContain('Bids · 124 of 275 · 151 to go');
-    expect(within(row).getByText('ticks itself')).toBeTruthy();
+    expect(row.textContent).toContain('124 of 275 · self 38 / 80 · bidder 86 / 195');
+    expect(within(row).getByText('124').className).toContain('amber');
     const box = within(row).getByRole('checkbox', { name: AUTO_BIDS }) as HTMLInputElement;
     expect(box.checked).toBe(false);
     expect(box.disabled).toBe(true);
     expect(within(row).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('45');
+    expect(await within(row).findByText('this week 914 of 2,000')).toBeTruthy();
   });
 
   it('Bids ticks itself at the target', async () => {
     setup(plan({ targets: { ...c, bidsSelf: 100 }, done: { ...c, bidsSelf: 60 }, bidsBidderAuto: 45 }));
     const row = await rowOf('Bids');
-    expect(row.textContent).toContain('Bids · 105 of 100');
-    expect(row.textContent).not.toContain('to go');
+    expect(row.textContent).toContain('105 of 100 · self 60 / 100 · bidder 45');
+    expect(within(row).getByText('105').className).toContain('emerald');
     expect((within(row).getByRole('checkbox', { name: AUTO_BIDS }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it('Bids without a target: only the count, no box', async () => {
+  it('Bids without a target: the counts alone, and the box counts as ticked', async () => {
     setup(plan({ targets: { ...c } }));
     const row = await rowOf('Bids');
-    expect(row.textContent).toBe('Bids · 138');
-    expect(within(row).queryByRole('checkbox')).toBeNull();
+    expect(row.textContent).toContain('138 · self 52 · bidder 86');
+    expect(row.textContent).not.toContain(' of 0');
+    const box = within(row).getByRole('checkbox', { name: AUTO_BIDS }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(box.disabled).toBe(true);
     expect(within(row).queryByRole('progressbar')).toBeNull();
   });
 
-  it('Interviews with none today: says so, no box', async () => {
-    setup(plan({ todayInterviews: [], interviewsMarked: { marked: 0, total: 0 } }));
-    const row = await rowOf('Interviews');
-    expect(row.textContent).toBe('Interviews · none today');
-    expect(within(row).queryByRole('checkbox')).toBeNull();
+  it("Bids use the day's totals when the server sends them", async () => {
+    setup(plan({ bidsTotals: { self: 60, selfTarget: 50, bidder: 85, bidderTarget: null, total: 145, target: 150 } }));
+    expect((await rowOf('Bids')).textContent).toContain('145 of 150 · self 60 / 50 · bidder 85');
   });
 
-  it('Interviews partly marked: unticked', async () => {
-    setup(plan({ todayInterviews: [iv(), iv({ roundId: 'r-b', state: 'unmarked', status: 'scheduled' })], interviewsMarked: { marked: 1, total: 2 } }));
+  it('the week numbers fall back to the whole-week count on an older server, and leave out a target that is not set', async () => {
+    const w = week();
+    vi.mocked(api.getDashboardWeek).mockResolvedValue(week({
+      bids: { ...w.bids, week: undefined, byDay: undefined }, interviews: { ...w.interviews, target: null, rounds: undefined },
+    }) as never);
+    setup(plan({ todayInterviews: [], interviewsMarked: { marked: 0, total: 0 } }));
+    expect(await within(await rowOf('Bids')).findByText('this week 934 of 2,100')).toBeTruthy();
+    expect(within(await rowOf('Interviews')).getByText('this week 3')).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull(); // no days: no week table
+  });
+
+  it('the location table shows only with more than one location', async () => {
+    const us = { region: 'US', self: 60, selfTarget: 50, bidder: 85, total: 145 };
+    setup(plan({ bidsByRegion: [us, { region: 'EU', self: 22, selfTarget: 30, bidder: 35, total: 57 }, { region: 'Latam', self: 10, selfTarget: null, bidder: 0, total: 10 }] }));
+    const table = within(await daily()).getByRole('table', { name: 'Bids by location' });
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Location', 'Self', 'Bidder', 'Total']);
+    expect(within(table).getAllByRole('row').slice(1).map((r) => [...r.children].map((x) => x.textContent))).toEqual([
+      ['US', '60 / 50', '85', '145'], ['EU', '22 / 30', '35', '57'], ['Latam', '10', '0', '10'],
+    ]);
+    expect(within(table).getByText('22 / 30').className).toContain('amber');
+    expect(within(table).getByText('60 / 50').className).not.toContain('amber');
+    cleanup();
+    setup(plan({ bidsByRegion: [us] }));
+    await daily();
+    expect(screen.queryByRole('table', { name: 'Bids by location' })).toBeNull();
+  });
+
+  it('Interviews with none today: says so, counts as ticked, with the week against what is planned', async () => {
+    setup(plan({ todayInterviews: [], interviewsMarked: { marked: 0, total: 0 } }));
     const row = await rowOf('Interviews');
-    expect(row.textContent).toContain('Interviews · 1 of 2 marked');
+    expect(row.textContent).toContain('none today');
+    expect((within(row).getByRole('checkbox', { name: AUTO_INTERVIEWS }) as HTMLInputElement).checked).toBe(true);
+    expect(await within(row).findByText('this week 3 of 4 planned')).toBeTruthy();
+  });
+
+  it('Interviews partly marked: unticked, with who takes them', async () => {
+    setup(plan({
+      todayInterviews: [iv(), iv({ roundId: 'r-b', state: 'unmarked', status: 'scheduled', who: { kind: 'caller', name: 'Sam', assigned: true, confirmed: true } })],
+      interviewsMarked: { marked: 1, total: 2 },
+    }));
+    const row = await rowOf('Interviews');
+    expect(row.textContent).toContain('1 of 2 marked · self 1 · caller 1');
     const box = within(row).getByRole('checkbox', { name: AUTO_INTERVIEWS }) as HTMLInputElement;
     expect(box.checked).toBe(false);
     expect(box.disabled).toBe(true);
@@ -331,7 +414,7 @@ describe('TodayCard: Bids and Interviews rows', () => {
   it('Interviews all marked: ticked', async () => {
     setup(plan({ todayInterviews: [iv(), iv({ roundId: 'r-b', state: 'passed', status: 'passed' })], interviewsMarked: { marked: 2, total: 2 } }));
     const row = await rowOf('Interviews');
-    expect(row.textContent).toContain('Interviews · 2 of 2 marked');
+    expect(row.textContent).toContain('2 of 2 marked · self 2 · caller 0');
     expect((within(row).getByRole('checkbox', { name: AUTO_INTERVIEWS }) as HTMLInputElement).checked).toBe(true);
   });
 
@@ -344,32 +427,45 @@ describe('TodayCard: Bids and Interviews rows', () => {
     expect((within(row).getByRole('checkbox', { name: AUTO_INTERVIEWS }) as HTMLInputElement).checked).toBe(false);
   });
 
-  it('the heading counts the daily rows that have a box, the auto rows included', async () => {
+  it('the heading counts every row with a box, the two that tick themselves included, and what is left', async () => {
     setup(plan({
       targets: { ...c, bidsSelf: 100 }, done: { ...c, bidsSelf: 100 }, bidsBidderAuto: 0,
       todayInterviews: [iv()], interviewsMarked: { marked: 1, total: 1 },
       items: [item({ id: 'r1', text: 'A', result: { done: true, value: null, target: null } }), item({ id: 'r2', text: 'B' }), item({ id: 'r3', text: 'C' })],
     }));
     await daily();
-    expect(screen.getByRole('heading', { name: /Today/ }).parentElement?.textContent).toContain('3 of 5 done');
+    expect(head(/^Today/)).toBe('Today · Wed, Nov 183 of 5 done · 2 to go');
+    expect(screen.queryByText(DONE)).toBeNull();
   });
 
-  it('auto rows without a box are not counted', async () => {
+  it('no bids target and no round today both count as ticked', async () => {
     setup(plan({ targets: { ...c }, todayInterviews: [], interviewsMarked: { marked: 0, total: 0 } }));
     await daily();
-    expect(screen.getByRole('heading', { name: /Today/ }).parentElement?.textContent).toContain('0 of 2 done');
+    expect(head(/^Today/)).toBe('Today · Wed, Nov 182 of 4 done · 2 to go');
+  });
+
+  it('every box ticked: all done, good to go', async () => {
+    setup(plan({
+      targets: { ...c, bidsSelf: 100 }, done: { ...c, bidsSelf: 100 }, bidsBidderAuto: 0,
+      todayInterviews: [iv()], interviewsMarked: { marked: 1, total: 1 },
+      items: [item({ id: 'r1', text: 'A', result: { done: true, value: null, target: null } })],
+    }));
+    await daily();
+    expect(head(/^Today/)).toBe('Today · Wed, Nov 183 of 3 done');
+    expect(screen.getByRole('status').textContent).toBe(`✓ ${DONE}`);
   });
 
   it('an old response without the interviews fields still shows the count it has, with no box', async () => {
     setup(plan());
     const row = await rowOf('Interviews');
-    expect(row.textContent).toBe('Interviews · 2 of 2');
+    expect(row.textContent).toContain('2 of 2');
+    expect(row.textContent).not.toContain('marked');
     expect(within(row).queryByRole('checkbox')).toBeNull();
     expect(screen.queryByRole('list', { name: "Today's interviews" })).toBeNull();
   });
 });
 
-describe("TodayCard: today's interviews", () => {
+describe("MyHome: today's interviews", () => {
   const rounds = async () => within(await screen.findByRole('list', { name: "Today's interviews" })).getAllByRole('listitem');
   const show = (list: object[]) => setup(plan({ todayInterviews: list, interviewsMarked: { marked: 0, total: list.length } }));
   const unmarked = (o: object = {}) => iv({
@@ -453,28 +549,15 @@ describe("TodayCard: today's interviews", () => {
     expect(api.getDayPlan).toHaveBeenCalledTimes(1);
   });
 
-  it('Completed saves at once, then refetches the day, the week and the month', async () => {
-    const weekFetch = vi.fn().mockResolvedValue({});
-    const monthFetch = vi.fn().mockResolvedValue({});
-    const Probe = () => {
-      useSWR(['home-week', '2026-11-18'], weekFetch, { revalidateOnFocus: false });
-      useSWR(['home-month-interviews', '2026-11-18'], monthFetch, { revalidateOnFocus: false });
-      return null;
-    };
-    const p = plan({ todayInterviews: [unmarked()], interviewsMarked: { marked: 0, total: 1 } });
-    vi.mocked(api.getDayPlan).mockResolvedValue(p as never);
+  it('Completed saves at once, then refetches the day, the week and the pending items', async () => {
     vi.mocked(api.updateInterviewStage).mockResolvedValue({} as never);
-    render(
-      <SWRConfig value={{ provider: () => new Map() }}>
-        <MemoryRouter><TodayCard /><Probe /></MemoryRouter>
-      </SWRConfig>,
-    );
+    show([unmarked()]);
     const [row] = await rounds();
     fireEvent.click(within(row).getByRole('button', { name: 'Completed' }));
     await waitFor(() => expect(api.updateInterviewStage).toHaveBeenCalledWith('iv-b', 'r-b', { status: 'completed' }));
     await waitFor(() => expect(api.getDayPlan).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(weekFetch).toHaveBeenCalledTimes(2));
-    expect(monthFetch).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(api.getDashboardWeek).toHaveBeenCalledTimes(2));
+    expect(api.getDashboardPending).toHaveBeenCalledTimes(2);
   });
 
   it("a round's buttons are disabled while its save is in flight", async () => {
@@ -524,7 +607,7 @@ describe("TodayCard: today's interviews", () => {
   });
 });
 
-describe('TodayCard: Pending items (where Follow-ups was)', () => {
+describe('MyHome: Pending items and Follow up', () => {
   const round = (o: object = {}) => ({
     interviewId: 'iv1', roundId: 'r1', companyName: 'Acme', profileName: 'John D', ownerId: 'me', ownerName: 'Me',
     stage: 'intro', status: 'completed', scheduledAt: '2026-11-10T15:00:00Z', endsAt: '2026-11-10T16:00:00Z', need: 'follow_up', ...o,
@@ -533,50 +616,63 @@ describe('TodayCard: Pending items (where Follow-ups was)', () => {
   const waiting = (interviews: object[], rest: object = {}) =>
     vi.mocked(api.getDashboardPending).mockResolvedValue({ interviews, profiles: [], bidders: [], counts: {}, ...rest } as never);
   const block = () => screen.findByRole('group', { name: /Pending items/ });
+  const tickOf = (company: string) => screen.findByRole('checkbox', { name: `I followed up with ${company}` }) as Promise<HTMLInputElement>;
 
-  it('is hidden when nothing waits, and the old Follow-ups block is gone', async () => {
+  it('Pending items is hidden when nothing waits, and there is no Follow up row', async () => {
     setup(plan());
     await screen.findByLabelText('Bidder Management');
     await waitFor(() => expect(api.getDashboardPending).toHaveBeenCalledWith(undefined));
     await act(async () => {});
-    expect(screen.queryByText(/Pending items|Follow-ups/)).toBeNull();
+    expect(screen.queryByText(/Pending items|Follow up/)).toBeNull();
   });
 
-  it('sits at the top, above the to-dos, with the interviews, profiles and bidders that wait on the person', async () => {
-    waiting([round(), outcome(1)], {
+  it('Pending items is its own block above Today, folded; the follow-ups are rows of Today with a box', async () => {
+    waiting([round(), round({ interviewId: 'iv2', roundId: 'r2', companyName: 'Initech', stage: 'final' }), outcome(1)], {
       profiles: [{ accountId: 'a2', name: 'Theo Deng', kind: 'no_bids', idleDays: 21, capped: false, bids: null, tailorScore: null }],
       bidders: [{ bidderId: 'b1', name: 'Ali', kind: 'not_bidding', days: 2, recent: null, before: null }],
     });
-    setup(plan({ items: [item({ id: 'g1', text: 'Goal one', scope: 'goal' })] }));
+    setup(plan());
     const box = await block();
-    expect(within(box).getByRole('heading', { name: 'Pending items (4)' })).toBeTruthy();
-    expect(within(box).getByText('Things waiting on you')).toBeTruthy();
+    const today = screen.getByRole('heading', { name: /^Today/ });
+    expect(today.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(box.contains(today) || today.closest('section')?.contains(box)).toBe(false);
+    const fold = within(box).getByRole('button', { name: 'Pending items 3' });
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    expect(within(box).queryByRole('list')).toBeNull();
+    fireEvent.click(fold);
     expect(within(box).getAllByRole('list').map((l) => l.getAttribute('aria-label'))).toEqual(['Interviews', 'Profiles', 'Bidders']);
-    expect(within(box).getByRole('checkbox', { name: 'I followed up with Acme' })).toBeTruthy();
-    expect(screen.queryByText(/Follow-ups \(/)).toBeNull();
-    const goal = screen.getByLabelText(/Goal one/);
-    expect(goal.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(box.textContent).not.toContain('Acme');
+
+    const daily = screen.getByRole('list', { name: 'Daily' });
+    const rows = within(daily).getAllByText('Follow up').map((x) => x.closest('li') as HTMLElement);
+    expect(rows.map((r) => r.textContent)).toEqual([
+      'Follow upAcme · Intro · no result for 8 daystick when you have followed up', 'Follow upInitech · Final · no result for 8 days',
+    ]);
+    const tick = within(rows[0]).getByRole('checkbox', { name: 'I followed up with Acme' }) as HTMLInputElement;
+    expect(tick.checked).toBe(false);
+    expect(within(rows[0]).queryByRole('button')).toBeNull();
+    // Bids (under target) and the two follow-ups and the two routines are open; the old response has no Interviews box
+    expect(head(/^Today/)).toBe('Today · Wed, Nov 180 of 5 done · 5 to go');
   });
 
-  it("does not repeat today's unmarked rounds: they are answered in the Today list above", async () => {
+  it("Pending items does not repeat today's unmarked rounds: they are answered in the Today list", async () => {
     waiting([round(), outcome(1), outcome(2)]);
     setup(plan({
       todayInterviews: [iv({ interviewId: 'o1', roundId: 'o1', state: 'unmarked', status: 'scheduled' })],
       interviewsMarked: { marked: 0, total: 1 },
     }));
     const box = await block();
-    expect(within(box).getByRole('heading', { name: 'Pending items (2)' })).toBeTruthy();
+    fireEvent.click(within(box).getByRole('button', { name: 'Pending items 1' }));
     expect(box.textContent).toContain('Out 2');
     expect(box.textContent).not.toContain('Out 1');
   });
 
-  it('ticking a follow-up records it, disables the row meanwhile, then refetches the block and the day', async () => {
+  it('ticking a follow-up records it, stays ticked and disabled meanwhile, then the row leaves and the page is read again', async () => {
     waiting([round()]);
     let done: (v: unknown) => void = () => {};
     vi.mocked(api.followUpInterviewStage).mockReturnValue(new Promise((resolve) => { done = resolve; }) as never);
     setup(plan());
-    const box = await block();
-    const tick = within(box).getByRole('checkbox', { name: 'I followed up with Acme' }) as HTMLInputElement;
+    const tick = await tickOf('Acme');
     fireEvent.click(tick);
     expect(api.followUpInterviewStage).toHaveBeenCalledWith('iv1', 'r1');
     await waitFor(() => expect(tick.disabled).toBe(true));
@@ -585,27 +681,30 @@ describe('TodayCard: Pending items (where Follow-ups was)', () => {
     expect(api.followUpInterviewStage).toHaveBeenCalledTimes(1);
     waiting([]);
     await act(async () => { done({}); });
-    await waitFor(() => expect(screen.queryByText(/Pending items/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Follow up')).toBeNull());
     expect(api.getDashboardPending).toHaveBeenCalledTimes(2);
     expect(api.getDayPlan).toHaveBeenCalledTimes(2);
+    expect(api.getDashboardWeek).toHaveBeenCalledTimes(2);
   });
 
   it('a failed follow-up keeps the row, unticked and usable again', async () => {
     waiting([round()]);
     vi.mocked(api.followUpInterviewStage).mockRejectedValue(new Error('nope'));
     setup(plan());
-    const tick = within(await block()).getByRole('checkbox') as HTMLInputElement;
+    const tick = await tickOf('Acme');
     fireEvent.click(tick);
     await waitFor(() => expect(api.followUpInterviewStage).toHaveBeenCalled());
     await waitFor(() => expect(tick.disabled).toBe(false));
     expect(tick.checked).toBe(false);
   });
 
-  it('Rejected asks the reason before saving', async () => {
-    waiting([round()]);
+  it('a pending row is answered from the block: Rejected asks the reason before saving', async () => {
+    waiting([round({ need: 'heard_back', followedUpAt: '2026-11-11T12:00:00Z' })]);
     vi.mocked(api.updateInterviewStage).mockResolvedValue({} as never);
     setup(plan());
-    fireEvent.click(within(await block()).getByRole('button', { name: 'Rejected' }));
+    const box = await block();
+    fireEvent.click(within(box).getByRole('button', { name: 'Pending items 1' }));
+    fireEvent.click(within(box).getByRole('button', { name: 'Rejected' }));
     const dialog = await screen.findByRole('dialog', { name: /Reject round · Acme/ });
     const save = within(dialog).getByRole('button', { name: 'Save as Rejected' }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
@@ -616,16 +715,16 @@ describe('TodayCard: Pending items (where Follow-ups was)', () => {
     ));
   });
 
-  it("an old server without the pending read: the interviews come from the needs-input list, an admin's by their own id", async () => {
+  it("an old server without the pending read: the follow-ups come from the needs-input list, an admin's by their own id", async () => {
     auth.role = 'admin';
     vi.mocked(api.getDashboardPending).mockRejectedValue(new Error('404'));
     vi.mocked(api.getNeedsInput).mockResolvedValue({
       items: [round(), round({ interviewId: 'iv8', roundId: 'r8', companyName: 'Theirs', ownerId: 'other' })], counts: {},
     } as never);
     setup(plan());
-    const box = await block();
-    expect(within(box).getByRole('heading', { name: 'Pending items (1)' })).toBeTruthy();
-    expect(box.textContent).not.toContain('Theirs');
+    expect(await tickOf('Acme')).toBeTruthy();
+    expect(screen.queryByText('Theirs')).toBeNull();
+    expect(screen.queryByText(/Pending items/)).toBeNull();
     expect(vi.mocked(api.getNeedsInput).mock.calls.every(([u]) => u === 'me')).toBe(true);
   });
 });

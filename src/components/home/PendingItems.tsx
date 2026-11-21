@@ -33,6 +33,7 @@ const FIRST = 5;
  * The reads behind Pending items and what they add up to: the interview rows in tag order, the profile and bidder
  * flags, and the total. Shared with the admin's person page, whose Pending tile shows the same numbers (same SWR
  * keys, so nothing is read twice). `loading` until the first answer; `failed` when neither read answered.
+ * `owner`: the follow-up rows are not in `rows` or the total but in `followUps`: the person's Home lists them in Today.
  */
 export function usePending(mode: 'owner' | 'admin', userId: string | undefined, today: TodayInterview[]) {
   const { user } = useAuth();
@@ -51,11 +52,12 @@ export function usePending(mode: 'owner' | 'admin', userId: string | undefined, 
   const interviews = mode === 'owner'
     ? waiting.filter((row) => !(row.need === 'outcome' && todayKeys.has(needsInputKey(row))))
     : [...waiting, ...unmarkedToday.filter((r) => !known.has(roundKey(r))).map(asNeedsInput)];
-  const rows = NEEDS.flatMap((n) => interviews.filter((row) => row.need === n.need).map((row) => ({ row, ...n })));
+  const followUps = mode === 'owner' ? interviews.filter((row) => row.need === 'follow_up') : [];
+  const rows = NEEDS.flatMap((n) => interviews.filter((row) => row.need === n.need && !followUps.includes(row)).map((row) => ({ row, ...n })));
   const profiles = pending.data?.profiles ?? [];
   const bidders = pending.data?.bidders ?? [];
   return {
-    rows, profiles, bidders, unmarkedToday, total: rows.length + profiles.length + bidders.length,
+    rows, followUps, profiles, bidders, unmarkedToday, total: rows.length + profiles.length + bidders.length,
     loading: !pending.data && (!pending.error || (!list.data && !list.error)),
     failed: !pending.data && !!pending.error && !list.data && !!list.error,
     retry: () => pending.mutate(),
@@ -64,9 +66,10 @@ export function usePending(mode: 'owner' | 'admin', userId: string | undefined, 
 
 /**
  * What waits on one person: interviews that need an answer, and the flags on their profiles and bidders.
- * `owner`: on the person's own Home (follow-up rows have the "I followed up" checkbox; `today`'s unmarked rounds are
- * answered in the Today list above, so they are not repeated). `admin`: on the admin's page for `userId` (`name`),
- * where the result buttons work but following up stays with the owner, and `today`'s unmarked rounds are listed.
+ * `owner`: its own block on the person's Home, folded until its heading is clicked (follow-up rows and `today`'s
+ * unmarked rounds are rows of the Today list there, so they are not repeated). `admin`: on the admin's page for
+ * `userId` (`name`), where the result buttons work but following up stays with the owner, and `today`'s unmarked
+ * rounds are listed.
  * Hidden when nothing waits. `onSaved` refetches whatever the page shows, this list included (`home-pending`,
  * `interviews-needs-input`). An older server without the pending read still gives the interviews.
  */
@@ -82,7 +85,8 @@ export default function PendingItems({
   const id = useId();
   const { tz } = useInterviewTimezone();
   const { rows, profiles, bidders, unmarkedToday, total } = usePending(mode, userId, today);
-  const { dialog, isSaving, followUp, ask, button, resultButtons, outcomeButtons } = useNeedsInputActions(onSaved);
+  const { dialog, ask, button, resultButtons, outcomeButtons } = useNeedsInputActions(onSaved);
+  const [open, setOpen] = useState(mode === 'admin'); // the owner's block starts folded
   // admin only: the groups folded, and the groups shown past their first rows
   const [folded, setFolded] = useState<string[]>([]);
   const [whole, setWhole] = useState<string[]>([]);
@@ -128,9 +132,8 @@ export default function PendingItems({
   };
   const whatToChange = `/statistics?tab=conversion&scope=me${mode === 'admin' && userId ? `&user=${encodeURIComponent(userId)}` : ''}`;
 
-  const line = (key: string, tag: string, color: string, who: string, text: string, end: ReactNode, start?: ReactNode) => (
+  const line = (key: string, tag: string, color: string, who: string, text: string, end: ReactNode) => (
     <li key={key} className={LINE}>
-      {start}
       <span className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${color}`}>{tag}</span>
       <span className="min-w-0 flex-1 basis-52">
         <span className="font-medium text-strong">{who}</span>
@@ -172,34 +175,34 @@ export default function PendingItems({
   const link = (to: string, text: string) => <Link to={to} className="link-inline whitespace-nowrap text-xs">{text} →</Link>;
 
   return (
-    <div role="group" aria-labelledby={id} className={mode === 'admin' ? 'panel p-4' : 'mt-4'}>
+    <div role="group" aria-labelledby={id} className="panel p-4">
       {dialog}
       <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-        <h3 id={id} className={mode === 'admin' ? 'card-title' : LABEL}>Pending items ({total})</h3>
-        <span className="text-xs text-muted">Things waiting on {mode === 'admin' ? name || 'this person' : 'you'}</span>
+        <h3 id={id} className="card-title">
+          {mode === 'admin' ? `Pending items (${total})` : (
+            <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+              <span aria-hidden>{open ? '▾ ' : '▸ '}</span>Pending items{' '}
+              <span className="rounded-full bg-red-100 px-1.5 text-[11px] font-bold text-red-700 dark:bg-red-950 dark:text-red-300">{total}</span>
+            </button>
+          )}
+        </h3>
+        <span className="text-xs text-muted">{mode === 'admin' ? `Things waiting on ${name || 'this person'}` : 'Older things waiting on you'}</span>
       </div>
-      {group('Interviews', rows.map(({ row, tag, color }) => line(
-        needsInputKey(row), tag, color, row.companyName || 'Untitled company', interviewText(row),
-        <div className="flex flex-wrap gap-2">{interviewButtons(row)}</div>,
-        mode === 'owner' && row.need === 'follow_up' && (
-          <input
-            type="checkbox"
-            className="h-4 w-4 shrink-0"
-            aria-label={`I followed up with ${row.companyName || 'the company'}`}
-            // Stays ticked while it saves; a saved row leaves the list, a failed one comes back unticked.
-            checked={isSaving(row)}
-            disabled={isSaving(row)}
-            onChange={() => followUp(row)}
-          />
-        ),
-      )))}
-      {group('Profiles', profiles.map((p) => (p.kind === 'no_interviews'
-        ? line(`${p.accountId}:${p.kind}`, 'No interviews', RED, p.name || 'Unnamed', profileText(p), link(whatToChange, 'What to change'))
-        : line(`${p.accountId}:${p.kind}`, 'No bids', GREY, p.name || 'Unnamed', profileText(p), link(`/accounts/${p.accountId}`, 'Open profile')))))}
-      {group('Bidders', bidders.map((b) => line(
-        `${b.bidderId}:${b.kind}`, b.kind === 'not_bidding' ? 'Not bidding' : 'Slowing down', b.kind === 'not_bidding' ? RED : AMBER,
-        b.name || 'Unnamed', bidderText(b), link(`/bidders?bidder=${encodeURIComponent(b.bidderId)}`, 'Open bidder'),
-      )))}
+      {open && (
+        <>
+          {group('Interviews', rows.map(({ row, tag, color }) => line(
+            needsInputKey(row), tag, color, row.companyName || 'Untitled company', interviewText(row),
+            <div className="flex flex-wrap gap-2">{interviewButtons(row)}</div>,
+          )))}
+          {group('Profiles', profiles.map((p) => (p.kind === 'no_interviews'
+            ? line(`${p.accountId}:${p.kind}`, 'No interviews', RED, p.name || 'Unnamed', profileText(p), link(whatToChange, 'What to change'))
+            : line(`${p.accountId}:${p.kind}`, 'No bids', GREY, p.name || 'Unnamed', profileText(p), link(`/accounts/${p.accountId}`, 'Open profile')))))}
+          {group('Bidders', bidders.map((b) => line(
+            `${b.bidderId}:${b.kind}`, b.kind === 'not_bidding' ? 'Not bidding' : 'Slowing down', b.kind === 'not_bidding' ? RED : AMBER,
+            b.name || 'Unnamed', bidderText(b), link(`/bidders?bidder=${encodeURIComponent(b.bidderId)}`, 'Open bidder'),
+          )))}
+        </>
+      )}
     </div>
   );
 }

@@ -69,6 +69,14 @@ describe('PendingItems', () => {
     expect(screen.queryByText(/Pending items/)).toBeNull();
   });
 
+  it('owner: follow-ups alone do not make the block show (they are rows of Today)', async () => {
+    pending({ interviews: [round()] });
+    show();
+    await waitFor(() => expect(api.getDashboardPending).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText(/Pending items/)).toBeNull();
+  });
+
   it('admin: three groups with their counts, tags, texts, buttons and links; the heading counts them all', async () => {
     pending({ interviews: [noReason, heardBack, round(), unknown], profiles, bidders });
     asAdmin();
@@ -133,14 +141,26 @@ describe('PendingItems', () => {
     expect(within(box).queryByRole('button', { name: /… \d+ more/ })).toBeNull();
   });
 
-  it('owner: groups do not fold and every row is listed', async () => {
+  it('owner: its own panel, folded at first; the heading is a button with the count; groups inside do not fold', async () => {
     const many = Array.from({ length: 8 }, (_, i) => ({ ...profiles[1], accountId: `p${i}`, name: `Profile ${i}` }));
-    pending({ profiles: many });
+    pending({ interviews: [round(), unknown], profiles: many });
     show();
     const box = await block();
+    expect(box.className).toContain('panel');
+    const head = within(box).getByRole('button', { name: 'Pending items 9' }); // the follow-up is not counted
+    expect(within(box).getByRole('heading', { name: 'Pending items 9' })).toBeTruthy();
+    expect(head.getAttribute('aria-expanded')).toBe('false');
+    expect(within(box).getByText('Older things waiting on you')).toBeTruthy();
+    expect(within(box).queryByRole('list')).toBeNull();
+    fireEvent.click(head);
+    expect(head.getAttribute('aria-expanded')).toBe('true');
     expect(rowsOf(box, 'Profiles')).toHaveLength(8);
-    expect(within(box).queryByRole('button')).toBeNull();
     expect(within(box).getByText('Profiles (8)').tagName).toBe('DIV');
+    expect(rowsOf(box, 'Interviews').map((r) => r.textContent?.split(' · ')[0])).toEqual(['Status unknownKOPE AI']);
+    expect(box.textContent).not.toContain('Liberty');
+    expect(within(box).queryByRole('checkbox')).toBeNull();
+    fireEvent.click(head);
+    expect(within(box).queryByRole('list')).toBeNull();
   });
 
   it('a group with nothing in it is left out', async () => {
@@ -176,36 +196,17 @@ describe('PendingItems', () => {
     expect(buttons(rows[1])).toEqual(['Completed', 'Passed', 'Rejected', 'Rescheduled', 'Canceled']);
   });
 
-  it("owner: today's unmarked rounds are not repeated here, follow-up rows keep their checkbox, links carry no user", async () => {
+  it("owner: today's unmarked rounds are not repeated here, links carry no user", async () => {
     pending({ interviews: [round(), unknown, { ...unknown, interviewId: 'ivt', roundId: 'rt', companyName: 'Globex' }], profiles: [profiles[0]] });
     show({ today: [todayRound()] as never });
     const box = await block();
     expect(api.getDashboardPending).toHaveBeenCalledWith(undefined);
-    expect(within(box).getByRole('heading', { name: 'Pending items (3)' })).toBeTruthy();
-    expect(within(box).getByText('Things waiting on you')).toBeTruthy();
+    fireEvent.click(within(box).getByRole('button', { name: 'Pending items 2' }));
     expect(box.textContent).not.toContain('Globex');
-    const [a, b] = rowsOf(box, 'Interviews');
+    const [a] = rowsOf(box, 'Interviews');
     expect(a.textContent).toContain('Status unknownKOPE AI');
-    expect(within(a).queryByRole('checkbox')).toBeNull();
-    expect(within(b).getByRole('checkbox', { name: 'I followed up with Liberty' })).toBeTruthy();
-    expect(buttons(b)).toEqual(['Passed', 'Rejected']);
+    expect(buttons(a)).toEqual(['Completed', 'Passed', 'Rejected', 'Rescheduled', 'Canceled']);
     expect(within(box).getByRole('link', { name: /What to change/ }).getAttribute('href')).toBe('/statistics?tab=conversion&scope=me');
-  });
-
-  it('owner: ticking a follow-up records it, disables the row meanwhile and tells the page', async () => {
-    pending({ interviews: [round()] });
-    let done: (v: unknown) => void = () => {};
-    vi.mocked(api.followUpInterviewStage).mockReturnValue(new Promise((resolve) => { done = resolve; }) as never);
-    show();
-    const box = await block();
-    const tick = within(box).getByRole('checkbox', { name: 'I followed up with Liberty' }) as HTMLInputElement;
-    fireEvent.click(tick);
-    expect(api.followUpInterviewStage).toHaveBeenCalledWith('iv1', 'r1');
-    await waitFor(() => expect(tick.disabled).toBe(true));
-    expect(within(box).getAllByRole('button').every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
-    expect(onSaved).not.toHaveBeenCalled();
-    done({});
-    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
   });
 
   it('admin: Rejected asks the reason and sends what the Interviews page sends', async () => {
@@ -248,11 +249,12 @@ describe('PendingItems', () => {
   it("owner who is an admin: the fallback asks for their own rounds by id and never shows someone else's", async () => {
     auth.role = 'admin';
     vi.mocked(api.getDashboardPending).mockRejectedValue(new Error('404'));
-    vi.mocked(api.getNeedsInput).mockResolvedValue({ items: [round(), round({ interviewId: 'iv8', roundId: 'r8', companyName: 'Theirs', ownerId: 'other' })], counts: {} } as never);
+    vi.mocked(api.getNeedsInput).mockResolvedValue({ items: [heardBack, round({ interviewId: 'iv8', roundId: 'r8', companyName: 'Theirs', ownerId: 'other' })], counts: {} } as never);
     show();
     const box = await block();
     expect(api.getNeedsInput).toHaveBeenCalledWith('me');
-    expect(within(box).getByRole('heading', { name: 'Pending items (1)' })).toBeTruthy();
+    fireEvent.click(within(box).getByRole('button', { name: 'Pending items 1' }));
+    expect(box.textContent).toContain('Smart Working');
     expect(box.textContent).not.toContain('Theirs');
   });
 

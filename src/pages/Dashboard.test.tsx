@@ -9,8 +9,7 @@ import DashboardPage from './Dashboard';
 let role = 'staff';
 vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'boss', role } }) }));
 vi.mock('../api/endpoints', () => ({ getTeamToday: vi.fn(), lookupUsers: vi.fn() }));
-vi.mock('../components/home/TodayCard', () => ({ default: () => <div>today-stub</div> }));
-vi.mock('../components/home/WeekCard', () => ({ default: () => <div>week-stub</div> }));
+vi.mock('../components/home/MyHome', () => ({ default: () => <div>my-home-stub</div> }));
 vi.mock('../components/home/MetricsCard', () => ({ default: () => <div>metrics-stub</div> }));
 vi.mock('../components/dashboard/TeamOverview', () => ({ default: () => <div>team-stub</div> })); // not rendered now; kept so a return is caught
 vi.mock('../components/home/PersonPage', () => ({
@@ -56,11 +55,11 @@ const picker = () => screen.findByLabelText('User') as Promise<HTMLSelectElement
 const names = (el: HTMLSelectElement) => [...el.options].map((o) => o.text);
 
 describe('Home', () => {
-  it('staff see the Today to-do list and This week only: no This month, no team', () => {
+  it('staff see their own Home (pending, today, this week) only: no This month, no team, no Week / Day picker', () => {
     role = 'staff';
     renderIt();
-    expect(screen.getByText('today-stub')).toBeTruthy();
-    expect(screen.getByText('week-stub')).toBeTruthy();
+    expect(screen.getByText('my-home-stub')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Week' })).toBeNull();
     expect(screen.queryByText('metrics-stub')).toBeNull();
     expect(screen.queryByText('team-stub')).toBeNull();
     expect(screen.queryByRole('radio')).toBeNull();
@@ -78,7 +77,7 @@ describe('Home', () => {
     expect(screen.getByText('Pick a person to see their bids, interviews, to-dos, goals and pending items.')).toBeTruthy();
     expect(screen.queryByTestId('person')).toBeNull();
     expect(screen.queryByRole('radio', { name: 'Me' })).toBeNull();
-    expect(screen.queryByText('today-stub')).toBeNull();
+    expect(screen.queryByText('my-home-stub')).toBeNull();
     expect(screen.queryByText('team-stub')).toBeNull(); // the Team totals table is off for now
     expect(api.getTeamToday).not.toHaveBeenCalled(); // nothing slow is read before a person is picked
     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
