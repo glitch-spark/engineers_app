@@ -12,7 +12,7 @@ const week = (over: Partial<WeekPlan> = {}): WeekPlan => ({
   routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }],
   weeklyGoals: [{ id: 'g1', text: 'Send proposals', kind: 'count', target: 250, archived: false }],
   progress: { g1: { value: 180, done: false, target: 250 } },
-  recapNotes: '', stages: { self: {}, caller: {} }, days: [], ...over,
+  recapNotes: '', stages: { self: {}, caller: {} }, days: [], plansOwnWeek: true, ...over,
 });
 
 describe('WeekGoalCard', () => {

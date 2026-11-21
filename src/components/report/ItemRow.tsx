@@ -26,12 +26,12 @@ export default function ItemRow({
   const removed = item.archived ? <span className="ml-1 text-xs text-muted">(removed)</span> : null;
   const progress = week && (
     <span className="ml-auto text-xs tabular-nums text-muted">
-      {item.kind === 'check' ? (note ? null : week.done ? '✓ this week' : 'Not yet this week') : <>{week.value}{week.target ? ` / ${week.target}` : ''} this week</>}
+      {['check', 'log'].includes(item.kind) ? (note ? null : week.done ? '✓ this week' : 'Not yet this week') : <>{week.value}{week.target ? ` / ${week.target}` : ''} this week</>}
     </span>
   );
   const showTarget = !!target && !week;
   const reached = showTarget && (result.value ?? 0) >= target!;
-  if (item.kind === 'check') {
+  if (['check', 'log'].includes(item.kind)) {
     return (
       <li className="rounded-lg px-1 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
         <label className="flex items-center gap-2 text-sm text-body">

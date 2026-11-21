@@ -95,7 +95,7 @@ export default function DayPanel({
       // Checks send done; counts / hours send done + value (the server also ticks them at the frozen target).
       const results = Object.fromEntries(items.map((i) => {
         const r = form.results[i.id] ?? { done: false, value: null };
-        return [i.id, i.kind === 'check' ? { done: r.done } : { done: r.done, value: r.value }];
+        return [i.id, ['check', 'log'].includes(i.kind) ? { done: r.done } : { done: r.done, value: r.value }];
       }));
       await api.putDayPlan(date, {
         results,
