@@ -68,6 +68,13 @@ describe('Home', () => {
     expect(screen.getByText('Fri, Nov 20')).toBeTruthy();
   });
 
+  it('says it is loading the team while the list is on its way, not a blank page', async () => {
+    vi.mocked(api.getTeamToday).mockReturnValue(new Promise(() => {}) as never);
+    renderIt();
+    expect((await screen.findByRole('status')).textContent).toContain('Loading the team');
+    expect(screen.getByText('This can take a few seconds the first time.')).toBeTruthy();
+  });
+
   it('Me is the page as before, with the team table below, and the choice is remembered', async () => {
     renderIt();
     await person();

@@ -31,6 +31,19 @@ const asDate = (iso: string) => {
   return new Date(y, m - 1, d);
 };
 
+/** The team list reads everyone's day and flags: say so while it loads, the first load can take a few seconds. */
+function TeamLoading() {
+  return (
+    <div className="panel space-y-3 p-3" role="status">
+      <p className="flex items-center gap-2 text-sm text-body">
+        <span className="spinner spinner-sm" aria-hidden /> Loading the team…
+      </p>
+      <p className="text-xs text-muted">This can take a few seconds the first time.</p>
+      {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-12 w-full" />)}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   return (
@@ -119,10 +132,17 @@ function AdminHome() {
               <p className="panel p-3 text-sm text-muted">
                 Couldn&rsquo;t load the team. <button type="button" className="underline" onClick={() => team.mutate()}>Retry</button>
               </p>
-            ) : !team.data ? <div className="skeleton h-40 w-full" aria-busy="true" />
+            ) : !team.data ? <TeamLoading />
               : people.length === 0 ? <p className="panel p-3 text-sm text-muted">No team members to show.</p>
                 : <TeamList people={people} picked={picked} onPick={(userId) => patch({ user: userId })} />}
           </div>
+          {!team.data && !team.error && !picked && (
+            <div className="panel space-y-3 p-4" aria-hidden>
+              <div className="skeleton h-5 w-40" />
+              <div className="skeleton h-24 w-full" />
+              <div className="skeleton h-24 w-full" />
+            </div>
+          )}
           {picked && (
             <PersonPage key={picked} userId={picked} name={people.find((p) => p.userId === picked)?.name ?? ''} day={day} today={today} />
           )}
