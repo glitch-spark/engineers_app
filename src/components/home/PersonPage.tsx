@@ -1,22 +1,27 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type ReactNode } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
-import type { PipelineItem } from '../../api/endpoints';
+import type { DashboardWeek, PipelineItem, TodayInterview } from '../../api/endpoints';
 import { formatInZone, parseServerTime, zonedDateKey } from '../../lib/interviewTimezone';
 import { stageLabel } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
+import { dayDate, dayLabel, mondayOf, monthDay } from '../../lib/week';
 import { shortDay } from '../interview/useNeedsInputActions';
 import { kept } from '../report/ItemRow';
-import BidsDays, { weekdayShort } from './BidsDays';
-import PendingItems from './PendingItems';
+import { weekdayShort } from './BidsDays';
+import PendingItems, { usePending } from './PendingItems';
 import RoutinesGrid from './RoutinesGrid';
 import TodayRound, { roundKey, roundState, useNow } from './TodayRound';
 
 const LABEL = 'text-[11px] font-medium uppercase tracking-wider text-muted';
 const AMBER = 'text-amber-700 dark:text-amber-400';
+const BIG = 'text-2xl font-bold tabular-nums text-strong';
+const TRACK = 'mt-1.5 flex h-2 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800';
+const NONE: TodayInterview[] = [];
 const TH = 'px-1.5 py-1 text-right text-[11px] font-normal normal-case tracking-normal text-muted first:pl-0 first:text-left';
 const TD = 'whitespace-nowrap px-1.5 py-1.5 text-right tabular-nums';
 const num = (n: number) => n.toLocaleString('en-US');
+const count = (n: number, one: string) => `${num(n)} ${one}${n === 1 ? '' : 's'}`;
 /** Every read of this page; refetched together after an admin sets a round's result. */
 const PIPELINE_GROUPS: [PipelineItem['status'], string][] = [
   ['scheduled', 'Scheduled'], ['waiting', 'Waiting for a result'], ['no_result', 'No result for a week or more'],
@@ -26,13 +31,33 @@ const PERSON_KEYS = ['team-today', 'person-day', 'person-week', 'person-pipeline
 
 function Card({ title, summary, children }: { title: string; summary?: string; children: ReactNode }) {
   return (
-    <section aria-label={title} className="panel p-4">
+    <section aria-label={title} data-section={title} className="panel scroll-mt-20 p-4">
       <header className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2">
         <h3 className="card-title">{title}</h3>
         {summary && <span className="text-xs text-muted">{summary}</span>}
       </header>
       {children}
     </section>
+  );
+}
+
+/** One of the four numbers at the top. */
+function Tile({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div role="group" aria-label={label} className="panel min-w-0 px-4 py-3">
+      <div className={LABEL}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+/** A half's heading: what it is about on the left, its number on the right. */
+function Sub({ title, children, className = '' }: { title: string; children?: ReactNode; className?: string }) {
+  return (
+    <div className={`mb-1.5 flex flex-wrap items-baseline justify-between gap-x-2 ${className}`}>
+      <h4 className={LABEL}>{title}</h4>
+      {children != null && children !== '' && <span className="text-xs font-semibold text-strong">{children}</span>}
+    </div>
   );
 }
 
@@ -55,51 +80,152 @@ function Against({ done, target, head }: { done: number; target: number | null |
   );
 }
 
+/** How far along a target: green once reached, amber under. */
+function Meter({ label, value, target }: { label: string; value: number; target: number }) {
+  return (
+    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round((value / target) * 100))} className={TRACK}>
+      <div className={value >= target ? 'bg-success-500' : 'bg-amber-500'} style={{ width: `${Math.min(100, (value / target) * 100)}%` }} />
+    </div>
+  );
+}
+
+type Outcome = { n: number; short: string; name: string; color: string };
+/** The week's held rounds by how they ended, as one stacked bar. */
+function OutcomeBar({ parts }: { parts: Outcome[] }) {
+  const total = parts.reduce((sum, p) => sum + p.n, 0);
+  if (!total) return null;
+  return (
+    <div role="img" aria-label={parts.map((p) => `${p.n} ${p.name}`).join(', ')} className={TRACK}>
+      {parts.map((p) => <div key={p.name} className={p.color} style={{ width: `${(p.n / total) * 100}%` }} />)}
+    </div>
+  );
+}
+
 /**
- * The admin's page for one person: their bids, interviews, daily to-dos, weekly goals and pending items. `day` is
- * the day shown (today or yesterday) for the bids table, the rounds and the to-dos summary; the week, the pipeline
- * and the pending items are always as of now. Read-only, except the interview result buttons in Pending items.
- * Each read fails on its own: the other sections stay.
+ * One bar per weekday with its number: green at or over the day's target, amber under, today's in blue, a dash for
+ * a day still to come. Each bar is a button that picks its day and says the same in words. The dashed line marks
+ * the daily target, drawn only when every day has the same one.
  */
-export default function PersonPage({ userId, name, day, today }: { userId: string; name: string; day: string; today: string }) {
+function WeekBars({ days, today, picked, onPick }: { days: NonNullable<DashboardWeek['bids']['byDay']>; today: string; picked: string; onPick: (day: string) => void }) {
+  const max = Math.max(1, ...days.flatMap((d) => [d.done, d.target ?? 0]));
+  const height = (n: number) => `${(n / max) * 80}%`; // the rest of the height is room for the number above the bar
+  const line = days.every((d) => !!d.target && d.target === days[0].target) ? days[0].target : null;
+  return (
+    <>
+      <div role="group" aria-label="Bids by weekday" className="relative mt-1 flex h-28 items-stretch gap-2 border-b border-zinc-200 dark:border-zinc-700">
+        {!!line && (
+          <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-zinc-400 dark:border-zinc-500" style={{ bottom: height(line) }}>
+            <span className="absolute -top-4 right-0 text-[10px] text-muted">target {num(line)} a day</span>
+          </div>
+        )}
+        {days.map((d) => {
+          const future = d.date > today;
+          const isToday = d.date === today;
+          const against = !d.target ? '' : d.done < d.target ? `, under the ${num(d.target)} target` : `, at or over the ${num(d.target)} target`;
+          const color = isToday ? 'bg-sky-300 dark:bg-sky-700' : !d.target ? 'bg-zinc-300 dark:bg-zinc-600' : d.done < d.target ? 'bg-amber-500' : 'bg-success-500';
+          return (
+            <button
+              key={d.date} type="button" disabled={future} aria-pressed={d.date === picked} onClick={() => onPick(d.date)}
+              aria-label={future ? `${dayLabel(d.date)}: still to come` : `${dayLabel(d.date)}${isToday ? ', today' : ''}: ${count(d.done, 'bid')}${against} — show this day`}
+              className={`flex min-w-0 flex-1 flex-col items-center justify-end rounded-t ${d.date === picked ? 'bg-zinc-100 dark:bg-zinc-800' : ''} ${future ? '' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+            >
+              <span className={`text-[11px] tabular-nums ${future ? 'text-muted' : 'font-semibold text-strong'}`}>{future ? '–' : num(d.done)}</span>
+              <span className={`block w-[70%] rounded-t ${color}`} style={{ height: future ? 0 : height(d.done) }} />
+            </button>
+          );
+        })}
+      </div>
+      <div aria-hidden className="mt-1 flex gap-2 text-center text-[11px] text-muted">
+        {days.map((d) => <span key={d.date} className="min-w-0 flex-1">{weekdayShort(d.date)}{d.date === today && ' · today'}</span>)}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The admin's page for one person: four numbers, then their bids, interviews, daily to-dos, weekly goals and
+ * pending items. `day` is the day picked in the filter bar: the day tile, the day halves of Bids and Interviews
+ * and the to-dos day count follow it; the week tiles and halves, the to-dos grid and the weekly goals follow its
+ * week; the pipeline and the pending items always show how things stand now. `today` is the real current date.
+ * `onPickDay`: a weekday's bar or to-dos column head picks that day. Read-only, except the interview result buttons
+ * in Pending items. Each read fails on its own: the other parts stay.
+ */
+export default function PersonPage({ userId, name, day, today, onPickDay }: { userId: string; name: string; day: string; today: string; onPickDay: (day: string) => void }) {
   const { tz } = useInterviewTimezone();
   const now = useNow();
+  const root = useRef<HTMLDivElement>(null);
   const { mutate: globalMutate } = useSWRConfig();
+  const isToday = day === today;
+  const monday = mondayOf(day);
+  const thisWeek = monday === mondayOf(today);
   const plan = useSWR(['person-day', day, userId], () => api.getDayPlan(day, userId));
-  const week = useSWR(['person-week', today, userId], () => api.getDashboardWeek({ userId, today }));
+  // today's rounds, for the pending items whatever day is picked (the same read as above when the day is today)
+  const nowPlan = useSWR(['person-day', today, userId], () => api.getDayPlan(today, userId));
+  // Keyed by the week, so another day of a past week is not read again; the server takes any date of the week.
+  const week = useSWR(
+    ['person-week', today, userId, ...(thisWeek ? [] : [monday])],
+    () => api.getDashboardWeek({ userId, today, ...(thisWeek ? {} : { weekOf: day }) }),
+  );
   const pipeline = useSWR(['person-pipeline', userId], () => api.getInterviewPipeline(userId));
+  const todayRounds = nowPlan.data?.todayInterviews ?? NONE;
+  const pend = usePending('admin', userId, todayRounds);
   // pipeline groups folded by the admin; all but Scheduled start folded
   const [folded, setFolded] = useState<Set<PipelineItem['status']>>(() => new Set(['waiting', 'no_result', 'followed_up', 'passed']));
   const refresh = () => globalMutate((key) => Array.isArray(key) && PERSON_KEYS.includes(key[0]));
 
-  const isToday = day === today;
-  const dayWord = isToday ? 'today' : 'yesterday';
+  const on = isToday ? 'today' : `on ${dayLabel(day)}`;
+  const dayHead = isToday ? 'Today' : dayLabel(day);
+  const inWeek = thisWeek ? 'this week' : `in the week of ${monthDay(monday)}`;
+  const weekHead = thisWeek ? 'This week' : `Week of ${monthDay(monday)}`;
+  const dow = dayDate(today).getDay(); // 1 = Mon .. 5 = Fri
+  const weekRuns = thisWeek && dow >= 1 && dow <= 5; // a past week, or the weekend after this one, is over
   const d = plan.data;
   const w = week.data;
   const dayFailed = !!plan.error && !d;
   const weekFailed = !!week.error && !w;
+  const dayGone = <Failed what="the day" retry={plan.mutate} />;
+  const weekGone = <Failed what="the week" retry={week.mutate} />;
 
   // ---- Bids
   const totals = d && (d.bidsTotals ?? {
     self: d.done.bidsSelf, selfTarget: d.targets.bidsSelf || null, bidder: d.bidsBidderAuto, bidderTarget: d.targets.bidsBidder || null,
     total: d.done.bidsSelf + d.bidsBidderAuto, target: d.targets.bidsSelf + d.targets.bidsBidder || null,
   });
-  const toGo = totals?.target ? totals.target - totals.total : 0;
-  const bidsSummary = totals
-    ? `${num(totals.total)}${totals.target ? ` of ${num(totals.target)}` : ''} ${dayWord}${isToday && toGo > 0 ? ` · ${num(toGo)} to go` : ''}`
-    : undefined;
+  const dayTarget = totals?.target || null;
+  const dayLine = totals && [
+    dayTarget && (totals.total >= dayTarget ? 'target reached' : `${num(dayTarget - totals.total)} ${isToday ? 'to go' : 'short'}`),
+    `self ${num(totals.self)}`, `bidder ${num(totals.bidder)}`,
+  ].filter(Boolean).join(' · ');
+  const of = (done: number, target: number | null) => `${num(done)}${target ? ` of ${num(target)}` : ''}`;
   const regions = d?.bidsByRegion ?? [];
-  const weekTarget = w?.bids.target != null && w.bids.target > 0 ? w.bids.target : null;
+  // Mon–Fri when the server sends it: the older total also counts weekend bids
+  const weekBids = w && (w.bids.week ?? { total: w.bids.total, target: w.bids.target });
+  const weekTarget = weekBids?.target || null;
+  const daysLeft = dow === 5 ? 'last day of the week' : `${6 - dow} days left`;
+  const weekLine = weekBids && [
+    weekTarget && (weekBids.total >= weekTarget ? 'target reached' : `${num(weekTarget - weekBids.total)} ${weekRuns ? 'to go' : 'short'}`),
+    weekRuns && daysLeft,
+  ].filter(Boolean).join(' · ');
 
   // ---- Interviews
   const rounds = d?.todayInterviews;
   const unmarked = (rounds ?? []).filter((r) => roundState(r, now) === 'unmarked').length;
+  const o = w?.interviews.outcomes;
+  const outcomes: Outcome[] = !o ? [] : [
+    { n: o.passed, short: 'passed', name: 'passed', color: 'bg-success-500' },
+    { n: o.rejected, short: 'rejected', name: 'rejected', color: 'bg-red-500' },
+    { n: o.noAnswer, short: 'no answer', name: 'no answer', color: 'bg-zinc-400 dark:bg-zinc-500' },
+    { n: o.waiting, short: 'waiting', name: 'waiting for a result', color: 'bg-sky-300 dark:bg-sky-700' },
+  ].filter((p) => p.n > 0);
+  const ivDays = w?.interviews.byDay;
+  // A day before today that still has rounds "not held yet": they ended and nobody marked them.
+  const stale = (ivDays ?? []).filter((x) => x.date < today).reduce((sum, x) => sum + x.scheduled, 0);
+  const toCome = ivDays ? ivDays.filter((x) => x.date >= today).reduce((sum, x) => sum + x.scheduled, 0) : o?.scheduled ?? 0;
+  const weekOver = !!ivDays?.length && ivDays.every((x) => x.date < today);
+  const held = o?.held ?? w?.interviews.done ?? 0;
+  const sum = (key: 'held' | 'canceled') => (ivDays ?? []).reduce((total, x) => total + x[key], 0);
+  const notMarked = (n: number, where: string) => <td aria-label={`${where}: ${n} not marked`} className={`${TD} ${AMBER}`}>{n} not marked</td>;
   const open = pipeline.data?.items;
-  const interviewsSummary = [
-    rounds && `${rounds.length} ${dayWord}`,
-    rounds && `${unmarked} not marked`,
-    open && `${open.length} in pipeline`,
-  ].filter(Boolean).join(' · ');
   const todayKey = zonedDateKey(new Date(now), tz);
   const when = (p: PipelineItem) => {
     const at = parseServerTime(p.at);
@@ -113,8 +239,8 @@ export default function PersonPage({ userId, name, day, today }: { userId: strin
       case 'waiting': return ['waiting for a result', false];
       case 'no_result': return [p.days != null ? `no result for ${p.days} days` : 'no result yet', true];
       case 'followed_up': {
-        const on = shortDay(p.followedUpAt, tz);
-        return [`followed up${on ? ` ${on}` : ''}`, true];
+        const day = shortDay(p.followedUpAt, tz);
+        return [`followed up${day ? ` ${day}` : ''}`, true];
       }
       default: return ['passed, next round not set', false];
     }
@@ -123,24 +249,102 @@ export default function PersonPage({ userId, name, day, today }: { userId: strin
   // ---- Daily to-dos and weekly goals
   const routines = (d?.items ?? []).filter((i) => kept(i) && i.scope === 'routine');
   const todosSummary = [
-    w && `${w.routines.done} of ${w.routines.expected} this week`,
-    d && routines.length > 0 && `${routines.filter((i) => i.result?.done).length} of ${routines.length} ${dayWord}`,
+    d && routines.length > 0 && `${routines.filter((i) => i.result?.done).length} of ${routines.length} ${on}`,
+    w && `${w.routines.done} of ${w.routines.expected} ${inWeek}`,
   ].filter(Boolean).join(' · ');
   const goals = (d?.items ?? []).filter((i) => kept(i) && i.scope === 'goal').map((i) => {
     const p = d?.progress[i.id];
     return { id: i.id, text: i.text, kind: i.kind, done: p?.done ?? i.result?.done ?? false, value: p?.value ?? 0, target: p?.target ?? i.target, doneOn: p?.doneOn };
   });
-  const [y, m, dd] = today.split('-').map(Number);
-  const dow = new Date(y, m - 1, dd).getDay(); // 1 = Mon .. 5 = Fri
-  const left = dow === 5 ? 'last day' : dow >= 1 && dow <= 4 ? `${6 - dow} days left` : '';
+  const left = !weekRuns ? '' : dow === 5 ? 'last day' : `${6 - dow} days left`;
   const goalsSummary = d ? [`${goals.filter((g) => g.done).length} of ${goals.length} done`, left].filter(Boolean).join(' · ') : undefined;
 
+  // ---- Pending
+  const ended = pend.rows.filter((r) => r.row.need === 'outcome').length;
+  const pendingParts = [
+    pend.rows.length > 0 && count(pend.rows.length, 'interview'),
+    pend.profiles.length > 0 && count(pend.profiles.length, 'profile'),
+    pend.bidders.length > 0 && count(pend.bidders.length, 'bidder'),
+  ].filter(Boolean).join(' · ');
+
+  /** Scrolls a section into view and moves focus to its heading. */
+  const jump = (section: string) => {
+    const el = root.current?.querySelector<HTMLElement>(`[data-section="${section}"]`);
+    const heading = el?.querySelector<HTMLElement>('h3');
+    if (!el || !heading) return;
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'start' }); // jsdom has none
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <div className="min-w-0 space-y-4">
-          <Card title="Bids" summary={bidsSummary}>
-            {dayFailed ? <Failed what="the day" retry={plan.mutate} /> : !d ? <Loading /> : regions.length > 0 && totals && (
+    <div ref={root} className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Tile label={isToday ? 'Bids today' : `Bids on ${dayLabel(day)}`}>
+          {dayFailed ? dayGone : !totals ? <Loading /> : (
+            <>
+              <p><span className={BIG}>{num(totals.total)}</span>{!!dayTarget && <span className="text-sm text-muted"> of {num(dayTarget)}</span>}</p>
+              {!!dayTarget && <Meter label={isToday ? 'Bids today' : `Bids on ${dayLabel(day)}`} value={totals.total} target={dayTarget} />}
+              <p className="mt-1 text-xs text-muted">{dayLine}</p>
+            </>
+          )}
+        </Tile>
+        <Tile label={`Bids ${inWeek}`}>
+          {weekFailed ? weekGone : !weekBids ? <Loading /> : (
+            <>
+              <p><span className={BIG}>{num(weekBids.total)}</span>{!!weekTarget && <span className="text-sm text-muted"> of {num(weekTarget)}</span>}</p>
+              {!!weekTarget && <Meter label={`Bids ${inWeek}`} value={weekBids.total} target={weekTarget} />}
+              {weekLine && <p className="mt-1 text-xs text-muted">{weekLine}</p>}
+            </>
+          )}
+        </Tile>
+        <Tile label={`Interviews ${inWeek}`}>
+          {weekFailed ? weekGone : !w ? <Loading /> : (
+            <>
+              <p>
+                <span className={BIG}>{num(held)}</span>
+                <span className="text-sm text-muted"> held{o && ` · ${num(toCome)} still to come`}</span>
+              </p>
+              <OutcomeBar parts={outcomes} />
+              {o && (outcomes.length > 0 || o.canceled > 0) && (
+                <p className="mt-1 text-xs text-muted">
+                  {[...outcomes.map((p) => `${p.n} ${p.short}`), o.canceled > 0 && `${o.canceled} canceled`].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </>
+          )}
+        </Tile>
+        <Tile label="Pending">
+          {pend.failed ? <Failed what="the pending items" retry={pend.retry} /> : pend.loading ? <Loading /> : (
+            <>
+              <p><span className={BIG}>{num(pend.total)}</span></p>
+              {pendingParts && <p className="mt-1 text-xs text-muted">{pendingParts}</p>}
+              {ended > 0 && (
+                <p className="text-xs font-semibold text-red-700 dark:text-red-400">
+                  {ended === 1 ? "1 interview ended and isn't marked" : `${num(ended)} interviews ended and aren't marked`}
+                </p>
+              )}
+            </>
+          )}
+        </Tile>
+      </div>
+
+      <nav aria-label="Sections" className="flex flex-wrap gap-1.5">
+        {['Bids', 'Interviews', 'Daily to-dos', 'Weekly goals', ...(pend.total > 0 ? ['Pending'] : [])].map((s) => (
+          <button
+            key={s} type="button" onClick={() => jump(s)}
+            className="rounded-full border border-zinc-200 bg-white px-3 py-0.5 text-xs text-body hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          >
+            {s}{s === 'Pending' && <b className="font-semibold text-red-700 dark:text-red-400"> {num(pend.total)}</b>}
+          </button>
+        ))}
+      </nav>
+
+      <Card title="Bids">
+        <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
+          <div className="min-w-0">
+            <Sub title={dayHead}>{totals && of(totals.total, dayTarget)}</Sub>
+            {dayFailed ? dayGone : !d ? <Loading /> : regions.length > 0 && totals && (
               <div className="overflow-x-auto">
                 <table aria-label="Bids by region" className="w-full border-collapse text-sm">
                   <thead>
@@ -165,83 +369,152 @@ export default function PersonPage({ userId, name, day, today }: { userId: strin
                 </table>
               </div>
             )}
-            {w && (
+          </div>
+          <div className="min-w-0">
+            <Sub title={weekHead}>{weekBids && of(weekBids.total, weekTarget)}</Sub>
+            {weekFailed ? weekGone : !w ? <Loading /> : (
               <>
-                <div className={`mt-3 ${LABEL}`}>This week · {num(w.bids.total)}{weekTarget ? ` of ${num(weekTarget)}` : ''}</div>
-                <BidsDays days={w.bids.byDay ?? []} today={today} />
-              </>
-            )}
-          </Card>
-
-          <Card title="Interviews" summary={interviewsSummary || undefined}>
-            {!dayFailed && !d && <Loading />}
-            {rounds && (
-              <>
-                <div className={LABEL}>{isToday ? 'Today' : 'Yesterday'}</div>
-                {rounds.length === 0 ? <p className="py-1 text-sm text-muted">None {dayWord}.</p> : (
-                  <ul aria-label={`${isToday ? 'Today' : 'Yesterday'}'s interviews`} className="border-l-2 border-zinc-200 dark:border-zinc-700">
-                    {rounds.map((iv) => <TodayRound key={roundKey(iv)} iv={iv} now={now} tz={tz} />)}
-                  </ul>
-                )}
-              </>
-            )}
-            {pipeline.error && !open ? <div className="mt-3"><Failed what="the pipeline" retry={pipeline.mutate} /></div> : open && (
-              <>
-                <div className={`mt-3 ${LABEL}`}>In pipeline ({open.length})</div>
-                {open.length === 0 ? <p className="py-1 text-sm text-muted">Nothing in the pipeline.</p> : (
-                  <div className="overflow-x-auto">
-                    <table aria-label="In pipeline" className="w-full border-collapse text-sm">
+                {!!w.bids.byDay?.length && <WeekBars days={w.bids.byDay} today={today} picked={day} onPick={onPickDay} />}
+                {w.bids.week && (
+                  <div className="mt-2 overflow-x-auto">
+                    <table aria-label={`Bids ${inWeek}`} className="w-full border-collapse text-sm">
                       <thead>
-                        <tr>{['Company', 'Stage', 'Next / last round', 'Status'].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}</tr>
+                        <tr>{[weekHead, 'Self', 'Bidder', 'Total'].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}</tr>
                       </thead>
-                      {/* grouped by where each interview stands; a group's heading folds it (user, 2026-11-21) */}
-                      {PIPELINE_GROUPS.map(([key, label]) => {
-                        const rows = open.filter((p) => p.status === key);
-                        if (rows.length === 0) return null;
-                        const shown = !folded.has(key);
-                        return (
-                          <tbody key={key}>
-                            <tr className="border-t border-zinc-200 dark:border-zinc-700">
-                              <td colSpan={4} className="bg-zinc-50 px-1 py-1 dark:bg-zinc-900">
-                                <button
-                                  type="button" aria-expanded={shown} className="w-full text-left text-xs font-semibold text-body"
-                                  onClick={() => setFolded((f) => { const n = new Set(f); if (n.has(key)) n.delete(key); else n.add(key); return n; })}
-                                >
-                                  <span aria-hidden>{shown ? '▾ ' : '▸ '}</span>{label} ({rows.length})
-                                </button>
-                              </td>
-                            </tr>
-                            {shown && rows.map((p) => {
-                              const [text, due] = status(p);
-                              return (
-                                <tr key={p.interviewId} className="border-t border-zinc-100 dark:border-zinc-800">
-                                  <th scope="row" className="py-1.5 pl-4 pr-2 text-left font-normal text-body">{p.companyName || 'Untitled company'}</th>
-                                  <td className={TD}>{stageLabel(p.stage)}</td>
-                                  <td className={TD}>{when(p)}</td>
-                                  <td className={`${TD} ${due ? AMBER : ''}`}>{text}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        );
-                      })}
+                      <tbody>
+                        <tr className="border-t border-zinc-200 dark:border-zinc-700">
+                          <th scope="row" className="py-1.5 text-left font-semibold text-strong">All regions</th>
+                          <Against head done={w.bids.week.self} target={w.bids.week.selfTarget} />
+                          <Against head done={w.bids.week.bidder} target={w.bids.week.bidderTarget} />
+                          <Against head done={w.bids.week.total} target={w.bids.week.target} />
+                        </tr>
+                      </tbody>
                     </table>
                   </div>
                 )}
               </>
             )}
-          </Card>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Interviews">
+        <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
+          <div className="min-w-0">
+            <Sub title={dayHead}>{rounds && `${count(rounds.length, 'round')} · ${unmarked} not marked`}</Sub>
+            {dayFailed ? dayGone : !d ? <Loading /> : rounds && (rounds.length === 0 ? <p className="py-1 text-sm text-muted">None {on}.</p> : (
+              <ul aria-label={isToday ? "Today's interviews" : `Interviews on ${dayLabel(day)}`} className="border-l-2 border-zinc-200 dark:border-zinc-700">
+                {rounds.map((iv) => <TodayRound key={roundKey(iv)} iv={iv} now={now} tz={tz} />)}
+              </ul>
+            ))}
+          </div>
+          <div className="min-w-0">
+            <Sub title={weekHead}>
+              {w && [`${num(held)} held`, o && !weekOver && `${num(toCome)} to come`, stale > 0 && `${num(stale)} not marked`].filter(Boolean).join(' · ')}
+            </Sub>
+            {weekFailed ? weekGone : !w ? <Loading /> : (
+              <>
+                {!!ivDays?.length && (
+                  <div className="overflow-x-auto">
+                    <table aria-label="Interviews by weekday" className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr>
+                          <th scope="col" className={TH}><span className="sr-only">What</span></th>
+                          {ivDays.map((x) => <th key={x.date} scope="col" className={TH}>{weekdayShort(x.date)}</th>)}
+                          <th scope="col" className={TH}>Week</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {([['Held', 'held'], ['Canceled', 'canceled']] as const).map(([label, key]) => (
+                          <tr key={key} className="border-t border-zinc-100 dark:border-zinc-800">
+                            <th scope="row" className="py-1.5 text-left font-normal text-body">{label}</th>
+                            {ivDays.map((x) => <td key={x.date} className={TD}>{num(x[key])}</td>)}
+                            <td className={`${TD} font-semibold`}>{num(sum(key))}</td>
+                          </tr>
+                        ))}
+                        <tr className="border-t border-zinc-100 dark:border-zinc-800">
+                          <th scope="row" className="whitespace-nowrap py-1.5 text-left font-normal text-body">Still to come</th>
+                          {ivDays.map((x) => (x.date >= today
+                            ? <td key={x.date} className={TD}>{num(x.scheduled)}</td>
+                            : x.scheduled > 0 ? <Fragment key={x.date}>{notMarked(x.scheduled, weekdayShort(x.date))}</Fragment>
+                              : <td key={x.date} className={`${TD} text-muted`}>–</td>))}
+                          {!weekOver ? <td className={`${TD} font-semibold`}>{num(toCome)}</td>
+                            : stale > 0 ? notMarked(stale, 'Week') : <td className={`${TD} text-muted`}>–</td>}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {outcomes.length > 0 && (
+                  <>
+                    <OutcomeBar parts={outcomes} />
+                    <ul aria-label="Outcomes" className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-body">
+                      {outcomes.map((p) => (
+                        <li key={p.name} className="inline-flex items-center gap-1"><span aria-hidden className={`h-2 w-2 rounded-sm ${p.color}`} />{p.n} {p.name}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="min-w-0 space-y-4">
-          <Card title="Daily to-dos" summary={todosSummary || undefined}>
-            {weekFailed ? <Failed what="the week" retry={week.mutate} /> : !w ? <Loading />
-              : w.routines.rows?.length ? <RoutinesGrid rows={w.routines.rows} today={today} />
-                : <p className="text-sm text-muted">No daily to-dos this week.</p>}
-          </Card>
+        <Sub title="Pipeline" className="mt-4">{open && count(open.length, 'open interview')}</Sub>
+        {pipeline.error && !open ? <Failed what="the pipeline" retry={pipeline.mutate} /> : !open ? <Loading />
+          : open.length === 0 ? <p className="py-1 text-sm text-muted">Nothing in the pipeline.</p> : (
+            <div className="overflow-x-auto">
+              <table aria-label="Pipeline" className="w-full border-collapse text-sm">
+                <thead>
+                  <tr>{['Company', 'Stage', 'Next / last round', 'Status'].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}</tr>
+                </thead>
+                {/* grouped by where each interview stands; a group's heading folds it (user, 2026-11-21) */}
+                {PIPELINE_GROUPS.map(([key, label]) => {
+                  const rows = open.filter((p) => p.status === key);
+                  if (rows.length === 0) return null;
+                  const shown = !folded.has(key);
+                  return (
+                    <tbody key={key}>
+                      <tr className="border-t border-zinc-200 dark:border-zinc-700">
+                        <td colSpan={4} className="bg-zinc-50 px-1 py-1 dark:bg-zinc-900">
+                          <button
+                            type="button" aria-expanded={shown} className="w-full text-left text-xs font-semibold text-body"
+                            onClick={() => setFolded((f) => { const n = new Set(f); if (n.has(key)) n.delete(key); else n.add(key); return n; })}
+                          >
+                            <span aria-hidden>{shown ? '▾ ' : '▸ '}</span>{label} ({rows.length})
+                          </button>
+                        </td>
+                      </tr>
+                      {shown && rows.map((p) => {
+                        const [text, due] = status(p);
+                        return (
+                          <tr key={p.interviewId} className="border-t border-zinc-100 dark:border-zinc-800">
+                            <th scope="row" className="py-1.5 pl-4 pr-2 text-left font-normal text-body">{p.companyName || 'Untitled company'}</th>
+                            <td className={TD}>{stageLabel(p.stage)}</td>
+                            <td className={TD}>{when(p)}</td>
+                            <td className={`${TD} ${due ? AMBER : ''}`}>{text}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  );
+                })}
+              </table>
+            </div>
+          )}
+      </Card>
 
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="min-w-0">
+          <Card title="Daily to-dos" summary={todosSummary || undefined}>
+            {weekFailed ? weekGone : !w ? <Loading />
+              : w.routines.rows?.length ? <RoutinesGrid rows={w.routines.rows} today={today} onPickDay={onPickDay} />
+                : <p className="text-sm text-muted">No daily to-dos {inWeek}.</p>}
+          </Card>
+        </div>
+        <div className="min-w-0">
           <Card title="Weekly goals" summary={goalsSummary}>
-            {dayFailed ? <Failed what="the day" retry={plan.mutate} /> : !d ? <Loading /> : goals.length === 0 ? <p className="text-sm text-muted">No weekly goals.</p> : (
+            {dayFailed ? dayGone : !d ? <Loading /> : goals.length === 0 ? <p className="text-sm text-muted">No weekly goals.</p> : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {goals.map((g) => (
                   <li key={g.id} className="flex flex-wrap items-center gap-2 py-1.5 text-sm text-body">
@@ -274,8 +547,10 @@ export default function PersonPage({ userId, name, day, today }: { userId: strin
         </div>
       </div>
 
-      {/* Rounds of the day shown count as "ended today" only when that day is today. */}
-      <PendingItems mode="admin" userId={userId} name={name} today={isToday ? rounds ?? [] : []} onSaved={refresh} />
+      {/* Always as of now: today's unmarked rounds count as "ended today" whatever day is picked. */}
+      <div data-section="Pending" className="scroll-mt-20">
+        <PendingItems mode="admin" userId={userId} name={name} today={todayRounds} onSaved={refresh} />
+      </div>
     </div>
   );
 }

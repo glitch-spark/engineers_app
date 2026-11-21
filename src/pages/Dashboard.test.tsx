@@ -14,7 +14,12 @@ vi.mock('../components/home/WeekCard', () => ({ default: () => <div>week-stub</d
 vi.mock('../components/home/MetricsCard', () => ({ default: () => <div>metrics-stub</div> }));
 vi.mock('../components/dashboard/TeamOverview', () => ({ default: () => <div>team-stub</div> })); // not rendered now; kept so a return is caught
 vi.mock('../components/home/PersonPage', () => ({
-  default: (p: { userId: string; name: string; day: string; today: string }) => <div data-testid="person">{`${p.userId}|${p.name}|${p.day}|${p.today}`}</div>,
+  default: (p: { userId: string; name: string; day: string; today: string; onPickDay: (day: string) => void }) => (
+    <div>
+      <div data-testid="person">{`${p.userId}|${p.name}|${p.day}|${p.today}`}</div>
+      <button type="button" onClick={() => p.onPickDay('2026-11-17')}>pick-tuesday</button>
+    </div>
+  ),
 }));
 
 const users = [
@@ -101,16 +106,127 @@ describe('Home', () => {
     await waitFor(() => expect(screen.getByTestId('person').textContent).toBe('u1|Yuari|2026-11-20|2026-11-20'));
   });
 
-  it('Day is a filter too: Yesterday changes the day the person page asks for and sits in the URL; Clear resets both', async () => {
+  const where = () => screen.getByTestId('where').textContent;
+  const shown = () => screen.getByTestId('person').textContent!.split('|').slice(2).join('|');
+  const days = () => within(screen.getByRole('radiogroup', { name: 'Day' })).getAllByRole('radio') as HTMLInputElement[];
+  const week = () => screen.getByRole('group', { name: 'Week' });
+  const button = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement;
+
+  it('the filter bar shows the week and its five days: today picked and labelled, nothing to clear, next week not offered', async () => {
     renderIt('/dashboard?user=u1');
     await person();
-    const day = screen.getByLabelText('Day') as HTMLSelectElement;
-    expect(names(day)).toEqual(['Today · Fri, Nov 20', 'Yesterday · Thu, Nov 19']);
-    fireEvent.change(day, { target: { value: 'yesterday' } });
-    await waitFor(() => expect(screen.getByTestId('person').textContent).toContain('|2026-11-19|2026-11-20'));
-    expect(screen.getByTestId('where').textContent).toBe('?user=u1&day=yesterday');
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(screen.getByTestId('where').textContent).toBe('');
+    expect(within(week()).getByText('Nov 16 – Nov 20')).toBeTruthy();
+    expect(button('Next week').disabled).toBe(true);
+    expect(button('Previous week').disabled).toBe(false);
+    expect(days().map((d) => [d.getAttribute('aria-label'), d.checked, d.disabled, d.getAttribute('aria-current')])).toEqual([
+      ['Mon, Nov 16', false, false, null], ['Tue, Nov 17', false, false, null], ['Wed, Nov 18', false, false, null],
+      ['Thu, Nov 19', false, false, null], ['Fri, Nov 20', true, false, 'date'],
+    ]);
+    expect(within(screen.getByRole('radiogroup', { name: 'Day' })).getByText('today')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
+    expect(shown()).toBe('2026-11-20|2026-11-20');
+    expect(screen.queryByLabelText('Day', { selector: 'select' })).toBeNull(); // the Today / Yesterday select is gone
+  });
+
+  it('days still to come cannot be picked', async () => {
+    vi.setSystemTime(new Date('2026-11-18T12:00:00-06:00')); // a Wednesday
+    renderIt('/dashboard?user=u1');
+    await person();
+    expect(days().map((d) => [d.checked, d.disabled, d.getAttribute('aria-current')])).toEqual([
+      [false, false, null], [false, false, null], [true, false, 'date'], [false, true, null], [false, true, null],
+    ]);
+  });
+
+  it('picking a day puts it in the URL and on the page; Back to today shows only then and returns', async () => {
+    renderIt('/dashboard?user=u1');
+    await person();
+    fireEvent.click(screen.getByRole('radio', { name: 'Wed, Nov 18' }));
+    await waitFor(() => expect(shown()).toBe('2026-11-18|2026-11-20'));
+    expect(where()).toBe('?user=u1&day=2026-11-18');
+    expect(days().map((d) => d.checked)).toEqual([false, false, true, false, false]);
+    fireEvent.click(button('Back to today'));
+    expect(where()).toBe('?user=u1');
+    expect(shown()).toBe('2026-11-20|2026-11-20');
+    expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
+  });
+
+  it("a day picked on the person's page (a bar, a to-dos column) lands in the URL too", async () => {
+    renderIt('/dashboard?user=u1');
+    await person();
+    fireEvent.click(button('pick-tuesday'));
+    expect(where()).toBe('?user=u1&day=2026-11-17');
+    expect(shown()).toBe('2026-11-17|2026-11-20');
+  });
+
+  it('Previous week picks that week\'s Friday, any number of weeks back; Next week comes back and picks today in the current week', async () => {
+    renderIt('/dashboard?user=u1');
+    await person();
+    fireEvent.click(button('Previous week'));
+    expect(where()).toBe('?user=u1&day=2026-11-13');
+    expect(within(week()).getByText('Nov 9 – Nov 13')).toBeTruthy();
+    expect(days().map((d) => [d.getAttribute('aria-label'), d.checked, d.disabled, d.getAttribute('aria-current')])).toEqual([
+      ['Mon, Nov 9', false, false, null], ['Tue, Nov 10', false, false, null], ['Wed, Nov 11', false, false, null],
+      ['Thu, Nov 12', false, false, null], ['Fri, Nov 13', true, false, null],
+    ]);
+    expect(button('Next week').disabled).toBe(false);
+    expect(button('Back to today')).toBeTruthy();
+    fireEvent.click(button('Previous week'));
+    expect(where()).toBe('?user=u1&day=2026-11-06');
+    expect(within(week()).getByText('Nov 2 – Nov 6')).toBeTruthy();
+    fireEvent.click(button('Next week'));
+    expect(where()).toBe('?user=u1&day=2026-11-13');
+    fireEvent.click(button('Next week'));
+    expect(where()).toBe('?user=u1');
+    expect(shown()).toBe('2026-11-20|2026-11-20');
+    expect(button('Next week').disabled).toBe(true);
+  });
+
+  it('Clear resets the person and the day, and shows whenever either is set', async () => {
+    renderIt('/dashboard?user=u1&day=2026-11-18');
+    await person();
+    fireEvent.click(button('Clear'));
+    expect(where()).toBe('');
     expect(screen.queryByTestId('person')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'Mon, Nov 16' }));
+    expect(where()).toBe('?day=2026-11-16');
+    expect(button('Clear')).toBeTruthy();
+  });
+
+  it.each([
+    ['day=2026-11-18', '2026-11-18', '?user=u1&day=2026-11-18'],
+    ['day=yesterday', '2026-11-19', '?user=u1&day=yesterday'], // an old link
+    ['day=2026-11-03', '2026-11-03', '?user=u1&day=2026-11-03'], // weeks back
+    ['day=2026-11-15', '2026-11-13', '?user=u1&day=2026-11-15'], // a Sunday: its week's Friday
+    ['day=2026-11-21', '2026-11-20', '?user=u1&day=2026-11-21'], // the future: today
+    ['day=2027-01-04', '2026-11-20', '?user=u1&day=2027-01-04'],
+    ['day=nonsense', '2026-11-20', '?user=u1&day=nonsense'], // malformed: today
+    ['day=2026-13-45', '2026-11-20', '?user=u1&day=2026-13-45'],
+    ['day=2026-02-30', '2026-11-20', '?user=u1&day=2026-02-30'],
+  ])('a link with ?%s shows %s', async (query, day, url) => {
+    renderIt(`/dashboard?user=u1&${query}`);
+    await person();
+    expect(shown()).toBe(`${day}|2026-11-20`);
+    expect(where()).toBe(url); // a link is not rewritten on arrival
+    expect(days().filter((d) => d.checked).map((d) => d.value)).toEqual([day]);
+    expect(!!screen.queryByRole('button', { name: 'Back to today' })).toBe(day !== '2026-11-20');
+  });
+
+  it('on a weekend the week just ended shows with its Friday picked: every day can be picked, none is today, nothing to go back to', async () => {
+    vi.setSystemTime(new Date('2026-11-22T12:00:00-06:00')); // a Sunday
+    renderIt('/dashboard?user=u1');
+    await person();
+    expect(shown()).toBe('2026-11-20|2026-11-22');
+    expect(within(week()).getByText('Nov 16 – Nov 20')).toBeTruthy();
+    expect(days().map((d) => [d.checked, d.disabled, d.getAttribute('aria-current')])).toEqual([
+      [false, false, null], [false, false, null], [false, false, null], [false, false, null], [true, false, null],
+    ]);
+    expect(button('Next week').disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeNull(); // the person
+    fireEvent.click(screen.getByRole('radio', { name: 'Thu, Nov 19' }));
+    expect(where()).toBe('?user=u1&day=2026-11-19');
+    fireEvent.click(button('Back to today'));
+    expect(where()).toBe('?user=u1');
   });
 });
