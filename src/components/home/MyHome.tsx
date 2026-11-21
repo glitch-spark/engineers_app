@@ -27,16 +27,21 @@ const WEEK = 'whitespace-nowrap text-xs text-muted';
  * A person's own Home (user, 2026-11-21): what waits on them (folded), today's to-do list (every row has a box;
  * all ticked = good to go), then the week as a read-only table with the weekly goals under it. Fed by the day read,
  * the week read and the pending read; after any save the page reads them again.
+ *
+ * With `userId` it is an admin looking at that person's Home (`name`): the same page, read for them. Their to-dos,
+ * goals and follow-ups are theirs to tick, so those boxes are disabled; the interview result buttons work, as on
+ * the admin's own view of the person.
  */
-export default function MyHome() {
+export default function MyHome({ userId, name }: { userId?: string; name?: string }) {
+  const who = userId ? [userId] : []; // own Home keeps its keys, so nothing it shares a cache with changes
   const today = todayInputValue();
   const now = useNow();
   const { tz } = useInterviewTimezone();
   const { mutate: globalMutate } = useSWRConfig();
-  const { data: plan, error, isLoading, mutate } = useSWR(['home-day', today], () => api.getDayPlan(today), { revalidateOnFocus: false });
-  const week = useSWR(['home-week', today], () => api.getDashboardWeek({ today }));
+  const { data: plan, error, isLoading, mutate } = useSWR(['home-day', today, ...who], () => api.getDayPlan(today, userId), { revalidateOnFocus: false });
+  const week = useSWR(['home-week', today, ...who], () => api.getDashboardWeek({ today, ...(userId ? { userId } : {}) }));
   const rounds = plan?.todayInterviews ?? [];
-  const { followUps } = usePending('owner', undefined, rounds);
+  const { followUps } = usePending('owner', userId, rounds);
   // What the page shows besides the day: the week and the pending items (follow-ups included).
   const refreshRest = () => globalMutate((key) => Array.isArray(key) && ['home-week', 'home-pending', 'interviews-needs-input'].includes(key[0]));
   const refresh = () => Promise.all([mutate(), refreshRest()]);
@@ -131,7 +136,7 @@ export default function MyHome() {
   const daysLeft = dow >= 1 && dow <= 4 ? `${6 - dow} days left` : dow === 5 ? 'last day' : '';
   const daily = plan.items.filter((i) => kept(i) && i.scope === 'routine');
   const weekly = plan.items.filter((i) => kept(i) && i.scope === 'goal');
-  const disabled = !plan.weekSaved;
+  const disabled = !plan.weekSaved || !!userId;
   // A goal done only by its week total has no done day: it can't be un-ticked from Home.
   const weekMet = (i: DayItem) => i.scope === 'goal' && !!plan.progress[i.id]?.done && !plan.progress[i.id]?.doneOn;
   const doneEarlier = (i: DayItem) => {
@@ -191,7 +196,7 @@ export default function MyHome() {
   return (
     <>
       {dialog}
-      <PendingItems mode="owner" today={rounds} onSaved={refresh} />
+      <PendingItems mode="owner" userId={userId} name={name} today={rounds} onSaved={refresh} />
       <section className="panel p-4">
         <header className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-base font-semibold text-heading">Today · {dayDate(today).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h2>
@@ -199,7 +204,7 @@ export default function MyHome() {
             <b className="font-semibold text-body">{boxes.length - toGo} of {boxes.length} done</b>{toGo > 0 && ` · ${toGo} to go`}
           </span>
         </header>
-        {disabled && (
+        {!plan.weekSaved && !userId && (
           <p className="mt-2 text-sm text-muted">
             No plan for this week yet — <Link to="/plans" className="underline">Set this week's plan</Link>
           </p>
@@ -296,7 +301,7 @@ export default function MyHome() {
                   aria-label={`I followed up with ${row.companyName || 'the company'}`}
                   // Stays ticked while it saves; a saved row leaves the list, a failed one comes back unticked.
                   checked={isSaving(row)}
-                  disabled={isSaving(row)}
+                  disabled={isSaving(row) || !!userId}
                   onChange={() => followUp(row)}
                 />
                 <span className={NAME}>Follow up</span>
@@ -304,7 +309,7 @@ export default function MyHome() {
                   <b className="font-medium text-strong">{row.companyName || 'Untitled company'}</b> · {stageLabel(row.stage)}
                   <span className="text-muted"> · {days === null ? 'no result yet' : `no result for ${days} days`}</span>
                 </span>
-                {i === 0 && <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-muted dark:border-zinc-700">tick when you have followed up</span>}
+                {i === 0 && <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-muted dark:border-zinc-700">{userId ? 'theirs to tick' : 'tick when you have followed up'}</span>}
               </li>
             );
           })}

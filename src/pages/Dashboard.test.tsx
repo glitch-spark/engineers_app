@@ -9,7 +9,7 @@ import DashboardPage from './Dashboard';
 let role = 'staff';
 vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'boss', role } }) }));
 vi.mock('../api/endpoints', () => ({ getTeamToday: vi.fn(), lookupUsers: vi.fn() }));
-vi.mock('../components/home/MyHome', () => ({ default: () => <div>my-home-stub</div> }));
+vi.mock('../components/home/MyHome', () => ({ default: (p: { userId?: string; name?: string }) => <div>{`my-home-stub${p.userId ? `|${p.userId}|${p.name}` : ''}`}</div> }));
 vi.mock('../components/home/MetricsCard', () => ({ default: () => <div>metrics-stub</div> }));
 vi.mock('../components/dashboard/TeamOverview', () => ({ default: () => <div>team-stub</div> })); // not rendered now; kept so a return is caught
 vi.mock('../components/home/PersonPage', () => ({
@@ -65,6 +65,27 @@ describe('Home', () => {
     expect(screen.queryByRole('radio')).toBeNull();
     expect(api.getTeamToday).not.toHaveBeenCalled();
     expect(api.lookupUsers).not.toHaveBeenCalled();
+  });
+
+  it("an admin switches a picked person between the admin view and the person's own Home, kept in the URL", async () => {
+    renderIt('/dashboard?user=u2');
+    await person();
+    const view = screen.getByRole('radiogroup', { name: 'View' });
+    expect(within(view).getByRole('radio', { name: 'Admin view' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(within(view).getByRole('radio', { name: "User's view" }));
+    expect(await screen.findByText('my-home-stub|u2|Puma')).toBeTruthy();
+    expect(screen.queryByTestId('person')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Week' })).toBeNull(); // the person's Home is today and this week only
+    expect(screen.getByTestId('where').textContent).toBe('?user=u2&view=user');
+    fireEvent.click(screen.getByRole('radio', { name: 'Admin view' }));
+    await person();
+    expect(screen.getByTestId('where').textContent).toBe('?user=u2');
+  });
+
+  it('the view switch shows only once a person is picked', async () => {
+    renderIt();
+    await picker();
+    expect(screen.queryByRole('radiogroup', { name: 'View' })).toBeNull();
   });
 
   it('an admin gets a User filter at the top like other pages: the names at once, nobody picked, no cards of their own', async () => {

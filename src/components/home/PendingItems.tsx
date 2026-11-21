@@ -46,8 +46,9 @@ export function usePending(mode: 'owner' | 'admin', userId: string | undefined, 
   const unmarkedToday = today.filter((r) => roundState(r, now) === 'unmarked');
   const todayKeys = new Set(today.map(roundKey));
   const waiting = (pending.data?.interviews ?? list.data?.items ?? [])
-    // Guard: an admin's own Home never shows someone else's round, whatever the server returned.
-    .filter((row) => mode === 'admin' || user?.role !== 'admin' || row.ownerId === user.id);
+    // Guard: an admin's own Home never shows someone else's round, whatever the server returned (asked for a
+    // person by id, the rows are that person's).
+    .filter((row) => mode === 'admin' || !!userId || user?.role !== 'admin' || row.ownerId === user.id);
   const known = new Set(waiting.map(needsInputKey));
   const interviews = mode === 'owner'
     ? waiting.filter((row) => !(row.need === 'outcome' && todayKeys.has(needsInputKey(row))))
@@ -130,7 +131,7 @@ export default function PendingItems({
     if (!b.recent?.length) return 'bidding less than before';
     return `${listed(b.recent)} bids the last ${b.recent.length} days${b.before != null ? ` · ${num(Math.round(b.before))} a day before` : ''}`;
   };
-  const whatToChange = `/statistics?tab=conversion&scope=me${mode === 'admin' && userId ? `&user=${encodeURIComponent(userId)}` : ''}`;
+  const whatToChange = `/statistics?tab=conversion&scope=me${userId ? `&user=${encodeURIComponent(userId)}` : ''}`;
 
   const line = (key: string, tag: string, color: string, who: string, text: string, end: ReactNode) => (
     <li key={key} className={LINE}>
@@ -186,7 +187,7 @@ export default function PendingItems({
             </button>
           )}
         </h3>
-        <span className="text-xs text-muted">{mode === 'admin' ? `Things waiting on ${name || 'this person'}` : 'Older things waiting on you'}</span>
+        <span className="text-xs text-muted">{mode === 'admin' ? `Things waiting on ${name || 'this person'}` : `Older things waiting on ${userId ? name || 'this person' : 'you'}`}</span>
       </div>
       {open && (
         <>

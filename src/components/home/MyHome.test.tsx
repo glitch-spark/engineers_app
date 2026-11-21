@@ -321,6 +321,28 @@ describe('MyHome', () => {
   });
 });
 
+describe("MyHome seen by an admin (the person's view)", () => {
+  it('reads that person, shows their to-dos read-only and leaves following up to them', async () => {
+    auth.role = 'admin';
+    vi.mocked(api.getDashboardPending).mockResolvedValue({
+      interviews: [{ interviewId: 'iv-f', roundId: 'r-f', companyName: 'Acme', profileName: null, ownerId: 'u2', ownerName: 'Puma', stage: 'intro',
+        status: 'completed', scheduledAt: '2026-11-09T16:00:00Z', endsAt: '2026-11-09T17:00:00Z', need: 'follow_up' }],
+      profiles: [], bidders: [], counts: {},
+    } as never);
+    cache = new Map();
+    vi.mocked(api.getDayPlan).mockResolvedValue(plan() as never);
+    render(<SWRConfig value={{ provider: () => cache as never }}><MemoryRouter><MyHome userId="u2" name="Puma" /></MemoryRouter></SWRConfig>);
+    const routine = (await screen.findByLabelText('Bidder Management')) as HTMLInputElement;
+    expect(routine.disabled).toBe(true);
+    expect(api.getDayPlan).toHaveBeenCalledWith('2026-11-18', 'u2');
+    expect(api.getDashboardWeek).toHaveBeenCalledWith({ today: '2026-11-18', userId: 'u2' });
+    expect(api.getDashboardPending).toHaveBeenCalledWith('u2');
+    // the admin's own-rounds guard does not hide the person's follow-up; its box is theirs to tick
+    expect(((await screen.findByRole('checkbox', { name: 'I followed up with Acme' })) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByRole('link', { name: /Set this week/ })).toBeNull();
+  });
+});
+
 describe('MyHome: Bids and Interviews rows', () => {
   const daily = () => screen.findByRole('list', { name: 'Daily' });
   const rowOf = async (name: string) => within(await daily()).getByText(name).closest('li') as HTMLElement;
