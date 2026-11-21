@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import FilterBar, { FilterField } from '../components/filters/FilterBar';
+import TodayCard from '../components/home/TodayCard';
+import WeekCard from '../components/home/WeekCard';
 import PersonPage from '../components/home/PersonPage';
 import { useAuth } from '../auth/useAuth';
 import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../lib/week';
@@ -103,18 +105,12 @@ export default function DashboardPage() {
   );
 }
 
-/**
- * A person's own Home: the same page an admin sees for them, read at once, which they work from (to-dos, goals,
- * interview answers, follow-ups), then This month. The day (`?day=`) sits in the URL.
- */
+/** A person's own Home: today's to-do list, then the week (user, 2026-11-21: no This month card). */
 function MyHome() {
-  const { patch, today, home, day, pickDay } = usePickedDay();
   return (
     <>
-      <FilterBar canClear={day !== home} onClear={() => patch({ day: null })}>
-        <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />
-      </FilterBar>
-      <PersonPage mode="owner" day={day} today={today} onPickDay={pickDay} />
+      <TodayCard />
+      <WeekCard />
     </>
   );
 }
@@ -158,7 +154,7 @@ function AdminHome() {
         <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />
       </FilterBar>
       {picked ? (
-        <PersonPage key={picked} mode="admin" userId={picked} name={people.find((p) => p.value === picked)?.label ?? ''} day={day} today={today} onPickDay={pickDay} />
+        <PersonPage key={picked} userId={picked} name={people.find((p) => p.value === picked)?.label ?? ''} day={day} today={today} onPickDay={pickDay} />
       ) : (
         <p className="panel p-6 text-sm text-muted">Pick a person to see their bids, interviews, to-dos, goals and pending items.</p>
       )}

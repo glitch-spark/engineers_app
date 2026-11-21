@@ -9,8 +9,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 /**
  * Mon–Fri with each day's bids: a day under its target in amber, `today` labelled, days still to come as a dash.
- * Nothing without days (an older server). Not shown anywhere since the Home page draws the week as bars
- * (PersonPage); kept as a shared piece.
+ * Shared by Home's This week card and the admin's page for one person. Nothing without days (an older server).
  */
 export default function BidsDays({ days, today }: { days: NonNullable<DashboardWeek['bids']['byDay']>; today: string }) {
   if (!days.length) return null;

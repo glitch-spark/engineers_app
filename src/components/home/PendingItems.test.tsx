@@ -133,25 +133,14 @@ describe('PendingItems', () => {
     expect(within(box).queryByRole('button', { name: /… \d+ more/ })).toBeNull();
   });
 
-  it('owner: the groups fold and cut the same way', async () => {
+  it('owner: groups do not fold and every row is listed', async () => {
     const many = Array.from({ length: 8 }, (_, i) => ({ ...profiles[1], accountId: `p${i}`, name: `Profile ${i}` }));
     pending({ profiles: many });
     show();
     const box = await block();
-    expect(rowsOf(box, 'Profiles')).toHaveLength(5);
-    fireEvent.click(within(box).getByRole('button', { name: '… 3 more profiles' }));
     expect(rowsOf(box, 'Profiles')).toHaveLength(8);
-    fireEvent.click(within(box).getByRole('button', { name: 'Profiles (8)' }));
-    expect(within(box).queryByRole('list')).toBeNull();
-  });
-
-  it("owner, with listToday: today's unmarked rounds are listed here, once, with the follow-up checkbox kept", async () => {
-    pending({ interviews: [round(), { ...unknown, interviewId: 'ivt', roundId: 'rt', companyName: 'Globex', stage: 'tech1' }] });
-    show({ listToday: true, today: [todayRound(), todayRound({ interviewId: 'ivu', roundId: 'ru', companyName: 'Fresh' })] as never });
-    const box = await block();
-    expect(within(box).getByRole('heading', { name: 'Pending items (3)' })).toBeTruthy();
-    expect(rowsOf(box, 'Interviews').map((r) => r.textContent?.split(' · ')[0])).toEqual(['Status unknownGlobex', 'Status unknownFresh', 'Follow-up dueLiberty']);
-    expect(within(box).getByRole('checkbox', { name: 'I followed up with Liberty' })).toBeTruthy();
+    expect(within(box).queryByRole('button')).toBeNull();
+    expect(within(box).getByText('Profiles (8)').tagName).toBe('DIV');
   });
 
   it('a group with nothing in it is left out', async () => {
@@ -213,8 +202,7 @@ describe('PendingItems', () => {
     fireEvent.click(tick);
     expect(api.followUpInterviewStage).toHaveBeenCalledWith('iv1', 'r1');
     await waitFor(() => expect(tick.disabled).toBe(true));
-    // the row's own buttons (the group's fold button stays usable)
-    expect(within(tick.closest('li')!).getAllByRole('button').every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+    expect(within(box).getAllByRole('button').every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     expect(onSaved).not.toHaveBeenCalled();
     done({});
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));

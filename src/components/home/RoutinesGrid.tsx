@@ -20,7 +20,7 @@ function dayCell(d: RoutineDay): [string, string, string] {
 
 /**
  * One line per routine with its working days and the legend; scrolls sideways inside its card on a narrow screen.
- * On the Home page (a person's own, and the admin's page for one person). With `onPickDay` a weekday's column head is
+ * Shared by Home's This week card and the admin's page for one person. With `onPickDay` a weekday's column head is
  * a button that picks that day (days after `today` cannot be picked).
  */
 export default function RoutinesGrid({ rows, today, onPickDay }: { rows: DashboardRoutineRow[]; today: string; onPickDay?: (date: string) => void }) {
