@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { WeekPlan } from '../../api/endpoints';
 import WeekGoalCard from './WeekGoalCard';
@@ -37,5 +37,23 @@ describe('WeekGoalCard', () => {
     unmount();
     render(<WeekGoalCard week={week()} canEdit onOpen={() => {}} />);
     expect(screen.queryByText(/Copied from last week/)).toBeNull();
+  });
+
+  it('an admin viewing a person gets "Edit plan" / "Set plan" and an open button when there is no plan yet', () => {
+    const onOpen = vi.fn();
+    const { unmount } = render(<WeekGoalCard week={week()} canEdit={false} adminEdit onOpen={onOpen} />);
+    expect(screen.getByRole('button', { name: 'Edit plan' })).toBeTruthy();
+    unmount();
+    const empty = week({ exists: false, goal: counts, routines: [], weeklyGoals: [] });
+    render(<WeekGoalCard week={empty} canEdit={false} adminEdit onOpen={onOpen} />);
+    expect(screen.getByRole('button', { name: 'Set plan' })).toBeTruthy();
+    screen.getByRole('button', { name: 'Set week plan' }).click();
+    expect(onOpen).toHaveBeenCalled();
+  });
+
+  it('a teammate viewing gets "View" and no set button', () => {
+    render(<WeekGoalCard week={week({ exists: false, goal: counts, routines: [], weeklyGoals: [] })} canEdit={false} onOpen={() => {}} />);
+    expect(screen.getByRole('button', { name: 'View' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Set week plan' })).toBeNull();
   });
 });
