@@ -41,14 +41,20 @@ export function columns(s: GridState): Column[] {
   return out;
 }
 
-export function ownItems(s: GridState, userId: string): { scope: Scope; item: PlanItemIn }[] {
+/** `index` is the item's position in that user's list for `scope` (what `removeOwnItem` takes). */
+export function ownItems(s: GridState, userId: string): { scope: Scope; item: PlanItemIn; index: number }[] {
   const u = s.users.find((x) => x.userId === userId);
   if (!u) return [];
   const shared = new Set(columns(s).map((c) => c.key));
   return SCOPES.flatMap((scope) =>
-    u[listKey(scope)].filter((i) => !shared.has(itemKey(i, scope))).map((item) => ({ scope, item })),
+    u[listKey(scope)].flatMap((item, index) => (shared.has(itemKey(item, scope)) ? [] : [{ scope, item, index }])),
   );
 }
+
+/** A column, or anyone's item, already has this key. */
+export const keyTaken = (s: GridState, key: string): boolean =>
+  columns(s).some((c) => c.key === key) ||
+  s.users.some((u) => SCOPES.some((scope) => u[listKey(scope)].some((i) => itemKey(i, scope) === key)));
 
 const mapUsers = (s: GridState, f: (u: TeamWeekUser) => TeamWeekUser): GridState => ({ ...s, users: s.users.map(f) });
 const mapUser = (s: GridState, userId: string, f: (u: TeamWeekUser) => TeamWeekUser): GridState =>
@@ -122,6 +128,10 @@ export function renameColumn(s: GridState, c: Column, text: string): GridState {
   return { users, pinned: rewritePinned(s, c, next) };
 }
 
+/** People who have the column's item but whose list for `scope` is full: `retypeColumn` would drop their item. */
+export const retypeBlocked = (s: GridState, c: Column, scope: Scope): TeamWeekUser[] =>
+  c.scope === scope ? [] : s.users.filter((u) => findItem(u, c) && u[listKey(scope)].length >= MAX_ITEMS);
+
 export function retypeColumn(s: GridState, c: Column, kind: PlanItemKind, scope: Scope): GridState {
   const next = { ...c, kind, scope, key: columnKey(c.text, kind, scope) };
   const from = listKey(c.scope);
@@ -163,9 +173,10 @@ const toRow = (u: TeamWeekUser): TeamWeekRowIn => ({
 export function rowsToSave(saved: TeamWeekUser[], s: GridState): TeamWeekRowIn[] {
   const out: TeamWeekRowIn[] = [];
   for (const u of s.users) {
-    if (!u.exists && isEmptyRow(u)) continue; // server skips a plan-less empty row
-    const row = toRow(u);
     const was = saved.find((x) => x.userId === u.userId);
+    // The server skips a plan-less empty row but still writes its switch.
+    if (!u.exists && isEmptyRow(u) && (!was || was.plansOwnWeek === u.plansOwnWeek)) continue;
+    const row = toRow(u);
     if (!u.exists || !was || JSON.stringify(toRow(was)) !== JSON.stringify(row)) out.push(row);
   }
   return out;

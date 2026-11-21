@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanItem, PlanItemKind, TeamWeekUser } from '../api/endpoints';
 import {
   addColumn, addOwnItem, cell, changed, columnKey, columns, fillColumn, isEmptyRow, ownItems, removeColumn,
-  removeOwnItem, renameColumn, retypeColumn, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
+  removeOwnItem, renameColumn, retypeColumn, retypeBlocked, keyTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
   type GridState,
 } from './teamGrid';
 
@@ -183,5 +183,40 @@ describe('teamGrid', () => {
     expect(weekStatus(draft, st(draft))).toBe('draft');
     const none = [user('A', [], [], false), user('B', [], [], false)];
     expect(weekStatus(none, st(none))).toBe('none');
+  });
+
+  it('rowsToSave includes a toggled switch on an empty row with no saved plan', () => {
+    const saved = [user('C', [], [], false)];
+    expect(rowsToSave(saved, setOwnWeek(st(saved), 'C', true)).map((r) => r.userId)).toEqual(['C']);
+  });
+
+  it('rowsToSave keeps item ids after a rename and omits them after a retype', () => {
+    const a = item('Old'), b = item('old');
+    const saved = [user('A', [a]), user('B', [b])];
+    const r = renameColumn(st(saved), columns(st(saved))[0], 'New');
+    expect(rowsToSave(saved, r).map((x) => x.routines[0])).toMatchObject([{ id: a.id, text: 'New' }, { id: b.id, text: 'New' }]);
+    const t = retypeColumn(r, columns(r)[0], 'count', 'routine');
+    expect(rowsToSave(saved, t).map((x) => 'id' in x.routines[0])).toEqual([false, false]);
+  });
+
+  it('ownItems gives each item its index within that scope', () => {
+    const s = st([user('A', [item('Shared'), item('R1')], [item('G1')]), user('B', [item('Shared')])]);
+    expect(ownItems(s, 'A').map((o) => [o.scope, o.index])).toEqual([['routine', 1], ['goal', 0]]);
+    expect(removeOwnItem(s, 'A', 'routine', ownItems(s, 'A')[0].index).users[0].routines.map((i) => i.text)).toEqual(['Shared']);
+  });
+
+  it('retypeBlocked names the people whose other list is full; same-scope retype never blocks', () => {
+    const full = Array.from({ length: 20 }, (_, i) => item(`g${i}`));
+    const s = st([user('A', [item('X')], full), user('B', [item('X')])]);
+    const c = columns(s)[0];
+    expect(retypeBlocked(s, c, 'goal').map((u) => u.userId)).toEqual(['A']);
+    expect(retypeBlocked(s, c, 'routine')).toEqual([]);
+  });
+
+  it('keyTaken: a column or anyone\'s item with that key', () => {
+    const s = addColumn(st([user('A', [item('Solo')]), user('B')]), 'Pin', 'count', 'goal');
+    expect(keyTaken(s, columnKey(' solo ', 'check', 'routine'))).toBe(true);
+    expect(keyTaken(s, columnKey('pin', 'count', 'goal'))).toBe(true);
+    expect(keyTaken(s, columnKey('Solo', 'check', 'goal'))).toBe(false);
   });
 });
