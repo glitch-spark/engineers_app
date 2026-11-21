@@ -96,7 +96,7 @@ const show = (props: object = {}) => render(
   </SWRConfig>,
 );
 const card = (name: string) => screen.findByRole('region', { name });
-const cells = (table: HTMLElement) => within(table).getAllByRole('row').map((r) => within(r).queryAllByRole('cell').map((x) => x.textContent)).filter((r) => r.length);
+const cells = (table: HTMLElement) => within(table).getAllByRole('row').map((r) => within(r).queryAllByRole('cell').map((x) => x.textContent)).filter((r) => r.length > 1); // a one-cell row is a group heading
 
 describe('PersonPage', () => {
   it("asks every read for that person, and the day's reads for the day shown", async () => {
