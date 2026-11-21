@@ -47,7 +47,8 @@ const renderIt = (url = '/dashboard') => render(
   </SWRConfig>,
 );
 const person = () => screen.findByTestId('person');
-const list = () => within(screen.getByRole('navigation', { name: 'People' })).getAllByRole('button');
+const picker = () => screen.findByLabelText('User') as Promise<HTMLSelectElement>;
+const names = (el: HTMLSelectElement) => [...el.options].map((o) => o.text);
 
 describe('Home', () => {
   it('staff see Today, This week and This month only: no team', () => {
@@ -62,78 +63,54 @@ describe('Home', () => {
     expect(api.lookupUsers).not.toHaveBeenCalled();
   });
 
-  it('an admin always gets the team: the names at once, nobody picked, no Me / Team switch, no cards of their own', async () => {
-    vi.mocked(api.getTeamToday).mockReturnValue(new Promise(() => {}) as never); // the slow summary never arrives
+  it('an admin gets a User filter at the top like other pages: the names at once, nobody picked, no cards of their own', async () => {
     renderIt();
-    await waitFor(() => expect(list().map((b) => b.textContent)).toEqual(['Puma', 'Yuari'])); // A–Z, the inactive one left out
-    expect(list().map((b) => b.getAttribute('aria-current'))).toEqual([null, null]);
+    const user = await picker();
+    await waitFor(() => expect(names(user)).toEqual(['Pick a person', 'Puma', 'Yuari'])); // A–Z, the inactive one left out
+    expect(user.value).toBe('');
+    expect(within(screen.getByRole('group', { name: 'Filters' })).getByLabelText('User')).toBe(user);
+    expect(screen.queryByRole('navigation', { name: 'People' })).toBeNull(); // no list down the side
     expect(screen.getByText('Pick a person to see their bids, interviews, to-dos, goals and pending items.')).toBeTruthy();
     expect(screen.queryByTestId('person')).toBeNull();
-    expect(screen.queryByRole('status')).toBeNull(); // nothing says "loading" for the details
     expect(screen.queryByRole('radio', { name: 'Me' })).toBeNull();
-    expect(screen.queryByRole('radio', { name: 'Team' })).toBeNull();
     expect(screen.queryByText('today-stub')).toBeNull();
     expect(screen.queryByText('team-stub')).toBeNull(); // the Team totals table is off for now
-    expect(screen.getByText('Fri, Nov 20')).toBeTruthy();
-  });
-
-  it("fills in each name's dot, pending count and bids when the day's summary arrives", async () => {
-    renderIt();
-    expect(await screen.findByLabelText('28 pending')).toBeTruthy();
-    expect(api.getTeamToday).toHaveBeenCalledWith('2026-11-20');
-    expect(list().map((b) => b.textContent)).toEqual(['Puma10186 / 200 bids · 1 of 3 to-dos', 'Yuari28183 / 270 bids · 1 of 4 to-dos']);
-  });
-
-  it('keeps the names when the summary fails', async () => {
-    vi.mocked(api.getTeamToday).mockRejectedValue(new Error('down'));
-    renderIt();
-    await waitFor(() => expect(list().map((b) => b.textContent)).toEqual(['Puma', 'Yuari']));
+    expect(api.getTeamToday).not.toHaveBeenCalled(); // nothing slow is read before a person is picked
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
   });
 
   it('says so, with a retry, when the names cannot be read', async () => {
     vi.mocked(api.lookupUsers).mockRejectedValueOnce(new Error('down'));
     renderIt();
     fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
-    await waitFor(() => expect(list()).toHaveLength(2));
+    await waitFor(async () => expect(names(await picker())).toHaveLength(3));
   });
 
   it('picking a person puts them in the URL and loads their page', async () => {
     renderIt();
-    await waitFor(() => expect(list()).toHaveLength(2));
-    fireEvent.click(list()[0]);
+    const user = await picker();
+    await waitFor(() => expect(names(user)).toHaveLength(3));
+    fireEvent.change(user, { target: { value: 'u2' } });
     expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
     expect(screen.getByTestId('where').textContent).toBe('?user=u2');
-    expect(list().map((b) => b.getAttribute('aria-current'))).toEqual(['true', null]);
+    expect(user.value).toBe('u2');
   });
 
   it('a link with ?user= opens that person', async () => {
     renderIt('/dashboard?user=u1');
-    expect((await person()).textContent).toContain('u1|');
     await waitFor(() => expect(screen.getByTestId('person').textContent).toBe('u1|Yuari|2026-11-20|2026-11-20'));
   });
 
-  it('the narrow form picks from a dropdown and steps with previous / next', async () => {
-    renderIt();
-    await waitFor(() => expect(list()).toHaveLength(2));
-    expect((screen.getByLabelText('Viewing') as HTMLSelectElement).value).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'Next person' }));
-    expect((await person()).textContent).toContain('u2|Puma');
-    fireEvent.click(screen.getByRole('button', { name: 'Next person' }));
-    await waitFor(() => expect(screen.getByTestId('person').textContent).toContain('u1|Yuari'));
-    expect((screen.getByRole('button', { name: 'Next person' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Previous person' }));
-    await waitFor(() => expect(screen.getByTestId('person').textContent).toContain('u2|Puma'));
-  });
-
-  it('Yesterday changes the day the reads ask for, sits in the URL, and Today goes back', async () => {
+  it('Day is a filter too: Yesterday changes the day the person page asks for and sits in the URL; Clear resets both', async () => {
     renderIt('/dashboard?user=u1');
     await person();
-    fireEvent.click(screen.getByRole('radio', { name: 'Yesterday' }));
-    await waitFor(() => expect(api.getTeamToday).toHaveBeenCalledWith('2026-11-19'));
-    expect(screen.getByTestId('person').textContent).toContain('|2026-11-19|2026-11-20');
+    const day = screen.getByLabelText('Day') as HTMLSelectElement;
+    expect(names(day)).toEqual(['Today · Fri, Nov 20', 'Yesterday · Thu, Nov 19']);
+    fireEvent.change(day, { target: { value: 'yesterday' } });
+    await waitFor(() => expect(screen.getByTestId('person').textContent).toContain('|2026-11-19|2026-11-20'));
     expect(screen.getByTestId('where').textContent).toBe('?user=u1&day=yesterday');
-    expect(screen.getByText('Thu, Nov 19')).toBeTruthy();
-    fireEvent.click(screen.getByRole('radio', { name: 'Today' }));
-    expect(screen.getByTestId('where').textContent).toBe('?user=u1');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByTestId('where').textContent).toBe('');
+    expect(screen.queryByTestId('person')).toBeNull();
   });
 });
