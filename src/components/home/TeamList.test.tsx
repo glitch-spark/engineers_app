@@ -82,3 +82,18 @@ describe('TeamList', () => {
     expect((screen.getByRole('button', { name: 'Next person' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('TeamList before the details arrive', () => {
+  it('shows the names alone: no dot, no pending count, no bids line, and nobody picked in the dropdown', () => {
+    render(<TeamList people={[{ userId: 'u1', name: 'Yuari' }, { userId: 'u2', name: 'Puma' }]} picked="" onPick={() => {}} />);
+    const rows = within(screen.getByRole('navigation', { name: 'People' })).getAllByRole('button');
+    expect(rows.map((r) => r.textContent)).toEqual(['Yuari', 'Puma']);
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    const select = screen.getByLabelText('Viewing') as HTMLSelectElement;
+    expect(select.value).toBe('');
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Pick a person', 'Yuari', 'Puma']);
+    expect((screen.getByRole('button', { name: 'Previous person' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Next person' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});

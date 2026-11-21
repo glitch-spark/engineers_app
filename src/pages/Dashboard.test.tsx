@@ -8,7 +8,7 @@ import DashboardPage from './Dashboard';
 
 let role = 'staff';
 vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'boss', role } }) }));
-vi.mock('../api/endpoints', () => ({ getTeamToday: vi.fn(), getDayPlan: vi.fn() }));
+vi.mock('../api/endpoints', () => ({ getTeamToday: vi.fn(), lookupUsers: vi.fn() }));
 vi.mock('../components/home/TodayCard', () => ({ default: () => <div>today-stub</div> }));
 vi.mock('../components/home/WeekCard', () => ({ default: () => <div>week-stub</div> }));
 vi.mock('../components/home/MetricsCard', () => ({ default: () => <div>metrics-stub</div> }));
@@ -17,6 +17,11 @@ vi.mock('../components/home/PersonPage', () => ({
   default: (p: { userId: string; name: string; day: string; today: string }) => <div data-testid="person">{`${p.userId}|${p.name}|${p.day}|${p.today}`}</div>,
 }));
 
+const users = [
+  { _id: 'u1', name: 'Yuari', email: null, role: 'staff', isActive: true },
+  { _id: 'u2', name: 'Puma', email: null, role: 'staff', isActive: true },
+  { _id: 'u9', name: 'Gone', email: null, role: 'staff', isActive: false },
+];
 const people = [
   { userId: 'u1', name: 'Yuari', bids: { done: 183, target: 270 }, todos: { done: 1, total: 4 }, pending: 28, state: 'red' },
   { userId: 'u2', name: 'Puma', bids: { done: 186, target: 200 }, todos: { done: 1, total: 3 }, pending: 10, state: 'amber' },
@@ -28,7 +33,7 @@ beforeEach(() => {
   localStorage.clear();
   role = 'admin';
   vi.mocked(api.getTeamToday).mockResolvedValue({ day: '2026-11-20', people } as never);
-  vi.mocked(api.getDayPlan).mockResolvedValue({ weekSaved: true } as never);
+  vi.mocked(api.lookupUsers).mockResolvedValue({ users } as never);
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -41,12 +46,11 @@ const renderIt = (url = '/dashboard') => render(
     <MemoryRouter initialEntries={[url]}><DashboardPage /><Where /></MemoryRouter>
   </SWRConfig>,
 );
-const view = (name: string) => screen.getByRole('radio', { name });
 const person = () => screen.findByTestId('person');
 const list = () => within(screen.getByRole('navigation', { name: 'People' })).getAllByRole('button');
 
 describe('Home', () => {
-  it('staff see Today, This week and This month only: no switch, no team', () => {
+  it('staff see Today, This week and This month only: no team', () => {
     role = 'staff';
     renderIt();
     expect(screen.getByText('today-stub')).toBeTruthy();
@@ -55,130 +59,81 @@ describe('Home', () => {
     expect(screen.queryByText('team-stub')).toBeNull();
     expect(screen.queryByRole('radio')).toBeNull();
     expect(api.getTeamToday).not.toHaveBeenCalled();
+    expect(api.lookupUsers).not.toHaveBeenCalled();
   });
 
-  it('an admin lands on Team by default: the list, with the first person picked and their page beside it', async () => {
+  it('an admin always gets the team: the names at once, nobody picked, no Me / Team switch, no cards of their own', async () => {
+    vi.mocked(api.getTeamToday).mockReturnValue(new Promise(() => {}) as never); // the slow summary never arrives
     renderIt();
-    expect(view('Team').getAttribute('aria-checked')).toBe('true');
-    expect((await person()).textContent).toBe('u1|Yuari|2026-11-20|2026-11-20');
-    expect(api.getTeamToday).toHaveBeenCalledWith('2026-11-20');
-    expect(list().map((b) => b.getAttribute('aria-current'))).toEqual(['true', null]);
+    await waitFor(() => expect(list().map((b) => b.textContent)).toEqual(['Puma', 'Yuari'])); // A–Z, the inactive one left out
+    expect(list().map((b) => b.getAttribute('aria-current'))).toEqual([null, null]);
+    expect(screen.getByText('Pick a person to see their bids, interviews, to-dos, goals and pending items.')).toBeTruthy();
+    expect(screen.queryByTestId('person')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull(); // nothing says "loading" for the details
+    expect(screen.queryByRole('radio', { name: 'Me' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Team' })).toBeNull();
     expect(screen.queryByText('today-stub')).toBeNull();
-    expect(screen.queryByText('team-stub')).toBeNull();
+    expect(screen.getByText('team-stub')).toBeTruthy();
     expect(screen.getByText('Fri, Nov 20')).toBeTruthy();
   });
 
-  it('says it is loading the team while the list is on its way, not a blank page', async () => {
-    vi.mocked(api.getTeamToday).mockReturnValue(new Promise(() => {}) as never);
+  it("fills in each name's dot, pending count and bids when the day's summary arrives", async () => {
     renderIt();
-    expect((await screen.findByRole('status')).textContent).toContain('Loading the team');
-    expect(screen.getByText('This can take a few seconds the first time.')).toBeTruthy();
+    expect(await screen.findByLabelText('28 pending')).toBeTruthy();
+    expect(api.getTeamToday).toHaveBeenCalledWith('2026-11-20');
+    expect(list().map((b) => b.textContent)).toEqual(['Puma10186 / 200 bids · 1 of 3 to-dos', 'Yuari28183 / 270 bids · 1 of 4 to-dos']);
   });
 
-  it('Me is the page as before, with the team table below, and the choice is remembered', async () => {
+  it('keeps the names when the summary fails', async () => {
+    vi.mocked(api.getTeamToday).mockRejectedValue(new Error('down'));
     renderIt();
-    await person();
-    fireEvent.click(view('Me'));
-    expect(screen.getByText('today-stub')).toBeTruthy();
-    const metrics = screen.getByText('metrics-stub');
-    expect(metrics.compareDocumentPosition(screen.getByText('team-stub')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.queryByTestId('person')).toBeNull();
-    expect(localStorage.getItem('home-view')).toBe('me');
-    cleanup();
-    renderIt();
-    expect(await screen.findByText('today-stub')).toBeTruthy();
-    expect(view('Me').getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(view('Team'));
-    expect(localStorage.getItem('home-view')).toBe('team');
-    expect(await person()).toBeTruthy();
+    await waitFor(() => expect(list().map((b) => b.textContent)).toEqual(['Puma', 'Yuari']));
   });
 
-  it('an admin with no plan of their own lands on Team even when Me was remembered, and can still open Me', async () => {
-    localStorage.setItem('home-view', 'me');
-    vi.mocked(api.getDayPlan).mockResolvedValue({ weekSaved: false } as never);
+  it('says so, with a retry, when the names cannot be read', async () => {
+    vi.mocked(api.lookupUsers).mockRejectedValueOnce(new Error('down'));
     renderIt();
-    expect(await person()).toBeTruthy();
-    expect(view('Team').getAttribute('aria-checked')).toBe('true');
-    expect(api.getDayPlan).toHaveBeenCalledWith('2026-11-20');
-    fireEvent.click(view('Me'));
-    expect(screen.getByText('today-stub')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(list()).toHaveLength(2));
   });
 
-  it('remembered Me stays Me when the own day cannot be read', async () => {
-    localStorage.setItem('home-view', 'me');
-    vi.mocked(api.getDayPlan).mockRejectedValue(new Error('500'));
+  it('picking a person puts them in the URL and loads their page', async () => {
     renderIt();
-    expect(await screen.findByText('today-stub')).toBeTruthy();
-  });
-
-  it('works when the browser storage throws', async () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
-    renderIt();
-    expect(await person()).toBeTruthy();
-    fireEvent.click(view('Me'));
-    expect(screen.getByText('today-stub')).toBeTruthy();
-  });
-
-  it('picking a person puts them in the URL and shows their page', async () => {
-    renderIt();
-    await person();
-    fireEvent.click(list()[1]);
+    await waitFor(() => expect(list()).toHaveLength(2));
+    fireEvent.click(list()[0]);
+    expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
     expect(screen.getByTestId('where').textContent).toBe('?user=u2');
-    expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
-    expect(list().map((b) => b.getAttribute('aria-current'))).toEqual([null, 'true']);
+    expect(list().map((b) => b.getAttribute('aria-current'))).toEqual(['true', null]);
   });
 
-  it('a link with ?user= opens Team on that person, whatever was remembered', async () => {
-    localStorage.setItem('home-view', 'me');
-    renderIt('/dashboard?user=u2');
-    expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
-    expect(api.getDayPlan).not.toHaveBeenCalled();
+  it('a link with ?user= opens that person', async () => {
+    renderIt('/dashboard?user=u1');
+    expect((await person()).textContent).toContain('u1|');
+    await waitFor(() => expect(screen.getByTestId('person').textContent).toBe('u1|Yuari|2026-11-20|2026-11-20'));
   });
 
-  it('the narrow form steps through people with previous / next', async () => {
-    renderIt('/dashboard?user=u2');
-    await person();
-    fireEvent.click(screen.getByRole('button', { name: 'Previous person' }));
-    expect(screen.getByTestId('where').textContent).toBe('?user=u1');
+  it('the narrow form picks from a dropdown and steps with previous / next', async () => {
+    renderIt();
+    await waitFor(() => expect(list()).toHaveLength(2));
+    expect((screen.getByLabelText('Viewing') as HTMLSelectElement).value).toBe('');
     fireEvent.click(screen.getByRole('button', { name: 'Next person' }));
-    expect(screen.getByTestId('where').textContent).toBe('?user=u2');
+    expect((await person()).textContent).toContain('u2|Puma');
+    fireEvent.click(screen.getByRole('button', { name: 'Next person' }));
+    await waitFor(() => expect(screen.getByTestId('person').textContent).toContain('u1|Yuari'));
+    expect((screen.getByRole('button', { name: 'Next person' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous person' }));
+    await waitFor(() => expect(screen.getByTestId('person').textContent).toContain('u2|Puma'));
   });
 
   it('Yesterday changes the day the reads ask for, sits in the URL, and Today goes back', async () => {
-    renderIt('/dashboard?user=u2');
+    renderIt('/dashboard?user=u1');
     await person();
-    fireEvent.click(view('Yesterday'));
-    expect(screen.getByTestId('where').textContent).toBe('?user=u2&day=yesterday');
+    fireEvent.click(screen.getByRole('radio', { name: 'Yesterday' }));
     await waitFor(() => expect(api.getTeamToday).toHaveBeenCalledWith('2026-11-19'));
-    expect((await person()).textContent).toBe('u2|Puma|2026-11-19|2026-11-20');
+    expect(screen.getByTestId('person').textContent).toContain('|2026-11-19|2026-11-20');
+    expect(screen.getByTestId('where').textContent).toBe('?user=u1&day=yesterday');
     expect(screen.getByText('Thu, Nov 19')).toBeTruthy();
-    fireEvent.click(view('Today'));
-    expect(screen.getByTestId('where').textContent).toBe('?user=u2');
-    expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
-  });
-
-  it('going back to Me drops the person and the day from the URL', async () => {
-    renderIt('/dashboard?user=u2&day=yesterday');
-    await person();
-    fireEvent.click(view('Me'));
-    expect(screen.getByTestId('where').textContent).toBe('');
-  });
-
-  it('a failed list read says so with a retry; a person in the URL still gets their page', async () => {
-    vi.mocked(api.getTeamToday).mockRejectedValueOnce(new Error('500'));
-    renderIt('/dashboard?user=u2');
-    expect(await screen.findByText(/Couldn.t load the team/)).toBeTruthy();
-    expect((await person()).textContent).toBe('u2||2026-11-20|2026-11-20');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    await waitFor(() => expect(list()).toHaveLength(2));
-    expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
-  });
-
-  it('an empty team says so', async () => {
-    vi.mocked(api.getTeamToday).mockResolvedValue({ day: '2026-11-20', people: [] } as never);
-    renderIt();
-    expect(await screen.findByText('No team members to show.')).toBeTruthy();
-    expect(screen.queryByTestId('person')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'Today' }));
+    expect(screen.getByTestId('where').textContent).toBe('?user=u1');
   });
 });
