@@ -5,10 +5,9 @@ import type { DashboardWeek, PipelineItem, TodayInterview } from '../../api/endp
 import { formatInZone, parseServerTime, zonedDateKey } from '../../lib/interviewTimezone';
 import { stageLabel } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
-import { dayDate, dayLabel, mondayOf, monthDay } from '../../lib/week';
+import { dayDate, dayLabel, mondayOf, monthDay, weekdayShort } from '../../lib/week';
 import { shortDay } from '../interview/useNeedsInputActions';
 import { kept } from '../report/ItemRow';
-import { weekdayShort } from './BidsDays';
 import PendingItems, { usePending } from './PendingItems';
 import RoutinesGrid from './RoutinesGrid';
 import TodayRound, { roundKey, roundState, useNow } from './TodayRound';

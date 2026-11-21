@@ -1,10 +1,6 @@
 import type { DashboardWeek } from '../../api/endpoints';
+import { weekdayShort } from '../../lib/week';
 
-/** "Mon" for a YYYY-MM-DD day. */
-export const weekdayShort = (iso: string) => {
-  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short' });
-};
 const num = (n: number) => n.toLocaleString('en-US');
 
 /**

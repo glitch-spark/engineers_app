@@ -1213,7 +1213,7 @@ export interface DashboardWeek {
     pace: DashboardPace | null;
     percentile: DashboardPercentile | null;
     /** Mon–Fri, each day's bids and daily target. Missing from an older server. */
-    byDay?: { date: string; done: number; target: number | null }[];
+    byDay?: { date: string; done: number; target: number | null; self?: number; bidder?: number }[];
     /** Mon–Fri only (`total` above also counts the weekend); a target is the week's sum of the day targets, null when unset. Missing from an older server. */
     week?: { self: number; selfTarget: number | null; bidder: number; bidderTarget: number | null; total: number; target: number | null };
   };
@@ -1234,6 +1234,12 @@ export interface DashboardWeek {
      * before today. Missing from an older server.
      */
     byDay?: { date: string; held: number; canceled: number; scheduled: number }[];
+    /** Mon–Fri, each round in time order (`date` in the app timezone). Missing from an older server. */
+    rounds?: {
+      date: string; interviewId: string; companyName: string | null; stage: string; at: string;
+      who: 'self' | 'caller'; callerName: string | null;
+      status: 'scheduled' | 'waiting' | 'followed_up' | 'passed' | 'rejected' | 'no_answer' | 'canceled';
+    }[];
   };
   stages: { key: string; label: string; count: number }[];
   streak: number;

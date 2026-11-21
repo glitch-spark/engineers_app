@@ -1,7 +1,7 @@
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import { todayInputValue } from '../../lib/week';
-import BidsDays, { weekdayShort as weekday } from './BidsDays';
+import { todayInputValue, weekdayShort as weekday } from '../../lib/week';
+import BidsDays from './BidsDays';
 import RoutinesGrid from './RoutinesGrid';
 
 function localDate(iso: string): Date {

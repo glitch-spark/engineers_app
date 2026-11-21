@@ -69,3 +69,6 @@ export const dayLabel = (iso: string) => dayDate(iso).toLocaleDateString('en-US'
 
 /** "Nov 18" */
 export const monthDay = (iso: string) => dayDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+/** "Wed" */
+export const weekdayShort = (iso: string) => dayDate(iso).toLocaleDateString('en-US', { weekday: 'short' });
