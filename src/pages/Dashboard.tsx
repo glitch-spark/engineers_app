@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import FilterBar, { FilterField } from '../components/filters/FilterBar';
-import PersonPage from '../components/home/PersonPage';
+import MyHome from '../components/home/MyHome';
 import { useAuth } from '../auth/useAuth';
 import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../lib/week';
 import { teamMembersAZ, useTeamLookup } from '../lib/useFirstTeamMember';
@@ -104,22 +104,6 @@ export default function DashboardPage() {
 }
 
 /**
- * A person's own Home: the same page an admin sees for them, read at once, which they work from (to-dos, goals,
- * interview answers, follow-ups), then This month. The day (`?day=`) sits in the URL.
- */
-function MyHome() {
-  const { patch, today, home, day, pickDay } = usePickedDay();
-  return (
-    <>
-      <FilterBar canClear={day !== home} onClear={() => patch({ day: null })}>
-        <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />
-      </FilterBar>
-      <PersonPage mode="owner" day={day} today={today} onPickDay={pickDay} />
-    </>
-  );
-}
-
-/**
  * An admin's Home is the team, one person at a time, picked with a User filter at the top like the other pages
  * (user, 2026-11-21: no Me / Team switch, no list down the side, no Team totals table for now). The names come from
  * the shared team lookup, so the filter is there at once; nobody is picked on arrival and a person's page is read
@@ -131,6 +115,7 @@ function AdminHome() {
   const lookup = useTeamLookup();
   const people = teamMembersAZ(lookup.data?.users).map((u) => ({ value: u._id, label: u.name?.trim() || u.email?.trim() || 'Unnamed' }));
   const picked = params.get('user') || '';
+  const pickedName = people.find((p) => p.value === picked)?.label ?? '';
 
   return (
     <>
@@ -157,9 +142,8 @@ function AdminHome() {
         </FilterField>
         <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />
       </FilterBar>
-      {picked ? (
-        <PersonPage key={picked} mode="admin" userId={picked} name={people.find((p) => p.value === picked)?.label ?? ''} day={day} today={today} onPickDay={pickDay} />
-      ) : (
+      {/* the person's own Home, read for them, on the picked day (user, 2026-11-21: one view, no switch) */}
+      {picked ? <MyHome key={picked} userId={picked} name={pickedName} day={day} /> : (
         <p className="panel p-6 text-sm text-muted">Pick a person to see their bids, interviews, to-dos, goals and pending items.</p>
       )}
     </>

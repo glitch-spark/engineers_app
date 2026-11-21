@@ -4,8 +4,10 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
+import WeekTable from './WeekTable';
 import MetricsCard from './MetricsCard';
 
+vi.mock('../../lib/useInterviewTimezone', () => ({ useInterviewTimezone: () => ({ tz: 'America/Chicago' }) }));
 vi.mock('../../api/endpoints', () => ({ getDashboardWeek: vi.fn(), getDashboardNetMonthly: vi.fn(), getDashboardMonthInterviews: vi.fn() }));
 
 beforeEach(() => {
@@ -22,9 +24,106 @@ const week = (o: object = {}) => ({
   stages: [], streak: 0, hasWeeklyPlan: true,
   routines: { done: 11, expected: 15 }, weeklyGoals: [], ...o,
 });
+const DATES = ['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20'];
+const byDay = (done: number[], target: number | null = 400) => DATES.map((date, i) => ({ date, done: done[i], target }));
+const bids = (o: object = {}) => ({ ...week().bids, byDay: byDay([410, 400, 124, 0, 0]), ...o });
+const days = (states: (string | [string, number, number])[]) => states.map((s, i) => (
+  typeof s === 'string' ? { date: DATES[i], state: s, value: null, target: null } : { date: DATES[i], state: s[0], value: s[1], target: s[2] }
+));
 const wrap = (ui: React.ReactElement) =>
   render(<SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false }}><MemoryRouter>{ui}</MemoryRouter></SWRConfig>);
 const tile = (name: string) => screen.getByRole('group', { name });
+
+describe('WeekTable (This week, read-only)', () => {
+  const round = (o: object = {}) => ({
+    date: '2026-11-18', interviewId: 'i1', companyName: 'Acme', stage: 'tech1', at: '2026-11-18T16:00:00Z', who: 'self', callerName: null, status: 'passed', ...o,
+  });
+  const full = () => week({
+    bids: {
+      ...week().bids,
+      byDay: DATES.map((date, i) => ({ date, done: [410, 380, 124, 0, 0][i], target: 400, self: [200, 180, 60, 0, 0][i], bidder: [210, 200, 64, 0, 0][i] })),
+      week: { self: 440, selfTarget: 1000, bidder: 474, bidderTarget: null, total: 914, target: 2000 },
+    },
+    interviews: { ...week().interviews, done: 3, self: 2, caller: 1, target: 4, rounds: [
+      round({ date: '2026-11-16', interviewId: 'i0', companyName: 'Old Co', stage: 'intro', at: '2026-11-16T15:00:00Z', status: 'scheduled' }),
+      round({ date: '2026-11-17', interviewId: 'i2', companyName: 'Hooli', at: '2026-11-17T20:30:00Z', who: 'caller', callerName: 'Sam', status: 'canceled' }),
+      round(),
+      round({ interviewId: 'i3', companyName: 'Globex', stage: 'intro', at: '2026-11-18T20:00:00Z', who: 'caller', status: 'scheduled' }),
+    ] },
+    routines: { done: 1, expected: 5, rows: [
+      { id: 'a', text: 'Send 50 emails', days: days(['done', 'missed', ['short', 30, 50], 'future', 'future']), doneDays: 1, totalDays: 5 },
+    ] },
+  });
+  const show = (w: object) => wrap(<WeekTable week={w as never} today="2026-11-18" />);
+  const rowOf = (name: string | RegExp) => screen.getByRole('rowheader', { name }).closest('tr') as HTMLElement;
+  const cells = (name: string | RegExp) => within(rowOf(name)).getAllByRole('cell').map((c) => c.textContent);
+
+  it('one table: the days with their dates and today marked, then Week and Planned', () => {
+    show(full());
+    const table = screen.getByRole('table', { name: 'This week' });
+    expect(table.parentElement?.className).toContain('overflow-x-auto');
+    expect([...table.querySelectorAll('thead th')].map((h) => [h.textContent, h.getAttribute('scope')])).toEqual([
+      ['Row', 'col'], ['Mon 16', 'col'], ['Tue 17', 'col'], ['Wed 18 · today', 'col'], ['Thu 19', 'col'], ['Fri 20', 'col'], ['Week', 'col'], ['Planned', 'col'],
+    ]);
+    expect(within(table).queryByRole('checkbox')).toBeNull();
+    expect(within(table).queryByRole('button')).toBeNull();
+  });
+
+  it('Bids: each day against its target, days to come as a dash, then the self and bidder rows', () => {
+    show(full());
+    expect(cells('Bids')).toEqual(['410', '380, under target', '124, under target', '–', '–', '914, under target', '2,000']);
+    const [mon, tue] = within(rowOf('Bids')).getAllByRole('cell');
+    expect(mon.className).toContain('emerald');
+    expect(tue.className).toContain('amber');
+    expect(cells('self')).toEqual(['200', '180', '60', '–', '–', '440', '1,000']);
+    expect(cells('bidder')).toEqual(['210', '200', '64', '–', '–', '474', '–']);
+  });
+
+  it("Interviews: each day lists its rounds with the time, stage, who takes it and the status in words", () => {
+    show(full());
+    expect(rowOf(/^Interviews/).querySelector('th')?.textContent).toBe('Interviewsself 2 · caller 1');
+    expect(cells(/^Interviews/)).toEqual([
+      'Old Co9:00 AM · Intro · selfnot marked',
+      'Hooli2:30 PM · Tech round 1 · caller Samcanceled',
+      'Acme10:00 AM · Tech round 1 · selfpassedGlobex2:00 PM · Intro · callerscheduled',
+      '–', '–', '3, under target', '4',
+    ]);
+    expect(screen.getByText('Old Co').parentElement?.className).toContain('amber'); // scheduled on a day before today
+    expect(screen.getByText('Globex').parentElement?.className).toContain('sky');
+    expect(screen.getByText('Acme').parentElement?.className).toContain('emerald');
+    expect(screen.getByText('Hooli').className).toContain('line-through');
+  });
+
+  it('Daily to-dos: a heading row, then each routine with its marks, days done and days planned', () => {
+    show(full());
+    expect(screen.getByRole('rowheader', { name: 'Daily to-dos' })).toBeTruthy();
+    expect(within(rowOf('Send 50 emails')).getAllByRole('cell').map((c) => [c.getAttribute('aria-label'), c.textContent])).toEqual([
+      ['Mon: done', '✓'], ['Tue: missed', '✗'], ['Wed: 30 of 50, short of the target', '30 / 50'],
+      ['Thu: still to come', ''], ['Fri: still to come', ''], [null, '1'], [null, '5'],
+    ]);
+  });
+
+  it('the legend names every colour', () => {
+    show(full());
+    expect(within(screen.getByRole('list', { name: 'Interview colours' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(
+      ['scheduled', 'not marked', 'completed', 'completed · followed up', 'passed', 'rejected', 'no answer', 'canceled'],
+    );
+  });
+
+  it('an older server (days, but no self / bidder / rounds / routine rows): the rows show what they have', () => {
+    show(week({ bids: bids() }));
+    expect(cells('Bids')).toEqual(['410', '400', '124, under target', '–', '–', '734, under target', '2,000']);
+    expect(cells('self')).toEqual(['–', '–', '–', '–', '–', '0', '–']);
+    expect(cells(/^Interviews/)).toEqual(['', '', '', '', '', '5, under target', '10']);
+    expect(screen.queryByText('Daily to-dos')).toBeNull();
+  });
+
+  it('no days at all: no table', () => {
+    show(week());
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByRole('list')).toBeNull();
+  });
+});
 
 describe('MetricsCard (This month)', () => {
   const months = (cur: object, prev: object | null = { net: 3514 }) => ({

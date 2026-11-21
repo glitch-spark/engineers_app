@@ -9,16 +9,18 @@ import DashboardPage from './Dashboard';
 let role = 'staff';
 vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'boss', role } }) }));
 vi.mock('../api/endpoints', () => ({ getTeamToday: vi.fn(), lookupUsers: vi.fn() }));
+// own Home: no props; the admin's view of a person: who, and the picked day beside the real today
+vi.mock('../components/home/MyHome', async () => {
+  const { todayInputValue } = await import('../lib/week');
+  return {
+    default: (p: { userId?: string; name?: string; day?: string }) => (
+      p.userId ? <div data-testid="person">{`${p.userId}|${p.name}|${p.day}|${todayInputValue()}`}</div> : <div>my-home-stub</div>
+    ),
+  };
+});
 vi.mock('../components/home/MetricsCard', () => ({ default: () => <div>metrics-stub</div> }));
 vi.mock('../components/dashboard/TeamOverview', () => ({ default: () => <div>team-stub</div> })); // not rendered now; kept so a return is caught
-vi.mock('../components/home/PersonPage', () => ({
-  default: (p: { mode: string; userId?: string; name?: string; day: string; today: string; onPickDay: (day: string) => void }) => (
-    <div>
-      <div data-testid="person" data-mode={p.mode}>{`${p.userId}|${p.name}|${p.day}|${p.today}`}</div>
-      <button type="button" onClick={() => p.onPickDay('2026-11-17')}>pick-tuesday</button>
-    </div>
-  ),
-}));
+
 
 const users = [
   { _id: 'u1', name: 'Yuari', email: null, role: 'staff', isActive: true },
@@ -54,45 +56,23 @@ const picker = () => screen.findByLabelText('User') as Promise<HTMLSelectElement
 const names = (el: HTMLSelectElement) => [...el.options].map((o) => o.text);
 
 describe('Home', () => {
-  it("staff get the same page for themselves at once: Week and Day filters but no User; no This month card, no team", async () => {
+  it('staff see their own Home (pending, today, this week) only: no This month, no team, no Week / Day picker', () => {
     role = 'staff';
     renderIt();
-    const page = screen.getByTestId('person'); // no "pick a person" step
-    expect(page.getAttribute('data-mode')).toBe('owner');
-    expect(page.textContent).toBe('undefined|undefined|2026-11-20|2026-11-20'); // their own: no userId
-    const filters = screen.getByRole('group', { name: 'Filters' });
-    expect(within(filters).queryByLabelText('User')).toBeNull();
-    expect(within(filters).getByRole('group', { name: 'Week' })).toBeTruthy();
-    expect(within(filters).getAllByRole('radio').map((d) => d.getAttribute('aria-label'))).toEqual(['Mon, Nov 16', 'Tue, Nov 17', 'Wed, Nov 18', 'Thu, Nov 19', 'Fri, Nov 20']);
-    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
-    expect(screen.queryByText('metrics-stub')).toBeNull(); // the This month card is off the personal Home (user, 2026-11-21)
+    expect(screen.getByText('my-home-stub')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Week' })).toBeNull();
+    expect(screen.queryByText('metrics-stub')).toBeNull();
     expect(screen.queryByText('team-stub')).toBeNull();
-    expect(screen.queryByText(/Pick a person/)).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
     expect(api.getTeamToday).not.toHaveBeenCalled();
     expect(api.lookupUsers).not.toHaveBeenCalled();
   });
 
-  it('staff pick a day or a week the same way; Back to today and Clear both return', async () => {
-    role = 'staff';
-    renderIt();
-    fireEvent.click(screen.getByRole('radio', { name: 'Wed, Nov 18' }));
-    expect(screen.getByTestId('where').textContent).toBe('?day=2026-11-18');
-    expect(screen.getByTestId('person').textContent).toBe('undefined|undefined|2026-11-18|2026-11-20');
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(screen.getByTestId('where').textContent).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'Previous week' }));
-    expect(screen.getByTestId('where').textContent).toBe('?day=2026-11-13');
-    fireEvent.click(screen.getByRole('button', { name: 'Back to today' }));
-    expect(screen.getByTestId('where').textContent).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'pick-tuesday' }));
-    expect(screen.getByTestId('person').textContent).toBe('undefined|undefined|2026-11-17|2026-11-20');
-  });
-
-  it("a ?user= in a staff link is ignored: the page stays their own", () => {
-    role = 'staff';
-    renderIt('/dashboard?user=u2&day=yesterday');
-    expect(screen.getByTestId('person').textContent).toBe('undefined|undefined|2026-11-19|2026-11-20');
+  it("an admin sees the picked person's own Home on the picked day: one view, no switch", async () => {
+    renderIt('/dashboard?user=u2&view=user'); // an old link's view is ignored
+    expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
+    expect(screen.queryByRole('radiogroup', { name: 'View' })).toBeNull();
+    expect(screen.getByRole('group', { name: 'Week' })).toBeTruthy();
   });
 
   it('an admin gets a User filter at the top like other pages: the names at once, nobody picked, no cards of their own', async () => {
@@ -105,7 +85,7 @@ describe('Home', () => {
     expect(screen.getByText('Pick a person to see their bids, interviews, to-dos, goals and pending items.')).toBeTruthy();
     expect(screen.queryByTestId('person')).toBeNull();
     expect(screen.queryByRole('radio', { name: 'Me' })).toBeNull();
-    expect(screen.queryByText('metrics-stub')).toBeNull(); // This month is the owner's only
+    expect(screen.queryByText('my-home-stub')).toBeNull();
     expect(screen.queryByText('team-stub')).toBeNull(); // the Team totals table is off for now
     expect(api.getTeamToday).not.toHaveBeenCalled(); // nothing slow is read before a person is picked
     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
@@ -124,8 +104,6 @@ describe('Home', () => {
     await waitFor(() => expect(names(user)).toHaveLength(3));
     fireEvent.change(user, { target: { value: 'u2' } });
     expect((await person()).textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
-    expect(screen.getByTestId('person').getAttribute('data-mode')).toBe('admin');
-    expect(screen.queryByText('metrics-stub')).toBeNull();
     expect(screen.getByTestId('where').textContent).toBe('?user=u2');
     expect(user.value).toBe('u2');
   });
@@ -181,14 +159,6 @@ describe('Home', () => {
     expect(where()).toBe('?user=u1');
     expect(shown()).toBe('2026-11-20|2026-11-20');
     expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
-  });
-
-  it("a day picked on the person's page (a bar, a to-dos column) lands in the URL too", async () => {
-    renderIt('/dashboard?user=u1');
-    await person();
-    fireEvent.click(button('pick-tuesday'));
-    expect(where()).toBe('?user=u1&day=2026-11-17');
-    expect(shown()).toBe('2026-11-17|2026-11-20');
   });
 
   it('Previous week picks that week\'s Friday, any number of weeks back; Next week comes back and picks today in the current week', async () => {
