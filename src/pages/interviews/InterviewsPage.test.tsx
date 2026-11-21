@@ -642,7 +642,7 @@ describe('Interviews page: Region filter and the totals strip', () => {
     renderPage('/interviews');
     const el = await strip();
     expect(within(el).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Total 1,234 rounds', 'Scheduled 1,000', 'Completed 200', 'Passed 30', 'Rejected 3', 'Canceled 1',
+      'Total 1,234 rounds', 'Scheduled 1,000 81%', 'Completed 200 16%', 'Passed 30 2%', 'Rejected 3 <1%', 'Canceled 1 <1%',
     ]);
     expect(within(el).getByText('counts rounds, not companies')).toBeTruthy();
   });
@@ -652,12 +652,12 @@ describe('Interviews page: Region filter and the totals strip', () => {
     renderPage('/interviews?status=passed&page=3');
     const btn = async (name: RegExp) => within(await strip()).getByRole('button', { name });
     const pressed = async () => within(await strip()).getAllByRole('button', { pressed: true }).map((b) => b.textContent);
-    expect(await pressed()).toEqual(['Passed 30']);
+    expect(await pressed()).toEqual(['Passed 30 2%']);
     expect((await btn(/^Total/)).hasAttribute('aria-pressed')).toBe(false);
     fireEvent.click(await btn(/^Scheduled/));
     await waitFor(() => expect(search()).toBe('?status=scheduled'));
     expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('scheduled');
-    expect(await pressed()).toEqual(['Scheduled 1,000']);
+    expect(await pressed()).toEqual(['Scheduled 1,000 81%']);
     fireEvent.click(await btn(/^Scheduled/));
     await waitFor(() => expect(search()).toBe(''));
     fireEvent.click(await btn(/^Rejected/));
