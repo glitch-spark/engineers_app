@@ -33,7 +33,7 @@ export default function InterviewTotals({
   return (
     <div role="group" aria-label="Round totals" className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
       <button type="button" className={`${chip} border-transparent text-body hover:bg-zinc-100 dark:hover:bg-zinc-800`} onClick={() => onStatus('')}>
-        Total <span className="font-semibold tabular-nums text-strong">{n(data.total)}</span> rounds
+        Total <span className="font-semibold tabular-nums text-strong">{n(data.total)}</span> {data.total === 1 ? 'round' : 'rounds'}
       </button>
       {INTERVIEW_STATUSES.map((s) => {
         const active = status === s.value;
