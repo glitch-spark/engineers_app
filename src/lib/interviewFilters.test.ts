@@ -16,6 +16,7 @@ import {
   rangeDates,
   roundsQuery,
   stepCalendar,
+  summaryQuery,
   viewSwitchQuery,
   type InterviewFilters,
 } from './interviewFilters';
@@ -54,7 +55,7 @@ describe('normalizeRange (old URLs)', () => {
 describe('parseInterviewValues', () => {
   it('reads the defaults for an empty URL', () => {
     expect(parse()).toEqual({
-      user: 'me', profile: '', stage: '', status: '', caller: '', owner: '', q: '',
+      user: 'me', profile: '', region: '', stage: '', status: '', caller: '', owner: '', q: '',
       range: 'this_week', from: '', to: '', sort: 'latest', dir: 'desc', page: 1, size: 20,
     });
   });
@@ -311,5 +312,63 @@ describe('legacyCallTarget (old ?call= links)', () => {
   it('leaves links without call alone', () => {
     expect(legacyCallTarget('/interviews', '?q=acme')).toBeNull();
     expect(legacyCallTarget('/interviews', '')).toBeNull();
+  });
+});
+
+describe('region filter', () => {
+  const now = new Date('2026-11-11T17:00:00Z');
+  const r = { from: '2026-11-09', to: '2026-11-16' };
+  it('defaults to every region and reads the known values only', () => {
+    expect(interviewUrlDefaults(D).region).toBe('');
+    for (const v of ['Latam', 'EU', 'Canada', 'US', 'Asia', 'none']) expect(parse({ region: v }).region).toBe(v);
+    expect(parse({ region: 'Mars' }).region).toBe('');
+  });
+  it('is on both bars, after Profile / after Caller, and counts toward Clear', () => {
+    expect(barKeys(false).slice(0, 3)).toEqual(['user', 'profile', 'region']);
+    expect(barKeys(true).slice(0, 3)).toEqual(['owner', 'caller', 'region']);
+    expect(barDiffers(parse({ region: 'EU' }), D, false)).toBe(true);
+    expect(barDiffers(parse({ region: 'none' }), D, true)).toBe(true);
+  });
+  it('is carried by the List | Calendar switch', () => {
+    expect(viewSwitchQuery(new URLSearchParams('region=EU&page=2'))).toBe('?region=EU');
+  });
+  it('is sent to the list, the caller rounds and the calendar, and left out when empty', () => {
+    const f = base({ region: 'EU' });
+    expect(listQuery(f, 20, now, 'UTC')!.region).toBe('EU');
+    expect(callerRoundsQuery(f, 20, now, 'UTC')!.region).toBe('EU');
+    expect(roundsQuery(f, r, 'UTC').region).toBe('EU');
+    expect(roundsQuery(f, r, 'UTC', { callers: true }).region).toBe('EU');
+    expect('region' in listQuery(base(), 20, now, 'UTC')!).toBe(false);
+    expect('region' in callerRoundsQuery(base(), 20, now, 'UTC')!).toBe(false);
+    expect('region' in roundsQuery(base(), r, 'UTC')).toBe(false);
+  });
+});
+
+describe('summaryQuery (the totals strip)', () => {
+  const now = new Date('2026-11-11T17:00:00Z');
+  const f = base({ user: 'u1', profile: 'a1', region: 'EU', stage: 'intro', status: 'passed', q: 'acme', caller: 'c1', owner: 'u2', page: 3 });
+  it('is the Self list request without paging and sorting', () => {
+    expect(summaryQuery(listQuery(f, 20, now, 'UTC'))).toEqual({
+      from: '2026-11-09T00:00:00.000Z', to: '2026-11-15T23:59:59.999Z',
+      creatorId: 'u1', accountId: 'a1', region: 'EU', stage: 'intro', status: 'passed', callType: 'self', q: 'acme',
+    });
+  });
+  it('counts caller rounds only on the Caller interviews list', () => {
+    expect(summaryQuery(callerRoundsQuery(f, 20, now, 'UTC'), { callers: true })).toEqual({
+      from: '2026-11-09T00:00:00.000Z', to: '2026-11-15T23:59:59.999Z',
+      creatorId: 'u2', callerId: 'c1', region: 'EU', stage: 'intro', status: 'passed', q: 'acme', callerOnly: true,
+    });
+  });
+  it('covers the calendar\'s visible days: its exclusive end becomes the last instant shown', () => {
+    const r = { from: '2026-11-09', to: '2026-11-16' };
+    expect(summaryQuery(roundsQuery(f, r, 'UTC'), { exclusiveTo: true })).toMatchObject({
+      from: '2026-11-09T00:00:00.000Z', to: '2026-11-15T23:59:59.999Z', creatorId: 'u1', callType: 'self', region: 'EU',
+    });
+    expect(summaryQuery(roundsQuery(f, r, 'UTC', { callers: true }), { callers: true, exclusiveTo: true })).toMatchObject({
+      to: '2026-11-15T23:59:59.999Z', callerOnly: true, callerId: 'c1', creatorId: 'u2',
+    });
+  });
+  it('is null while the view has nothing to ask for', () => {
+    expect(summaryQuery(null)).toBeNull();
   });
 });

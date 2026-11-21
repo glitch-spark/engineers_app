@@ -743,6 +743,8 @@ export interface InterviewListParams {
   from?: string;
   to?: string;
   accountId?: string;
+  /** The profile's region: one of PROFILE_REGIONS, or 'none' for no region. Omitted = every region. */
+  region?: string;
   stage?: string;
   status?: string;
   creatorId?: string;
@@ -788,6 +790,8 @@ export const listInterviewRounds = (params: {
   to: string;
   creatorId?: string;
   accountId?: string;
+  /** The profile's region: one of PROFILE_REGIONS, or 'none' for no region. Omitted = every region. */
+  region?: string;
   stage?: string;
   status?: string;
   /** 'true': caller rounds only (the Callers calendar). */
@@ -806,6 +810,8 @@ export const listInterviewRounds = (params: {
 export const listCallerRounds = (params: {
   from?: string;
   to?: string;
+  /** The profile's region: one of PROFILE_REGIONS, or 'none' for no region. Omitted = every region. */
+  region?: string;
   stage?: string;
   status?: string;
   callerId?: string;
@@ -819,6 +825,29 @@ export const listCallerRounds = (params: {
 }) => apiFetch<{ rounds: InterviewRoundRow[]; interviews: Record<string, Record<string, unknown>>; pagination: Pagination }>(
   `/interviews/caller-rounds${qs(params)}`,
 );
+
+export interface InterviewSummaryParams {
+  /** Inclusive; YYYY-MM-DD or an ISO datetime. */
+  from?: string;
+  to?: string;
+  accountId?: string;
+  region?: string;
+  stage?: string;
+  /** Accepted but not applied: the breakdown always covers every status. */
+  status?: string;
+  creatorId?: string;
+  /** Caller rounds only (the Caller interviews tab). */
+  callerOnly?: boolean;
+  callerId?: string;
+  callType?: CallType;
+  q?: string;
+}
+
+/** How many rounds match the filters, and how many per status (rounds, not interviews). */
+export const getInterviewSummary = (params?: InterviewSummaryParams) =>
+  apiFetch<{ total: number; byStatus: Record<'scheduled' | 'completed' | 'passed' | 'rejected' | 'canceled', number> }>(
+    `/interviews/summary${qs(params)}`,
+  );
 
 export const getInterview = (id: string) =>
   apiFetch<Record<string, unknown>>(`/interviews/${id}`);

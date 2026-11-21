@@ -113,4 +113,20 @@ describe('useInterviewFilters', () => {
     const { result } = setup('?range=next_week&q=acme&page=2&panel=abc');
     expect(result.current.sharedQs).toBe('?range=next_week&q=acme');
   });
+
+  it('keeps the region in the URL, resets the page, and Clear drops it on both tabs', () => {
+    const { result } = setup('?page=3');
+    expect(result.current.filters.region).toBe('');
+    act(() => result.current.update({ region: 'EU' }));
+    expect(seen.search).toBe('?region=EU');
+    expect(result.current.filters.region).toBe('EU');
+    expect(result.current.canClear).toBe(true);
+    expect(result.current.sharedQs).toBe('?region=EU');
+    act(() => result.current.clear());
+    expect(seen.search).toBe('');
+    const callers = setup('?region=none', true);
+    expect(callers.result.current.canClear).toBe(true);
+    act(() => callers.result.current.clear());
+    expect(seen.search).toBe('');
+  });
 });

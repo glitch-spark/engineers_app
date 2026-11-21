@@ -17,6 +17,7 @@ import { useInterviewFilters } from './useInterviewFilters';
 import { legacyCallTarget } from '../../lib/interviewFilters';
 import ZoneSelect from '../../components/interview/ZoneSelect';
 import CallerRoundsList from './CallerRoundsList';
+import { SUMMARY_KEY } from './InterviewTotals';
 import CallersLegend from '../../components/interview/CallersLegend';
 import CallersDirectory from './CallersDirectory';
 
@@ -44,7 +45,7 @@ function InterviewsPageBody({ view, callers = false, directory = false }: { view
   const [deleting, setDeleting] = useState(false);
 
   const refresh = () => mutate(
-    (key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list', 'interviews-needs-input'].includes(key[0]),
+    (key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list', 'interviews-needs-input', SUMMARY_KEY].includes(key[0]),
   );
 
   // Dropping the deep-link param re-renders this page; only unmounting should discard a pending lookup.

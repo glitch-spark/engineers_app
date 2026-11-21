@@ -32,7 +32,7 @@ export interface InterviewFilterState {
 }
 
 /**
- * Filters for the Self interviews and Caller interviews tabs, read from and written to the URL (`user profile caller
+ * Filters for the Self interviews and Caller interviews tabs, read from and written to the URL (`user profile region caller
  * owner stage status q range from to sort dir page`). `callers`: the Caller interviews tab, whose bar shows Owner and
  * Caller instead of User and Profile.
  */
