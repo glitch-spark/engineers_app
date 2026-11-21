@@ -174,7 +174,9 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
     .filter(([n]) => n > 0).map(([n, short]) => `${n} ${short}`).join(' · ');
 
   const row = (item: DayItem) => {
-    const earlier = doneEarlier(item);
+    const doneOn = doneEarlier(item);
+    // A log goal is edited today whatever day it was first done: an edit must never un-tick that day.
+    const earlier = item.kind === 'log' ? null : doneOn;
     const met = weekMet(item);
     const busy = !!unticking[item.id];
     return (
@@ -188,8 +190,8 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
           compact
           valueLocked={!!earlier}
           doneLocked={met}
-          note={busy ? undefined : earlier ? `done ${dayDate(earlier).toLocaleDateString('en-US', { weekday: 'short' })}` : met ? 'week target met' : undefined}
-          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, met ? { done: item.result?.done ?? false, value: r.value } : r))}
+          note={busy ? undefined : doneOn ? `done ${dayDate(doneOn).toLocaleDateString('en-US', { weekday: 'short' })}` : met ? 'week target met' : undefined}
+          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, met ? { done: item.result?.done ?? false, value: r.value, ...(r.entries ? { entries: r.entries } : {}) } : r))}
         />
         {(failedUntick[item.id] || (failed[item.id] && !local[item.id])) && (
           <li className="text-xs text-red-600">
