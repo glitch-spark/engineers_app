@@ -1,4 +1,5 @@
 import { Archive, Plus } from 'lucide-react';
+import { hasTarget } from '../../api/endpoints';
 import type { PlanItemIn, PlanItemKind } from '../../api/endpoints';
 
 const MAX_ITEMS = 20;
@@ -35,7 +36,7 @@ export default function PlanItemsEditor({
         {live.map(({ item, index }) => (
           <li key={item.id ?? index} className="text-sm text-body">
             {item.text}
-            {!['check', 'log'].includes(item.kind) && item.target != null && (
+            {hasTarget(item.kind) && item.target != null && (
               <span className="text-xs text-muted"> · {item.target}{item.kind === 'hours' ? 'h' : ''} {scope === 'routine' ? 'per day' : 'this week'}</span>
             )}
           </li>
@@ -71,14 +72,15 @@ export default function PlanItemsEditor({
             aria-label={`${label} item ${n + 1} kind`}
             onChange={(e) => {
               const kind = e.target.value as PlanItemKind;
-              update(index, { kind, target: ['check', 'log'].includes(kind) ? null : item.target });
+              update(index, { kind, target: hasTarget(kind) ? item.target : null });
             }}
           >
             <option value="check">Check</option>
             <option value="count">Count</option>
             <option value="hours">Hours</option>
+            <option value="log">Log</option>
           </select>
-          {!['check', 'log'].includes(item.kind) && (
+          {hasTarget(item.kind) && (
             <>
               <input
                 type="number"
@@ -110,6 +112,6 @@ export default function PlanItemsEditor({
 export function cleanItems(items: PlanItemIn[]): PlanItemIn[] {
   return items
     .filter((i) => !i.archived)
-    .map((i) => ({ ...i, text: i.text.trim(), target: ['check', 'log'].includes(i.kind) ? null : i.target }))
+    .map((i) => ({ ...i, text: i.text.trim(), target: hasTarget(i.kind) ? i.target : null }))
     .filter((i) => i.text);
 }

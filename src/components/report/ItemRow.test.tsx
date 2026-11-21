@@ -65,4 +65,27 @@ describe('ItemRow: a counted item', () => {
     expect(bar.style.width).toBe('100%');
     expect(bar.className).toContain('green');
   });
+
+describe('ItemRow log', () => {
+  const log = { id: 'l1', text: 'Profile review', kind: 'log', target: null, archived: false, scope: 'routine', result: null } as unknown as DayItem;
+  const profiles = [{ id: 'p1', name: 'Anna', region: null, archived: false }];
+  const renderLog = (entries: { profileId: string | null; note: string }[]) => {
+    const onChange = vi.fn();
+    render(<ul><ItemRow item={log} result={{ done: entries.length > 0, value: null, entries }} profiles={profiles} disabled={false} onChange={onChange} /></ul>);
+    return onChange;
+  };
+
+  it('a log item is done when it has an entry with a note', () => {
+    const onChange = renderLog([{ profileId: 'p1', note: '' }]);
+    fireEvent.change(screen.getByLabelText('What changed 1'), { target: { value: 'New title' } });
+    expect(onChange).toHaveBeenLastCalledWith({ done: true, value: null, entries: [{ profileId: 'p1', note: 'New title' }] });
+    expect(screen.getByRole('checkbox')).toHaveProperty('disabled', true);
+  });
+
+  it('removing the last entry makes it not done', () => {
+    const onChange = renderLog([{ profileId: 'p1', note: 'x' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove entry 1' }));
+    expect(onChange).toHaveBeenLastCalledWith({ done: false, value: null, entries: [] });
+  });
+});
 });

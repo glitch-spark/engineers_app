@@ -5,7 +5,7 @@ import { SWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import DayPanel from './DayPanel';
 
-vi.mock('../../api/endpoints', () => ({ getDayPlan: vi.fn(), putDayPlan: vi.fn(), deleteDayPlan: vi.fn() }));
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getDayPlan: vi.fn(), putDayPlan: vi.fn(), deleteDayPlan: vi.fn() }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const c = { bidsSelf: 0, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0 };
@@ -88,6 +88,21 @@ describe('DayPanel', () => {
     expect(body).not.toHaveProperty('targetOverride');
     expect(body.done).not.toHaveProperty('bidsBidder');
     expect(JSON.stringify(body.results)).not.toContain('target');
+  });
+
+  it("saving sends a log item's entries with empty notes dropped", async () => {
+    setup(plan({
+      items: [item({ id: 'l1', text: 'Profile review', kind: 'log' })],
+      profiles: [{ id: 'p1', name: 'Anna', region: null, archived: false }],
+    }));
+    await screen.findByText('Profile review');
+    fireEvent.click(screen.getByRole('button', { name: /add profile/i }));
+    fireEvent.change(screen.getByLabelText('What changed 1'), { target: { value: ' New title ' } });
+    fireEvent.click(screen.getByRole('button', { name: /add profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+    await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+    const body = vi.mocked(api.putDayPlan).mock.calls[0][1] as unknown as Record<string, any>;
+    expect(body.results.l1).toEqual({ done: true, entries: [{ profileId: 'p1', note: 'New title' }] });
   });
 
   it('sends targetOverride only after "change for today"', async () => {

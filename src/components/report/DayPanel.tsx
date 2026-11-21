@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import type { Counts } from '../../api/endpoints';
+import { hasTarget } from '../../api/endpoints';
+import type { Counts, LogEntry } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
 import { bidsOf, dateParam, dayLabel, isToday, parseDateParam, withListedProfiles } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import GoalDoneFields from './GoalDoneFields';
 import ItemRow, { kept } from './ItemRow';
+import { cleanEntries } from './LogEntries';
 import { formSelfBids } from '../../lib/selfBids';
 
 interface FollowUp {
   done: Counts;
-  results: Record<string, { done: boolean; value: number | null }>;
+  results: Record<string, { done: boolean; value: number | null; entries?: LogEntry[] }>;
   notes: string;
   /** Set only by "change for today". */
   override: Counts | null;
@@ -63,7 +65,7 @@ export default function DayPanel({
       ? { ...listed, bidsSelfByProfile: formSelfBids(listed.bidsSelfByProfile ?? {}, data.trackedProfiles, data.selfOtherByProfile ?? {}) }
       : listed;
     const results = Object.fromEntries(
-      data.items.filter(kept).map((i) => [i.id, { done: i.result?.done ?? false, value: i.result?.value ?? null }]),
+      data.items.filter(kept).map((i) => [i.id, { done: i.result?.done ?? false, value: i.result?.value ?? null, entries: i.result?.entries ?? [] }]),
     );
     const next: FollowUp = { done, results, notes: data.notes, override: null };
     setForm(next);
@@ -95,7 +97,8 @@ export default function DayPanel({
       // Checks send done; counts / hours send done + value (the server also ticks them at the frozen target).
       const results = Object.fromEntries(items.map((i) => {
         const r = form.results[i.id] ?? { done: false, value: null };
-        return [i.id, ['check', 'log'].includes(i.kind) ? { done: r.done } : { done: r.done, value: r.value }];
+        if (i.kind === 'log') return [i.id, { done: r.done, entries: cleanEntries(r.entries ?? []) }];
+        return [i.id, hasTarget(i.kind) ? { done: r.done, value: r.value } : { done: r.done }];
       }));
       await api.putDayPlan(date, {
         results,
@@ -211,6 +214,7 @@ export default function DayPanel({
                       key={item.id}
                       item={item}
                       result={form.results[item.id] ?? { done: false, value: null }}
+                      profiles={data.profiles}
                       week={scope === 'goal' ? data.progress[item.id] : undefined}
                       disabled={!editable || item.archived}
                       onChange={(r) => setForm({ ...form, results: { ...form.results, [item.id]: r } })}

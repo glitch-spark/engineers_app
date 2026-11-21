@@ -1,13 +1,17 @@
-import type { DayItem } from '../../api/endpoints';
+import { hasTarget } from '../../api/endpoints';
+import type { DayItem, LogEntry, PlanProfile } from '../../api/endpoints';
+import LogEntries from './LogEntries';
 
 /** Archived items stay on days that have a result for them (the server rebuilds results from the body). */
 export const kept = (i: DayItem) => !i.archived || i.result !== null;
 
 export default function ItemRow({
-  item, result, week, disabled, valueLocked, doneLocked, note, compact, onChange,
+  item, result, profiles, week, disabled, valueLocked, doneLocked, note, compact, onChange,
 }: {
   item: DayItem;
-  result: { done: boolean; value: number | null };
+  result: { done: boolean; value: number | null; entries?: LogEntry[] };
+  /** The person's profiles, for a log item's rows. */
+  profiles?: PlanProfile[];
   /** A weekly goal's progress so far this week. */
   week?: { value: number; done: boolean; target: number | null };
   disabled: boolean;
@@ -19,19 +23,39 @@ export default function ItemRow({
   note?: string;
   /** A number box as low as the small buttons beside it (Home). */
   compact?: boolean;
-  onChange: (r: { done: boolean; value: number | null }) => void;
+  onChange: (r: { done: boolean; value: number | null; entries?: LogEntry[] }) => void;
 }) {
   const target = item.result?.target ?? item.target; // a saved day keeps the target it was frozen with
   const cls = result.done ? 'line-through text-muted' : '';
   const removed = item.archived ? <span className="ml-1 text-xs text-muted">(removed)</span> : null;
   const progress = week && (
     <span className="ml-auto text-xs tabular-nums text-muted">
-      {['check', 'log'].includes(item.kind) ? (note ? null : week.done ? '✓ this week' : 'Not yet this week') : <>{week.value}{week.target ? ` / ${week.target}` : ''} this week</>}
+      {!hasTarget(item.kind) ? (note ? null : week.done ? '✓ this week' : 'Not yet this week') : <>{week.value}{week.target ? ` / ${week.target}` : ''} this week</>}
     </span>
   );
   const showTarget = !!target && !week;
   const reached = showTarget && (result.value ?? 0) >= target!;
-  if (['check', 'log'].includes(item.kind)) {
+  if (item.kind === 'log') {
+    const entries = result.entries ?? [];
+    return (
+      <li className="rounded-lg px-1 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
+        <label className="flex items-center gap-2 text-sm text-body">
+          {/* done follows the entries; the box only mirrors it */}
+          <input type="checkbox" className="h-4 w-4" disabled checked={result.done} readOnly />
+          <span className={cls}>{item.text}</span>{removed}
+          {progress}
+          {note && <span className="ml-auto text-xs text-muted">{note}</span>}
+        </label>
+        <LogEntries
+          entries={entries}
+          profiles={profiles ?? []}
+          disabled={disabled}
+          onChange={(next) => onChange({ done: next.some((e) => e.note.trim() !== ''), value: null, entries: next })}
+        />
+      </li>
+    );
+  }
+  if (!hasTarget(item.kind)) {
     return (
       <li className="rounded-lg px-1 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
         <label className="flex items-center gap-2 text-sm text-body">

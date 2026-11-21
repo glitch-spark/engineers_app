@@ -8,7 +8,7 @@ import Report from './Report';
 vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'u', role: 'staff' } }) }));
 vi.mock('../lib/useFirstTeamMember', () => ({ useTeamLookup: () => ({ data: undefined }) }));
 vi.mock('../components/report/DayPanel', () => ({ default: ({ date }: { date: string }) => <div>panel {date}</div> }));
-vi.mock('../api/endpoints', () => ({
+vi.mock('../api/endpoints', async (orig) => ({ ...(await orig<object>()),
   getWeekPlan: vi.fn(() => new Promise(() => {})),
   getDayPlans: vi.fn(() => new Promise(() => {})),
 }));

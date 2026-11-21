@@ -5,7 +5,7 @@ import { SWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import WeekPanel from './WeekPanel';
 
-vi.mock('../../api/endpoints', () => ({ getWeekPlan: vi.fn(), putWeekPlan: vi.fn() }));
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getWeekPlan: vi.fn(), putWeekPlan: vi.fn() }));
 afterEach(cleanup);
 
 const counts = { bidsSelf: 0, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0 };

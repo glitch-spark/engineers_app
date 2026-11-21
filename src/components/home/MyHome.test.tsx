@@ -6,7 +6,7 @@ import { SWRConfig, unstable_serialize } from 'swr';
 import * as api from '../../api/endpoints';
 import MyHome from './MyHome';
 
-vi.mock('../../api/endpoints', () => ({
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()),
   getDayPlan: vi.fn(), putDayProgress: vi.fn(), getDashboardWeek: vi.fn(), getInterviewPipeline: vi.fn(), getNeedsInput: vi.fn(), getDashboardPending: vi.fn(), followUpInterviewStage: vi.fn(), updateInterviewStage: vi.fn(),
 }));
 const auth = vi.hoisted(() => ({ role: 'staff' }));

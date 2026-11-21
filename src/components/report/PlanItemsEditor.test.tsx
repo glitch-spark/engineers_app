@@ -51,4 +51,12 @@ describe('PlanItemsEditor', () => {
     expect(spy).toHaveBeenLastCalledWith([{ id: 'a', text: 'Saved', kind: 'check', target: null, archived: true }]);
     expect(screen.queryByDisplayValue('Saved')).toBeNull();
   });
+
+  it('the kind select offers Log and a log item has no target input', () => {
+    const spy = vi.fn();
+    render(<Harness initial={[{ text: 'Review', kind: 'count', target: 5, archived: false }]} scope="routine" spy={spy} />);
+    fireEvent.change(screen.getByLabelText(/kind/i), { target: { value: 'log' } });
+    expect(spy).toHaveBeenLastCalledWith([{ text: 'Review', kind: 'log', target: null, archived: false }]);
+    expect(screen.queryByLabelText(/target/i)).toBeNull();
+  });
 });

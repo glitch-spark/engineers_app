@@ -504,6 +504,9 @@ export interface Counts extends Bids {
 
 export type PlanItemKind = 'check' | 'count' | 'hours' | 'log';
 
+/** Counts and hours carry a target; checks and logs don't. */
+export const hasTarget = (kind: PlanItemKind): boolean => kind === 'count' || kind === 'hours';
+
 /** A log item's line for one profile on one day. `profileId` null = the person's own work. */
 export interface LogEntry {
   profileId: string | null;

@@ -1,4 +1,5 @@
 import { CheckCircle2, Circle, Target } from 'lucide-react';
+import { hasTarget } from '../../api/endpoints';
 import type { PlanItem, WeekPlan } from '../../api/endpoints';
 import { preSplitSelf, selfRegionsTotal, SELF_REGIONS } from '../../lib/reportWeek';
 import ProgressMetric from './ProgressMetric';
@@ -82,7 +83,7 @@ export default function WeekGoalCard({
                   <li key={item.id} className="flex items-start gap-2 text-sm text-body">
                     <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-400" aria-hidden />
                     <span>{item.text}</span>
-                    {!['check', 'log'].includes(item.kind) && item.target != null && (
+                    {hasTarget(item.kind) && item.target != null && (
                       <span className="text-xs tabular-nums text-muted">{item.target}{unit(item)} per day</span>
                     )}
                   </li>
@@ -99,7 +100,7 @@ export default function WeekGoalCard({
                   const p = week.progress[item.id];
                   return (
                     <li key={item.id}>
-                      {['check', 'log'].includes(item.kind) ? (
+                      {!hasTarget(item.kind) ? (
                         <div className="flex items-start gap-2 text-sm">
                           {p?.done ? (
                             <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success-600" aria-hidden />
