@@ -3,12 +3,11 @@ import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import { todayInputValue } from '../../lib/week';
-import type { DayItem, NeedsInputItem, TodayInterview } from '../../api/endpoints';
-import { useAuth } from '../../auth/useAuth';
-import { stageLabel } from '../../lib/stageBadge';
+import type { DayItem, TodayInterview } from '../../api/endpoints';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
-import { daysWithoutResult, needsInputKey, shortDay, useNeedsInputActions } from '../interview/useNeedsInputActions';
+import { useNeedsInputActions } from '../interview/useNeedsInputActions';
 import ItemRow, { kept } from '../report/ItemRow';
+import PendingItems from './PendingItems';
 import TodayRound, { asNeedsInput, roundKey, roundState, useNow } from './TodayRound';
 
 type Result = { done: boolean; value: number | null };
@@ -114,10 +113,10 @@ export default function TodayCard() {
     ...(bidsTarget > 0 ? [bidsDone >= bidsTarget] : []),
     ...(marked && marked.total > 0 ? [marked.marked >= marked.total && !toCome] : []),
   ];
-  // After anything done to a round: the day, plus the week and month cards and the waiting list.
+  // After anything done to a round: the day, plus the week and month cards and the pending items.
   const refresh = () => Promise.all([
     mutate(),
-    globalMutate((key) => Array.isArray(key) && ['home-week', 'home-month-interviews', 'interviews-needs-input'].includes(key[0])),
+    globalMutate((key) => Array.isArray(key) && ['home-week', 'home-month-interviews', 'home-pending', 'interviews-needs-input'].includes(key[0])),
   ]);
   const daysLeft = dow >= 1 && dow <= 4 ? `${6 - dow} days left · ` : dow === 5 ? 'last day · ' : '';
   const daily = plan.items.filter((i) => kept(i) && i.scope === 'routine');
@@ -239,7 +238,7 @@ export default function TodayCard() {
       </ul>
       {label('This week', `${daysLeft}${count(weekly)}`)}
       <ul className="space-y-0.5">{weekly.map(row)}</ul>
-      <WaitingInterviews today={rounds} onSaved={refresh} />
+      <PendingItems mode="owner" today={rounds} onSaved={refresh} />
     </section>
   );
 }
@@ -262,96 +261,5 @@ function TodayInterviews({ rounds, now, onSaved }: { rounds: TodayInterview[]; n
         ))}
       </ul>
     </>
-  );
-}
-
-const WAITING_ROWS = 5;
-
-/**
- * The signed-in person's follow-ups: rounds held a week ago with no result (tick once followed up) and follow-ups
- * that got no answer. Older rounds that need their outcome or a reason are only counted, with a link to the
- * Interviews page; `today`'s rounds are answered in the list above, so they are not counted again. Hidden when
- * nothing waits. `onSaved` refetches the day, the other cards and this list.
- */
-function WaitingInterviews({ today, onSaved }: { today: TodayInterview[]; onSaved: () => unknown }) {
-  const { user } = useAuth();
-  const { tz } = useInterviewTimezone();
-  // An admin asks for their own rounds by id (without it the server returns the whole team's). Same key shape as
-  // the Interviews page's list, so a save on either refreshes both.
-  const own = user?.role === 'admin' ? user.id : undefined;
-  const { data } = useSWR(['interviews-needs-input', own ?? ''], () => api.getNeedsInput(own));
-  const { dialog, isSaving, followUp, resultButtons } = useNeedsInputActions(onSaved);
-  // Guard: never show an admin someone else's round here, whatever the server returned.
-  const items = (data?.items ?? []).filter((row) => user?.role !== 'admin' || row.ownerId === user.id);
-  const todayKeys = new Set(today.map(roundKey));
-  const count = (need: NeedsInputItem['need']) => items.filter((row) => row.need === need && !todayKeys.has(roundKey(row))).length;
-  const outcomes = count('outcome');
-  const reasons = count('reason');
-  const older = (n: number) => `${n} older ${n === 1 ? 'round needs' : 'rounds need'}`;
-  const others = [
-    outcomes > 0 && `${older(outcomes)} "How did it go?"`,
-    reasons > 0 && (outcomes > 0 ? `${reasons} ${reasons === 1 ? 'needs' : 'need'} a reason` : `${older(reasons)} a reason`),
-  ].filter(Boolean).join(' · ');
-  const rows = items
-    .filter((row) => row.need === 'follow_up' || row.need === 'heard_back')
-    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)); // oldest first
-  const more = rows.length - WAITING_ROWS;
-  if (!rows.length && !others) return dialog;
-  const line = 'flex flex-wrap items-center gap-x-2 gap-y-1.5 px-1 py-1.5 text-sm text-body';
-
-  return (
-    <div role="group" aria-labelledby="waiting-interviews-title">
-      {dialog}
-      <div className="mt-3 flex flex-wrap justify-between gap-x-2 text-[11px] font-medium uppercase tracking-wider text-muted">
-        <span id="waiting-interviews-title">Follow-ups ({rows.length})</span>
-        <span className="normal-case tracking-normal">tick when you've followed up with the company</span>
-      </div>
-      <ul className="space-y-0.5">
-        {rows.slice(0, WAITING_ROWS).map((row) => {
-          const company = row.companyName || 'the company';
-          const round = [stageLabel(row.stage), shortDay(row.scheduledAt, tz)].filter(Boolean).join(', ');
-          const days = daysWithoutResult(row);
-          const followedUp = shortDay(row.followedUpAt, tz);
-          const waiting = row.need === 'follow_up'
-            ? (days === null ? 'no result yet' : `no result for ${days} days`)
-            : `followed up${followedUp ? ` ${followedUp}` : ''}`;
-          return (
-            <li key={needsInputKey(row)} className={line}>
-              {row.need === 'follow_up' ? (
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 shrink-0"
-                  aria-label={`I followed up with ${company}`}
-                  // Stays ticked while it saves; a saved row leaves the list, a failed one comes back unticked.
-                  checked={isSaving(row)}
-                  disabled={isSaving(row)}
-                  onChange={() => followUp(row)}
-                />
-              ) : <span className="w-4 shrink-0" />}
-              <span className="min-w-0 flex-1 basis-52">
-                <span className="font-medium text-strong">
-                  {row.need === 'follow_up' ? (row.companyName || 'Untitled company') : `Did you hear back? ${row.companyName || ''}`.trim()}
-                </span>
-                <span className="text-xs text-muted"> · {round} · {waiting}</span>
-              </span>
-              <div className="flex flex-wrap gap-2">{resultButtons(row)}</div>
-            </li>
-          );
-        })}
-        {more > 0 && (
-          <li className={line}>
-            <span className="w-4 shrink-0" />
-            <Link to="/interviews" className="text-xs underline">…and {more} more → Interviews</Link>
-          </li>
-        )}
-        {others && (
-          <li className={line}>
-            <span className="w-4 shrink-0" />
-            <span className="min-w-0 flex-1 text-xs text-muted">{others}</span>
-            <Link to="/interviews" className="text-xs underline">Interviews →</Link>
-          </li>
-        )}
-      </ul>
-    </div>
   );
 }

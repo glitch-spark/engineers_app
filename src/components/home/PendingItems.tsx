@@ -1,0 +1,161 @@
+import { useId, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import useSWR from 'swr';
+import * as api from '../../api/endpoints';
+import type { NeedsInputItem, PendingBidder, PendingProfile, TodayInterview } from '../../api/endpoints';
+import { useAuth } from '../../auth/useAuth';
+import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
+import { stageLabel } from '../../lib/stageBadge';
+import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
+import { daysWithoutResult, needsInputKey, shortDay, useNeedsInputActions } from '../interview/useNeedsInputActions';
+import { asNeedsInput, roundKey, roundState, useNow } from './TodayRound';
+
+const RED = 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300';
+const AMBER = 'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+const BLUE = 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-400';
+const GREY = 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300';
+const NEEDS: { need: NeedsInputItem['need']; tag: string; color: string }[] = [
+  { need: 'outcome', tag: 'Status unknown', color: RED },
+  { need: 'follow_up', tag: 'Follow-up due', color: AMBER },
+  { need: 'heard_back', tag: 'Heard back?', color: BLUE },
+  { need: 'reason', tag: 'No reason', color: GREY },
+];
+const LABEL = 'text-[11px] font-medium uppercase tracking-wider text-muted';
+const LINE = 'flex flex-wrap items-center gap-x-2 gap-y-1.5 py-1.5 text-sm text-body';
+const num = (n: number) => n.toLocaleString('en-US');
+/** "48, 52 and 40" */
+const listed = (xs: number[]) => (xs.length > 1 ? `${xs.slice(0, -1).map(num).join(', ')} and ${num(xs[xs.length - 1])}` : xs.map(num).join(''));
+
+/**
+ * What waits on one person: interviews that need an answer, and the flags on their profiles and bidders.
+ * `owner`: on the person's own Home (follow-up rows have the "I followed up" checkbox; `today`'s unmarked rounds are
+ * answered in the Today list above, so they are not repeated). `admin`: on the admin's page for `userId` (`name`),
+ * where the result buttons work but following up stays with the owner, and `today`'s unmarked rounds are listed.
+ * Hidden when nothing waits. `onSaved` refetches whatever the page shows, this list included (`home-pending`,
+ * `interviews-needs-input`). An older server without the pending read still gives the interviews.
+ */
+export default function PendingItems({
+  mode, userId, name, today, onSaved,
+}: {
+  mode: 'owner' | 'admin';
+  userId?: string;
+  name?: string;
+  today: TodayInterview[];
+  onSaved: () => unknown;
+}) {
+  const id = useId();
+  const { user } = useAuth();
+  const { tz } = useInterviewTimezone();
+  const now = useNow();
+  const pending = useSWR(['home-pending', userId ?? ''], () => api.getDashboardPending(userId), { shouldRetryOnError: false });
+  // An admin's own rounds are asked for by id (without it the needs-input list is the whole team's).
+  const listFor = userId ?? (user?.role === 'admin' ? user.id : undefined);
+  const list = useSWR(pending.error ? ['interviews-needs-input', listFor ?? ''] : null, () => api.getNeedsInput(listFor));
+  const { dialog, isSaving, followUp, ask, button, resultButtons, outcomeButtons } = useNeedsInputActions(onSaved);
+
+  const unmarkedToday = today.filter((r) => roundState(r, now) === 'unmarked');
+  const todayKeys = new Set(today.map(roundKey));
+  const waiting = (pending.data?.interviews ?? list.data?.items ?? [])
+    // Guard: an admin's own Home never shows someone else's round, whatever the server returned.
+    .filter((row) => mode === 'admin' || user?.role !== 'admin' || row.ownerId === user.id);
+  const known = new Set(waiting.map(needsInputKey));
+  const interviews = mode === 'owner'
+    ? waiting.filter((row) => !(row.need === 'outcome' && todayKeys.has(needsInputKey(row))))
+    : [...waiting, ...unmarkedToday.filter((r) => !known.has(roundKey(r))).map(asNeedsInput)];
+  const rows = NEEDS.flatMap((n) => interviews.filter((row) => row.need === n.need).map((row) => ({ row, ...n })));
+  const profiles = pending.data?.profiles ?? [];
+  const bidders = pending.data?.bidders ?? [];
+  const total = rows.length + profiles.length + bidders.length;
+  if (!total) return dialog;
+
+  const interviewText = (row: NeedsInputItem) => {
+    const round = [stageLabel(row.stage), shortDay(row.scheduledAt, tz)].filter(Boolean).join(', ');
+    if (row.need === 'outcome') {
+      const live = unmarkedToday.find((r) => roundKey(r) === needsInputKey(row));
+      if (!live) return `${round} · ended, never marked`;
+      const ended = live.endsAt ? ` ${formatInZone(parseServerTime(live.endsAt), tz, { hour: 'numeric', minute: '2-digit' })}` : '';
+      return `${stageLabel(live.stage)} · ended today${ended}, not marked`;
+    }
+    if (row.need === 'follow_up') {
+      const days = daysWithoutResult(row);
+      return `${round} · ${days === null ? 'no result yet' : `no result for ${days} days`}`;
+    }
+    if (row.need === 'heard_back') {
+      const day = shortDay(row.followedUpAt, tz);
+      return `${round} · followed up${day ? ` ${day}` : ''}`;
+    }
+    return `${round} · ${row.status === 'rejected' ? 'rejected' : 'canceled'} with no reason`;
+  };
+  const interviewButtons = (row: NeedsInputItem) => {
+    if (!row.roundId) return null; // an old round with no id of its own: the Interviews page handles it
+    if (row.need === 'outcome') return outcomeButtons(row);
+    if (row.need === 'reason') return [button(row, 'Add reason', () => ask(row, row.status))];
+    return resultButtons(row);
+  };
+  const profileText = (p: PendingProfile) => {
+    const days = `${num(p.idleDays)} days${p.capped ? ' or more' : ''}`;
+    if (p.kind === 'no_bids') return `no bids, self or bidder, for ${days} · archive it?`;
+    const extra = [
+      p.bids != null && `${num(p.bids)} bids in that time`,
+      p.tailorScore != null && `resume score ${Math.round(p.tailorScore)} on average`,
+    ].filter(Boolean).join(', ');
+    return `no interview for ${days}${extra ? ` · ${extra}` : ''}`;
+  };
+  const bidderText = (b: PendingBidder) => {
+    if (b.kind === 'not_bidding') return b.days != null ? `no bids for ${b.days} working days` : 'no bids lately';
+    if (!b.recent?.length) return 'bidding less than before';
+    return `${listed(b.recent)} bids the last ${b.recent.length} days${b.before != null ? ` · ${num(Math.round(b.before))} a day before` : ''}`;
+  };
+  const whatToChange = `/statistics?tab=conversion&scope=me${mode === 'admin' && userId ? `&user=${encodeURIComponent(userId)}` : ''}`;
+
+  const line = (key: string, tag: string, color: string, who: string, text: string, end: ReactNode, start?: ReactNode) => (
+    <li key={key} className={LINE}>
+      {start}
+      <span className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${color}`}>{tag}</span>
+      <span className="min-w-0 flex-1 basis-52">
+        <span className="font-medium text-strong">{who}</span>
+        <span className="text-muted"> · {text}</span>
+      </span>
+      {end}
+    </li>
+  );
+  const group = (title: string, items: ReactNode[]) => items.length > 0 && (
+    <>
+      <div className={`mt-3 ${LABEL}`}>{title} ({items.length})</div>
+      <ul aria-label={title} className="divide-y divide-zinc-100 dark:divide-zinc-800">{items}</ul>
+    </>
+  );
+  const link = (to: string, text: string) => <Link to={to} className="link-inline whitespace-nowrap text-xs">{text} →</Link>;
+
+  return (
+    <div role="group" aria-labelledby={id} className={mode === 'admin' ? 'panel p-4' : 'mt-4'}>
+      {dialog}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <h3 id={id} className={mode === 'admin' ? 'card-title' : LABEL}>Pending items ({total})</h3>
+        <span className="text-xs text-muted">Things waiting on {mode === 'admin' ? name || 'this person' : 'you'}</span>
+      </div>
+      {group('Interviews', rows.map(({ row, tag, color }) => line(
+        needsInputKey(row), tag, color, row.companyName || 'Untitled company', interviewText(row),
+        <div className="flex flex-wrap gap-2">{interviewButtons(row)}</div>,
+        mode === 'owner' && row.need === 'follow_up' && (
+          <input
+            type="checkbox"
+            className="h-4 w-4 shrink-0"
+            aria-label={`I followed up with ${row.companyName || 'the company'}`}
+            // Stays ticked while it saves; a saved row leaves the list, a failed one comes back unticked.
+            checked={isSaving(row)}
+            disabled={isSaving(row)}
+            onChange={() => followUp(row)}
+          />
+        ),
+      )))}
+      {group('Profiles', profiles.map((p) => (p.kind === 'no_interviews'
+        ? line(`${p.accountId}:${p.kind}`, 'No interviews', RED, p.name || 'Unnamed', profileText(p), link(whatToChange, 'What to change'))
+        : line(`${p.accountId}:${p.kind}`, 'No bids', GREY, p.name || 'Unnamed', profileText(p), link(`/accounts/${p.accountId}`, 'Open profile')))))}
+      {group('Bidders', bidders.map((b) => line(
+        `${b.bidderId}:${b.kind}`, b.kind === 'not_bidding' ? 'Not bidding' : 'Slowing down', b.kind === 'not_bidding' ? RED : AMBER,
+        b.name || 'Unnamed', bidderText(b), link(`/bidders?bidder=${encodeURIComponent(b.bidderId)}`, 'Open bidder'),
+      )))}
+    </div>
+  );
+}

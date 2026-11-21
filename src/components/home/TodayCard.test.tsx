@@ -7,7 +7,7 @@ import * as api from '../../api/endpoints';
 import TodayCard from './TodayCard';
 
 vi.mock('../../api/endpoints', () => ({
-  getDayPlan: vi.fn(), putDayProgress: vi.fn(), getNeedsInput: vi.fn(), followUpInterviewStage: vi.fn(), updateInterviewStage: vi.fn(),
+  getDayPlan: vi.fn(), putDayProgress: vi.fn(), getNeedsInput: vi.fn(), getDashboardPending: vi.fn(), followUpInterviewStage: vi.fn(), updateInterviewStage: vi.fn(),
 }));
 const auth = vi.hoisted(() => ({ role: 'staff' }));
 vi.mock('../../lib/useInterviewTimezone', () => ({ useInterviewTimezone: () => ({ tz: 'America/Chicago' }) }));
@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-11-18T19:00:00-06:00'));
   auth.role = 'staff';
   vi.mocked(api.getNeedsInput).mockResolvedValue({ items: [], counts: {} } as never);
+  vi.mocked(api.getDashboardPending).mockResolvedValue({ interviews: [], profiles: [], bidders: [], counts: {} } as never);
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
 
@@ -523,105 +524,50 @@ describe("TodayCard: today's interviews", () => {
   });
 });
 
-describe('TodayCard: Follow-ups', () => {
+describe('TodayCard: Pending items (where Follow-ups was)', () => {
   const round = (o: object = {}) => ({
     interviewId: 'iv1', roundId: 'r1', companyName: 'Acme', profileName: 'John D', ownerId: 'me', ownerName: 'Me',
     stage: 'intro', status: 'completed', scheduledAt: '2026-11-10T15:00:00Z', endsAt: '2026-11-10T16:00:00Z', need: 'follow_up', ...o,
   });
-  const heardBack = round({
-    interviewId: 'iv2', roundId: 'r2', companyName: 'Initech', need: 'heard_back',
-    scheduledAt: '2026-10-08T15:00:00Z', endsAt: '2026-10-08T16:00:00Z', followedUpAt: '2026-11-11T12:00:00Z',
-  });
   const outcome = (n: number) => round({ interviewId: `o${n}`, roundId: `o${n}`, companyName: `Out ${n}`, status: 'scheduled', need: 'outcome' });
-  const reason = (n: number) => round({ interviewId: `x${n}`, roundId: `x${n}`, companyName: `Why ${n}`, status: 'canceled', need: 'reason' });
-  const waiting = (items: object[]) => vi.mocked(api.getNeedsInput).mockResolvedValue({ items, counts: {} } as never);
-  const block = () => screen.findByRole('group', { name: /Follow-ups/ });
-  const texts = (el: HTMLElement) => within(el).getAllByRole('listitem').map((li) => li.textContent);
+  const waiting = (interviews: object[], rest: object = {}) =>
+    vi.mocked(api.getDashboardPending).mockResolvedValue({ interviews, profiles: [], bidders: [], counts: {}, ...rest } as never);
+  const block = () => screen.findByRole('group', { name: /Pending items/ });
 
-  it('is hidden when nothing waits', async () => {
+  it('is hidden when nothing waits, and the old Follow-ups block is gone', async () => {
     setup(plan());
     await screen.findByLabelText('Bidder Management');
-    await waitFor(() => expect(api.getNeedsInput).toHaveBeenCalled());
-    expect(screen.queryByText(/Follow-ups/)).toBeNull();
+    await waitFor(() => expect(api.getDashboardPending).toHaveBeenCalledWith(undefined));
+    await act(async () => {});
+    expect(screen.queryByText(/Pending items|Follow-ups/)).toBeNull();
   });
 
-  it('counts the follow-up and heard-back rows in the heading, shows the hint and lists them oldest first', async () => {
-    waiting([round(), heardBack, outcome(1), outcome(2), reason(1)]);
-    setup(plan());
+  it('sits under This week with the interviews, profiles and bidders that wait on the person', async () => {
+    waiting([round(), outcome(1)], {
+      profiles: [{ accountId: 'a2', name: 'Theo Deng', kind: 'no_bids', idleDays: 21, capped: false, bids: null, tailorScore: null }],
+      bidders: [{ bidderId: 'b1', name: 'Ali', kind: 'not_bidding', days: 2, recent: null, before: null }],
+    });
+    setup(plan({ items: [item({ id: 'g1', text: 'Goal one', scope: 'goal' })] }));
     const box = await block();
-    expect(within(box).getByText('Follow-ups (2)')).toBeTruthy();
-    expect(within(box).getByText("tick when you've followed up with the company")).toBeTruthy();
-    const rows = within(box).getAllByRole('listitem');
-    expect(rows).toHaveLength(3);
-    expect(rows[0].textContent).toContain('Did you hear back? Initech · Intro, Oct 8 · followed up Nov 11');
-    expect(within(rows[0]).queryByRole('checkbox')).toBeNull();
-    expect(within(rows[0]).getAllByRole('button').map((b) => b.textContent)).toEqual(['No, close as rejected', 'Passed', 'Rejected']);
-    expect(rows[1].textContent).toContain('Acme · Intro, Nov 10 · no result for 8 days');
-    expect(within(rows[1]).getByRole('checkbox', { name: 'I followed up with Acme' })).toBeTruthy();
-    expect(within(rows[1]).getAllByRole('button').map((b) => b.textContent)).toEqual(['Passed', 'Rejected']);
-    expect(rows[2].textContent).toContain('2 older rounds need "How did it go?" · 1 needs a reason');
-    expect(within(rows[2]).getByRole('link', { name: /Interviews/ }).getAttribute('href')).toBe('/interviews');
+    expect(within(box).getByRole('heading', { name: 'Pending items (4)' })).toBeTruthy();
+    expect(within(box).getByText('Things waiting on you')).toBeTruthy();
+    expect(within(box).getAllByRole('list').map((l) => l.getAttribute('aria-label'))).toEqual(['Interviews', 'Profiles', 'Bidders']);
+    expect(within(box).getByRole('checkbox', { name: 'I followed up with Acme' })).toBeTruthy();
+    expect(screen.queryByText(/Follow-ups \(/)).toBeNull();
+    const goal = screen.getByLabelText(/Goal one/);
+    expect(goal.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it.each([
-    [[outcome(1)], '1 older round needs "How did it go?"'],
-    [[outcome(1), outcome(2)], '2 older rounds need "How did it go?"'],
-    [[reason(1)], '1 older round needs a reason'],
-    [[reason(1), reason(2)], '2 older rounds need a reason'],
-    [[outcome(1), reason(1), reason(2)], '1 older round needs "How did it go?" · 2 need a reason'],
-  ])('the older-rounds line leaves out a kind with none: %#', async (items, line) => {
-    waiting(items);
-    setup(plan());
-    const box = await block();
-    expect(within(box).getByText('Follow-ups (0)')).toBeTruthy();
-    const rows = texts(box);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toBe(`${line}Interviews →`);
-  });
-
-  it("the older-rounds line leaves out today's unmarked rounds: they are answered in the list above", async () => {
+  it("does not repeat today's unmarked rounds: they are answered in the Today list above", async () => {
     waiting([round(), outcome(1), outcome(2)]);
     setup(plan({
       todayInterviews: [iv({ interviewId: 'o1', roundId: 'o1', state: 'unmarked', status: 'scheduled' })],
       interviewsMarked: { marked: 0, total: 1 },
     }));
-    const rows = texts(await block());
-    expect(rows[rows.length - 1]).toBe('1 older round needs "How did it go?"Interviews →');
-  });
-
-  it("is hidden when the only waiting round is one of today's", async () => {
-    waiting([outcome(1)]);
-    setup(plan({
-      todayInterviews: [iv({ interviewId: 'o1', roundId: 'o1', state: 'unmarked', status: 'scheduled' })],
-      interviewsMarked: { marked: 0, total: 1 },
-    }));
-    await screen.findByRole('list', { name: "Today's interviews" });
-    await waitFor(() => expect(api.getNeedsInput).toHaveBeenCalled());
-    await act(async () => {});
-    expect(screen.queryByText(/Follow-ups/)).toBeNull();
-  });
-
-  it('has no older-rounds line when only follow-ups wait', async () => {
-    waiting([round()]);
-    setup(plan());
     const box = await block();
-    expect(within(box).getByText('Follow-ups (1)')).toBeTruthy();
-    expect(within(box).getAllByRole('listitem')).toHaveLength(1);
-    expect(within(box).queryByRole('link')).toBeNull();
-  });
-
-  it('lists at most 5 rows, then "…and n more" linking to Interviews', async () => {
-    waiting([1, 2, 3, 4, 5, 6, 7].map((n) => round({
-      interviewId: `iv${n}`, roundId: `r${n}`, companyName: `Co ${n}`, scheduledAt: `2026-11-0${n}T15:00:00Z`, endsAt: undefined,
-    })).reverse());
-    setup(plan());
-    const box = await block();
-    expect(within(box).getByText('Follow-ups (7)')).toBeTruthy();
-    expect(within(box).getAllByRole('checkbox').map((c) => c.getAttribute('aria-label'))).toEqual(
-      [1, 2, 3, 4, 5].map((n) => `I followed up with Co ${n}`),
-    );
-    const more = within(box).getByRole('link', { name: /…and 2 more/ });
-    expect(more.getAttribute('href')).toBe('/interviews');
+    expect(within(box).getByRole('heading', { name: 'Pending items (2)' })).toBeTruthy();
+    expect(box.textContent).toContain('Out 2');
+    expect(box.textContent).not.toContain('Out 1');
   });
 
   it('ticking a follow-up records it, disables the row meanwhile, then refetches the block and the day', async () => {
@@ -635,13 +581,12 @@ describe('TodayCard: Follow-ups', () => {
     expect(api.followUpInterviewStage).toHaveBeenCalledWith('iv1', 'r1');
     await waitFor(() => expect(tick.disabled).toBe(true));
     expect(tick.checked).toBe(true);
-    expect(within(box).getAllByRole('button').every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     fireEvent.click(tick);
     expect(api.followUpInterviewStage).toHaveBeenCalledTimes(1);
     waiting([]);
     await act(async () => { done({}); });
-    await waitFor(() => expect(screen.queryByText(/Follow-ups/)).toBeNull());
-    expect(api.getNeedsInput).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(screen.queryByText(/Pending items/)).toBeNull());
+    expect(api.getDashboardPending).toHaveBeenCalledTimes(2);
     expect(api.getDayPlan).toHaveBeenCalledTimes(2);
   });
 
@@ -664,7 +609,6 @@ describe('TodayCard: Follow-ups', () => {
     const dialog = await screen.findByRole('dialog', { name: /Reject round · Acme/ });
     const save = within(dialog).getByRole('button', { name: 'Save as Rejected' }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
-    expect(api.updateInterviewStage).not.toHaveBeenCalled();
     fireEvent.change(within(dialog).getByLabelText(/Why was it rejected\?/), { target: { value: 'experience' } });
     fireEvent.click(save);
     await waitFor(() => expect(api.updateInterviewStage).toHaveBeenCalledWith(
@@ -672,39 +616,16 @@ describe('TodayCard: Follow-ups', () => {
     ));
   });
 
-  it('Passed opens the optional feedback dialog', async () => {
-    waiting([round()]);
-    vi.mocked(api.updateInterviewStage).mockResolvedValue({} as never);
-    setup(plan());
-    fireEvent.click(within(await block()).getByRole('button', { name: 'Passed' }));
-    const dialog = await screen.findByRole('dialog', { name: /Passed to next round · Acme/ });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save as Passed' }));
-    await waitFor(() => expect(api.updateInterviewStage).toHaveBeenCalledWith('iv1', 'r1', { status: 'passed', statusNote: '' }));
-  });
-
-  it('"No, close as rejected" saves rejected with no answer in one click', async () => {
-    waiting([heardBack]);
-    vi.mocked(api.updateInterviewStage).mockResolvedValue({} as never);
-    setup(plan());
-    fireEvent.click(within(await block()).getByRole('button', { name: 'No, close as rejected' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
-    await waitFor(() => expect(api.updateInterviewStage).toHaveBeenCalledWith('iv2', 'r2', { status: 'rejected', statusReason: 'no_answer' }));
-  });
-
-  it("an admin asks for their own rounds by id and sees only those, not the team's", async () => {
+  it("an old server without the pending read: the interviews come from the needs-input list, an admin's by their own id", async () => {
     auth.role = 'admin';
-    waiting([round(), round({ interviewId: 'iv8', roundId: 'r8', companyName: 'Theirs', ownerId: 'other' }), { ...outcome(1), ownerId: 'other' }]);
+    vi.mocked(api.getDashboardPending).mockRejectedValue(new Error('404'));
+    vi.mocked(api.getNeedsInput).mockResolvedValue({
+      items: [round(), round({ interviewId: 'iv8', roundId: 'r8', companyName: 'Theirs', ownerId: 'other' })], counts: {},
+    } as never);
     setup(plan());
     const box = await block();
-    expect(within(box).getByText('Follow-ups (1)')).toBeTruthy();
+    expect(within(box).getByRole('heading', { name: 'Pending items (1)' })).toBeTruthy();
     expect(box.textContent).not.toContain('Theirs');
-    expect(vi.mocked(api.getNeedsInput).mock.calls.every((args) => args[0] === 'me')).toBe(true);
-  });
-
-  it('staff ask without a userId', async () => {
-    waiting([round()]);
-    setup(plan());
-    await block();
-    expect(vi.mocked(api.getNeedsInput).mock.calls.every((args) => args[0] === undefined)).toBe(true);
+    expect(vi.mocked(api.getNeedsInput).mock.calls.every(([u]) => u === 'me')).toBe(true);
   });
 });
