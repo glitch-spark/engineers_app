@@ -168,6 +168,7 @@ const toRow = (u: TeamWeekUser): TeamWeekRowIn => ({
   goal: { bidsSelf: u.goal.bidsSelf, bidsBidder: u.goal.bidsBidder, interviewsSelf: u.goal.interviewsSelf },
   routines: toItems(u.routines),
   weeklyGoals: toItems(u.weeklyGoals),
+  exists: u.exists,
 });
 
 export function rowsToSave(saved: TeamWeekUser[], s: GridState): TeamWeekRowIn[] {

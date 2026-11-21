@@ -728,6 +728,8 @@ export interface TeamWeekRowIn {
   goal: TeamGoal;
   routines: PlanItemIn[];
   weeklyGoals: PlanItemIn[];
+  /** As loaded: false = a carry-over draft, refused if the person saved the week since. */
+  exists: boolean;
 }
 
 export const getTeamWeek = (weekStart: string) =>

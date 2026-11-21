@@ -154,7 +154,7 @@ describe('teamGrid', () => {
     const saved = [user('A')];
     const s = setTarget(st(saved), 'A', 'bidsSelf', 1);
     const [row] = rowsToSave(saved, s);
-    expect(Object.keys(row).sort()).toEqual(['goal', 'plansOwnWeek', 'routines', 'userId', 'weeklyGoals']);
+    expect(Object.keys(row).sort()).toEqual(['exists', 'goal', 'plansOwnWeek', 'routines', 'userId', 'weeklyGoals']);
     expect(Object.keys(row.goal).sort()).toEqual(['bidsBidder', 'bidsSelf', 'interviewsSelf']);
   });
 
@@ -218,5 +218,11 @@ describe('teamGrid', () => {
     expect(keyTaken(s, columnKey(' solo ', 'check', 'routine'))).toBe(true);
     expect(keyTaken(s, columnKey('pin', 'count', 'goal'))).toBe(true);
     expect(keyTaken(s, columnKey('Solo', 'check', 'goal'))).toBe(false);
+  });
+
+  it('rowsToSave rows carry the loaded exists, so the server can refuse a carry-over row over a plan saved since', () => {
+    const saved = [user('A', [item('x')]), user('B', [item('y')], [], false)];
+    const s = setTarget(st(saved), 'A', 'bidsSelf', 1);
+    expect(rowsToSave(saved, s).map((r) => [r.userId, r.exists])).toEqual([['A', true], ['B', false]]);
   });
 });

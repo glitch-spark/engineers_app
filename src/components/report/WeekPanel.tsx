@@ -78,7 +78,7 @@ export default function WeekPanel({
       if (mode === 'admin') {
         const { bidsSelf, bidsBidder, interviewsSelf } = form.goal;
         const res = await api.putTeamWeek(weekStart, [
-          { userId: userId!, plansOwnWeek: data.plansOwnWeek, goal: { bidsSelf, bidsBidder, interviewsSelf }, routines, weeklyGoals },
+          { userId: userId!, plansOwnWeek: data.plansOwnWeek, goal: { bidsSelf, bidsBidder, interviewsSelf }, routines, weeklyGoals, exists: data.exists },
         ]);
         const failed = res.results.find((r) => !r.ok);
         if (failed) {
