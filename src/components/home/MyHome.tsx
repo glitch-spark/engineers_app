@@ -9,6 +9,7 @@ import { addDays, dayDate, mondayOf, monthDay, todayInputValue } from '../../lib
 import { daysWithoutResult, needsInputKey, useNeedsInputActions } from '../interview/useNeedsInputActions';
 import ItemRow, { kept } from '../report/ItemRow';
 import PendingItems, { usePending } from './PendingItems';
+import PipelineTable, { PIPELINE_GROUPS } from './PipelineTable';
 import TodayRound, { asNeedsInput, roundKey, roundState, useNow } from './TodayRound';
 import WeekTable from './WeekTable';
 
@@ -40,10 +41,12 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
   const { mutate: globalMutate } = useSWRConfig();
   const { data: plan, error, isLoading, mutate } = useSWR(['home-day', today, ...who], () => api.getDayPlan(today, userId), { revalidateOnFocus: false });
   const week = useSWR(['home-week', today, ...who], () => api.getDashboardWeek({ today, ...(userId ? { userId } : {}) }));
+  const pipeline = useSWR(['person-pipeline', userId ?? ''], () => api.getInterviewPipeline(userId));
+  const [pipelineOpen, setPipelineOpen] = useState(false); // reference, not a to-do: one line until opened
   const rounds = plan?.todayInterviews ?? [];
   const { followUps } = usePending('owner', userId, rounds);
   // What the page shows besides the day: the week and the pending items (follow-ups included).
-  const refreshRest = () => globalMutate((key) => Array.isArray(key) && ['home-week', 'home-pending', 'interviews-needs-input'].includes(key[0]));
+  const refreshRest = () => globalMutate((key) => Array.isArray(key) && ['home-week', 'home-pending', 'interviews-needs-input', 'person-pipeline'].includes(key[0]));
   const refresh = () => Promise.all([mutate(), refreshRest()]);
   const { dialog, outcomeButtons, followUp, isSaving } = useNeedsInputActions(refresh);
   const [local, setLocal] = useState<Record<string, Result>>({}); // optimistic, until saved
@@ -153,6 +156,9 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
   // Every row of Today with a box, and whether it is ticked (a follow-up leaves the list once it is done).
   const boxes = [bidsOk, ...(marked ? [interviewsOk] : []), ...followUps.map(() => false), ...daily.map(isDone)];
   const toGo = boxes.filter((b) => !b).length;
+  const open = pipeline.data?.items ?? [];
+  const pipelineLine = PIPELINE_GROUPS.map(([key, , short]) => [open.filter((p) => p.status === key).length, short] as const)
+    .filter(([n]) => n > 0).map(([n, short]) => `${n} ${short}`).join(' · ');
 
   const row = (item: DayItem) => {
     const earlier = doneEarlier(item);
@@ -342,6 +348,20 @@ export default function MyHome({ userId, name }: { userId?: string; name?: strin
           </>
         )}
       </section>
+      {/* every open interview as it stands now, last on the page and folded (user, 2026-11-21) */}
+      {open.length > 0 && (
+        <section aria-label="Interview pipeline" className="panel p-4">
+          <header className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="card-title">
+              <button type="button" aria-expanded={pipelineOpen} onClick={() => setPipelineOpen(!pipelineOpen)}>
+                <span aria-hidden>{pipelineOpen ? '▾ ' : '▸ '}</span>Interview pipeline <span className="text-xs font-normal text-muted">· {open.length} open</span>
+              </button>
+            </h2>
+            <span className="text-xs text-muted">{pipelineLine}</span>
+          </header>
+          {pipelineOpen && <div className="mt-2"><PipelineTable items={open} /></div>}
+        </section>
+      )}
     </>
   );
 }

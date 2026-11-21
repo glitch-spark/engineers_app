@@ -1,14 +1,12 @@
-import { Fragment, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useRef, type ReactNode } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
-import type { DashboardWeek, PipelineItem, TodayInterview } from '../../api/endpoints';
-import { formatInZone, parseServerTime, zonedDateKey } from '../../lib/interviewTimezone';
-import { stageLabel } from '../../lib/stageBadge';
+import type { DashboardWeek, TodayInterview } from '../../api/endpoints';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { dayDate, dayLabel, mondayOf, monthDay, weekdayShort } from '../../lib/week';
-import { shortDay } from '../interview/useNeedsInputActions';
 import { kept } from '../report/ItemRow';
 import PendingItems, { usePending } from './PendingItems';
+import PipelineTable from './PipelineTable';
 import RoutinesGrid from './RoutinesGrid';
 import TodayRound, { roundKey, roundState, useNow } from './TodayRound';
 
@@ -22,10 +20,6 @@ const TD = 'whitespace-nowrap px-1.5 py-1.5 text-right tabular-nums';
 const num = (n: number) => n.toLocaleString('en-US');
 const count = (n: number, one: string) => `${num(n)} ${one}${n === 1 ? '' : 's'}`;
 /** Every read of this page; refetched together after an admin sets a round's result. */
-const PIPELINE_GROUPS: [PipelineItem['status'], string][] = [
-  ['scheduled', 'Scheduled'], ['waiting', 'Waiting for a result'], ['no_result', 'No result for a week or more'],
-  ['followed_up', 'Followed up'], ['passed', 'Passed, next round not set'],
-];
 const PERSON_KEYS = ['team-today', 'person-day', 'person-week', 'person-pipeline', 'home-pending', 'interviews-needs-input'];
 
 function Card({ title, summary, children }: { title: string; summary?: string; children: ReactNode }) {
@@ -168,8 +162,6 @@ export default function PersonPage({ userId, name, day, today, onPickDay }: { us
   const pipeline = useSWR(['person-pipeline', userId], () => api.getInterviewPipeline(userId));
   const todayRounds = nowPlan.data?.todayInterviews ?? NONE;
   const pend = usePending('admin', userId, todayRounds);
-  // pipeline groups folded by the admin; all but Scheduled start folded
-  const [folded, setFolded] = useState<Set<PipelineItem['status']>>(() => new Set(['waiting', 'no_result', 'followed_up', 'passed']));
   const refresh = () => globalMutate((key) => Array.isArray(key) && PERSON_KEYS.includes(key[0]));
 
   const on = isToday ? 'today' : `on ${dayLabel(day)}`;
@@ -225,25 +217,6 @@ export default function PersonPage({ userId, name, day, today, onPickDay }: { us
   const sum = (key: 'held' | 'canceled') => (ivDays ?? []).reduce((total, x) => total + x[key], 0);
   const notMarked = (n: number, where: string) => <td aria-label={`${where}: ${n} not marked`} className={`${TD} ${AMBER}`}>{n} not marked</td>;
   const open = pipeline.data?.items;
-  const todayKey = zonedDateKey(new Date(now), tz);
-  const when = (p: PipelineItem) => {
-    const at = parseServerTime(p.at);
-    if (isNaN(at.getTime())) return '—';
-    if (zonedDateKey(at, tz) === todayKey) return p.upcoming ? `today ${formatInZone(at, tz, { hour: 'numeric', minute: '2-digit' })}` : 'today';
-    return p.upcoming ? formatInZone(at, tz, { weekday: 'short', month: 'short', day: 'numeric' }) : shortDay(p.at, tz);
-  };
-  const status = (p: PipelineItem): [string, boolean] => {
-    switch (p.status) {
-      case 'scheduled': return ['scheduled', false];
-      case 'waiting': return ['waiting for a result', false];
-      case 'no_result': return [p.days != null ? `no result for ${p.days} days` : 'no result yet', true];
-      case 'followed_up': {
-        const day = shortDay(p.followedUpAt, tz);
-        return [`followed up${day ? ` ${day}` : ''}`, true];
-      }
-      default: return ['passed, next round not set', false];
-    }
-  };
 
   // ---- Daily to-dos and weekly goals
   const routines = (d?.items ?? []).filter((i) => kept(i) && i.scope === 'routine');
@@ -462,44 +435,7 @@ export default function PersonPage({ userId, name, day, today, onPickDay }: { us
         <Sub title="Pipeline" className="mt-4">{open && count(open.length, 'open interview')}</Sub>
         {pipeline.error && !open ? <Failed what="the pipeline" retry={pipeline.mutate} /> : !open ? <Loading />
           : open.length === 0 ? <p className="py-1 text-sm text-muted">Nothing in the pipeline.</p> : (
-            <div className="overflow-x-auto">
-              <table aria-label="Pipeline" className="w-full border-collapse text-sm">
-                <thead>
-                  <tr>{['Company', 'Stage', 'Next / last round', 'Status'].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}</tr>
-                </thead>
-                {/* grouped by where each interview stands; a group's heading folds it (user, 2026-11-21) */}
-                {PIPELINE_GROUPS.map(([key, label]) => {
-                  const rows = open.filter((p) => p.status === key);
-                  if (rows.length === 0) return null;
-                  const shown = !folded.has(key);
-                  return (
-                    <tbody key={key}>
-                      <tr className="border-t border-zinc-200 dark:border-zinc-700">
-                        <td colSpan={4} className="bg-zinc-50 px-1 py-1 dark:bg-zinc-900">
-                          <button
-                            type="button" aria-expanded={shown} className="w-full text-left text-xs font-semibold text-body"
-                            onClick={() => setFolded((f) => { const n = new Set(f); if (n.has(key)) n.delete(key); else n.add(key); return n; })}
-                          >
-                            <span aria-hidden>{shown ? '▾ ' : '▸ '}</span>{label} ({rows.length})
-                          </button>
-                        </td>
-                      </tr>
-                      {shown && rows.map((p) => {
-                        const [text, due] = status(p);
-                        return (
-                          <tr key={p.interviewId} className="border-t border-zinc-100 dark:border-zinc-800">
-                            <th scope="row" className="py-1.5 pl-4 pr-2 text-left font-normal text-body">{p.companyName || 'Untitled company'}</th>
-                            <td className={TD}>{stageLabel(p.stage)}</td>
-                            <td className={TD}>{when(p)}</td>
-                            <td className={`${TD} ${due ? AMBER : ''}`}>{text}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  );
-                })}
-              </table>
-            </div>
+            <PipelineTable items={open} />
           )}
       </Card>
 

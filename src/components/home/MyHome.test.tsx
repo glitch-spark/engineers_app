@@ -7,7 +7,7 @@ import * as api from '../../api/endpoints';
 import MyHome from './MyHome';
 
 vi.mock('../../api/endpoints', () => ({
-  getDayPlan: vi.fn(), putDayProgress: vi.fn(), getDashboardWeek: vi.fn(), getNeedsInput: vi.fn(), getDashboardPending: vi.fn(), followUpInterviewStage: vi.fn(), updateInterviewStage: vi.fn(),
+  getDayPlan: vi.fn(), putDayProgress: vi.fn(), getDashboardWeek: vi.fn(), getInterviewPipeline: vi.fn(), getNeedsInput: vi.fn(), getDashboardPending: vi.fn(), followUpInterviewStage: vi.fn(), updateInterviewStage: vi.fn(),
 }));
 const auth = vi.hoisted(() => ({ role: 'staff' }));
 vi.mock('../../lib/useInterviewTimezone', () => ({ useInterviewTimezone: () => ({ tz: 'America/Chicago' }) }));
@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-11-18T19:00:00-06:00'));
   auth.role = 'staff';
   vi.mocked(api.getNeedsInput).mockResolvedValue({ items: [], counts: {} } as never);
+  vi.mocked(api.getInterviewPipeline).mockResolvedValue({ items: [] } as never);
   vi.mocked(api.getDashboardWeek).mockResolvedValue(week() as never);
   vi.mocked(api.getDashboardPending).mockResolvedValue({ interviews: [], profiles: [], bidders: [], counts: {} } as never);
 });
@@ -340,6 +341,47 @@ describe("MyHome seen by an admin (the person's view)", () => {
     // the admin's own-rounds guard does not hide the person's follow-up; its box is theirs to tick
     expect(((await screen.findByRole('checkbox', { name: 'I followed up with Acme' })) as HTMLInputElement).disabled).toBe(true);
     expect(screen.queryByRole('link', { name: /Set this week/ })).toBeNull();
+  });
+});
+
+describe('MyHome: Interview pipeline', () => {
+  const pipe = (o: object) => ({
+    interviewId: 'p1', companyName: 'Trellix', profileName: null, stage: 'intro', at: '2026-11-23T16:00:00Z', upcoming: true,
+    status: 'scheduled', days: null, followedUpAt: null, ...o,
+  });
+  const block = () => screen.findByRole('region', { name: 'Interview pipeline' });
+
+  it('is the last block, folded to one line that counts each group, and opens to the grouped table', async () => {
+    vi.mocked(api.getInterviewPipeline).mockResolvedValue({ items: [
+      pipe({}), pipe({ interviewId: 'p2', companyName: 'HackerOne' }),
+      pipe({ interviewId: 'p3', companyName: 'Wiz', status: 'waiting', upcoming: false, at: '2026-11-17T16:00:00Z' }),
+      pipe({ interviewId: 'p4', companyName: 'Reach', status: 'no_result', upcoming: false, at: '2026-11-03T16:00:00Z', days: 15 }),
+    ] } as never);
+    setup(plan());
+    const box = await block();
+    const fold = within(box).getByRole('button', { name: /Interview pipeline/ });
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    expect(box.textContent).toContain('4 open');
+    expect(box.textContent).toContain('2 scheduled · 1 waiting · 1 no result');
+    expect(within(box).queryByRole('table')).toBeNull();
+    fireEvent.click(fold);
+    const table = within(box).getByRole('table', { name: 'Pipeline' });
+    expect(within(table).getByRole('link', { name: 'Trellix' }).getAttribute('href')).toBe('/interviews?panel=p1');
+    expect(within(table).getByRole('button', { name: /Waiting for a result \(1\)/ })).toBeTruthy();
+    const week = screen.getByRole('heading', { name: /^This week/ });
+    expect(week.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('is left out with nothing open, and when the read fails', async () => {
+    setup(plan());
+    await screen.findByRole('heading', { name: /^This week/ });
+    await waitFor(() => expect(api.getInterviewPipeline).toHaveBeenCalled());
+    expect(screen.queryByText(/Interview pipeline/)).toBeNull();
+    cleanup();
+    vi.mocked(api.getInterviewPipeline).mockRejectedValue(new Error('down'));
+    setup(plan());
+    await screen.findByRole('heading', { name: /^This week/ });
+    expect(screen.queryByText(/Interview pipeline/)).toBeNull();
   });
 });
 
