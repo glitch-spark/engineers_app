@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreHorizontal } from 'lucide-react';
 
@@ -10,9 +10,11 @@ const GAP = 4;
 /**
  * "⋯" button with a menu rendered at the document root (fixed position), so
  * table wrappers and scroll panels can't clip it. Flips upward when there is
- * no room below. Renders nothing when there are no items.
+ * no room below. Renders nothing when there are no items. `children` replaces the "⋯" with a visible label.
  */
-export default function ActionMenu({ label, items }: { label: string; items: ActionItem[] }) {
+export default function ActionMenu({
+  label, items, children, className = 'btn-icon',
+}: { label: string; items: ActionItem[]; children?: ReactNode; className?: string }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -77,14 +79,14 @@ export default function ActionMenu({ label, items }: { label: string; items: Act
       <button
         ref={triggerRef}
         type="button"
-        className="btn-icon"
-        aria-label={label}
+        className={className}
+        aria-label={children ? undefined : label}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={(e) => { stop(e); setOpen((v) => !v); }}
         onKeyDown={stop}
       >
-        <MoreHorizontal size={16} aria-hidden />
+        {children ?? <MoreHorizontal size={16} aria-hidden />}
       </button>
       {open && pos && createPortal(
         <div

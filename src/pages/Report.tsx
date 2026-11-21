@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import DayPanel from '../components/report/DayPanel';
 import DayRow from '../components/report/DayRow';
+import SetupGrid from '../components/report/SetupGrid';
 import TeamTable from '../components/report/TeamTable';
 import WeekPanel from '../components/report/WeekPanel';
 import WeekGoalCard from '../components/report/WeekGoalCard';
@@ -40,6 +41,8 @@ export default function ReportPage() {
     isAdmin, userId: user?.id, user: params.get('user'), view: params.get('view'),
   });
   const today = dateParam(new Date());
+  // Admins plan everyone's week in one grid; anyone else asking for it gets their usual page.
+  const setup = isAdmin && teamView && params.get('view') === 'setup';
 
   const setParam = useCallback(
     (patch: Record<string, string | null>) =>
@@ -102,7 +105,11 @@ export default function ReportPage() {
             This week
           </button>
         )}
-        {viewUser ? (
+        {setup ? (
+          <Link to={teamLink} className="ml-auto text-sm underline">← Team</Link>
+        ) : isAdmin && teamView ? (
+          <Link to={`/plans?week=${week}&view=setup`} className="btn ml-auto text-sm">Plan the week</Link>
+        ) : viewUser ? (
           <span className="ml-auto flex items-center gap-2 text-sm">
             <Link to={teamLink} className="underline">← Team</Link>
             <span className="text-muted">Viewing {viewedName?.name || viewedName?.email || 'teammate'}</span>
@@ -128,7 +135,9 @@ export default function ReportPage() {
         )}
       </div>
 
-      {!showBoard ? (
+      {setup ? (
+        <SetupGrid key={week} week={week} />
+      ) : !showBoard ? (
         // A row opens that person's board (read-only); the viewer's own row opens their own, editable one.
         <TeamTable week={week} onOpenUser={(id) => setParam({ user: id === user?.id ? null : id, view: null })} />
       ) : (
@@ -147,7 +156,7 @@ export default function ReportPage() {
               </div>
             </div>
           ) : (
-            <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} onOpen={() => setWeekOpen(true)} />
+            <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} adminEdit={isAdmin && !!viewUser} onOpen={() => setWeekOpen(true)} />
           )}
 
           {daysQuery.error ? (
