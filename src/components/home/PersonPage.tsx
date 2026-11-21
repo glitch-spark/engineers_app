@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import type { PipelineItem } from '../../api/endpoints';
@@ -18,6 +18,10 @@ const TH = 'px-1.5 py-1 text-right text-[11px] font-normal normal-case tracking-
 const TD = 'whitespace-nowrap px-1.5 py-1.5 text-right tabular-nums';
 const num = (n: number) => n.toLocaleString('en-US');
 /** Every read of this page; refetched together after an admin sets a round's result. */
+const PIPELINE_GROUPS: [PipelineItem['status'], string][] = [
+  ['scheduled', 'Scheduled'], ['waiting', 'Waiting for a result'], ['no_result', 'No result for a week or more'],
+  ['followed_up', 'Followed up'], ['passed', 'Passed, next round not set'],
+];
 const PERSON_KEYS = ['team-today', 'person-day', 'person-week', 'person-pipeline', 'home-pending', 'interviews-needs-input'];
 
 function Card({ title, summary, children }: { title: string; summary?: string; children: ReactNode }) {
@@ -64,6 +68,8 @@ export default function PersonPage({ userId, name, day, today }: { userId: strin
   const plan = useSWR(['person-day', day, userId], () => api.getDayPlan(day, userId));
   const week = useSWR(['person-week', today, userId], () => api.getDashboardWeek({ userId, today }));
   const pipeline = useSWR(['person-pipeline', userId], () => api.getInterviewPipeline(userId));
+  // pipeline groups folded by the admin; all but Scheduled start folded
+  const [folded, setFolded] = useState<Set<PipelineItem['status']>>(() => new Set(['waiting', 'no_result', 'followed_up', 'passed']));
   const refresh = () => globalMutate((key) => Array.isArray(key) && PERSON_KEYS.includes(key[0]));
 
   const isToday = day === today;
@@ -188,19 +194,37 @@ export default function PersonPage({ userId, name, day, today }: { userId: strin
                       <thead>
                         <tr>{['Company', 'Stage', 'Next / last round', 'Status'].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}</tr>
                       </thead>
-                      <tbody>
-                        {open.map((p) => {
-                          const [text, due] = status(p);
-                          return (
-                            <tr key={p.interviewId} className="border-t border-zinc-100 dark:border-zinc-800">
-                              <th scope="row" className="py-1.5 pr-2 text-left font-normal text-body">{p.companyName || 'Untitled company'}</th>
-                              <td className={TD}>{stageLabel(p.stage)}</td>
-                              <td className={TD}>{when(p)}</td>
-                              <td className={`${TD} ${due ? AMBER : ''}`}>{text}</td>
+                      {/* grouped by where each interview stands; a group's heading folds it (user, 2026-11-21) */}
+                      {PIPELINE_GROUPS.map(([key, label]) => {
+                        const rows = open.filter((p) => p.status === key);
+                        if (rows.length === 0) return null;
+                        const shown = !folded.has(key);
+                        return (
+                          <tbody key={key}>
+                            <tr className="border-t border-zinc-200 dark:border-zinc-700">
+                              <td colSpan={4} className="bg-zinc-50 px-1 py-1 dark:bg-zinc-900">
+                                <button
+                                  type="button" aria-expanded={shown} className="w-full text-left text-xs font-semibold text-body"
+                                  onClick={() => setFolded((f) => { const n = new Set(f); if (n.has(key)) n.delete(key); else n.add(key); return n; })}
+                                >
+                                  <span aria-hidden>{shown ? '▾ ' : '▸ '}</span>{label} ({rows.length})
+                                </button>
+                              </td>
                             </tr>
-                          );
-                        })}
-                      </tbody>
+                            {shown && rows.map((p) => {
+                              const [text, due] = status(p);
+                              return (
+                                <tr key={p.interviewId} className="border-t border-zinc-100 dark:border-zinc-800">
+                                  <th scope="row" className="py-1.5 pl-4 pr-2 text-left font-normal text-body">{p.companyName || 'Untitled company'}</th>
+                                  <td className={TD}>{stageLabel(p.stage)}</td>
+                                  <td className={TD}>{when(p)}</td>
+                                  <td className={`${TD} ${due ? AMBER : ''}`}>{text}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        );
+                      })}
                     </table>
                   </div>
                 )}

@@ -157,21 +157,34 @@ describe('PersonPage', () => {
     expect(rounds[0].textContent).toContain('Completed ✓');
     expect(rounds[1].textContent).toContain('4:00 PM · Globex');
     expect(rounds[1].textContent).toContain('Ended 4:25 PM · not marked');
-    expect(within(box).queryByRole('button')).toBeNull();
+    expect(within(within(box).getByRole('list', { name: "Today's interviews" })).queryByRole('button')).toBeNull();
     expect(within(box).getByText('In pipeline (6)')).toBeTruthy();
     const table = within(box).getByRole('table', { name: 'In pipeline' });
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Company', 'Stage', 'Next / last round', 'Status']);
-    expect(cells(table)).toEqual([
-      ['Final', 'today 11:00 PM', 'scheduled'],
-      ['Panel', 'Mon, Nov 23', 'scheduled'],
-      ['Intro', 'today', 'waiting for a result'],
-      ['Intro', 'Nov 12', 'no result for 8 days'],
-      ['Intro', 'Oct 8', 'followed up Nov 13'],
-      ['Tech round 1', 'Nov 17', 'passed, next round not set'],
+    // grouped by where each interview stands, each group a button that folds it; only Scheduled starts open
+    const groups = () => within(table).getAllByRole('button').map((b) => [b.textContent, b.getAttribute('aria-expanded')]);
+    expect(groups()).toEqual([
+      ['Scheduled (2)', 'true'], ['Waiting for a result (1)', 'false'], ['No result for a week or more (1)', 'false'],
+      ['Followed up (1)', 'false'], ['Passed, next round not set (1)', 'false'],
     ]);
-    expect(within(table).getAllByRole('rowheader').map((h) => h.textContent)).toEqual(['Voxology', 'Impelsys', 'superlinked', 'Liberty', 'Smart Working', 'Curotec']);
+    expect(cells(table)).toEqual([['Final', 'today 11:00 PM', 'scheduled'], ['Panel', 'Mon, Nov 23', 'scheduled']]);
+    fireEvent.click(within(table).getByRole('button', { name: 'No result for a week or more (1)' }));
+    fireEvent.click(within(table).getByRole('button', { name: 'Waiting for a result (1)' }));
+    fireEvent.click(within(table).getByRole('button', { name: 'Scheduled (2)' }));
+    expect(cells(table)).toEqual([['Intro', 'today', 'waiting for a result'], ['Intro', 'Nov 12', 'no result for 8 days']]);
+    expect(within(table).getAllByRole('rowheader').map((h) => h.textContent)).toEqual(['superlinked', 'Liberty']);
     expect(within(table).getByText('no result for 8 days').className).toContain('amber');
     expect(within(table).getByText('waiting for a result').className).not.toContain('amber');
+    fireEvent.click(within(table).getByRole('button', { name: 'Followed up (1)' }));
+    fireEvent.click(within(table).getByRole('button', { name: 'Passed, next round not set (1)' }));
+    expect(cells(table).slice(2)).toEqual([['Intro', 'Oct 8', 'followed up Nov 13'], ['Tech round 1', 'Nov 17', 'passed, next round not set']]);
+  });
+
+  it('a pipeline group with no interviews is left out', async () => {
+    vi.mocked(api.getInterviewPipeline).mockResolvedValue({ items: pipeline.slice(0, 2) } as never);
+    show();
+    const table = await within(await card('Interviews')).findByRole('table', { name: 'In pipeline' });
+    expect(within(table).getAllByRole('button').map((b) => b.textContent)).toEqual(['Scheduled (2)']);
   });
 
   it('Interviews with none that day and nothing in the pipeline', async () => {
