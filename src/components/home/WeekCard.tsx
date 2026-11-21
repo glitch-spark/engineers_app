@@ -1,13 +1,14 @@
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import { todayInputValue } from '../../lib/week';
+import BidsDays, { weekdayShort as weekday } from './BidsDays';
+import RoutinesGrid from './RoutinesGrid';
 
 function localDate(iso: string): Date {
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 const shortLabel = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-const weekday = (iso: string) => localDate(iso).toLocaleDateString('en-US', { weekday: 'short' });
 const num = (n: number) => n.toLocaleString('en-US');
 const some = (parts: (string | false)[]) => parts.filter(Boolean) as string[];
 
@@ -92,23 +93,7 @@ function Bids({ bids, today, lastDay }: { bids: api.DashboardWeek['bids']; today
           <div className={behind ? 'bg-amber-500' : 'bg-success-500'} style={{ width: `${Math.min(100, (bids.total / target) * 100)}%` }} />
         </div>
       )}
-      {days.length > 0 && (
-        <ol className="mt-2 flex gap-1.5">
-          {days.map((d) => {
-            const future = d.date > today;
-            const under = !future && !!d.target && d.done < d.target;
-            return (
-              <li key={d.date} className="flex-1 text-center text-[11px] text-muted">
-                <b className={`block text-sm tabular-nums ${future ? 'font-normal' : under ? 'text-amber-600 dark:text-amber-400' : 'text-strong'}`}>
-                  {future ? '–' : num(d.done)}
-                </b>
-                {weekday(d.date)}{d.date === today && ' · today'}
-                {under && <span className="sr-only">, under target</span>}
-              </li>
-            );
-          })}
-        </ol>
-      )}
+      <BidsDays days={days} today={today} />
       {days.length > 0 && !!perDay && <p className="mt-1 text-xs text-muted">Target {num(perDay)} a day · amber = under target</p>}
     </div>
   );
@@ -154,58 +139,5 @@ function Interviews({ interviews }: { interviews: api.DashboardWeek['interviews'
       )}
       {second.length > 0 && <div className="mt-1.5 text-xs text-muted">{second.join(' · ')}</div>}
     </div>
-  );
-}
-
-type RoutineDay = api.DashboardRoutineRow['days'][number];
-/** What a day's cell shows, what it is called for a screen reader, and its colour. */
-function dayCell(d: RoutineDay): [string, string, string] {
-  switch (d.state) {
-    case 'done': return ['✓', 'done', 'font-bold text-emerald-600 dark:text-emerald-400'];
-    case 'missed': return ['✗', 'missed', 'font-bold text-red-600 dark:text-red-400'];
-    case 'short':
-      return d.target
-        ? [`${d.value ?? 0} / ${d.target}`, `${d.value ?? 0} of ${d.target}, short of the target`, 'font-semibold text-amber-600 dark:text-amber-400']
-        : [`${d.value ?? 0}`, `${d.value ?? 0}, short of the target`, 'font-semibold text-amber-600 dark:text-amber-400'];
-    case 'today': return ['·', 'today, not done yet', 'text-muted'];
-    case 'future': return ['', 'still to come', ''];
-    default: return ['', 'not planned', ''];
-  }
-}
-
-/** One line per routine with its working days; scrolls sideways inside the card on a narrow screen. */
-function RoutinesGrid({ rows, today }: { rows: api.DashboardRoutineRow[]; today: string }) {
-  const now = (date: string) => (date === today ? 'bg-zinc-50 dark:bg-zinc-900' : '');
-  return (
-    <>
-      <div className="overflow-x-auto">
-        <table aria-label="Routines this week" className="mt-1 w-full min-w-[30rem] border-collapse text-sm">
-          <thead>
-            <tr className="text-[11px] font-normal normal-case tracking-normal text-muted">
-              <th scope="col" className="text-left"><span className="sr-only">Routine</span></th>
-              {rows[0].days.map((d) => <th key={d.date} scope="col" className={`px-1.5 py-1 text-center font-normal ${now(d.date)}`}>{weekday(d.date)}</th>)}
-              <th scope="col"><span className="sr-only">Days done</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t border-zinc-100 dark:border-zinc-800">
-                <th scope="row" className="py-1.5 pr-2 text-left font-normal text-body">{row.text}</th>
-                {row.days.map((d) => {
-                  const [text, name, color] = dayCell(d);
-                  return (
-                    <td key={d.date} aria-label={`${weekday(d.date)}: ${name}`} className={`whitespace-nowrap px-1.5 py-1.5 text-center tabular-nums ${color} ${now(d.date)}`}>
-                      {text}
-                    </td>
-                  );
-                })}
-                <td className="whitespace-nowrap py-1.5 pl-2 text-right text-xs text-muted">{row.doneDays} of {row.totalDays} days</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-1.5 text-xs text-muted">✓ done · ✗ missed · a number = short of that day&apos;s target · · = today, not done yet</p>
-    </>
   );
 }

@@ -5,40 +5,16 @@ import * as api from '../../api/endpoints';
 import { todayInputValue } from '../../lib/week';
 import type { DayItem, NeedsInputItem, TodayInterview } from '../../api/endpoints';
 import { useAuth } from '../../auth/useAuth';
-import { formatInZone, parseServerTime } from '../../lib/interviewTimezone';
 import { stageLabel } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { daysWithoutResult, needsInputKey, shortDay, useNeedsInputActions } from '../interview/useNeedsInputActions';
 import ItemRow, { kept } from '../report/ItemRow';
+import TodayRound, { asNeedsInput, roundKey, roundState, useNow } from './TodayRound';
 
 type Result = { done: boolean; value: number | null };
 const DEBOUNCE_MS = 800;
 
-const MINUTE_MS = 60000;
 const num = (n: number) => n.toLocaleString('en-US');
-const roundKey = (r: { interviewId: string; roundId: string }) => `${r.interviewId}:${r.roundId}`;
-
-/** The current time, refreshed once a minute, so "In 2 hours" does not go stale between fetches. */
-function useNow(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setTimeout(() => setNow(Date.now()), MINUTE_MS);
-    return () => clearTimeout(t);
-  }, [now]);
-  return now;
-}
-
-/**
- * Where a round of today stands right now. A round nobody marked moves from upcoming to happening to ended with
- * the clock, so those three are read from its times; an answered round keeps the state the server gave.
- */
-function roundState(iv: TodayInterview, now: number): TodayInterview['state'] {
-  if (iv.state !== 'upcoming' && iv.state !== 'now' && iv.state !== 'unmarked') return iv.state;
-  const start = parseServerTime(iv.scheduledAt).getTime();
-  const end = iv.endsAt ? parseServerTime(iv.endsAt).getTime() : NaN;
-  if (isNaN(start) || isNaN(end)) return iv.state;
-  return now < start ? 'upcoming' : now < end ? 'now' : 'unmarked';
-}
 
 const parseDay = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
@@ -268,78 +244,22 @@ export default function TodayCard() {
   );
 }
 
-const STEP_ENDED: Record<string, string> = { passed: ' ✓ passed', rejected: ' ✗ rejected', canceled: ' canceled', held: '' };
-
-/** Today's rounds under the Interviews row: who takes each, the steps so far, and where it stands right now. */
+/** Today's rounds under the Interviews row, each with its answer buttons once it has ended unmarked. */
 function TodayInterviews({ rounds, now, onSaved }: { rounds: TodayInterview[]; now: number; onSaved: () => unknown }) {
   const { tz } = useInterviewTimezone();
   const { dialog, outcomeButtons } = useNeedsInputActions(onSaved);
-  const clock = (iso: string) => formatInZone(parseServerTime(iso), tz, { hour: 'numeric', minute: '2-digit' });
-  const ok = 'font-semibold text-emerald-600 dark:text-emerald-400';
-
-  const status = (iv: TodayInterview, state: TodayInterview['state']) => {
-    switch (state) {
-      case 'upcoming': {
-        const minutes = Math.max(1, Math.ceil((parseServerTime(iv.scheduledAt).getTime() - now) / MINUTE_MS));
-        const hours = Math.round(minutes / 60);
-        const left = minutes < 60 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'}`;
-        return <span className="text-muted">In {left}</span>;
-      }
-      case 'now': return <span className="font-semibold text-accent-700 dark:text-accent-300">Happening now</span>;
-      case 'unmarked':
-        return <span className="font-semibold text-amber-700 dark:text-amber-400">Ended {iv.endsAt ? `${clock(iv.endsAt)} ` : ''}· not marked</span>;
-      case 'completed': return <span className={ok}>Completed ✓</span>;
-      case 'passed': return <span className={ok}>Passed ✓</span>;
-      case 'rejected': return <span className="font-semibold text-red-600 dark:text-red-400">Rejected</span>;
-      case 'canceled': return <span className="text-muted">Canceled</span>;
-      default: {
-        const day = shortDay(iv.rescheduledTo, tz);
-        return <span className="text-muted">Rescheduled{day ? ` to ${day}` : ''}</span>;
-      }
-    }
-  };
-
   return (
     <>
       {dialog}
       <ul aria-label="Today's interviews" className="mb-1 ml-6 border-l-2 border-zinc-200 dark:border-zinc-700">
-        {rounds.map((iv) => {
-          const state = roundState(iv, now);
-          const who = iv.who.kind === 'self'
-            ? 'Self'
-            : !iv.who.assigned ? 'Caller: not assigned yet' : `Caller: ${iv.who.name || 'assigned'}${iv.who.confirmed ? ' ✓ confirmed' : ''}`;
-          return (
-            <li key={roundKey(iv)} className="py-2 pl-3 text-sm">
-              <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
-                <span className="min-w-0">
-                  <span className="font-medium text-strong">{clock(iv.scheduledAt)} · {iv.companyName || 'Untitled company'}</span>
-                  <span className="text-xs text-muted">{iv.profileName ? ` · ${iv.profileName}` : ''} · {who}</span>
-                </span>
-                <span className="text-xs">{status(iv, state)}</span>
-              </div>
-              <div className="mt-0.5 text-xs text-muted">
-                {iv.steps.map((step, i) => (
-                  <Fragment key={i}>
-                    {i > 0 && ' → '}
-                    {step.state === 'today'
-                      ? <span className="rounded bg-sky-50 px-1 font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-400">{stageLabel(step.stage)} · today</span>
-                      : `${stageLabel(step.stage)}${STEP_ENDED[step.state] ?? ''}`}
-                  </Fragment>
-                ))}
-              </div>
-              {/* an old round with no id of its own can't be answered from here: the Interviews page handles it */}
-              {state === 'unmarked' && !!iv.roundId && (
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {outcomeButtons({
-                    interviewId: iv.interviewId, roundId: iv.roundId, companyName: iv.companyName, profileName: iv.profileName,
-                    ownerId: '', ownerName: null, stage: iv.stage, status: iv.status, scheduledAt: iv.scheduledAt, endsAt: iv.endsAt,
-                    need: 'outcome',
-                  })}
-                </div>
-              )}
-            </li>
-          );
-        })}
+        {rounds.map((iv) => (
+          <TodayRound key={roundKey(iv)} iv={iv} now={now} tz={tz}>
+            {/* an old round with no id of its own can't be answered from here: the Interviews page handles it */}
+            {roundState(iv, now) === 'unmarked' && !!iv.roundId && (
+              <div className="mt-1.5 flex flex-wrap gap-2">{outcomeButtons(asNeedsInput(iv))}</div>
+            )}
+          </TodayRound>
+        ))}
       </ul>
     </>
   );
