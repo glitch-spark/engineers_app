@@ -192,7 +192,7 @@ export default function ReportPage() {
         <WeekPanel
           weekStart={week}
           userId={viewUser}
-          readOnly={readOnly}
+          mode={!viewUser ? 'own' : isAdmin ? 'admin' : 'view'}
           open
           onClose={() => setWeekOpen(false)}
           onSaved={refresh}
