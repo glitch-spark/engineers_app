@@ -482,7 +482,7 @@ describe("the owner's Home page: Pending items", () => {
     expect(screen.queryByText(/Pending items|Follow-ups/)).toBeNull();
   });
 
-  it('sits under the weekly goals with the interviews, profiles and bidders that wait on the person', async () => {
+  it('sits at the top, above Bids, with the interviews, profiles and bidders that wait on the person', async () => {
     waiting([round(), outcome(1)], {
       profiles: [{ accountId: 'a2', name: 'Theo Deng', kind: 'no_bids', idleDays: 21, capped: false, bids: null, tailorScore: null }],
       bidders: [{ bidderId: 'b1', name: 'Ali', kind: 'not_bidding', days: 2, recent: null, before: null }],
@@ -494,8 +494,11 @@ describe("the owner's Home page: Pending items", () => {
     expect(within(box).getAllByRole('list').map((l) => l.getAttribute('aria-label'))).toEqual(['Interviews', 'Profiles', 'Bidders']);
     expect(within(box).getByRole('checkbox', { name: 'I followed up with Acme' })).toBeTruthy();
     expect(screen.queryByText(/Follow-ups \(/)).toBeNull();
-    const goal = screen.getByLabelText(/Goal one/);
-    expect(goal.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // on a person's own Home the things waiting on them come first (user, 2026-11-21)
+    const bids = screen.getByRole('region', { name: 'Bids' });
+    expect(box.compareDocumentPosition(bids) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(screen.getByRole('navigation', { name: 'Sections' })).getAllByRole('button').map((x) => x.textContent))
+      .toEqual(['Pending 4', 'Bids', 'Interviews', 'Daily to-dos', 'Weekly goals']);
   });
 
   it("does not repeat today's unmarked rounds: they are answered in the Today list above", async () => {

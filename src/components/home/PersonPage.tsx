@@ -159,6 +159,8 @@ function WeekBars({ days, today, picked, onPick }: { days: NonNullable<Dashboard
  * a round of today that ended unmarked has its answer buttons, and follow-ups have their checkbox. A past day or
  * week is read-only for them too.
  */
+const SECTIONS = ['Bids', 'Interviews', 'Daily to-dos', 'Weekly goals'];
+
 export default function PersonPage({ mode, userId, name, day, today, onPickDay }: {
   mode: 'admin' | 'owner'; userId?: string; name?: string; day: string; today: string; onPickDay: (day: string) => void;
 }) {
@@ -305,6 +307,14 @@ export default function PersonPage({ mode, userId, name, day, today, onPickDay }
   ].filter(Boolean).join(' · ');
 
   /** Scrolls a section into view and moves focus to its heading. */
+  const pendingLink = pend.total > 0 ? ['Pending'] : [];
+  // Always as of now: today's unmarked rounds count as "ended today" whatever day is picked. On a person's own Home
+  // the things waiting on them come first, above Bids; on the admin's page they close it (user, 2026-11-21).
+  const pendingBlock = (
+    <div data-section="Pending" className="scroll-mt-20">
+      <PendingItems mode={mode} userId={userId} name={name} today={todayRounds} listToday={listToday} onSaved={refresh} />
+    </div>
+  );
   const jump = (section: string) => {
     const el = root.current?.querySelector<HTMLElement>(`[data-section="${section}"]`);
     const heading = el?.querySelector<HTMLElement>('h3');
@@ -368,7 +378,7 @@ export default function PersonPage({ mode, userId, name, day, today, onPickDay }
       </div>
 
       <nav aria-label="Sections" className="flex flex-wrap gap-1.5">
-        {['Bids', 'Interviews', 'Daily to-dos', 'Weekly goals', ...(pend.total > 0 ? ['Pending'] : [])].map((s) => (
+        {(mode === 'owner' ? [...pendingLink, ...SECTIONS] : [...SECTIONS, ...pendingLink]).map((s) => (
           <button
             key={s} type="button" onClick={() => jump(s)}
             className="rounded-full border border-zinc-200 bg-white px-3 py-0.5 text-xs text-body hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
@@ -377,6 +387,8 @@ export default function PersonPage({ mode, userId, name, day, today, onPickDay }
           </button>
         ))}
       </nav>
+
+      {mode === 'owner' && pendingBlock}
 
       <Card title="Bids">
         <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
@@ -609,10 +621,7 @@ export default function PersonPage({ mode, userId, name, day, today, onPickDay }
         </div>
       </div>
 
-      {/* Always as of now: today's unmarked rounds count as "ended today" whatever day is picked. */}
-      <div data-section="Pending" className="scroll-mt-20">
-        <PendingItems mode={mode} userId={userId} name={name} today={todayRounds} listToday={listToday} onSaved={refresh} />
-      </div>
+      {mode !== 'owner' && pendingBlock}
     </div>
   );
 }
