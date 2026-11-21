@@ -1214,6 +1214,8 @@ export interface DashboardWeek {
     percentile: DashboardPercentile | null;
     /** Mon–Fri, each day's bids and daily target. Missing from an older server. */
     byDay?: { date: string; done: number; target: number | null }[];
+    /** Mon–Fri only (`total` above also counts the weekend); a target is the week's sum of the day targets, null when unset. Missing from an older server. */
+    week?: { self: number; selfTarget: number | null; bidder: number; bidderTarget: number | null; total: number; target: number | null };
   };
   interviews: {
     /** Rounds held this week: `self` the owner took, `caller` a caller took. */
@@ -1227,6 +1229,11 @@ export interface DashboardWeek {
     outcomes?: {
       held: number; passed: number; rejected: number; noAnswer: number; waiting: number; canceled: number; scheduled: number;
     };
+    /**
+     * Mon–Fri. `scheduled` = not held yet: still to come on today or a later day, ended and never marked on a day
+     * before today. Missing from an older server.
+     */
+    byDay?: { date: string; held: number; canceled: number; scheduled: number }[];
   };
   stages: { key: string; label: string; count: number }[];
   streak: number;
@@ -1274,7 +1281,11 @@ export interface DashboardMonthInterviews {
   passRate: { value: number | null; passed: number; decided: number; few: boolean; teamRate: number | null };
 }
 
-export const getDashboardWeek = (params: { userId?: string; today?: string }) =>
+/**
+ * `today` is the real current date (day states and pace are judged against it); `weekOf` is any date in the wanted
+ * week (absent = the week of `today`; a later week is refused).
+ */
+export const getDashboardWeek = (params: { userId?: string; today?: string; weekOf?: string }) =>
   apiFetch<DashboardWeek>(`/dashboard/week${qs(params)}`);
 
 export const getDashboardMonthInterviews = (params: { userId?: string; today?: string }) =>

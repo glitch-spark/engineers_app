@@ -1,4 +1,5 @@
 import type { DashboardRoutineRow } from '../../api/endpoints';
+import { dayLabel } from '../../lib/week';
 import { weekdayShort } from './BidsDays';
 
 type RoutineDay = DashboardRoutineRow['days'][number];
@@ -19,9 +20,10 @@ function dayCell(d: RoutineDay): [string, string, string] {
 
 /**
  * One line per routine with its working days and the legend; scrolls sideways inside its card on a narrow screen.
- * Shared by Home's This week card and the admin's page for one person.
+ * Shared by Home's This week card and the admin's page for one person. With `onPickDay` a weekday's column head is
+ * a button that picks that day (days after `today` cannot be picked).
  */
-export default function RoutinesGrid({ rows, today }: { rows: DashboardRoutineRow[]; today: string }) {
+export default function RoutinesGrid({ rows, today, onPickDay }: { rows: DashboardRoutineRow[]; today: string; onPickDay?: (date: string) => void }) {
   const now = (date: string) => (date === today ? 'bg-zinc-50 dark:bg-zinc-900' : '');
   return (
     <>
@@ -30,7 +32,19 @@ export default function RoutinesGrid({ rows, today }: { rows: DashboardRoutineRo
           <thead>
             <tr className="text-[11px] font-normal normal-case tracking-normal text-muted">
               <th scope="col" className="text-left"><span className="sr-only">Routine</span></th>
-              {rows[0].days.map((d) => <th key={d.date} scope="col" className={`px-1.5 py-1 text-center font-normal ${now(d.date)}`}>{weekdayShort(d.date)}</th>)}
+              {rows[0].days.map((d) => (
+                <th key={d.date} scope="col" className={`px-1.5 py-1 text-center font-normal ${now(d.date)}`}>
+                  {onPickDay ? (
+                    <button
+                      type="button" className="underline decoration-dotted underline-offset-2 disabled:no-underline"
+                      disabled={d.date > today} onClick={() => onPickDay(d.date)}
+                      aria-label={d.date > today ? `${dayLabel(d.date)}: still to come` : `${dayLabel(d.date)} — show this day`}
+                    >
+                      {weekdayShort(d.date)}
+                    </button>
+                  ) : weekdayShort(d.date)}
+                </th>
+              ))}
               <th scope="col"><span className="sr-only">Days done</span></th>
             </tr>
           </thead>

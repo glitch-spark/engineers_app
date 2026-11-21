@@ -48,3 +48,24 @@ export function formatCalendarDate(value: string) {
   if (!year || !month || !day) return value;
   return new Date(year, month - 1, day).toLocaleDateString();
 }
+
+/** A `YYYY-MM-DD` day (or ISO datetime) as a local date. */
+export function dayDate(iso: string) {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** The `YYYY-MM-DD` day `n` days after `iso` (before, when negative). */
+export function addDays(iso: string, n: number) {
+  const d = dayDate(iso);
+  return todayInputValue(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n));
+}
+
+/** The Monday of the day's week (a Sunday belongs to the week before it), as `YYYY-MM-DD`. */
+export const mondayOf = (iso: string) => todayInputValue(getWeekInfo(dayDate(iso)).startDate);
+
+/** "Wed, Nov 18" */
+export const dayLabel = (iso: string) => dayDate(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+/** "Nov 18" */
+export const monthDay = (iso: string) => dayDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
