@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Select from '../components/Select';
 import FilterBar, { FilterField } from '../components/filters/FilterBar';
-import MetricsCard from '../components/home/MetricsCard';
 import PersonPage from '../components/home/PersonPage';
 import { useAuth } from '../auth/useAuth';
 import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../lib/week';
@@ -114,7 +113,6 @@ function MyHome() {
         <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />
       </FilterBar>
       <PersonPage mode="owner" day={day} today={today} onPickDay={pickDay} />
-      <MetricsCard />
     </>
   );
 }

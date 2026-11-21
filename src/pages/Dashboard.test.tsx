@@ -54,7 +54,7 @@ const picker = () => screen.findByLabelText('User') as Promise<HTMLSelectElement
 const names = (el: HTMLSelectElement) => [...el.options].map((o) => o.text);
 
 describe('Home', () => {
-  it("staff get the same page for themselves at once: Week and Day filters but no User, then This month; no team", async () => {
+  it("staff get the same page for themselves at once: Week and Day filters but no User; no This month card, no team", async () => {
     role = 'staff';
     renderIt();
     const page = screen.getByTestId('person'); // no "pick a person" step
@@ -66,8 +66,7 @@ describe('Home', () => {
     expect(within(filters).getAllByRole('radio').map((d) => d.getAttribute('aria-label'))).toEqual(['Mon, Nov 16', 'Tue, Nov 17', 'Wed, Nov 18', 'Thu, Nov 19', 'Fri, Nov 20']);
     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
-    const month = screen.getByText('metrics-stub');
-    expect(page.compareDocumentPosition(month) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // at the bottom
+    expect(screen.queryByText('metrics-stub')).toBeNull(); // the This month card is off the personal Home (user, 2026-11-21)
     expect(screen.queryByText('team-stub')).toBeNull();
     expect(screen.queryByText(/Pick a person/)).toBeNull();
     expect(api.getTeamToday).not.toHaveBeenCalled();
