@@ -170,13 +170,20 @@ export const isEmptyRow = (u: TeamWeekUser): boolean =>
 const toItems = (l: (PlanItem | PlanItemIn)[]): PlanItemIn[] =>
   l.map((i) => ({ ...('id' in i && i.id ? { id: i.id } : {}), text: i.text, kind: i.kind, target: i.target, archived: i.archived }));
 
-const toRow = (u: TeamWeekUser): TeamWeekRowIn => ({
+/** Saved live own items that are gone from `u`: the server keeps any own item it is not told was removed. */
+const removedOwn = (u: TeamWeekUser, was?: TeamWeekUser): string[] => {
+  const kept = new Set([...u.routines, ...u.weeklyGoals].map((i) => ('id' in i ? i.id : undefined)));
+  return was ? [...was.routines, ...was.weeklyGoals].filter((i) => i.addedBy === 'self' && !i.archived && !kept.has(i.id)).map((i) => i.id) : [];
+};
+
+const toRow = (u: TeamWeekUser, was?: TeamWeekUser): TeamWeekRowIn => ({
   userId: u.userId,
   plansOwnWeek: u.plansOwnWeek,
   goal: { bidsSelf: u.goal.bidsSelf, bidsBidder: u.goal.bidsBidder, interviewsSelf: u.goal.interviewsSelf },
   routines: toItems(u.routines),
   weeklyGoals: toItems(u.weeklyGoals),
   exists: u.exists,
+  removedIds: removedOwn(u, was),
 });
 
 export function rowsToSave(saved: TeamWeekUser[], s: GridState): TeamWeekRowIn[] {
@@ -185,7 +192,7 @@ export function rowsToSave(saved: TeamWeekUser[], s: GridState): TeamWeekRowIn[]
     const was = saved.find((x) => x.userId === u.userId);
     // The server skips a plan-less empty row but still writes its switch.
     if (!u.exists && isEmptyRow(u) && (!was || was.plansOwnWeek === u.plansOwnWeek)) continue;
-    const row = toRow(u);
+    const row = toRow(u, was);
     if (!u.exists || !was || JSON.stringify(toRow(was)) !== JSON.stringify(row)) out.push(row);
   }
   return out;

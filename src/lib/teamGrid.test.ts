@@ -155,7 +155,7 @@ describe('teamGrid', () => {
     const saved = [user('A')];
     const s = setTarget(st(saved), 'A', 'bidsSelf', 1);
     const [row] = rowsToSave(saved, s);
-    expect(Object.keys(row).sort()).toEqual(['exists', 'goal', 'plansOwnWeek', 'routines', 'userId', 'weeklyGoals']);
+    expect(Object.keys(row).sort()).toEqual(['exists', 'goal', 'plansOwnWeek', 'removedIds', 'routines', 'userId', 'weeklyGoals']);
     expect(Object.keys(row.goal).sort()).toEqual(['bidsBidder', 'bidsSelf', 'interviewsSelf']);
   });
 
@@ -262,9 +262,14 @@ describe('teamGrid', () => {
     const saved = [user('A', [item('Email'), mine]), user('B')];
     const s = st(saved);
     expect(rowsToSave(saved, s)).toEqual([]);
-    const gone = removeOwnItem(s, 'B', 'routine', 0);
-    expect(rowsToSave(saved, gone)).toEqual([]);
+    const gone = removeOwnItem(s, 'A', 'routine', 1);
+    const [sent] = rowsToSave(saved, gone);
+    expect(sent.userId).toBe('A');
+    expect(sent.routines.map((i) => i.id)).toEqual([saved[0].routines[0].id]);
+    expect(sent.removedIds).toEqual([mine.id]);
+    expect(rowsToSave(saved, s)).toEqual([]);
     const edited = setTarget(s, 'A', 'bidsSelf', 5);
     expect(rowsToSave(saved, edited)[0].routines.map((i) => i.id)).toEqual([saved[0].routines[0].id, mine.id]);
+    expect(rowsToSave(saved, edited)[0].removedIds).toEqual([]);
   });
 });

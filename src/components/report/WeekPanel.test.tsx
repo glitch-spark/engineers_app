@@ -117,8 +117,22 @@ describe('WeekPanel', () => {
     expect(week).toBe('2026-11-16');
     expect(rows).toEqual([{
       userId: 'u1', plansOwnWeek: false, goal: { bidsSelf: 9, bidsBidder: 0, interviewsSelf: 3 },
-      routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }], weeklyGoals: [], exists: true,
+      routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }], weeklyGoals: [], exists: true, removedIds: [],
     }]);
+  });
+
+  it('admin: archiving a saved own item sends its id in removedIds', async () => {
+    vi.mocked(api.putTeamWeek).mockResolvedValue({ results: [{ userId: 'u1', ok: true, error: null }] });
+    renderPanel('admin', { plansOwnWeek: false, routines: [
+      { id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false, addedBy: 'admin' },
+      { id: 'r2', text: 'Discord', kind: 'check', target: null, archived: false, addedBy: 'self' },
+    ] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Archive Routine item 2' }));
+    fireEvent.click(screen.getByRole('button', { name: /save week/i }));
+    await waitFor(() => expect(api.putTeamWeek).toHaveBeenCalled());
+    const [, rows] = vi.mocked(api.putTeamWeek).mock.calls[0];
+    expect(rows[0].removedIds).toEqual(['r2']);
+    expect(rows[0].routines.map((i) => i.id)).toEqual(['r1']);
   });
 
   it('admin: a failed row shows its error and keeps the panel open', async () => {

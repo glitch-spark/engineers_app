@@ -62,7 +62,7 @@ export default function WeekPanel({
 
   const dirty = useMemo(() => !!form && JSON.stringify(form) !== initial, [form, initial]);
 
-  // Planned by the admin: the person sees the plan and writes only the recap, once the week is saved.
+  // Planned by the admin: the person sees the plan, edits only their own items and the recap, once the week is saved.
   const adminPlans = mode === 'own' && data?.plansOwnWeek === false;
   const planEditable = mode === 'admin' || (mode === 'own' && !adminPlans);
   const ownItems = adminPlans && !!data?.exists; // the planned person edits only their own items, once the week is saved
@@ -77,9 +77,10 @@ export default function WeekPanel({
       const routines = cleanItems(form.routines);
       const weeklyGoals = cleanItems(form.weeklyGoals);
       if (mode === 'admin') {
+        const removedIds = [...form.routines, ...form.weeklyGoals].flatMap((i) => (i.addedBy === 'self' && i.archived && i.id ? [i.id] : []));
         const { bidsSelf, bidsBidder, interviewsSelf } = form.goal;
         const res = await api.putTeamWeek(weekStart, [
-          { userId: userId!, plansOwnWeek: data.plansOwnWeek, goal: { bidsSelf, bidsBidder, interviewsSelf }, routines, weeklyGoals, exists: data.exists },
+          { userId: userId!, plansOwnWeek: data.plansOwnWeek, goal: { bidsSelf, bidsBidder, interviewsSelf }, routines, weeklyGoals, exists: data.exists, removedIds },
         ]);
         const failed = res.results.find((r) => !r.ok);
         if (failed) {

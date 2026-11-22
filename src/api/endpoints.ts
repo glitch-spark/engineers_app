@@ -732,6 +732,8 @@ export interface TeamWeekRowIn {
   weeklyGoals: PlanItemIn[];
   /** As loaded: false = a carry-over draft, refused if the person saved the week since. */
   exists: boolean;
+  /** Saved own (`self`) items the admin removed: any other own item missing from the lists stays live. */
+  removedIds: string[];
 }
 
 export const getTeamWeek = (weekStart: string) =>
