@@ -12,12 +12,15 @@ export default function PlanItemsEditor({
   scope,
   onChange,
   readOnly = false,
+  lockedFor,
   label = scope === 'routine' ? 'Routine' : 'Weekly goal',
 }: {
   items: PlanItemIn[];
   scope: 'routine' | 'goal';
   onChange: (next: PlanItemIn[]) => void;
   readOnly?: boolean;
+  /** Rows this returns true for show read-only with a lock; the rest edit, and new rows are the person's own. */
+  lockedFor?: (item: PlanItemIn) => boolean;
   label?: string;
 }) {
   const live = items.map((item, index) => ({ item, index })).filter((x) => !x.item.archived);
@@ -27,21 +30,22 @@ export default function PlanItemsEditor({
   const archive = (index: number) =>
     onChange(items[index].id ? items.map((item, i) => (i === index ? { ...item, archived: true } : item)) : items.filter((_, i) => i !== index));
   const add = () => {
-    if (live.length < MAX_ITEMS) onChange([...items, { text: '', kind: 'check', target: null, archived: false }]);
+    if (live.length < MAX_ITEMS) onChange([...items, { text: '', kind: 'check', target: null, archived: false, ...(lockedFor ? { addedBy: 'self' as const } : {}) }]);
   };
+
+  const readOnlyRow = ({ item, index }: { item: PlanItemIn; index: number }, locked: boolean) => (
+    <li key={item.id ?? index} className="text-sm text-body">
+      {locked && <span aria-label="Set by your admin" title="Set by your admin" className="mr-1">🔒</span>}
+      {item.text}
+      {hasTarget(item.kind) && item.target != null && (
+        <span className="text-xs text-muted"> · {item.target}{item.kind === 'hours' ? 'h' : ''} {scope === 'routine' ? 'per day' : 'this week'}</span>
+      )}
+    </li>
+  );
 
   if (readOnly) {
     return live.length ? (
-      <ul className="space-y-1">
-        {live.map(({ item, index }) => (
-          <li key={item.id ?? index} className="text-sm text-body">
-            {item.text}
-            {hasTarget(item.kind) && item.target != null && (
-              <span className="text-xs text-muted"> · {item.target}{item.kind === 'hours' ? 'h' : ''} {scope === 'routine' ? 'per day' : 'this week'}</span>
-            )}
-          </li>
-        ))}
-      </ul>
+      <ul className="space-y-1">{live.map((x) => readOnlyRow(x, false))}</ul>
     ) : (
       <p className="text-sm text-muted">None listed.</p>
     );
@@ -49,7 +53,9 @@ export default function PlanItemsEditor({
 
   return (
     <div className="space-y-1.5">
-      {live.map(({ item, index }, n) => (
+      {live.map(({ item, index }, n) => lockedFor?.(item) ? (
+        <ul key={item.id ?? `new-${index}`}>{readOnlyRow({ item, index }, true)}</ul>
+      ) : (
         <div key={item.id ?? `new-${index}`} className="flex flex-wrap items-center gap-2">
           <input
             type="text"
@@ -101,7 +107,7 @@ export default function PlanItemsEditor({
       ))}
       {live.length < MAX_ITEMS && (
         <button type="button" className="btn-outline text-xs" onClick={add}>
-          <Plus size={14} className="mr-1" aria-hidden /> Add item
+          <Plus size={14} className="mr-1" aria-hidden /> {lockedFor ? '+ Add my item' : 'Add item'}
         </button>
       )}
     </div>

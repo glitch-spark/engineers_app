@@ -8,7 +8,7 @@ import {
 
 let n = 0;
 const item = (text: string, kind: PlanItemKind = 'check', target: number | null = null): PlanItem => ({
-  id: `i${++n}`, text, kind, target, archived: false,
+  id: `i${++n}`, text, kind, target, archived: false, addedBy: 'admin',
 });
 const user = (userId: string, routines: PlanItem[] = [], weeklyGoals: PlanItem[] = [], exists = true): TeamWeekUser => ({
   userId, name: userId, plansOwnWeek: false, exists, goal: { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0 }, routines, weeklyGoals,

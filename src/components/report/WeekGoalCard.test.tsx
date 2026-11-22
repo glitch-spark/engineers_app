@@ -9,8 +9,8 @@ afterEach(cleanup);
 const counts = { bidsSelf: 0, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0 };
 const week = (over: Partial<WeekPlan> = {}): WeekPlan => ({
   weekStart: '2026-11-16', exists: true, draft: false, userId: 'u', goal: { ...counts, bidsSelf: 50 }, done: counts,
-  routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }],
-  weeklyGoals: [{ id: 'g1', text: 'Send proposals', kind: 'count', target: 250, archived: false }],
+  routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false, addedBy: 'admin' as const }],
+  weeklyGoals: [{ id: 'g1', text: 'Send proposals', kind: 'count', target: 250, archived: false, addedBy: 'admin' as const }],
   progress: { g1: { value: 180, done: false, target: 250 } },
   recapNotes: '', stages: { self: {}, caller: {} }, days: [], plansOwnWeek: true, ...over,
 });

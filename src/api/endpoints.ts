@@ -520,10 +520,12 @@ export interface PlanItem {
   kind: PlanItemKind;
   target: number | null;
   archived: boolean;
+  /** Who created it: the admin's items are locked for a person the admin plans. */
+  addedBy: 'admin' | 'self';
 }
 
 /** A plan item as sent: new items have no id (the server assigns one). */
-export type PlanItemIn = Omit<PlanItem, 'id'> & { id?: string };
+export type PlanItemIn = Omit<PlanItem, 'id' | 'addedBy'> & { id?: string; addedBy?: 'admin' | 'self' };
 
 /** One day's result for an item; `target` is frozen when saved. */
 export interface ItemResult {

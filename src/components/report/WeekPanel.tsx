@@ -65,8 +65,9 @@ export default function WeekPanel({
   // Planned by the admin: the person sees the plan and writes only the recap, once the week is saved.
   const adminPlans = mode === 'own' && data?.plansOwnWeek === false;
   const planEditable = mode === 'admin' || (mode === 'own' && !adminPlans);
+  const ownItems = adminPlans && !!data?.exists; // the planned person edits only their own items, once the week is saved
   const recapEditable = mode === 'own' && (!adminPlans || !!data?.exists);
-  const canSave = planEditable || recapEditable;
+  const canSave = planEditable || ownItems || recapEditable;
 
   const save = async () => {
     if (!form || !data) return;
@@ -159,13 +160,13 @@ export default function WeekPanel({
             <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-routines-title">
               <h3 id="week-routines-title" className="card-title">Routines</h3>
               <p className="mb-2 text-xs text-muted">Shown every working day; count / hours targets are per day.</p>
-              <PlanItemsEditor items={form.routines} scope="routine" onChange={(routines) => setForm({ ...form, routines })} readOnly={!planEditable} />
+              <PlanItemsEditor items={form.routines} scope="routine" onChange={(routines) => setForm({ ...form, routines })} readOnly={!planEditable && !ownItems} lockedFor={ownItems ? (i) => i.addedBy !== 'self' : undefined} />
             </section>
 
             <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-goals-title">
               <h3 id="week-goals-title" className="card-title">Weekly goals</h3>
               <p className="mb-2 text-xs text-muted">One-off outcomes; count / hours targets are for the whole week.</p>
-              <PlanItemsEditor items={form.weeklyGoals} scope="goal" onChange={(weeklyGoals) => setForm({ ...form, weeklyGoals })} readOnly={!planEditable} />
+              <PlanItemsEditor items={form.weeklyGoals} scope="goal" onChange={(weeklyGoals) => setForm({ ...form, weeklyGoals })} readOnly={!planEditable && !ownItems} lockedFor={ownItems ? (i) => i.addedBy !== 'self' : undefined} />
             </section>
           </div>
 

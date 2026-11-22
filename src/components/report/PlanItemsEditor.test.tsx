@@ -20,6 +20,18 @@ describe('PlanItemsEditor', () => {
     expect(spy).toHaveBeenLastCalledWith([{ text: '', kind: 'check', target: null, archived: false }]);
   });
 
+  it('a locked row has no inputs and no archive button; unlocked rows stay editable', () => {
+    const items: PlanItemIn[] = [
+      { id: 'a', text: 'Admin one', kind: 'check', target: null, archived: false, addedBy: 'admin' },
+      { id: 'b', text: 'Mine', kind: 'check', target: null, archived: false, addedBy: 'self' },
+    ];
+    render(<PlanItemsEditor items={items} scope="routine" onChange={() => {}} lockedFor={(i) => i.addedBy !== 'self'} />);
+    expect(screen.getByText('Admin one')).toBeTruthy();
+    expect(screen.getAllByLabelText(/^routine item \d+$/i)).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /archive/i })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: '+ Add my item' }));
+  });
+
   it('sets kind and target; target only for count / hours', () => {
     const spy = vi.fn();
     render(<Harness initial={[{ text: 'Reply', kind: 'check', target: null, archived: false }]} scope="routine" spy={spy} />);

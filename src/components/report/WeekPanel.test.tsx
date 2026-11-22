@@ -51,13 +51,41 @@ describe('WeekPanel', () => {
     renderPanel('own', { plansOwnWeek: false });
     expect(await screen.findByText('Planned by your admin')).toBeTruthy();
     expect(screen.queryByLabelText(/bids bidder goal/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: /add item/i })).toBeNull();
     fireEvent.change(screen.getByLabelText('Recap notes'), { target: { value: 'new recap' } });
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     await waitFor(() => expect(api.putWeekPlan).toHaveBeenCalled());
     const body = vi.mocked(api.putWeekPlan).mock.calls[0][1] as unknown as Record<string, unknown>;
     expect(body.recapNotes).toBe('new recap');
     expect(body.goal).toMatchObject({ bidsSelf: 5 });
+  });
+
+  it('planned person: admin items are locked, own items editable, Add item adds an own item, Save sends both', async () => {
+    vi.mocked(api.putWeekPlan).mockResolvedValue(plan as never);
+    renderPanel('own', {
+      plansOwnWeek: false,
+      routines: [
+        { id: 'r1', text: 'Admin routine', kind: 'check', target: null, archived: false, addedBy: 'admin' },
+        { id: 'r2', text: 'Mine', kind: 'check', target: null, archived: false, addedBy: 'self' },
+      ],
+    });
+    expect(await screen.findByText('Admin routine')).toBeTruthy();
+    expect(screen.getAllByText('🔒').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText(/^routine item \d+$/i)).toHaveLength(1);
+    fireEvent.click(screen.getAllByRole('button', { name: '+ Add my item' })[0]);
+    fireEvent.change(screen.getAllByLabelText(/^routine item \d+$/i)[1], { target: { value: 'New one' } });
+    fireEvent.click(screen.getByRole('button', { name: /save week/i }));
+    await waitFor(() => expect(api.putWeekPlan).toHaveBeenCalled());
+    const body = vi.mocked(api.putWeekPlan).mock.calls[0][1] as unknown as { routines: Record<string, unknown>[] };
+    expect(body.routines).toHaveLength(3);
+    expect(body.routines[0]).toMatchObject({ id: 'r1', text: 'Admin routine', addedBy: 'admin' });
+    expect(body.routines[2]).toMatchObject({ text: 'New one', addedBy: 'self' });
+  });
+
+  it('planned person before the week is published: no Add item, no Save', async () => {
+    renderPanel('own', { plansOwnWeek: false, exists: false });
+    expect(await screen.findByText('Planned by your admin')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /add (my )?item/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /save week/i })).toBeNull();
   });
 
   it('own + plansOwnWeek false + not saved: recap read-only, no Save', async () => {
