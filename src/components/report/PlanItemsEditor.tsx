@@ -24,6 +24,8 @@ export default function PlanItemsEditor({
   label?: string;
 }) {
   const live = items.map((item, index) => ({ item, index })).filter((x) => !x.item.archived);
+  // Labels number the editable rows only (locked rows are plain text).
+  const editable = live.filter((x) => !lockedFor?.(x.item));
   const update = (index: number, patch: Partial<PlanItemIn>) =>
     onChange(items.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   // Unsaved rows are dropped; saved ones are flagged so the server archives them.
@@ -35,7 +37,7 @@ export default function PlanItemsEditor({
 
   const readOnlyRow = ({ item, index }: { item: PlanItemIn; index: number }, locked: boolean) => (
     <li key={item.id ?? index} className="text-sm text-body">
-      {locked && <span aria-label="Set by your admin" title="Set by your admin" className="mr-1">🔒</span>}
+      {locked && <span role="img" aria-label="Set by your admin" title="Set by your admin" className="mr-1">🔒</span>}
       {item.text}
       {hasTarget(item.kind) && item.target != null && (
         <span className="text-xs text-muted"> · {item.target}{item.kind === 'hours' ? 'h' : ''} {scope === 'routine' ? 'per day' : 'this week'}</span>
@@ -53,7 +55,7 @@ export default function PlanItemsEditor({
 
   return (
     <div className="space-y-1.5">
-      {live.map(({ item, index }, n) => lockedFor?.(item) ? (
+      {live.map(({ item, index }) => lockedFor?.(item) ? (
         <ul key={item.id ?? `new-${index}`}>{readOnlyRow({ item, index }, true)}</ul>
       ) : (
         <div key={item.id ?? `new-${index}`} className="flex flex-wrap items-center gap-2">
@@ -63,7 +65,7 @@ export default function PlanItemsEditor({
             value={item.text}
             maxLength={MAX_LENGTH}
             placeholder="Describe it"
-            aria-label={`${label} item ${n + 1}`}
+            aria-label={`${label} item ${editable.findIndex((x) => x.index === index) + 1}`}
             onChange={(e) => update(index, { text: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -75,7 +77,7 @@ export default function PlanItemsEditor({
           <select
             className="input !w-24 shrink-0"
             value={item.kind}
-            aria-label={`${label} item ${n + 1} kind`}
+            aria-label={`${label} item ${editable.findIndex((x) => x.index === index) + 1} kind`}
             onChange={(e) => {
               const kind = e.target.value as PlanItemKind;
               update(index, { kind, target: hasTarget(kind) ? item.target : null });
@@ -94,20 +96,20 @@ export default function PlanItemsEditor({
                 step={item.kind === 'hours' ? 0.5 : 1}
                 className="input !w-20 shrink-0"
                 value={item.target ?? ''}
-                aria-label={`${label} item ${n + 1} target`}
+                aria-label={`${label} item ${editable.findIndex((x) => x.index === index) + 1} target`}
                 onChange={(e) => update(index, { target: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
               />
               <span className="text-xs text-muted">{scope === 'routine' ? 'per day' : 'this week'}</span>
             </>
           )}
-          <button type="button" className="btn-icon" aria-label={`Archive ${label} item ${n + 1}`} onClick={() => archive(index)}>
+          <button type="button" className="btn-icon" aria-label={`Archive ${label} item ${editable.findIndex((x) => x.index === index) + 1}`} onClick={() => archive(index)}>
             <Archive size={14} aria-hidden />
           </button>
         </div>
       ))}
       {live.length < MAX_ITEMS && (
         <button type="button" className="btn-outline text-xs" onClick={add}>
-          <Plus size={14} className="mr-1" aria-hidden /> {lockedFor ? '+ Add my item' : 'Add item'}
+          <Plus size={14} className="mr-1" aria-hidden /> {lockedFor ? 'Add my item' : 'Add item'}
         </button>
       )}
     </div>

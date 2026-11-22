@@ -29,7 +29,20 @@ describe('PlanItemsEditor', () => {
     expect(screen.getByText('Admin one')).toBeTruthy();
     expect(screen.getAllByLabelText(/^routine item \d+$/i)).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /archive/i })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: '+ Add my item' }));
+    expect(screen.getByRole('img', { name: 'Set by your admin' })).toBeTruthy();
+    expect(screen.getByLabelText('Routine item 1')).toBeTruthy();
+    const spy = vi.fn();
+    cleanup();
+    render(<PlanItemsEditor items={items} scope="routine" onChange={spy} lockedFor={(i) => i.addedBy !== 'self'} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add my item' }));
+    expect(spy.mock.lastCall![0][2]).toMatchObject({ text: '', addedBy: 'self' });
+  });
+
+  it('without lockedFor the button reads "Add item" and the new row has no addedBy', () => {
+    const spy = vi.fn();
+    render(<PlanItemsEditor items={[]} scope="routine" onChange={spy} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+    expect(spy.mock.lastCall![0][0]).not.toHaveProperty('addedBy');
   });
 
   it('sets kind and target; target only for count / hours', () => {

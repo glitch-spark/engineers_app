@@ -71,8 +71,8 @@ describe('WeekPanel', () => {
     expect(await screen.findByText('Admin routine')).toBeTruthy();
     expect(screen.getAllByText('🔒').length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText(/^routine item \d+$/i)).toHaveLength(1);
-    fireEvent.click(screen.getAllByRole('button', { name: '+ Add my item' })[0]);
-    fireEvent.change(screen.getAllByLabelText(/^routine item \d+$/i)[1], { target: { value: 'New one' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add my item' })[0]);
+    fireEvent.change(screen.getByLabelText('Routine item 2'), { target: { value: 'New one' } });
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     await waitFor(() => expect(api.putWeekPlan).toHaveBeenCalled());
     const body = vi.mocked(api.putWeekPlan).mock.calls[0][1] as unknown as { routines: Record<string, unknown>[] };
