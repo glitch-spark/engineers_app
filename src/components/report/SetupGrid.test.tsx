@@ -211,6 +211,45 @@ describe('SetupGrid', () => {
     expect(screen.getByRole('button', { name: /^Email.*daily/ })).toBeTruthy();
   });
 
+  it('chip menu "Move into column…" moves the chip into an existing column or a new name', async () => {
+    show();
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Solo of Ben' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
+    expect((screen.getByLabelText('Item name') as HTMLInputElement).value).toBe('Solo');
+    expect(document.querySelectorAll('datalist option').length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Brand new' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    expect(screen.getByRole('button', { name: /^Brand new/ })).toBeTruthy();
+    expect(input('Ben Brand new').checked).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Remove Solo from Ben' })).toBeNull();
+  });
+
+  it('own items (added by the person) have no Move action', async () => {
+    const t = team();
+    t[1].weeklyGoals.push({ ...item('g9', 'Mine'), addedBy: 'self' });
+    serve(t);
+    show();
+    await ready();
+    expect(screen.queryByRole('button', { name: 'Actions for Mine of Ben' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Actions for Solo of Ben' })).toBeTruthy();
+  });
+
+  it('a blocked move shows the message and changes nothing', async () => {
+    const t = team();
+    t[0].weeklyGoals.push(item('g8', 'Solo'));
+    t[0].weeklyGoals.push(item('g7', 'Other'));
+    serve(t);
+    show();
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Other of Ana' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
+    fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'solo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    expect(screen.getByRole('alert').textContent).toBe('Ana already has solo');
+    expect(screen.getByRole('button', { name: 'Remove Other from Ana' })).toBeTruthy();
+  });
+
   it('Publish week sends only rowsToSave and re-reads the week', async () => {
     serve([...team(), person('Cy', { exists: false, routines: [item('r9', 'Email')] })]);
     show();

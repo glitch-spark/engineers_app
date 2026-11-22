@@ -6,7 +6,8 @@ import type { Column, Scope } from '../../lib/teamGrid';
 export type ItemFormMode =
   | { mode: 'add'; userId: string | null }
   | { mode: 'rename'; col: Column }
-  | { mode: 'type'; col: Column };
+  | { mode: 'type'; col: Column }
+  | { mode: 'move'; userId: string; index: number; from: Column; personName: string };
 
 export interface ItemFormValues {
   text: string;
@@ -23,15 +24,17 @@ const KINDS: [PlanItemKind, string][] = [
 
 /** The grid's inline form: add an item (everyone or one person), rename a column, or change its type. */
 export default function SetupItemForm({
-  form, people, onSubmit, onCancel,
+  form, people, columnNames = [], onSubmit, onCancel,
 }: {
   form: ItemFormMode;
   people: { id: string; name: string }[];
+  /** Suggestions for the move form's name. */
+  columnNames?: string[];
   /** Returns an error to show, or null when applied. */
   onSubmit: (v: ItemFormValues) => string | null;
   onCancel: () => void;
 }) {
-  const col = form.mode === 'add' ? null : form.col;
+  const col = form.mode === 'add' ? null : form.mode === 'move' ? form.from : form.col;
   const [v, setV] = useState<ItemFormValues>({
     text: col?.text ?? '', kind: col?.kind ?? 'check', scope: col?.scope ?? 'routine',
     userId: form.mode === 'add' ? form.userId ?? '' : '', target: null,
@@ -44,7 +47,7 @@ export default function SetupItemForm({
     setError(onSubmit(v));
   };
 
-  const title = form.mode === 'add' ? 'Add item' : form.mode === 'rename' ? `Rename ${col?.text}` : `Change type of ${col?.text}`;
+  const title = form.mode === 'add' ? 'Add item' : form.mode === 'move' ? `Move ${col?.text} for ${form.personName}` : form.mode === 'rename' ? `Rename ${col?.text}` : `Change type of ${col?.text}`;
 
   return (
     <form
@@ -62,8 +65,12 @@ export default function SetupItemForm({
             value={v.text}
             autoFocus
             placeholder="e.g. LinkedIn connects"
+            list={form.mode === 'move' ? 'move-column-names' : undefined}
             onChange={(e) => set({ text: e.target.value })}
           />
+          {form.mode === 'move' && (
+            <datalist id="move-column-names">{columnNames.map((n) => <option key={n} value={n} />)}</datalist>
+          )}
         </label>
       )}
       {form.mode !== 'rename' && (
@@ -75,15 +82,17 @@ export default function SetupItemForm({
           </select>
         </label>
       )}
+      {(form.mode === 'add' || form.mode === 'move') && (
+        <label className="form-label flex flex-col gap-1">
+          When
+          <select className="input w-48" value={v.scope} onChange={(e) => set({ scope: e.target.value as Scope })}>
+            <option value="routine">Every day (routine)</option>
+            <option value="goal">Once this week (goal)</option>
+          </select>
+        </label>
+      )}
       {form.mode === 'add' && (
         <>
-          <label className="form-label flex flex-col gap-1">
-            When
-            <select className="input w-48" value={v.scope} onChange={(e) => set({ scope: e.target.value as Scope })}>
-              <option value="routine">Every day (routine)</option>
-              <option value="goal">Once this week (goal)</option>
-            </select>
-          </label>
           <label className="form-label flex flex-col gap-1">
             For
             <select className="input w-48" value={v.userId} onChange={(e) => set({ userId: e.target.value })}>
@@ -110,7 +119,7 @@ export default function SetupItemForm({
         </>
       )}
       <div className="flex gap-2">
-        <button type="submit" className="btn text-sm">{form.mode === 'add' ? 'Add' : 'Save'}</button>
+        <button type="submit" className="btn text-sm">{form.mode === 'add' ? 'Add' : form.mode === 'move' ? 'Move' : 'Save'}</button>
         <button type="button" className="btn-outline text-sm" onClick={onCancel}>Cancel</button>
       </div>
       {error && <p className="w-full text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}

@@ -5,7 +5,7 @@ import { hasTarget } from '../../api/endpoints';
 import type { PlanItemKind, TeamWeekUser } from '../../api/endpoints';
 import { addDays, dateParam, parseDateParam } from '../../lib/reportWeek';
 import {
-  addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, ownItems,
+  addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, moveBlocked, moveToColumn, ownItems,
   removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, setCell, setOwnWeek, setTarget,
   weekStatus, type Column, type GridState, type Scope, type TargetKey,
 } from '../../lib/teamGrid';
@@ -157,6 +157,12 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
         if (list.length >= MAX_ITEMS) return `${nameOf(u)} already has ${MAX_ITEMS} ${listName(v.scope)}.`;
         setState(addOwnItem(state, v.userId, text, v.kind, v.scope, v.target));
       }
+    } else if (form.mode === 'move') {
+      if (text.length > 200) return 'Name is too long (200 characters max).';
+      const to = { text, kind: v.kind, scope: v.scope };
+      const err = moveBlocked(state, form.userId, form.from.scope, form.index, to);
+      if (err) return err;
+      setState(moveToColumn(state, form.userId, form.from.scope, form.index, to));
     } else if (form.mode === 'rename') {
       const key = columnKey(text, form.col.kind, form.col.scope);
       if (key !== form.col.key && keyTaken(state, key)) return TAKEN;
@@ -270,7 +276,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
       {/* Locked while publishing: the re-read replaces every saved row, so later typing would be lost. */}
       <fieldset disabled={saving} className="m-0 min-w-0 space-y-3 border-0 p-0">
         {form && (
-          <SetupItemForm key={JSON.stringify(form)} form={form} people={people} onSubmit={submitForm} onCancel={() => setForm(null)} />
+          <SetupItemForm key={JSON.stringify(form)} form={form} people={people} columnNames={[...new Set(cols.map((c) => c.text))]} onSubmit={submitForm} onCancel={() => setForm(null)} />
         )}
 
         <div className="overflow-x-auto">
@@ -327,6 +333,16 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                             {o.item.target != null && ` · ${o.item.target}`}
                             {o.item.addedBy === 'self' && <span className="text-muted"> · added by {name}</span>}
                             <span className="text-muted"> · {o.scope === 'routine' ? 'daily' : 'week'}</span>
+                            {o.item.addedBy !== 'self' && (
+                              <ActionMenu
+                                label={`Actions for ${o.item.text} of ${name}`}
+                                className="ml-1 text-muted hover:text-zinc-900 dark:hover:text-zinc-100"
+                                items={[{
+                                  label: 'Move into column…',
+                                  onSelect: () => openForm({ mode: 'move', userId: u.userId, index: o.index, from: { key: '', text: o.item.text, kind: o.item.kind, scope: o.scope }, personName: name }),
+                                }]}
+                              />
+                            )}
                             <button type="button" className="ml-1 text-muted hover:text-red-600" aria-label={`Remove ${o.item.text} from ${name}`}
                               onClick={() => setState(removeOwnItem(state, u.userId, o.scope, o.index))}>
                               ✕

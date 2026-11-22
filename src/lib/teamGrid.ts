@@ -123,6 +123,40 @@ export const removeOwnItem = (s: GridState, userId: string, scope: Scope, index:
   return mapUser(s, userId, (u) => ({ ...u, [k]: u[k].filter((_, i) => i !== index) }));
 };
 
+type Dest = { text: string; kind: PlanItemKind; scope: Scope };
+
+/** Why chip `index` of `userId`'s `scope` list cannot move to `to`, or null. */
+export function moveBlocked(s: GridState, userId: string, scope: Scope, index: number, to: Dest): string | null {
+  const u = s.users.find((x) => x.userId === userId);
+  const it = u?.[listKey(scope)][index];
+  if (!u || !it) return null;
+  const name = u.name || u.userId;
+  const key = columnKey(to.text, to.kind, to.scope);
+  const taken = SCOPES.some((sc) => u[listKey(sc)].some((i, n) => !(sc === scope && n === index) && itemKey(i, sc) === key));
+  if (taken) return `${name} already has ${tidy(to.text)}`;
+  if (to.scope !== scope && u[listKey(to.scope)].length >= MAX_ITEMS) return `${name}'s list is full (${MAX_ITEMS} items)`;
+  return null;
+}
+
+/** Same kind and scope: a rename (id and target kept). Otherwise the id is dropped (the server archives and recreates). */
+export function moveToColumn(s: GridState, userId: string, scope: Scope, index: number, to: Dest): GridState {
+  const u = s.users.find((x) => x.userId === userId);
+  const it = u?.[listKey(scope)][index];
+  if (!u || !it || it.addedBy === 'self' || moveBlocked(s, userId, scope, index, to)) return s;
+  const text = tidy(to.text);
+  const pin = columns(s).some((c) => c.key === columnKey(text, to.kind, to.scope)) ? s : addColumn(s, text, to.kind, to.scope);
+  if (to.kind === it.kind && to.scope === scope) {
+    return mapUser(pin, userId, (x) => ({ ...x, [listKey(scope)]: x[listKey(scope)].map((i, n) => (n === index ? { ...i, text } : i)) }));
+  }
+  const moved: PlanItemIn = { text, kind: to.kind, target: hasTarget(it.kind) && hasTarget(to.kind) ? it.target : null, archived: false };
+  const from = listKey(scope);
+  const dest = listKey(to.scope);
+  return mapUser(pin, userId, (x) => {
+    const kept = { ...x, [from]: x[from].filter((_, n) => n !== index) };
+    return { ...kept, [dest]: [...kept[dest], moved] };
+  });
+}
+
 const rewritePinned = (s: GridState, c: Column, next: Column | null): Column[] =>
   s.pinned.flatMap((p) => (p.key !== c.key ? [p] : next ? [next] : []));
 
