@@ -7,7 +7,7 @@ export type ItemFormMode =
   | { mode: 'add'; userId: string | null }
   | { mode: 'rename'; col: Column }
   | { mode: 'type'; col: Column }
-  | { mode: 'move'; userId: string; index: number; from: Column; personName: string };
+  | { mode: 'move'; userId: string; index: number; from: Column; itemId?: string; personName: string };
 
 export interface ItemFormValues {
   text: string;

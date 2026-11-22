@@ -5,7 +5,7 @@ import { hasTarget } from '../../api/endpoints';
 import type { PlanItemKind, TeamWeekUser } from '../../api/endpoints';
 import { addDays, dateParam, parseDateParam } from '../../lib/reportWeek';
 import {
-  addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, moveBlocked, moveToColumn, ownItems,
+  addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, movable, moveBlocked, moveToColumn, ownItems,
   removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, setCell, setOwnWeek, setTarget,
   weekStatus, type Column, type GridState, type Scope, type TargetKey,
 } from '../../lib/teamGrid';
@@ -76,6 +76,11 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
       return { users: users.map(kept), pinned: [...base, ...s.pinned.filter((p) => !base.some((b) => b.key === p.key))] };
     });
   }, [cur.data]);
+
+  // Close the move form once its chip is no longer where it was (an earlier chip was removed, a cell toggled...).
+  useEffect(() => {
+    if (form?.mode === 'move' && state && !movable(state, form.userId, form.from.scope, form.index, { id: form.itemId, text: form.from.text, kind: form.from.kind })) setForm(null);
+  }, [state, form]);
 
   useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
@@ -160,9 +165,10 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     } else if (form.mode === 'move') {
       if (text.length > 200) return 'Name is too long (200 characters max).';
       const to = { text, kind: v.kind, scope: v.scope };
-      const err = moveBlocked(state, form.userId, form.from.scope, form.index, to);
+      const exp = { id: form.itemId, text: form.from.text, kind: form.from.kind };
+      const err = moveBlocked(state, form.userId, form.from.scope, form.index, to, exp);
       if (err) return err;
-      setState(moveToColumn(state, form.userId, form.from.scope, form.index, to));
+      setState(moveToColumn(state, form.userId, form.from.scope, form.index, to, exp));
     } else if (form.mode === 'rename') {
       const key = columnKey(text, form.col.kind, form.col.scope);
       if (key !== form.col.key && keyTaken(state, key)) return TAKEN;
@@ -339,7 +345,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                                 className="ml-1 text-muted hover:text-zinc-900 dark:hover:text-zinc-100"
                                 items={[{
                                   label: 'Move into column…',
-                                  onSelect: () => openForm({ mode: 'move', userId: u.userId, index: o.index, from: { key: '', text: o.item.text, kind: o.item.kind, scope: o.scope }, personName: name }),
+                                  onSelect: () => openForm({ mode: 'move', userId: u.userId, index: o.index, from: { key: '', text: o.item.text, kind: o.item.kind, scope: o.scope }, personName: name, itemId: 'id' in o.item ? o.item.id : undefined }),
                                 }]}
                               />
                             )}

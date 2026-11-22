@@ -274,12 +274,16 @@ describe('teamGrid', () => {
   });
 
   describe('moveToColumn', () => {
+    const ex = (s: GridState, u: string, scope: 'routine' | 'goal', i: number) => {
+      const it = s.users.find((x) => x.userId === u)![scope === 'routine' ? 'routines' : 'weeklyGoals'][i];
+      return { id: 'id' in it ? it.id : undefined, text: it.text, kind: it.kind };
+    };
     const outreach = (kind: PlanItemKind = 'count', scope: 'routine' | 'goal' = 'routine') => ({ text: 'Citizen outreach', kind, scope });
 
     it('a same-kind move renames the chip and keeps id and target', () => {
       const puma = item('Citizen Contact with Gmail', 'count', 250);
       const s = st([user('Puma', [puma])]);
-      const t = moveToColumn(s, 'Puma', 'routine', 0, outreach());
+      const t = moveToColumn(s, 'Puma', 'routine', 0, outreach(), ex(s, 'Puma', 'routine', 0));
       const c = columns(t)[0];
       expect(c.text).toBe('Citizen outreach');
       expect(cell(t, 'Puma', c)).toEqual({ has: true, target: 250 });
@@ -289,25 +293,26 @@ describe('teamGrid', () => {
     it('a different kind or scope drops the id and keeps the target only when both kinds have one', () => {
       const a = item('Calls', 'count', 5);
       const s = st([user('A', [a, item('Z')])]);
-      const hours = moveToColumn(s, 'A', 'routine', 0, outreach('hours'));
+      const hours = moveToColumn(s, 'A', 'routine', 0, outreach('hours'), ex(s, 'A', 'routine', 0));
       expect(hours.users[0].routines.map((i) => i.text)).toEqual(['Z', 'Citizen outreach']);
       expect(hours.users[0].routines[1]).toMatchObject({ kind: 'hours', target: 5 });
       expect('id' in hours.users[0].routines[1]).toBe(false);
-      const goal = moveToColumn(s, 'A', 'routine', 0, outreach('check', 'goal'));
+      const goal = moveToColumn(s, 'A', 'routine', 0, outreach('check', 'goal'), ex(s, 'A', 'routine', 0));
       expect(goal.users[0].weeklyGoals[0]).toMatchObject({ kind: 'check', target: null });
       expect(goal.users[0].routines).toHaveLength(1);
       expect(rowsToSave([], goal)[0].weeklyGoals[0]).not.toHaveProperty('id');
     });
 
     it('a new name pins a new column', () => {
-      const t = moveToColumn(st([user('A', [item('X')])]), 'A', 'routine', 0, { text: ' New  name ', kind: 'check', scope: 'routine' });
+      const s0 = st([user('A', [item('X')])]);
+      const t = moveToColumn(s0, 'A', 'routine', 0, { text: ' New  name ', kind: 'check', scope: 'routine' }, ex(s0, 'A', 'routine', 0));
       expect(columns(t).map((c) => c.text)).toEqual(['New name']);
     });
 
     it('two people moved into one name form one column', () => {
       let s = st([user('A', [item('x1')]), user('B', [item('x2')])]);
-      s = moveToColumn(s, 'A', 'routine', 0, { text: 'Same', kind: 'check', scope: 'routine' });
-      s = moveToColumn(s, 'B', 'routine', 0, { text: 'same', kind: 'check', scope: 'routine' });
+      s = moveToColumn(s, 'A', 'routine', 0, { text: 'Same', kind: 'check', scope: 'routine' }, ex(s, 'A', 'routine', 0));
+      s = moveToColumn(s, 'B', 'routine', 0, { text: 'same', kind: 'check', scope: 'routine' }, ex(s, 'B', 'routine', 0));
       expect(columns(s)).toHaveLength(1);
       expect(ownItems(s, 'A')).toEqual([]);
       expect(cell(s, 'B', columns(s)[0]).has).toBe(true);
@@ -317,16 +322,29 @@ describe('teamGrid', () => {
       const full = Array.from({ length: 20 }, (_, i) => item(`f${i}`));
       const s = st([user('A', [item('Email'), item('Other')], full), user('B', [item('Email')])]);
       const to = { text: 'email', kind: 'check' as const, scope: 'routine' as const };
-      expect(moveBlocked(s, 'A', 'routine', 1, to)).toBe('A already has email');
-      expect(moveToColumn(s, 'A', 'routine', 1, to)).toBe(s);
+      expect(moveBlocked(s, 'A', 'routine', 1, to, ex(s, 'A', 'routine', 1))).toBe('A already has email');
+      expect(moveToColumn(s, 'A', 'routine', 1, to, ex(s, 'A', 'routine', 1))).toBe(s);
       const toGoal = { text: 'Other', kind: 'check' as const, scope: 'goal' as const };
-      expect(moveBlocked(s, 'A', 'routine', 1, toGoal)).toBe("A's list is full (20 items)");
-      expect(moveBlocked(s, 'A', 'routine', 1, { text: 'Other', kind: 'count', scope: 'routine' })).toBeNull();
+      expect(moveBlocked(s, 'A', 'routine', 1, toGoal, ex(s, 'A', 'routine', 1))).toBe("A's list is full (20 items)");
+      expect(moveBlocked(s, 'A', 'routine', 1, { text: 'Other', kind: 'count', scope: 'routine' }, ex(s, 'A', 'routine', 1))).toBeNull();
+    });
+
+    it('refuses when the item at the index is not the expected one or the index is out of range', () => {
+      const s = st([user('A', [item('First'), item('Second')])]);
+      const e = ex(s, 'A', 'routine', 0);
+      const to = { text: 'Dest', kind: 'check' as const, scope: 'routine' as const };
+      const shifted = removeOwnItem(s, 'A', 'routine', 0);
+      expect(moveToColumn(shifted, 'A', 'routine', 0, to, e)).toBe(shifted);
+      expect(moveBlocked(shifted, 'A', 'routine', 0, to, e)).toMatch(/changed/);
+      expect(moveToColumn(s, 'A', 'routine', 5, to, e)).toBe(s);
+      expect(moveBlocked(s, 'A', 'routine', 5, to, e)).toMatch(/changed/);
+      // no id: falls back to text + kind
+      expect(moveToColumn(s, 'A', 'routine', 0, to, { text: 'Second', kind: 'check' })).toBe(s);
     });
 
     it('never moves an item the person added', () => {
       const s = st([user('A', [own('Mine')])]);
-      expect(moveToColumn(s, 'A', 'routine', 0, outreach('check'))).toBe(s);
+      expect(moveToColumn(s, 'A', 'routine', 0, outreach('check'), ex(s, 'A', 'routine', 0))).toBe(s);
     });
   });
 });

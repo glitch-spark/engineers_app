@@ -217,7 +217,7 @@ describe('SetupGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Solo of Ben' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
     expect((screen.getByLabelText('Item name') as HTMLInputElement).value).toBe('Solo');
-    expect(document.querySelectorAll('datalist option').length).toBeGreaterThan(0);
+    expect([...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))).toEqual(['Email', 'Proposals']);
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Brand new' } });
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
     expect(screen.getByRole('button', { name: /^Brand new/ })).toBeTruthy();
@@ -248,6 +248,21 @@ describe('SetupGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
     expect(screen.getByRole('alert').textContent).toBe('Ana already has solo');
     expect(screen.getByRole('button', { name: 'Remove Other from Ana' })).toBeTruthy();
+  });
+
+  it('closes the move form when an earlier chip is removed, so nothing else is moved', async () => {
+    const t = team();
+    t[1].weeklyGoals = [item('g3', 'Solo'), item('g4', 'Later')];
+    t[1].weeklyGoals.unshift(item('g2', 'Proposals', 'count', 100));
+    serve(t);
+    show();
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Later of Ben' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
+    expect(screen.getByLabelText('Item name')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Solo from Ben' }));
+    expect(screen.queryByLabelText('Item name')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove Later from Ben' })).toBeTruthy();
   });
 
   it('Publish week sends only rowsToSave and re-reads the week', async () => {

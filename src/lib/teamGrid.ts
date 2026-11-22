@@ -125,11 +125,20 @@ export const removeOwnItem = (s: GridState, userId: string, scope: Scope, index:
 
 type Dest = { text: string; kind: PlanItemKind; scope: Scope };
 
+/** What the caller believes sits at `index`: its id when it has one, else text + kind. */
+export type Expect = { id?: string; text: string; kind: PlanItemKind };
+const STALE = 'That item changed — open Move again';
+/** The item at `index` if it is still the expected one (the list may have shifted since the form opened). */
+export function movable(s: GridState, userId: string, scope: Scope, index: number, e: Expect): PlanItemIn | undefined {
+  const it = s.users.find((x) => x.userId === userId)?.[listKey(scope)][index];
+  const id = it && 'id' in it ? it.id : undefined;
+  return it && (e.id ? id === e.id : it.text === e.text && it.kind === e.kind) ? it : undefined;
+}
+
 /** Why chip `index` of `userId`'s `scope` list cannot move to `to`, or null. */
-export function moveBlocked(s: GridState, userId: string, scope: Scope, index: number, to: Dest): string | null {
+export function moveBlocked(s: GridState, userId: string, scope: Scope, index: number, to: Dest, e: Expect): string | null {
   const u = s.users.find((x) => x.userId === userId);
-  const it = u?.[listKey(scope)][index];
-  if (!u || !it) return null;
+  if (!u || !movable(s, userId, scope, index, e)) return STALE;
   const name = u.name || u.userId;
   const key = columnKey(to.text, to.kind, to.scope);
   const taken = SCOPES.some((sc) => u[listKey(sc)].some((i, n) => !(sc === scope && n === index) && itemKey(i, sc) === key));
@@ -139,10 +148,9 @@ export function moveBlocked(s: GridState, userId: string, scope: Scope, index: n
 }
 
 /** Same kind and scope: a rename (id and target kept). Otherwise the id is dropped (the server archives and recreates). */
-export function moveToColumn(s: GridState, userId: string, scope: Scope, index: number, to: Dest): GridState {
-  const u = s.users.find((x) => x.userId === userId);
-  const it = u?.[listKey(scope)][index];
-  if (!u || !it || it.addedBy === 'self' || moveBlocked(s, userId, scope, index, to)) return s;
+export function moveToColumn(s: GridState, userId: string, scope: Scope, index: number, to: Dest, e: Expect): GridState {
+  const it = movable(s, userId, scope, index, e);
+  if (!it || it.addedBy === 'self' || moveBlocked(s, userId, scope, index, to, e)) return s;
   const text = tidy(to.text);
   const pin = columns(s).some((c) => c.key === columnKey(text, to.kind, to.scope)) ? s : addColumn(s, text, to.kind, to.scope);
   if (to.kind === it.kind && to.scope === scope) {
