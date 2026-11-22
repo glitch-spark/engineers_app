@@ -10,6 +10,7 @@ let n = 0;
 const item = (text: string, kind: PlanItemKind = 'check', target: number | null = null): PlanItem => ({
   id: `i${++n}`, text, kind, target, archived: false, addedBy: 'admin',
 });
+const own = (text: string, kind: PlanItemKind = 'check', target: number | null = null): PlanItem => ({ ...item(text, kind, target), addedBy: 'self' });
 const user = (userId: string, routines: PlanItem[] = [], weeklyGoals: PlanItem[] = [], exists = true): TeamWeekUser => ({
   userId, name: userId, plansOwnWeek: false, exists, goal: { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0 }, routines, weeklyGoals,
 });
@@ -235,5 +236,35 @@ describe('teamGrid', () => {
     expect(addTaken(s, solo, 'A')).toBe(true);
     const all = addColumn(s, 'Solo', 'check', 'routine');
     expect(cell(all, 'A', columns(all).find((c) => c.key === solo)!).has).toBe(true);
+  });
+
+  it("a person's own item never joins a column, even with the same name as an admin column", () => {
+    const s = st([user('A', [item('Email'), own('Email')]), user('B', [item('Email')]), user('C', [own('Email')]), user('D', [own('Email')])]);
+    expect(columns(s).map((c) => c.text)).toEqual(['Email']);
+    expect(cell(s, 'C', columns(s)[0]).has).toBe(false);
+    expect(ownItems(s, 'C').map((o) => o.item.addedBy)).toEqual(['self']);
+    expect(ownItems(s, 'A').map((o) => o.item.addedBy)).toEqual(['self']);
+    // two people's own items alone make no column
+    expect(columns(st([user('C', [own('Solo')]), user('D', [own('Solo')])]))).toEqual([]);
+  });
+
+  it('own items do not block an admin add or rename, and survive column edits', () => {
+    const s = st([user('A', [item('Email'), own('Email')]), user('C', [own('Calls')])]);
+    expect(addTaken(s, columnKey('Calls', 'check', 'routine'))).toBe(false);
+    expect(addTaken(s, columnKey('Calls', 'check', 'routine'), 'C')).toBe(false);
+    expect(keyTaken(s, columnKey('Calls', 'check', 'routine'))).toBe(false);
+    const off = setCell(s, 'A', col('Email'), { has: false, target: null });
+    expect(off.users[0].routines.map((i) => i.addedBy)).toEqual(['self']);
+  });
+
+  it('own items keep their id in rowsToSave and are not sent when untouched', () => {
+    const mine = own('Mine');
+    const saved = [user('A', [item('Email'), mine]), user('B')];
+    const s = st(saved);
+    expect(rowsToSave(saved, s)).toEqual([]);
+    const gone = removeOwnItem(s, 'B', 'routine', 0);
+    expect(rowsToSave(saved, gone)).toEqual([]);
+    const edited = setTarget(s, 'A', 'bidsSelf', 5);
+    expect(rowsToSave(saved, edited)[0].routines.map((i) => i.id)).toEqual([saved[0].routines[0].id, mine.id]);
   });
 });

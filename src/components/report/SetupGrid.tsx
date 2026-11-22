@@ -325,6 +325,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                           <span key={`${o.scope}${o.index}`} className={o.scope === 'routine' ? 'badge-info' : 'badge-neutral'}>
                             {o.item.text}
                             {o.item.target != null && ` · ${o.item.target}`}
+                            {o.item.addedBy === 'self' && <span className="text-muted"> · added by {name}</span>}
                             <span className="text-muted"> · {o.scope === 'routine' ? 'daily' : 'week'}</span>
                             <button type="button" className="ml-1 text-muted hover:text-red-600" aria-label={`Remove ${o.item.text} from ${name}`}
                               onClick={() => setState(removeOwnItem(state, u.userId, o.scope, o.index))}>

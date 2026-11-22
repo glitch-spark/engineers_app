@@ -18,7 +18,8 @@ const tidy = (t: string) => norm(t);
 export const columnKey = (text: string, kind: PlanItemKind, scope: Scope): string =>
   `${scope}|${kind}|${norm(text).toLowerCase()}`;
 
-const itemKey = (i: PlanItemIn, scope: Scope) => columnKey(i.text, i.kind, scope);
+/** A person's own item (`addedBy: 'self'`) never matches a column or another item: it gets a key nothing else has. */
+const itemKey = (i: PlanItemIn, scope: Scope) => (i.addedBy === 'self' ? '\0own' : columnKey(i.text, i.kind, scope));
 const SCOPES: Scope[] = ['routine', 'goal'];
 
 export function columns(s: GridState): Column[] {
@@ -27,6 +28,7 @@ export function columns(s: GridState): Column[] {
     const seen = new Map<string, { col: Column; users: Set<string> }>();
     for (const u of s.users) {
       for (const i of u[listKey(scope)]) {
+        if (i.addedBy === 'self') continue;
         const key = itemKey(i, scope);
         const e = seen.get(key) ?? { col: { key, text: tidy(i.text), kind: i.kind, scope }, users: new Set() };
         e.users.add(u.userId);

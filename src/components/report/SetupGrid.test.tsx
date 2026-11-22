@@ -330,4 +330,17 @@ describe('SetupGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await ready();
   });
+
+  it('an own item chip reads "added by <name>" and can still be removed by the admin', async () => {
+    const t = team();
+    t[1].routines.push({ ...item('r9', 'Email'), addedBy: 'self' }, { ...item('r8', 'Notes'), addedBy: 'self' });
+    serve(t);
+    show();
+    await ready();
+    expect(screen.getAllByText(/added by Ben/)).toHaveLength(2);
+    expect(screen.queryByText(/added by Ana/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Notes from Ben' }));
+    expect(screen.queryByRole('button', { name: 'Remove Notes from Ben' })).toBeNull();
+    expect(screen.getAllByText(/added by Ben/)).toHaveLength(1);
+  });
 });
