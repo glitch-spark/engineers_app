@@ -5,7 +5,7 @@ import { SWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import DayPanel from './DayPanel';
 
-vi.mock('../../api/endpoints', () => ({ getDayPlan: vi.fn(), putDayPlan: vi.fn(), deleteDayPlan: vi.fn() }));
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getDayPlan: vi.fn(), putDayPlan: vi.fn(), deleteDayPlan: vi.fn() }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const c = { bidsSelf: 0, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0 };
@@ -90,6 +90,21 @@ describe('DayPanel', () => {
     expect(JSON.stringify(body.results)).not.toContain('target');
   });
 
+  it("saving sends a log item's entries with empty notes dropped", async () => {
+    setup(plan({
+      items: [item({ id: 'l1', text: 'Profile review', kind: 'log' })],
+      profiles: [{ id: 'p1', name: 'Anna', region: null, archived: false }],
+    }));
+    await screen.findByText('Profile review');
+    fireEvent.click(screen.getByRole('button', { name: /add profile/i }));
+    fireEvent.change(screen.getByLabelText('What changed 1'), { target: { value: ' New title ' } });
+    fireEvent.click(screen.getByRole('button', { name: /add profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+    await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+    const body = vi.mocked(api.putDayPlan).mock.calls[0][1] as unknown as Record<string, any>;
+    expect(body.results.l1).toEqual({ done: true, entries: [{ profileId: 'p1', note: 'New title' }] });
+  });
+
   it('sends targetOverride only after "change for today"', async () => {
     setup(plan());
     await screen.findByText('Check inbox');
@@ -142,5 +157,41 @@ describe('DayPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
     await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
     expect(vi.mocked(api.putDayPlan).mock.calls[0][1]).not.toHaveProperty('followUps');
+  });
+
+  describe('text and choice', () => {
+    const tc = (result: object | null = null, rc: object | null = null) => plan({ items: [
+      item({ id: 't1', text: 'Blockers', kind: 'text', options: [], result }),
+      item({ id: 'c1', text: 'Status', kind: 'choice', options: ['Done', 'Blocked'], result: rc }),
+    ] });
+    const sent = () => (vi.mocked(api.putDayPlan).mock.calls[0][1] as { results: Record<string, object> }).results;
+
+    it('sends the text trimmed, and never a choice the person did not change', async () => {
+      setup(tc({ done: true, value: null, text: ' hi ' }, { done: true, value: null, choice: 'Gone', text: null }));
+      await screen.findByText('Blockers');
+      fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+      await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+      expect(sent()).toEqual({ t1: { done: true, text: 'hi' }, c1: { done: true } });
+    });
+
+    it('sends an emptied text as "" and a changed pick and note', async () => {
+      setup(tc({ done: true, value: null, text: 'old' }, null));
+      await screen.findByText('Blockers');
+      fireEvent.change(screen.getByLabelText('Blockers answer'), { target: { value: '' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Blocked' }));
+      fireEvent.change(screen.getByLabelText('Status note'), { target: { value: ' why ' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+      await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+      expect(sent()).toEqual({ t1: { done: false, text: '' }, c1: { done: true, choice: 'Blocked', text: 'why' } });
+    });
+
+    it('clearing the pick sends choice null', async () => {
+      setup(tc(null, { done: true, value: null, choice: 'Done' }));
+      await screen.findByText('Status');
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+      await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+      expect(sent().c1).toEqual({ done: false, choice: null });
+    });
   });
 });

@@ -502,7 +502,16 @@ export interface Counts extends Bids {
   interviewsCaller: number;
 }
 
-export type PlanItemKind = 'check' | 'count' | 'hours';
+export type PlanItemKind = 'check' | 'count' | 'hours' | 'log' | 'text' | 'choice';
+
+/** Counts and hours carry a target; checks, logs, text and choice don't. */
+export const hasTarget = (kind: PlanItemKind): boolean => kind === 'count' || kind === 'hours';
+
+/** A log item's line for one profile on one day. `profileId` null = the person's own work. */
+export interface LogEntry {
+  profileId: string | null;
+  note: string;
+}
 
 /** A routine (every working day) or weekly goal. `target` is per day for routines, per week for goals. */
 export interface PlanItem {
@@ -510,17 +519,34 @@ export interface PlanItem {
   text: string;
   kind: PlanItemKind;
   target: number | null;
+  /** A choice item's options (2-6, each up to 40 characters); empty for the other kinds. */
+  options: string[];
   archived: boolean;
+  /** Who created it: the admin's items are locked for a person the admin plans. */
+  addedBy: 'admin' | 'self';
 }
 
 /** A plan item as sent: new items have no id (the server assigns one). */
-export type PlanItemIn = Omit<PlanItem, 'id'> & { id?: string };
+export type PlanItemIn = Omit<PlanItem, 'id' | 'addedBy' | 'options'> & { id?: string; addedBy?: 'admin' | 'self'; options?: string[] };
 
 /** One day's result for an item; `target` is frozen when saved. */
 export interface ItemResult {
   done: boolean;
   value: number | null;
   target?: number | null;
+  entries?: LogEntry[];
+  /** A text item's answer, or a choice item's note. */
+  text?: string | null;
+  choice?: string | null;
+}
+
+/** One item's result as sent. `text` / `choice` not sent = keep stored; null or "" = clear. */
+export interface ItemResultIn {
+  done?: boolean;
+  value?: number | null;
+  entries?: LogEntry[];
+  text?: string | null;
+  choice?: string | null;
 }
 
 export interface ItemProgress {
@@ -618,7 +644,7 @@ export interface TodayInterview {
 /** A day's follow-up: results per item, bids done, notes (posts to Slack). */
 export interface DayPlanInput {
   /** Checks send `done`; counts / hours send `value` (the server decides their done). */
-  results: Record<string, { done?: boolean; value?: number | null }>;
+  results: Record<string, ItemResultIn>;
   focus: string[];
   /** Bidder bids are counted by the server, never sent. */
   done: Omit<Bids, 'bidsBidder'>;
@@ -652,6 +678,8 @@ export interface WeekPlan {
   done: Counts;
   stages: InterviewStages;
   days: WeekDaySummary[];
+  /** False when an admin plans this week: the person cannot edit it. */
+  plansOwnWeek: boolean;
 }
 
 export interface WeekPlanInput {
@@ -684,7 +712,7 @@ export const putDayPlan = (date: string, body: DayPlanInput) =>
 
 /** Draft save from Home: ticks, counts and focus only; never submits or posts. */
 export interface DayProgressInput {
-  results?: Record<string, { done?: boolean; value?: number | null }>;
+  results?: Record<string, ItemResultIn>;
   focus?: string[];
 }
 export const putDayProgress = (date: string, body: DayProgressInput) =>
@@ -699,6 +727,34 @@ export const putWeekPlan = (weekStart: string, body: WeekPlanInput) =>
   putJSON<WeekPlan>(`/weekly-plans/${weekStart}`, body);
 
 export const deleteWeekPlan = (weekStart: string) => del<{ message: string }>(`/weekly-plans/${weekStart}`);
+
+export interface TeamGoal { bidsSelf: number; bidsBidder: number; interviewsSelf: number }
+export interface TeamWeekUser {
+  userId: string;
+  name: string | null;
+  plansOwnWeek: boolean;
+  exists: boolean;
+  goal: TeamGoal;
+  routines: PlanItem[];
+  weeklyGoals: PlanItem[];
+}
+export interface TeamWeekRowIn {
+  userId: string;
+  plansOwnWeek: boolean;
+  goal: TeamGoal;
+  routines: PlanItemIn[];
+  weeklyGoals: PlanItemIn[];
+  /** As loaded: false = a carry-over draft, refused if the person saved the week since. */
+  exists: boolean;
+  /** Saved own (`self`) items the admin removed: any other own item missing from the lists stays live. */
+  removedIds: string[];
+}
+
+export const getTeamWeek = (weekStart: string) =>
+  apiFetch<{ weekStart: string; users: TeamWeekUser[] }>(`/weekly-plans/team/${weekStart}`);
+
+export const putTeamWeek = (weekStart: string, plans: TeamWeekRowIn[]) =>
+  putJSON<{ results: { userId: string; ok: boolean; error: string | null }[] }>(`/weekly-plans/team/${weekStart}`, { plans });
 
 export const getTeamReport = (weekStart: string) =>
   apiFetch<{ weekStart: string; users: TeamRow[] }>(`/reports/team${qs({ weekStart })}`);

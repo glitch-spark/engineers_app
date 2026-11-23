@@ -1,18 +1,25 @@
 import { CheckCircle2, Circle, Target } from 'lucide-react';
+import { hasTarget } from '../../api/endpoints';
 import type { PlanItem, WeekPlan } from '../../api/endpoints';
 import { preSplitSelf, selfRegionsTotal, SELF_REGIONS } from '../../lib/reportWeek';
 import ProgressMetric from './ProgressMetric';
 
-/** The week's goal and how far along it is. */
+/**
+ * The week's goal and how far along it is. `adminEdit`: an admin viewing a person (the board is read-only, but the
+ * Week panel opens editable).
+ */
 export default function WeekGoalCard({
   week,
-  canEdit,
+  canEdit: ownerEdit,
+  adminEdit = false,
   onOpen,
 }: {
   week: WeekPlan;
   canEdit: boolean;
+  adminEdit?: boolean;
   onOpen: () => void;
 }) {
+  const canEdit = ownerEdit || adminEdit;
   const { goal, done } = week;
   const routines = week.routines.filter((i) => !i.archived);
   const goals = week.weeklyGoals.filter((i) => !i.archived);
@@ -48,7 +55,9 @@ export default function WeekGoalCard({
         <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-zinc-200 px-4 py-6 text-center dark:border-zinc-800">
           <p className="text-sm font-medium text-strong">No week plan yet</p>
           <p className="mt-1 text-xs text-muted">
-            {canEdit ? 'Set your bids and interviews for the week to track progress here.' : 'This teammate has not set a week plan.'}
+            {ownerEdit
+              ? 'Set your bids and interviews for the week to track progress here.'
+              : 'This teammate has not set a week plan.'}
           </p>
           {canEdit && (
             <button type="button" className="btn mt-3 text-sm" onClick={onOpen}>Set week plan</button>
@@ -82,7 +91,7 @@ export default function WeekGoalCard({
                   <li key={item.id} className="flex items-start gap-2 text-sm text-body">
                     <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-400" aria-hidden />
                     <span>{item.text}</span>
-                    {item.kind !== 'check' && item.target != null && (
+                    {hasTarget(item.kind) && item.target != null && (
                       <span className="text-xs tabular-nums text-muted">{item.target}{unit(item)} per day</span>
                     )}
                   </li>
@@ -99,7 +108,7 @@ export default function WeekGoalCard({
                   const p = week.progress[item.id];
                   return (
                     <li key={item.id}>
-                      {item.kind === 'check' ? (
+                      {!hasTarget(item.kind) ? (
                         <div className="flex items-start gap-2 text-sm">
                           {p?.done ? (
                             <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success-600" aria-hidden />

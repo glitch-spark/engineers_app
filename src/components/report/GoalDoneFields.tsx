@@ -82,6 +82,7 @@ export default function GoalDoneFields({
   showDone = true,
   showInterviewGoal = false,
   readOnly = false,
+  adminEdit = false,
   tracked = {},
   trackedProfiles = [],
   bidderAuto,
@@ -95,6 +96,8 @@ export default function GoalDoneFields({
   showDone?: boolean;
   showInterviewGoal?: boolean;
   readOnly?: boolean;
+  /** The admin plans: the self total is typed; the region split and the caller goal belong to the person. */
+  adminEdit?: boolean;
   /** Self bids the extension recorded per profile, and the profiles already on tracked counts. */
   tracked?: Record<string, number>;
   trackedProfiles?: string[];
@@ -119,8 +122,9 @@ export default function GoalDoneFields({
   const set = (c: Counts, field: NumberField, n: number): Counts =>
     SELF_REGIONS.some((r) => r.field === field) ? withSelfRegion(c, field as SelfRegionField, n) : { ...c, [field]: n };
 
+  const personField = (field: NumberField) => adminEdit && (field === 'interviewsCaller' || SELF_REGIONS.some((r) => r.field === field));
   const goalCell = (field: NumberField, label: string) =>
-    readOnly || !onGoal ? (
+    readOnly || !onGoal || personField(field) ? (
       <ValueBox value={goal[field] ?? 0} muted />
     ) : (
       <NumberInput value={goal[field] ?? 0} label={`${label} goal`} onChange={(n) => onGoal(set(goal, field, n))} />
@@ -204,6 +208,7 @@ export default function GoalDoneFields({
     <div key={field} className={`${row} py-1`}>
       <div className="min-w-0 pt-2 text-sm text-body">
         {label}
+        {adminEdit && field === 'interviewsCaller' && <div className="text-[11px] text-muted">Edited by the person</div>}
         {showDone && <StageChips stages={chips} />}
       </div>
       {showInterviewGoal ? goalCell(field, `Interviews ${label.toLowerCase()}`) : <span className="pt-2 text-right text-xs text-muted">—</span>}
@@ -220,7 +225,14 @@ export default function GoalDoneFields({
       </div>
       <section className="py-1">
         <h3 className="form-label mb-0.5">Bids</h3>
+        {adminEdit && onGoal && (
+          <div className={`${row} py-1`}>
+            <span className="pt-2 text-sm text-body">Self (total)</span>
+            <NumberInput value={goal.bidsSelf ?? 0} label="Bids self total goal" onChange={(n) => onGoal({ ...goal, bidsSelf: n })} />
+          </div>
+        )}
         {SELF_REGIONS.map((r) => bidRow(r.field, `Self (${r.label})`))}
+        {adminEdit && <p className="py-1 text-[11px] text-muted">Region split: Edited by the person</p>}
         {preSplitRow}
         {otherRow}
         {perProfile && shownProfiles.map(profileRow)}

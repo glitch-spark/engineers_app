@@ -8,12 +8,22 @@ import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../../lib/week';
 import { daysWithoutResult, needsInputKey, useNeedsInputActions } from '../interview/useNeedsInputActions';
 import ItemRow, { kept } from '../report/ItemRow';
+import type { RowResult } from '../report/ItemRow';
+import { cleanEntries } from '../report/LogEntries';
 import PendingItems, { usePending } from './PendingItems';
 import PipelineTable, { PIPELINE_GROUPS } from './PipelineTable';
 import TodayRound, { asNeedsInput, roundKey, roundState, useNow } from './TodayRound';
 import WeekTable from './WeekTable';
 
-type Result = { done: boolean; value: number | null };
+type Result = RowResult;
+/** A log result goes out with its blank-note rows dropped; text / choice go only when the person changed them (text raw: the server strips it) (a stale choice is a 422). */
+const body = (r: Result) => ({
+  done: r.done,
+  value: r.value,
+  ...(r.entries ? { entries: cleanEntries(r.entries) } : {}),
+  ...(r.textChanged ? { text: r.text ?? '' } : {}),
+  ...(r.choiceChanged ? { choice: r.choice ?? null } : {}),
+});
 const DEBOUNCE_MS = 800;
 
 const num = (n: number) => n.toLocaleString('en-US');
@@ -68,7 +78,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
   useEffect(() => () => {
     for (const [id, { t, r }] of Object.entries(timers.current)) {
       clearTimeout(t);
-      api.putDayProgress(today, { results: { [id]: r } })
+      api.putDayProgress(today, { results: { [id]: body(r) } })
         .then((next) => globalMutate(['day-plan', today, 'me'], next, false))
         .catch((e) => console.error('Today: flush on leave failed', e));
     }
@@ -97,11 +107,13 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
   const save = async (id: string, r: Result) => {
     delete timers.current[id];
     try {
-      const next = await api.putDayProgress(today, { results: { [id]: r } });
+      const next = await api.putDayProgress(today, { results: { [id]: body(r) } });
       await mutate(next, false);
       refreshRest();
       setFailed(({ [id]: _, ...rest }) => rest);
-      if (!timers.current[id]) setLocal(({ [id]: _, ...rest }) => rest); // keep newer typing
+      // keep newer typing, and a log row still being typed (a blank row isn't saved),
+      // and a text with edge whitespace (the server stores it stripped, which would eat the space between words)
+      if (!timers.current[id] && !r.entries?.some((e) => !e.note.trim()) && (r.text ?? '') === (r.text ?? '').trim()) setLocal(({ [id]: _, ...rest }) => rest);
     } catch {
       setFailed((f) => ({ ...f, [id]: r }));
       if (!timers.current[id]) setLocal(({ [id]: _, ...rest }) => rest); // back to the last saved result
@@ -156,7 +168,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
     return i.scope === 'goal' && on && on !== day ? on : null;
   };
   const resultOf = (i: DayItem) => {
-    const saved = { done: i.result?.done ?? false, value: i.result?.value ?? null };
+    const saved: Result = { done: i.result?.done ?? false, value: i.result?.value ?? null, ...(i.kind === 'log' ? { entries: i.result?.entries ?? [] } : {}), ...(i.kind === 'text' || i.kind === 'choice' ? { text: i.result?.text ?? '', choice: i.result?.choice ?? null } : {}) };
     const r = local[i.id] ?? (i.scope === 'goal' ? { ...saved, done: plan.progress[i.id]?.done ?? saved.done } : saved);
     return weekMet(i) ? { ...r, done: true } : r;
   };
@@ -170,7 +182,9 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
     .filter(([n]) => n > 0).map(([n, short]) => `${n} ${short}`).join(' · ');
 
   const row = (item: DayItem) => {
-    const earlier = doneEarlier(item);
+    const doneOn = doneEarlier(item);
+    // A log, text or choice goal is edited today whatever day it was first done: an edit must never un-tick that day.
+    const earlier = ['log', 'text', 'choice'].includes(item.kind) ? null : doneOn;
     const met = weekMet(item);
     const busy = !!unticking[item.id];
     return (
@@ -178,13 +192,14 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
         <ItemRow
           item={item}
           result={busy ? { done: false, value: item.result?.value ?? null } : earlier ? { done: true, value: item.result?.value ?? null } : resultOf(item)}
+          profiles={plan.profiles}
           week={item.scope === 'goal' ? plan.progress[item.id] : undefined}
           disabled={disabled || item.archived || busy}
           compact
           valueLocked={!!earlier}
           doneLocked={met}
-          note={busy ? undefined : earlier ? `done ${dayDate(earlier).toLocaleDateString('en-US', { weekday: 'short' })}` : met ? 'week target met' : undefined}
-          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, met ? { done: item.result?.done ?? false, value: r.value } : r))}
+          note={busy ? undefined : doneOn ? `done ${dayDate(doneOn).toLocaleDateString('en-US', { weekday: 'short' })}` : met ? 'week target met' : undefined}
+          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, met ? { ...r, done: item.result?.done ?? false } : r))}
         />
         {(failedUntick[item.id] || (failed[item.id] && !local[item.id])) && (
           <li className="text-xs text-red-600">

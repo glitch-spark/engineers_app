@@ -5,7 +5,7 @@ import type { Counts, PlanItemIn } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
 import { parseDateParam, weekLabel } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
-import PlanItemsEditor, { cleanItems } from './PlanItemsEditor';
+import PlanItemsEditor, { cleanItems, hasOptionsError } from './PlanItemsEditor';
 import GoalDoneFields from './GoalDoneFields';
 
 interface WeekForm {
@@ -19,14 +19,14 @@ interface WeekForm {
 export default function WeekPanel({
   weekStart,
   userId,
-  readOnly,
+  mode,
   open,
   onClose,
   onSaved,
 }: {
   weekStart: string;
   userId?: string;
-  readOnly: boolean;
+  mode: 'own' | 'admin' | 'view';
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -62,17 +62,34 @@ export default function WeekPanel({
 
   const dirty = useMemo(() => !!form && JSON.stringify(form) !== initial, [form, initial]);
 
+  // Planned by the admin: the person sees the plan, edits only their own items and the recap, once the week is saved.
+  const adminPlans = mode === 'own' && data?.plansOwnWeek === false;
+  const planEditable = mode === 'admin' || (mode === 'own' && !adminPlans);
+  const ownItems = adminPlans && !!data?.exists; // the planned person edits only their own items, once the week is saved
+  const recapEditable = mode === 'own' && (!adminPlans || !!data?.exists);
+  const canSave = planEditable || ownItems || recapEditable;
+
   const save = async () => {
-    if (!form) return;
+    if (!form || !data) return;
     setSaving(true);
     setMessage(null);
     try {
-      await api.putWeekPlan(weekStart, {
-        goal: form.goal,
-        routines: cleanItems(form.routines),
-        weeklyGoals: cleanItems(form.weeklyGoals),
-        recapNotes: form.recapNotes,
-      });
+      const routines = cleanItems(form.routines);
+      const weeklyGoals = cleanItems(form.weeklyGoals);
+      if (mode === 'admin') {
+        const removedIds = [...form.routines, ...form.weeklyGoals].flatMap((i) => (i.addedBy === 'self' && i.archived && i.id ? [i.id] : []));
+        const { bidsSelf, bidsBidder, interviewsSelf } = form.goal;
+        const res = await api.putTeamWeek(weekStart, [
+          { userId: userId!, plansOwnWeek: data.plansOwnWeek, goal: { bidsSelf, bidsBidder, interviewsSelf }, routines, weeklyGoals, exists: data.exists, removedIds },
+        ]);
+        const failed = res.results.find((r) => !r.ok);
+        if (failed) {
+          setMessage(failed.error || 'Could not save the week.');
+          return;
+        }
+      } else {
+        await api.putWeekPlan(weekStart, { goal: form.goal, routines, weeklyGoals, recapNotes: form.recapNotes });
+      }
       await mutate();
       onSaved();
       onClose();
@@ -84,12 +101,12 @@ export default function WeekPanel({
   };
 
   const monday = parseDateParam(weekStart) ?? new Date();
-  const footer = readOnly ? (
+  const footer = !canSave ? (
     <button type="button" className="btn-outline text-sm" onClick={onClose}>Close</button>
   ) : (
     <>
       <button type="button" className="btn-outline text-sm" onClick={onClose}>Cancel</button>
-      <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form}>
+      <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form || hasOptionsError([...form.routines, ...form.weeklyGoals])} title={form && hasOptionsError([...form.routines, ...form.weeklyGoals]) ? 'Fix the choice options first' : undefined}>
         {saving ? 'Saving…' : 'Save week'}
       </button>
     </>
@@ -99,10 +116,10 @@ export default function WeekPanel({
     <SidePanel
       open={open}
       title={`Week ${weekLabel(monday)}`}
-      subtitle={readOnly ? 'View only' : 'Targets, routines and weekly goals'}
+      subtitle={!canSave ? 'View only' : 'Targets, routines and weekly goals'}
       onClose={onClose}
       footer={footer}
-      dirty={dirty && !readOnly}
+      dirty={dirty && canSave}
       wide
     >
       {error && (
@@ -124,15 +141,19 @@ export default function WeekPanel({
               Copied from last week — save to keep
             </p>
           )}
+          {adminPlans && (
+            <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-body dark:bg-zinc-800" role="status">Planned by your admin</p>
+          )}
           <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-targets-title">
             <h3 id="week-targets-title" className="card-title mb-2">Targets</h3>
             <GoalDoneFields
               goal={form.goal}
-              onGoal={readOnly ? undefined : (goal) => setForm({ ...form, goal })}
+              onGoal={!planEditable ? undefined : (goal) => setForm({ ...form, goal })}
               done={data.done}
               stages={data.stages}
               showInterviewGoal
-              readOnly={readOnly}
+              readOnly={!planEditable}
+              adminEdit={mode === 'admin'}
             />
           </section>
 
@@ -140,19 +161,19 @@ export default function WeekPanel({
             <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-routines-title">
               <h3 id="week-routines-title" className="card-title">Routines</h3>
               <p className="mb-2 text-xs text-muted">Shown every working day; count / hours targets are per day.</p>
-              <PlanItemsEditor items={form.routines} scope="routine" onChange={(routines) => setForm({ ...form, routines })} readOnly={readOnly} />
+              <PlanItemsEditor items={form.routines} scope="routine" onChange={(routines) => setForm({ ...form, routines })} readOnly={!planEditable && !ownItems} lockedFor={ownItems ? (i) => i.addedBy !== 'self' : undefined} />
             </section>
 
             <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-goals-title">
               <h3 id="week-goals-title" className="card-title">Weekly goals</h3>
               <p className="mb-2 text-xs text-muted">One-off outcomes; count / hours targets are for the whole week.</p>
-              <PlanItemsEditor items={form.weeklyGoals} scope="goal" onChange={(weeklyGoals) => setForm({ ...form, weeklyGoals })} readOnly={readOnly} />
+              <PlanItemsEditor items={form.weeklyGoals} scope="goal" onChange={(weeklyGoals) => setForm({ ...form, weeklyGoals })} readOnly={!planEditable && !ownItems} lockedFor={ownItems ? (i) => i.addedBy !== 'self' : undefined} />
             </section>
           </div>
 
           <section>
             <label className="form-label mb-1 block" htmlFor="week-recap">Recap notes</label>
-            {readOnly ? (
+            {!recapEditable ? (
               <p className="whitespace-pre-wrap text-sm text-body">{form.recapNotes || '—'}</p>
             ) : (
               <textarea

@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import DayPanel from '../components/report/DayPanel';
 import DayRow from '../components/report/DayRow';
+import SetupGrid from '../components/report/SetupGrid';
 import TeamTable from '../components/report/TeamTable';
 import WeekPanel from '../components/report/WeekPanel';
 import WeekGoalCard from '../components/report/WeekGoalCard';
@@ -40,6 +41,12 @@ export default function ReportPage() {
     isAdmin, userId: user?.id, user: params.get('user'), view: params.get('view'),
   });
   const today = dateParam(new Date());
+  // Admins plan everyone's week in one grid; anyone else asking for it gets their usual page.
+  const setup = isAdmin && teamView && params.get('view') === 'setup';
+  const [gridDirty, setGridDirty] = useState(false);
+  // The grid remounts per week and unmounts off setup: unpublished edits would vanish silently.
+  const mayLeave = () =>
+    !setup || !gridDirty || window.confirm('Leave without publishing? Your changes to this week will be lost.');
 
   const setParam = useCallback(
     (patch: Record<string, string | null>) =>
@@ -82,7 +89,7 @@ export default function ReportPage() {
       <PageHeader title="Plans" />
 
       <div className="toolbar flex flex-wrap items-center gap-2">
-        <button type="button" className="btn-icon" aria-label="Previous week" onClick={() => setParam({ week: dateParam(addDays(monday, -7)) })}>
+        <button type="button" className="btn-icon" aria-label="Previous week" onClick={() => mayLeave() && setParam({ week: dateParam(addDays(monday, -7)) })}>
           <ChevronLeft size={18} aria-hidden />
         </button>
         <span className="min-w-[10rem] text-center font-medium text-strong" aria-live="polite">
@@ -93,16 +100,22 @@ export default function ReportPage() {
           className="btn-icon"
           aria-label="Next week"
           disabled={!canGoNext}
-          onClick={() => setParam({ week: dateParam(addDays(monday, 7)) })}
+          onClick={() => mayLeave() && setParam({ week: dateParam(addDays(monday, 7)) })}
         >
           <ChevronRight size={18} aria-hidden />
         </button>
         {week !== dateParam(currentMonday) && (
-          <button type="button" className="btn-outline text-xs" onClick={() => setParam({ week: null })}>
+          <button type="button" className="btn-outline text-xs" onClick={() => mayLeave() && setParam({ week: null })}>
             This week
           </button>
         )}
-        {viewUser ? (
+        {setup ? (
+          <Link to={teamLink} className="ml-auto text-sm underline" onClick={(e) => mayLeave() || e.preventDefault()}>
+            ← Team
+          </Link>
+        ) : isAdmin && teamView ? (
+          <Link to={`/plans?week=${week}&view=setup`} className="btn ml-auto text-sm">Plan the week</Link>
+        ) : viewUser ? (
           <span className="ml-auto flex items-center gap-2 text-sm">
             <Link to={teamLink} className="underline">← Team</Link>
             <span className="text-muted">Viewing {viewedName?.name || viewedName?.email || 'teammate'}</span>
@@ -128,7 +141,9 @@ export default function ReportPage() {
         )}
       </div>
 
-      {!showBoard ? (
+      {setup ? (
+        <SetupGrid key={week} week={week} onDirtyChange={setGridDirty} />
+      ) : !showBoard ? (
         // A row opens that person's board (read-only); the viewer's own row opens their own, editable one.
         <TeamTable week={week} onOpenUser={(id) => setParam({ user: id === user?.id ? null : id, view: null })} />
       ) : (
@@ -147,7 +162,7 @@ export default function ReportPage() {
               </div>
             </div>
           ) : (
-            <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} onOpen={() => setWeekOpen(true)} />
+            <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} adminEdit={isAdmin && !!viewUser} onOpen={() => setWeekOpen(true)} />
           )}
 
           {daysQuery.error ? (
@@ -192,7 +207,7 @@ export default function ReportPage() {
         <WeekPanel
           weekStart={week}
           userId={viewUser}
-          readOnly={readOnly}
+          mode={!viewUser ? 'own' : isAdmin ? 'admin' : 'view'}
           open
           onClose={() => setWeekOpen(false)}
           onSaved={refresh}
