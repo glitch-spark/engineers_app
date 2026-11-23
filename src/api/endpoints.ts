@@ -680,6 +680,8 @@ export interface WeekPlan {
   days: WeekDaySummary[];
   /** False when an admin plans this week: the person cannot edit it. */
   plansOwnWeek: boolean;
+  /** Each routine's state per day of the week, as Home's grid. Missing from an older server. */
+  routineDays?: DashboardRoutineRow[];
 }
 
 export interface WeekPlanInput {
@@ -720,8 +722,9 @@ export const putDayProgress = (date: string, body: DayProgressInput) =>
 
 export const deleteDayPlan = (date: string) => del<{ message: string }>(`/daily-plans/${date}`);
 
-export const getWeekPlan = (weekStart: string, userId?: string) =>
-  apiFetch<WeekPlan>(`/weekly-plans/${weekStart}${qs({ userId })}`);
+/** `today` (the viewer's date) judges `routineDays`' day states. */
+export const getWeekPlan = (weekStart: string, userId?: string, today?: string) =>
+  apiFetch<WeekPlan>(`/weekly-plans/${weekStart}${qs({ userId, today })}`);
 
 export const putWeekPlan = (weekStart: string, body: WeekPlanInput) =>
   putJSON<WeekPlan>(`/weekly-plans/${weekStart}`, body);

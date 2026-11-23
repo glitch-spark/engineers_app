@@ -6,7 +6,7 @@ import { dayDate, weekdayShort } from '../../lib/week';
 
 type RoutineDay = DashboardRoutineRow['days'][number];
 /** What a day's cell shows, what it is called for a screen reader, and its colour. */
-function dayCell(d: RoutineDay): [string, string, string] {
+export function dayCell(d: RoutineDay): [string, string, string] {
   switch (d.state) {
     case 'done': return ['✓', 'done', 'font-bold text-emerald-600 dark:text-emerald-400'];
     case 'missed': return ['✗', 'missed', 'font-bold text-red-600 dark:text-red-400'];

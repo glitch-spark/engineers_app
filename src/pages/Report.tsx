@@ -66,7 +66,7 @@ export default function ReportPage() {
   const who = viewUser ?? 'me';
   const weekKey = ['week-plan', week, who];
   const daysKey = ['day-plans', week, who];
-  const weekQuery = useSWR(showBoard ? weekKey : null, () => api.getWeekPlan(week, viewUser));
+  const weekQuery = useSWR(showBoard ? weekKey : null, () => api.getWeekPlan(week, viewUser, today));
   const daysQuery = useSWR(showBoard ? daysKey : null, () => api.getDayPlans(week, viewUser));
 
   // Admins land on the team table (no `view` needed); staff ask for it with `view=team`.
@@ -162,7 +162,7 @@ export default function ReportPage() {
               </div>
             </div>
           ) : (
-            <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} adminEdit={isAdmin && !!viewUser} onOpen={() => setWeekOpen(true)} />
+            <WeekGoalCard week={weekQuery.data} canEdit={!readOnly} adminEdit={isAdmin && !!viewUser} today={today} onOpen={() => setWeekOpen(true)} onOpenDay={setOpenDay} />
           )}
 
           {daysQuery.error ? (
