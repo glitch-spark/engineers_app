@@ -299,9 +299,23 @@ describe('MyHome', () => {
   it('a half-typed text answer is saved by the debounce, trimmed', async () => {
     setup(textChoice({ value: 0, done: false, target: null, doneOn: null }));
     await screen.findByText('Blockers');
-    fireEvent.change(screen.getByLabelText('Blockers answer'), { target: { value: ' waiting ' } });
+    fireEvent.change(screen.getByLabelText('Blockers answer'), { target: { value: 'waiting' } });
     await act(async () => { vi.advanceTimersByTime(800); });
     expect(api.putDayProgress).toHaveBeenCalledWith('2026-11-18', { results: { r9: { done: true, value: null, text: 'waiting' } } });
+  });
+
+  it('a text answer saved with a trailing space keeps the space while typing on', async () => {
+    setup(textChoice({ value: 0, done: false, target: null, doneOn: null }));
+    await screen.findByText('Blockers');
+    const box = () => screen.getByLabelText('Blockers answer') as HTMLTextAreaElement;
+    fireEvent.change(box(), { target: { value: 'hello ' } });
+    await act(async () => { vi.advanceTimersByTime(800); });
+    expect(api.putDayProgress).toHaveBeenLastCalledWith('2026-11-18', { results: { r9: { done: true, value: null, text: 'hello ' } } });
+    expect(box().value).toBe('hello ');
+    fireEvent.change(box(), { target: { value: 'hello world' } });
+    expect(box().value).toBe('hello world');
+    await act(async () => { vi.advanceTimersByTime(800); });
+    expect(api.putDayProgress).toHaveBeenLastCalledWith('2026-11-18', { results: { r9: { done: true, value: null, text: 'hello world' } } });
   });
 
   it('a choice goal done on an earlier day saves today and never un-ticks', async () => {

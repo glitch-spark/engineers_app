@@ -5,7 +5,7 @@ import type { Counts, PlanItemIn } from '../../api/endpoints';
 import { messageOf } from '../../lib/notify';
 import { parseDateParam, weekLabel } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
-import PlanItemsEditor, { cleanItems } from './PlanItemsEditor';
+import PlanItemsEditor, { cleanItems, hasOptionsError } from './PlanItemsEditor';
 import GoalDoneFields from './GoalDoneFields';
 
 interface WeekForm {
@@ -106,7 +106,7 @@ export default function WeekPanel({
   ) : (
     <>
       <button type="button" className="btn-outline text-sm" onClick={onClose}>Cancel</button>
-      <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form}>
+      <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form || hasOptionsError([...form.routines, ...form.weeklyGoals])} title={form && hasOptionsError([...form.routines, ...form.weeklyGoals]) ? 'Fix the choice options first' : undefined}>
         {saving ? 'Saving…' : 'Save week'}
       </button>
     </>

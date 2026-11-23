@@ -17,6 +17,10 @@ export function optionsError(options: string[]): string | null {
   return null;
 }
 
+/** True when a live choice item's options would be refused; the panel holds Save until fixed. */
+export const hasOptionsError = (items: PlanItemIn[]) =>
+  items.some((i) => !i.archived && i.kind === 'choice' && optionsError(i.options ?? []) !== null);
+
 /** Comma separated options; the box keeps what was typed (a trailing comma), the item gets the parsed list. */
 function OptionsField({ options, label, onChange }: { options: string[]; label: string; onChange: (o: string[]) => void }) {
   const [raw, setRaw] = useState(options.join(', '));

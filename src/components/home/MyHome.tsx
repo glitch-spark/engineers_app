@@ -16,12 +16,12 @@ import TodayRound, { asNeedsInput, roundKey, roundState, useNow } from './TodayR
 import WeekTable from './WeekTable';
 
 type Result = RowResult;
-/** A log result goes out with its blank-note rows dropped; text / choice go only when the person changed them (a stale choice is a 422). */
+/** A log result goes out with its blank-note rows dropped; text / choice go only when the person changed them (text raw: the server strips it) (a stale choice is a 422). */
 const body = (r: Result) => ({
   done: r.done,
   value: r.value,
   ...(r.entries ? { entries: cleanEntries(r.entries) } : {}),
-  ...(r.textChanged ? { text: (r.text ?? '').trim() } : {}),
+  ...(r.textChanged ? { text: r.text ?? '' } : {}),
   ...(r.choiceChanged ? { choice: r.choice ?? null } : {}),
 });
 const DEBOUNCE_MS = 800;
@@ -111,8 +111,9 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
       await mutate(next, false);
       refreshRest();
       setFailed(({ [id]: _, ...rest }) => rest);
-      // keep newer typing, and a log row still being typed (a blank row isn't saved)
-      if (!timers.current[id] && !r.entries?.some((e) => !e.note.trim())) setLocal(({ [id]: _, ...rest }) => rest);
+      // keep newer typing, and a log row still being typed (a blank row isn't saved),
+      // and a text with edge whitespace (the server stores it stripped, which would eat the space between words)
+      if (!timers.current[id] && !r.entries?.some((e) => !e.note.trim()) && (r.text ?? '') === (r.text ?? '').trim()) setLocal(({ [id]: _, ...rest }) => rest);
     } catch {
       setFailed((f) => ({ ...f, [id]: r }));
       if (!timers.current[id]) setLocal(({ [id]: _, ...rest }) => rest); // back to the last saved result

@@ -46,6 +46,16 @@ describe('WeekPanel', () => {
     );
   };
 
+  it('Save week is held while a choice item has invalid options', async () => {
+    vi.mocked(api.putWeekPlan).mockResolvedValue(plan as never);
+    renderPanel('own', { plansOwnWeek: true, routines: [{ id: 'r1', text: 'Status', kind: 'choice', options: ['Only'], target: null, archived: false }] });
+    const options = await screen.findByLabelText('Routine item 1 options');
+    const save = screen.getByRole('button', { name: /save week/i }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.change(options, { target: { value: 'Yes, No' } });
+    expect(save.disabled).toBe(false);
+  });
+
   it('own + plansOwnWeek false: read-only plan, note, recap editable, Save sends the recap', async () => {
     vi.mocked(api.putWeekPlan).mockResolvedValue(plan as never);
     renderPanel('own', { plansOwnWeek: false });
