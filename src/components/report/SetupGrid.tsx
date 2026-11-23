@@ -44,6 +44,8 @@ const SCOPES: Scope[] = ['routine', 'goal'];
 /** A coloured stripe per group on its headers (the body stays plain). */
 const HEAD_TINT: Record<Scope, string> = { routine: 'border-t-2 border-t-violet-400', goal: 'border-t-2 border-t-cyan-400' };
 const TINT: Record<Scope, string> = { routine: '', goal: '' };
+/** The "Own plan" switch, hidden for now: everyone is admin-planned. Each person's setting is kept and re-sent. */
+const SHOW_OWN_PLAN = false;
 const TOGGLE =
   "relative h-4 w-7 cursor-pointer appearance-none rounded-full bg-zinc-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-3 before:w-3 before:rounded-full before:bg-white before:transition-transform before:content-[''] checked:bg-accent-500 checked:before:translate-x-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 dark:bg-zinc-600";
 
@@ -341,7 +343,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
             <thead className="bg-zinc-50 text-muted dark:bg-zinc-900">
               <tr>
                 <th scope="col" rowSpan={2} className={`${TH} ${STICKY}`}>Person</th>
-                <th scope="col" rowSpan={2} className={`${TH} w-14`} title="On: the person plans their own week. Off: you plan it and they see it view-only.">Own plan</th>
+                {SHOW_OWN_PLAN && <th scope="col" rowSpan={2} className={`${TH} w-14`} title="On: the person plans their own week. Off: you plan it and they see it view-only.">Own plan</th>}
                 <th scope="colgroup" colSpan={TARGETS.length} className={`${TH} border-t-2 border-t-zinc-400 text-[11px] uppercase tracking-wide`}>Week targets</th>
                 {SCOPES.map((sc) => (
                   <th key={sc} scope="colgroup" colSpan={byScope(sc).length + 1} data-group={sc} className={`${TH} ${HEAD_TINT[sc]} text-[11px] uppercase tracking-wide`}>
@@ -365,7 +367,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
             <tbody>
               <tr className="border-b-2 border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60">
                 <th scope="row" className={`${TD} ${STICKY} px-3 text-xs font-medium text-muted`}>Fill all ↓</th>
-                <td className={TD} />
+                {SHOW_OWN_PLAN && <td className={TD} />}
                 {TARGETS.map((t) => (
                   <td key={t.key} className={TD}>
                     <input type="number" min={0} aria-label={`Fill all ${t.label}`} className={NUM}
@@ -409,10 +411,12 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                         <p className="whitespace-normal text-xs font-normal text-red-600 dark:text-red-400" role="alert">{errors[u.userId]}</p>
                       )}
                     </th>
-                    <td className={TD}>
-                      <input type="checkbox" role="switch" className={TOGGLE} aria-label={`${name} plans own week`} checked={u.plansOwnWeek}
-                        onChange={(e) => setState(setOwnWeek(state, u.userId, e.target.checked))} />
-                    </td>
+                    {SHOW_OWN_PLAN && (
+                      <td className={TD}>
+                        <input type="checkbox" role="switch" className={TOGGLE} aria-label={`${name} plans own week`} checked={u.plansOwnWeek}
+                          onChange={(e) => setState(setOwnWeek(state, u.userId, e.target.checked))} />
+                      </td>
+                    )}
                     {TARGETS.map((t) => (
                       <Td key={t.key} was={changed(prevUsers, state, u.userId, t.key)?.was}>
                         {numberInput(`${name} ${t.label}`, u.goal[t.key] || null, (n) => setState(setTarget(state, u.userId, t.key, n ?? 0)))}
@@ -444,7 +448,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
         </div>
       </fieldset>
       <p className="text-xs text-muted">
-        Amber cells changed since last week (was …). Own plan on = that person plans their own week; off = you plan it, view-only for them.
+        Amber cells changed since last week (was …).
         Sat blank = bids split evenly Mon–Sat. Click a column header to rename, re-type, set its days or remove it.
       </p>
     </section>
