@@ -143,7 +143,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
     save(id, r);
   };
 
-  const dow = thisWeek ? dayDate(today).getDay() : 0; // 1 = Mon .. 5 = Fri; a past week has no days left
+  const dow = thisWeek ? dayDate(today).getDay() : 0; // 1 = Mon .. 6 = Sat; a past week has no days left
   const t = plan.targets;
   const bids = plan.bidsTotals ?? { // an older server: the same numbers from the day's own fields
     self: plan.done.bidsSelf, selfTarget: t.bidsSelf || null, bidder: plan.bidsBidderAuto, bidderTarget: t.bidsBidder || null,
@@ -157,7 +157,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
   const w = week.data;
   const weekBids = w && (w.bids.week ?? w.bids);
   const monday = w?.week.start.slice(0, 10) ?? mondayOf(today);
-  const daysLeft = dow >= 1 && dow <= 4 ? `${6 - dow} days left` : dow === 5 ? 'last day' : '';
+  const daysLeft = dow >= 1 && dow <= 5 ? `${7 - dow} days left` : dow === 6 ? 'last day' : '';
   const daily = plan.items.filter((i) => kept(i) && i.scope === 'routine');
   const weekly = plan.items.filter((i) => kept(i) && i.scope === 'goal');
   const disabled = !plan.weekSaved || !!userId;
@@ -353,7 +353,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
       </section>
       <section className="panel p-4">
         <header className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-heading">{thisWeek ? 'This week' : 'Week'} · {monthDay(monday)} – {monthDay(addDays(monday, 4))}</h2>
+          <h2 className="text-base font-semibold text-heading">{thisWeek ? 'This week' : 'Week'} · {monthDay(monday)} – {monthDay(addDays(monday, 5))}</h2>
           <span className="text-xs text-muted">
             {weekly.length > 0 && <b className="font-semibold text-body">{count(weekly)}</b>}{weekly.length > 0 && daysLeft && ' · '}{daysLeft}
           </span>
@@ -366,9 +366,9 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
         {weekly.length > 0 && (
           <>
             <div className="mt-4 text-[11px] font-medium uppercase tracking-wider text-muted">
-              <span>Weekly goals</span><span className="normal-case tracking-normal"> · {count(weekly)}</span>
+              <span>Weekly to-dos</span><span className="normal-case tracking-normal"> · {count(weekly)}</span>
             </div>
-            <ul aria-label="Weekly goals" className="space-y-0.5">{weekly.map(row)}</ul>
+            <ul aria-label="Weekly to-dos" className="space-y-0.5">{weekly.map(row)}</ul>
           </>
         )}
       </section>

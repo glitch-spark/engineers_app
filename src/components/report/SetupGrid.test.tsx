@@ -194,7 +194,7 @@ describe('SetupGrid', () => {
     expect(screen.getByRole('button', { name: /^Inbox.*Hours/ })).toBeTruthy();
     expect(input('Ana Inbox').type).toBe('number');
 
-    await menu(/^Inbox/, 'Make weekly goal');
+    await menu(/^Inbox/, 'Make weekly to-do');
     expect(cellGroup(input('Ana Inbox'))).toBe('goal');
 
     await menu(/^Inbox/, 'Remove from this week');
@@ -208,8 +208,8 @@ describe('SetupGrid', () => {
     show();
     await ready();
     fireEvent.click(screen.getByRole('button', { name: /^Email/ }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Make weekly goal' }));
-    expect(screen.getByRole('alert').textContent).toMatch(/Ana already has 20 weekly goals/);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Make weekly to-do' }));
+    expect(screen.getByRole('alert').textContent).toMatch(/Ana already has 20 weekly to-dos/);
     expect(cellGroup(input('Ana Email'))).toBe('routine');
   });
 
@@ -399,7 +399,7 @@ describe('SetupGrid', () => {
     expect(screen.queryByRole('button', { name: 'Remove Notes from Ben' })).toBeNull();
     expect(screen.getAllByText(/added by Ben/)).toHaveLength(1);
   });
-  describe('daily routines / weekly goals split and the type picker', () => {
+  describe('daily / weekly to-dos split and the type picker', () => {
     const choice = (id: string, text: string, options: string[]): PlanItem => ({ ...item(id, text, 'choice'), options });
     const openAdd = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 
@@ -407,8 +407,8 @@ describe('SetupGrid', () => {
       serve([person('Ana', { routines: [item('r1', 'Inbox')], weeklyGoals: [item('g1', 'Launch')] }), person('Ben')]);
       show();
       await ready();
-      expect(screen.getByRole('columnheader', { name: 'Daily routines' })).toBeTruthy();
-      expect(screen.getByRole('columnheader', { name: 'Weekly goals' })).toBeTruthy();
+      expect(screen.getByRole('columnheader', { name: 'Daily to-dos' })).toBeTruthy();
+      expect(screen.getByRole('columnheader', { name: 'Weekly to-dos' })).toBeTruthy();
       const own = screen.getAllByRole('columnheader', { name: 'Only this person' });
       expect(own.map(cellGroup)).toEqual(['routine', 'goal']);
       expect(cellGroup(screen.getByRole('button', { name: 'Remove Inbox from Ana' }))).toBe('routine');
@@ -433,7 +433,7 @@ describe('SetupGrid', () => {
       openAdd('Add routine for Ana');
       expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('routine');
       expect([...(screen.getByLabelText('Group') as HTMLSelectElement).options].map((o) => o.text))
-        .toEqual(['Daily routine (every working day)', 'Weekly goal (once this week)']);
+        .toEqual(['Daily to-do (every working day)', 'Weekly to-do (once this week)']);
       expect(screen.getAllByRole('radio').map((r) => r.closest('label')!.textContent)).toEqual([
         'CheckboxTick when done.',
         'NumberEnter a count against a target, e.g. 40 / 50 emails.',

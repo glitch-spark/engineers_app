@@ -119,19 +119,19 @@ describe('Home', () => {
   const week = () => screen.getByRole('group', { name: 'Week' });
   const button = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement;
 
-  it('the filter bar shows the week and its five days: today picked and labelled, nothing to clear, next week not offered', async () => {
+  it('the filter bar shows the week and its six days: today picked and labelled, nothing to clear, next week not offered', async () => {
     renderIt('/dashboard?user=u1');
     await person();
-    expect(within(week()).getByText('Nov 16 – Nov 20')).toBeTruthy();
+    expect(within(week()).getByText('Nov 16 – Nov 21')).toBeTruthy();
     expect(button('Next week').disabled).toBe(true);
     expect(button('Previous week').disabled).toBe(false);
     expect(days().map((d) => [d.getAttribute('aria-label'), d.checked, d.disabled, d.getAttribute('aria-current')])).toEqual([
       ['Mon, Nov 16', false, false, null], ['Tue, Nov 17', false, false, null], ['Wed, Nov 18', false, false, null],
-      ['Thu, Nov 19', false, false, null], ['Fri, Nov 20', true, false, 'date'],
+      ['Thu, Nov 19', false, false, null], ['Fri, Nov 20', true, false, 'date'], ['Sat, Nov 21', false, true, null],
     ]);
     // one line per button, the same height as the other filters; today's reads "Today" where the others read the weekday
     const dayTexts = within(screen.getByRole('radiogroup', { name: 'Day' })).getAllByRole('radio').map((r) => r.parentElement!.textContent);
-    expect(dayTexts).toEqual(['Mon16', 'Tue17', 'Wed18', 'Thu19', 'Today20']);
+    expect(dayTexts).toEqual(['Mon16', 'Tue17', 'Wed18', 'Thu19', 'Today20', 'Sat21']);
     expect(screen.getByRole('group', { name: 'Week' }).querySelector('[data-control]')!.className).toContain('h-[38px]');
     expect(screen.getByRole('radio', { name: 'Mon, Nov 16' }).parentElement!.querySelector('[data-control]')!.className).toContain('h-[38px]');
     expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
@@ -144,7 +144,7 @@ describe('Home', () => {
     renderIt('/dashboard?user=u1');
     await person();
     expect(days().map((d) => [d.checked, d.disabled, d.getAttribute('aria-current')])).toEqual([
-      [false, false, null], [false, false, null], [true, false, 'date'], [false, true, null], [false, true, null],
+      [false, false, null], [false, false, null], [true, false, 'date'], [false, true, null], [false, true, null], [false, true, null],
     ]);
   });
 
@@ -154,30 +154,30 @@ describe('Home', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Wed, Nov 18' }));
     await waitFor(() => expect(shown()).toBe('2026-11-18|2026-11-20'));
     expect(where()).toBe('?user=u1&day=2026-11-18');
-    expect(days().map((d) => d.checked)).toEqual([false, false, true, false, false]);
+    expect(days().map((d) => d.checked)).toEqual([false, false, true, false, false, false]);
     fireEvent.click(button('Back to today'));
     expect(where()).toBe('?user=u1');
     expect(shown()).toBe('2026-11-20|2026-11-20');
     expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();
   });
 
-  it('Previous week picks that week\'s Friday, any number of weeks back; Next week comes back and picks today in the current week', async () => {
+  it('Previous week picks that week\'s Saturday, any number of weeks back; Next week comes back and picks today in the current week', async () => {
     renderIt('/dashboard?user=u1');
     await person();
     fireEvent.click(button('Previous week'));
-    expect(where()).toBe('?user=u1&day=2026-11-13');
-    expect(within(week()).getByText('Nov 9 – Nov 13')).toBeTruthy();
+    expect(where()).toBe('?user=u1&day=2026-11-14');
+    expect(within(week()).getByText('Nov 9 – Nov 14')).toBeTruthy();
     expect(days().map((d) => [d.getAttribute('aria-label'), d.checked, d.disabled, d.getAttribute('aria-current')])).toEqual([
       ['Mon, Nov 9', false, false, null], ['Tue, Nov 10', false, false, null], ['Wed, Nov 11', false, false, null],
-      ['Thu, Nov 12', false, false, null], ['Fri, Nov 13', true, false, null],
+      ['Thu, Nov 12', false, false, null], ['Fri, Nov 13', false, false, null], ['Sat, Nov 14', true, false, null],
     ]);
     expect(button('Next week').disabled).toBe(false);
     expect(button('Back to today')).toBeTruthy();
     fireEvent.click(button('Previous week'));
-    expect(where()).toBe('?user=u1&day=2026-11-06');
-    expect(within(week()).getByText('Nov 2 – Nov 6')).toBeTruthy();
+    expect(where()).toBe('?user=u1&day=2026-11-07');
+    expect(within(week()).getByText('Nov 2 – Nov 7')).toBeTruthy();
     fireEvent.click(button('Next week'));
-    expect(where()).toBe('?user=u1&day=2026-11-13');
+    expect(where()).toBe('?user=u1&day=2026-11-14');
     fireEvent.click(button('Next week'));
     expect(where()).toBe('?user=u1');
     expect(shown()).toBe('2026-11-20|2026-11-20');
@@ -200,7 +200,7 @@ describe('Home', () => {
     ['day=2026-11-18', '2026-11-18', '?user=u1&day=2026-11-18'],
     ['day=yesterday', '2026-11-19', '?user=u1&day=yesterday'], // an old link
     ['day=2026-11-03', '2026-11-03', '?user=u1&day=2026-11-03'], // weeks back
-    ['day=2026-11-15', '2026-11-13', '?user=u1&day=2026-11-15'], // a Sunday: its week's Friday
+    ['day=2026-11-15', '2026-11-14', '?user=u1&day=2026-11-15'], // a Sunday: its week's Saturday
     ['day=2026-11-21', '2026-11-20', '?user=u1&day=2026-11-21'], // the future: today
     ['day=2027-01-04', '2026-11-20', '?user=u1&day=2027-01-04'],
     ['day=nonsense', '2026-11-20', '?user=u1&day=nonsense'], // malformed: today
@@ -215,14 +215,14 @@ describe('Home', () => {
     expect(!!screen.queryByRole('button', { name: 'Back to today' })).toBe(day !== '2026-11-20');
   });
 
-  it('on a weekend the week just ended shows with its Friday picked: every day can be picked, none is today, nothing to go back to', async () => {
+  it('on a Sunday the week just ended shows with its Saturday picked: every day can be picked, none is today, nothing to go back to', async () => {
     vi.setSystemTime(new Date('2026-11-22T12:00:00-06:00')); // a Sunday
     renderIt('/dashboard?user=u1');
     await person();
-    expect(shown()).toBe('2026-11-20|2026-11-22');
-    expect(within(week()).getByText('Nov 16 – Nov 20')).toBeTruthy();
+    expect(shown()).toBe('2026-11-21|2026-11-22');
+    expect(within(week()).getByText('Nov 16 – Nov 21')).toBeTruthy();
     expect(days().map((d) => [d.checked, d.disabled, d.getAttribute('aria-current')])).toEqual([
-      [false, false, null], [false, false, null], [false, false, null], [false, false, null], [true, false, null],
+      [false, false, null], [false, false, null], [false, false, null], [false, false, null], [false, false, null], [true, false, null],
     ]);
     expect(button('Next week').disabled).toBe(true);
     expect(screen.queryByRole('button', { name: 'Back to today' })).toBeNull();

@@ -44,7 +44,7 @@ const ROW = 'border-t border-zinc-100 dark:border-zinc-800';
 const num = (n: number | null | undefined) => (n == null ? '–' : n.toLocaleString('en-US'));
 
 /**
- * Home's This week as one read-only table, Mon–Fri with Week and Planned: bids (total, self, bidder), the
+ * Home's This week as one read-only table, Mon–Sat with Week and Planned: bids (total, self, bidder), the
  * interviews of each day as a small calendar coloured by status, and the daily to-dos. Nothing without days (an
  * older server); a row shows what the server sent.
  */

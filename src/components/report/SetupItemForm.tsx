@@ -103,8 +103,8 @@ export default function SetupItemForm({
         <label className="form-label flex flex-col gap-1">
           Group
           <select className="input w-64" value={v.scope} onChange={(e) => set({ scope: e.target.value as Scope })}>
-            <option value="routine">Daily routine (every working day)</option>
-            <option value="goal">Weekly goal (once this week)</option>
+            <option value="routine">Daily to-do (every working day)</option>
+            <option value="goal">Weekly to-do (once this week)</option>
           </select>
         </label>
       )}

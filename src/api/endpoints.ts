@@ -1300,9 +1300,9 @@ export interface DashboardWeek {
     target: number | null;
     pace: DashboardPace | null;
     percentile: DashboardPercentile | null;
-    /** Mon–Fri, each day's bids and daily target. Missing from an older server. */
+    /** Mon–Sat, each day's bids and daily target. Missing from an older server. */
     byDay?: { date: string; done: number; target: number | null; self?: number; bidder?: number }[];
-    /** Mon–Fri only (`total` above also counts the weekend); a target is the week's sum of the day targets, null when unset. Missing from an older server. */
+    /** Mon–Sat only (`total` above also counts Sunday); a target is the week's sum of the day targets, null when unset. Missing from an older server. */
     week?: { self: number; selfTarget: number | null; bidder: number; bidderTarget: number | null; total: number; target: number | null };
   };
   interviews: {
@@ -1318,11 +1318,11 @@ export interface DashboardWeek {
       held: number; passed: number; rejected: number; noAnswer: number; waiting: number; canceled: number; scheduled: number;
     };
     /**
-     * Mon–Fri. `scheduled` = not held yet: still to come on today or a later day, ended and never marked on a day
+     * Mon–Sat. `scheduled` = not held yet: still to come on today or a later day, ended and never marked on a day
      * before today. Missing from an older server.
      */
     byDay?: { date: string; held: number; canceled: number; scheduled: number }[];
-    /** Mon–Fri, each round in time order (`date` in the app timezone). Missing from an older server. */
+    /** Mon–Sat, each round in time order (`date` in the app timezone). Missing from an older server. */
     rounds?: {
       date: string; interviewId: string; companyName: string | null; stage: string; at: string;
       who: 'self' | 'caller'; callerName: string | null;
@@ -1332,7 +1332,7 @@ export interface DashboardWeek {
   stages: { key: string; label: string; count: number }[];
   streak: number;
   hasWeeklyPlan: boolean;
-  /** `rows`: one line per routine with its Mon–Fri days. Missing from an older server. */
+  /** `rows`: one line per routine with its Mon–Sat days. Missing from an older server. */
   routines: { done: number; expected: number; rows?: DashboardRoutineRow[] };
   weeklyGoals: {
     id: string;

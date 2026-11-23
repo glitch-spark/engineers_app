@@ -26,7 +26,7 @@ describe('WeekPanel', () => {
     );
     expect(await screen.findByText(/Copied from last week — save to keep/)).toBeTruthy();
     fireEvent.click(screen.getAllByRole('button', { name: /add item/i })[1]);
-    fireEvent.change(screen.getByLabelText('Weekly goal item 1'), { target: { value: '  Ship it ' } });
+    fireEvent.change(screen.getByLabelText('Weekly to-do item 1'), { target: { value: '  Ship it ' } });
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     await waitFor(() => expect(api.putWeekPlan).toHaveBeenCalled());
     const body = vi.mocked(api.putWeekPlan).mock.calls[0][1] as unknown as Record<string, unknown>;
@@ -49,7 +49,7 @@ describe('WeekPanel', () => {
   it('Save week is held while a choice item has invalid options', async () => {
     vi.mocked(api.putWeekPlan).mockResolvedValue(plan as never);
     renderPanel('own', { plansOwnWeek: true, routines: [{ id: 'r1', text: 'Status', kind: 'choice', options: ['Only'], target: null, archived: false }] });
-    const options = await screen.findByLabelText('Routine item 1 options');
+    const options = await screen.findByLabelText('Daily to-do item 1 options');
     const save = screen.getByRole('button', { name: /save week/i }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     fireEvent.change(options, { target: { value: 'Yes, No' } });
@@ -80,9 +80,9 @@ describe('WeekPanel', () => {
     });
     expect(await screen.findByText('Admin routine')).toBeTruthy();
     expect(screen.getAllByText('🔒').length).toBeGreaterThan(0);
-    expect(screen.getAllByLabelText(/^routine item \d+$/i)).toHaveLength(1);
+    expect(screen.getAllByLabelText(/^daily to-do item \d+$/i)).toHaveLength(1);
     fireEvent.click(screen.getAllByRole('button', { name: 'Add my item' })[0]);
-    fireEvent.change(screen.getByLabelText('Routine item 2'), { target: { value: 'New one' } });
+    fireEvent.change(screen.getByLabelText('Daily to-do item 2'), { target: { value: 'New one' } });
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     await waitFor(() => expect(api.putWeekPlan).toHaveBeenCalled());
     const body = vi.mocked(api.putWeekPlan).mock.calls[0][1] as unknown as { routines: Record<string, unknown>[] };
@@ -137,7 +137,7 @@ describe('WeekPanel', () => {
       { id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false, addedBy: 'admin' },
       { id: 'r2', text: 'Discord', kind: 'check', target: null, archived: false, addedBy: 'self' },
     ] });
-    fireEvent.click(await screen.findByRole('button', { name: 'Archive Routine item 2' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Archive Daily to-do item 2' }));
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     await waitFor(() => expect(api.putTeamWeek).toHaveBeenCalled());
     const [, rows] = vi.mocked(api.putTeamWeek).mock.calls[0];

@@ -207,8 +207,8 @@ describe('MyHome', () => {
     await screen.findByLabelText(/Goal one/);
     // The Bids row (under its target) and the three routines; the old response has no Interviews box.
     expect(head(/^Today/)).toBe('Today · Wed, Nov 181 of 4 done · 3 to go');
-    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 200 of 2 done · 3 days left');
-    expect(screen.getByText('Weekly goals').parentElement?.textContent).toBe('Weekly goals · 0 of 2 done');
+    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 210 of 2 done · 4 days left');
+    expect(screen.getByText('Weekly to-dos').parentElement?.textContent).toBe('Weekly to-dos · 0 of 2 done');
   });
 
   it('This week: the read-only table sits above the weekly goals', async () => {
@@ -233,7 +233,7 @@ describe('MyHome', () => {
     );
     expect(await screen.findByText(/Couldn.t load this week/)).toBeTruthy();
     expect(screen.getByLabelText(/Goal one/)).toBeTruthy();
-    expect(head(/^This week/)).toContain('This week · Nov 16 – Nov 20');
+    expect(head(/^This week/)).toContain('This week · Nov 16 – Nov 21');
     expect(screen.queryByText(/this week \d/)).toBeNull();
     vi.mocked(api.getDashboardWeek).mockResolvedValue(week() as never);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -389,19 +389,19 @@ describe('MyHome', () => {
     await act(async () => { release(); });
   });
 
-  it('weekend: no days left', async () => {
-    vi.setSystemTime(new Date('2026-11-21T10:00:00-06:00'));
+  it('sunday: no days left', async () => {
+    vi.setSystemTime(new Date('2026-11-22T10:00:00-06:00'));
     setup(goals());
     await screen.findByLabelText(/Goal one/);
-    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 200 of 2 done');
+    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 210 of 2 done');
     expect(screen.queryByText(/days left|last day/)).toBeNull();
   });
 
-  it('friday: last day', async () => {
-    vi.setSystemTime(new Date('2026-11-20T10:00:00-06:00'));
+  it('saturday: last day', async () => {
+    vi.setSystemTime(new Date('2026-11-21T10:00:00-06:00'));
     setup(goals());
     await screen.findByLabelText(/Goal one/);
-    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 200 of 2 done · last day');
+    expect(head(/^This week/)).toBe('This week · Nov 16 – Nov 210 of 2 done · last day');
   });
 });
 

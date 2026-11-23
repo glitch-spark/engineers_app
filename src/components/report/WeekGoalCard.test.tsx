@@ -19,8 +19,8 @@ describe('WeekGoalCard', () => {
   it('shows the three blocks and goal progress 180 / 250', () => {
     render(<WeekGoalCard today="2026-11-18" onOpenDay={() => {}} week={week()} canEdit onOpen={() => {}} />);
     expect(screen.getByText('Targets')).toBeTruthy();
-    expect(screen.getByText('Daily routines')).toBeTruthy();
-    expect(screen.getByText('Weekly goals')).toBeTruthy();
+    expect(screen.getByText('Daily to-dos')).toBeTruthy();
+    expect(screen.getByText('Weekly to-dos')).toBeTruthy();
     expect(screen.getByText('Check inbox')).toBeTruthy();
     expect(screen.getByRole('progressbar', { name: 'Send proposals' }).getAttribute('aria-valuetext')).toBe('180 of 250');
     expect(screen.getByText('180 / 250')).toBeTruthy();
@@ -76,13 +76,13 @@ describe('WeekGoalCard', () => {
     expect(screen.getByText('Planned by your admin')).toBeTruthy();
     screen.getByRole('button', { name: "Fill today's standup" }).click();
     expect(onOpenDay).toHaveBeenCalledWith('2026-11-18');
-    expect(screen.getByText("Today's checklist")).toBeTruthy();
+    expect(screen.getByText("Today's to-dos")).toBeTruthy();
     expect(screen.getByText('30 / 50')).toBeTruthy();
     expect(screen.getByText('MINE')).toBeTruthy();
     expect(screen.getByRole('button', { name: '+ Add my own item' })).toBeTruthy();
-    expect(screen.queryByRole('table', { name: 'Routines by day' })).toBeNull();
+    expect(screen.queryByRole('table', { name: 'Daily to-dos by day' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Show week by day/ }));
-    expect(screen.getByRole('table', { name: 'Routines by day' })).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Daily to-dos by day' })).toBeTruthy();
   });
 
   it('targets: only set ones, against the pace of the week', () => {
@@ -104,6 +104,6 @@ describe('WeekGoalCard', () => {
   it('a past week: no today bar, the grid shown open', () => {
     render(<WeekGoalCard today="2026-11-30" onOpenDay={() => {}} week={week({ days, routines, routineDays: grid })} canEdit onOpen={() => {}} />);
     expect(screen.queryByText(/standup/)).toBeNull();
-    expect(screen.getByRole('table', { name: 'Routines by day' })).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Daily to-dos by day' })).toBeTruthy();
   });
 });

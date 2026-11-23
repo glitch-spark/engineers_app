@@ -202,7 +202,7 @@ export default function DayPanel({
             const rows = items.filter((i) => i.scope === scope);
             return rows.length > 0 && (
               <section key={scope}>
-                <h3 className="form-label mb-1">{scope === 'routine' ? 'Routines' : 'Weekly goals'}</h3>
+                <h3 className="form-label mb-1">{scope === 'routine' ? 'Daily to-dos' : 'Weekly to-dos'}</h3>
                 <ul className="space-y-1.5">
                   {rows.map((item) => (
                     <ItemRow

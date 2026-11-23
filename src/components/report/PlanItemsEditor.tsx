@@ -54,7 +54,7 @@ export default function PlanItemsEditor({
   onChange,
   readOnly = false,
   lockedFor,
-  label = scope === 'routine' ? 'Routine' : 'Weekly goal',
+  label = scope === 'routine' ? 'Daily to-do' : 'Weekly to-do',
 }: {
   items: PlanItemIn[];
   scope: 'routine' | 'goal';

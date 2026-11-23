@@ -46,10 +46,10 @@ function RoutineGrid({ rows, mine, today }: { rows: DashboardRoutineRow[]; mine:
   const TH = 'px-1.5 py-1 text-center text-[11px] font-medium text-muted';
   return (
     <div className="overflow-x-auto">
-      <table aria-label="Routines by day" className="w-full min-w-[30rem] border-collapse text-sm">
+      <table aria-label="Daily to-dos by day" className="w-full min-w-[30rem] border-collapse text-sm">
         <thead>
           <tr>
-            <th scope="col" className={`${TH} text-left`}><span className="sr-only">Routine</span></th>
+            <th scope="col" className={`${TH} text-left`}><span className="sr-only">To-do</span></th>
             {dates.map((date) => (
               <th key={date} scope="col" className={`${TH} ${date === today ? 'bg-zinc-50 dark:bg-zinc-900' : ''}`}>
                 {weekdayShort(date)} {dayDate(date).getDate()}
@@ -189,7 +189,7 @@ export default function WeekGoalCard({
             <div className="space-y-4 lg:col-span-3">
               {routines.length > 0 && (
                 <div>
-                  <h3 className="form-label mb-1">{current ? "Today's checklist" : 'Daily routines'}</h3>
+                  <h3 className="form-label mb-1">{current ? "Today's to-dos" : 'Daily to-dos'}</h3>
                   {current || !grid.length ? (
                     <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                       {routines.map((item) => {
@@ -245,7 +245,7 @@ export default function WeekGoalCard({
 
               {goals.length > 0 && (
                 <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                  <h3 className="form-label mb-1">Weekly goals</h3>
+                  <h3 className="form-label mb-1">Weekly to-dos</h3>
                   <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                     {goals.map((item) => {
                       const p = week.progress[item.id];

@@ -20,7 +20,7 @@ const TARGETS: { key: TargetKey; label: string }[] = [
 ];
 const MAX_ITEMS = 20;
 const TAKEN = 'An item with that name, type and group already exists.';
-const listName = (scope: Scope) => (scope === 'routine' ? 'daily routines' : 'weekly goals');
+const listName = (scope: Scope) => (scope === 'routine' ? 'daily to-dos' : 'weekly to-dos');
 const nameOf = (u: TeamWeekUser) => u.name || u.userId;
 const isBox = (kind: PlanItemKind) => !hasTarget(kind);
 /** '' → null (cleared); a number ≥ 0; anything else → undefined (ignored). */
@@ -261,7 +261,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
             { label: 'Rename', onSelect: () => openForm({ mode: 'rename', col: c }) },
             { label: 'Change type', onSelect: () => openForm({ mode: 'type', col: c }) },
             {
-              label: c.scope === 'routine' ? 'Make weekly goal' : 'Make daily routine',
+              label: c.scope === 'routine' ? 'Make weekly to-do' : 'Make daily to-do',
               onSelect: () => { setForm(null); setMenuError(retype(c, c.kind, other)); },
             },
             { label: 'Remove from this week', danger: true, onSelect: () => { setMenuError(null); setState(removeColumn(state, c)); } },
@@ -305,7 +305,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                 <th scope="colgroup" colSpan={TARGETS.length} className={`${TH} uppercase tracking-wide`}>Week targets</th>
                 {SCOPES.map((sc) => (
                   <th key={sc} scope="colgroup" colSpan={byScope(sc).length + 1} data-group={sc} className={`${TH} ${HEAD_TINT[sc]} uppercase tracking-wide`}>
-                    {sc === 'routine' ? 'Daily routines' : 'Weekly goals'}
+                    {sc === 'routine' ? 'Daily to-dos' : 'Weekly to-dos'}
                   </th>
                 ))}
                 <th scope="col" rowSpan={2} className={TH}>

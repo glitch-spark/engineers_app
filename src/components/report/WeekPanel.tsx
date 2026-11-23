@@ -116,7 +116,7 @@ export default function WeekPanel({
     <SidePanel
       open={open}
       title={`Week ${weekLabel(monday)}`}
-      subtitle={!canSave ? 'View only' : 'Targets, routines and weekly goals'}
+      subtitle={!canSave ? 'View only' : 'Targets, daily and weekly to-dos'}
       onClose={onClose}
       footer={footer}
       dirty={dirty && canSave}
@@ -159,13 +159,13 @@ export default function WeekPanel({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-routines-title">
-              <h3 id="week-routines-title" className="card-title">Routines</h3>
+              <h3 id="week-routines-title" className="card-title">Daily to-dos</h3>
               <p className="mb-2 text-xs text-muted">Shown every working day; count / hours targets are per day.</p>
               <PlanItemsEditor items={form.routines} scope="routine" onChange={(routines) => setForm({ ...form, routines })} readOnly={!planEditable && !ownItems} lockedFor={ownItems ? (i) => i.addedBy !== 'self' : undefined} />
             </section>
 
             <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-goals-title">
-              <h3 id="week-goals-title" className="card-title">Weekly goals</h3>
+              <h3 id="week-goals-title" className="card-title">Weekly to-dos</h3>
               <p className="mb-2 text-xs text-muted">One-off outcomes; count / hours targets are for the whole week.</p>
               <PlanItemsEditor items={form.weeklyGoals} scope="goal" onChange={(weeklyGoals) => setForm({ ...form, weeklyGoals })} readOnly={!planEditable && !ownItems} lockedFor={ownItems ? (i) => i.addedBy !== 'self' : undefined} />
             </section>
