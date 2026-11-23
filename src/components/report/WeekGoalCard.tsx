@@ -192,7 +192,7 @@ export default function WeekGoalCard({
                   <h3 className="form-label mb-1">{current ? "Today's to-dos" : 'Daily to-dos'}</h3>
                   {current || !grid.length ? (
                     <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {routines.map((item) => {
+                      {routines.filter((item) => !current || todayCells.get(item.id)?.state !== 'off').map((item) => {
                         const cell = todayCells.get(item.id);
                         const ok = cell?.state === 'done';
                         const label = (

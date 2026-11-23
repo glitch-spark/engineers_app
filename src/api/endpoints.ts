@@ -524,6 +524,14 @@ export interface PlanItem {
   archived: boolean;
   /** Who created it: the admin's items are locked for a person the admin plans. */
   addedBy: 'admin' | 'self';
+  /** A daily to-do's days (0 = Mon .. 5 = Sat); null = every working day. Missing from an older server. */
+  days?: number[] | null;
+}
+
+/** Saturday's bid targets: null = the week's even split over Mon–Sat; a number = Saturday gets it, Mon–Fri share the rest. */
+export interface SatGoal {
+  bidsSelf: number | null;
+  bidsBidder: number | null;
 }
 
 /** A plan item as sent: new items have no id (the server assigns one). */
@@ -682,6 +690,8 @@ export interface WeekPlan {
   plansOwnWeek: boolean;
   /** Each routine's state per day of the week, as Home's grid. Missing from an older server. */
   routineDays?: DashboardRoutineRow[];
+  /** Missing from an older server. */
+  satGoal?: SatGoal | null;
 }
 
 export interface WeekPlanInput {
@@ -689,6 +699,8 @@ export interface WeekPlanInput {
   routines: PlanItemIn[];
   weeklyGoals: PlanItemIn[];
   recapNotes: string;
+  /** Absent = keep the stored one. */
+  satGoal?: SatGoal | null;
 }
 
 export interface TeamRow {
@@ -740,6 +752,8 @@ export interface TeamWeekUser {
   goal: TeamGoal;
   routines: PlanItem[];
   weeklyGoals: PlanItem[];
+  /** Missing from an older server. */
+  satGoal?: SatGoal | null;
 }
 export interface TeamWeekRowIn {
   userId: string;
@@ -751,6 +765,7 @@ export interface TeamWeekRowIn {
   exists: boolean;
   /** Saved own (`self`) items the admin removed: any other own item missing from the lists stays live. */
   removedIds: string[];
+  satGoal: SatGoal | null;
 }
 
 export const getTeamWeek = (weekStart: string) =>

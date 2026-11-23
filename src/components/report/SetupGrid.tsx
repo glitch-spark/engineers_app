@@ -6,11 +6,12 @@ import type { PlanItemKind, TeamWeekUser } from '../../api/endpoints';
 import { addDays, dateParam, parseDateParam } from '../../lib/reportWeek';
 import {
   addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, movable, moveBlocked, moveToColumn, ownItems,
-  removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, setCell, setColumnOptions, setColumnTarget, setOwnWeek, setTarget,
-  weekStatus, type Column, type GridState, type Scope, type TargetKey,
+  removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, satSplit, setCell, setColumnDays, setColumnOptions, setColumnTarget,
+  setOwnWeek, setSat, fillSat, setTarget, weekStatus, type Column, type GridState, type SatKey, type Scope, type TargetKey,
 } from '../../lib/teamGrid';
 import ActionMenu from '../ActionMenu';
 import OwnItemsCell from './OwnItemsCell';
+import { daysLabel } from '../../lib/planDays';
 import SetupItemForm, { typeName, type ItemFormMode, type ItemFormValues } from './SetupItemForm';
 
 const TARGETS: { key: TargetKey; label: string }[] = [
@@ -19,6 +20,7 @@ const TARGETS: { key: TargetKey; label: string }[] = [
   { key: 'interviewsSelf', label: 'Interviews' },
 ];
 const MAX_ITEMS = 20;
+const isSat = (k: TargetKey) => k === 'bidsSelf' || k === 'bidsBidder';
 const TAKEN = 'An item with that name, type and group already exists.';
 const listName = (scope: Scope) => (scope === 'routine' ? 'daily to-dos' : 'weekly to-dos');
 const nameOf = (u: TeamWeekUser) => u.name || u.userId;
@@ -164,21 +166,23 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     if (form.mode !== 'type' && !text) return 'Enter a name.';
     if (form.mode === 'add') {
       if (addTaken(state, columnKey(text, v.kind, v.scope), v.userId || undefined)) return TAKEN;
-      if (!v.userId) setState(addColumn(state, text, v.kind, v.scope, v.options));
+      if (!v.userId) setState(addColumn(state, text, v.kind, v.scope, v.options, v.days));
       else {
         const u = state.users.find((x) => x.userId === v.userId);
         if (!u) return null;
         const list = v.scope === 'routine' ? u.routines : u.weeklyGoals;
         if (list.length >= MAX_ITEMS) return `${nameOf(u)} already has ${MAX_ITEMS} ${listName(v.scope)}.`;
-        setState(addOwnItem(state, v.userId, text, v.kind, v.scope, v.target, v.options));
+        setState(addOwnItem(state, v.userId, text, v.kind, v.scope, v.target, v.options, v.days));
       }
     } else if (form.mode === 'move') {
       if (text.length > 200) return 'Name is too long (200 characters max).';
-      const to = { text, kind: v.kind, scope: v.scope, options: v.options, target: v.target };
+      const to = { text, kind: v.kind, scope: v.scope, options: v.options, target: v.target, days: v.days };
       const exp = { id: form.itemId, text: form.from.text, kind: form.from.kind };
       const err = moveBlocked(state, form.userId, form.from.scope, form.index, to, exp);
       if (err) return err;
       setState(moveToColumn(state, form.userId, form.from.scope, form.index, to, exp));
+    } else if (form.mode === 'days') {
+      setState(setColumnDays(state, form.col, v.days));
     } else if (form.mode === 'rename') {
       const key = columnKey(text, form.col.kind, form.col.scope);
       if (key !== form.col.key && keyTaken(state, key)) return TAKEN;
@@ -232,6 +236,28 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     />
   );
 
+  /** Saturday's share of a bid target: blank = even over Mon–Sat; a number = Saturday's, Mon–Fri split the rest. */
+  const satCell = (u: TeamWeekUser, name: string, k: TargetKey, label: string) => {
+    const sat = u.satGoal?.[k as SatKey] ?? null;
+    const split = satSplit(u.goal[k], sat);
+    const over = sat != null && sat > u.goal[k];
+    return (
+      <>
+        <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted">
+          Sat
+          <input type="number" min={0} aria-label={`${name} ${label} Saturday`} placeholder="even" value={sat ?? ''}
+            className={`input w-16 px-1.5 py-0.5 text-center text-xs ${over ? 'border-red-500' : ''}`}
+            onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(setSat(state, u.userId, k as SatKey, n)); }} />
+        </label>
+        {over ? (
+          <p className="text-[11px] text-red-600 dark:text-red-400" role="alert">More than the week</p>
+        ) : split && u.goal[k] > 0 && (
+          <p className="whitespace-nowrap text-[11px] text-muted">Mon–Fri {split.weekday} · {split.sat ? `Sat ${split.sat}` : 'no Sat'}</p>
+        )}
+      </>
+    );
+  };
+
   const itemCell = (u: TeamWeekUser, c: Column) => {
     const v = cell(state, u.userId, c);
     const label = `${nameOf(u)} ${c.text}`;
@@ -260,6 +286,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
           items={[
             { label: 'Rename', onSelect: () => openForm({ mode: 'rename', col: c }) },
             { label: 'Change type', onSelect: () => openForm({ mode: 'type', col: c }) },
+            ...(c.scope === 'routine' ? [{ label: `Runs on: ${daysLabel(c.days)}…`, onSelect: () => openForm({ mode: 'days', col: c }) }] : []),
             {
               label: c.scope === 'routine' ? 'Make weekly to-do' : 'Make daily to-do',
               onSelect: () => { setForm(null); setMenuError(retype(c, c.kind, other)); },
@@ -269,6 +296,9 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
         >
           <span className="text-strong">{c.text} ▾</span>
           <small className="block font-normal text-muted">{typeName(c.kind)}{c.options?.length ? ` · ${c.options.join(' / ')}` : ''}</small>
+          {c.scope === 'routine' && c.days && (
+            <small className="mt-0.5 inline-block rounded bg-violet-100 px-1 text-[10px] font-semibold text-violet-800 dark:bg-violet-900/40 dark:text-violet-200">{daysLabel(c.days)}</small>
+          )}
           {isNew && <span className="sr-only"> (new this week)</span>}
         </ActionMenu>
       </th>
@@ -341,6 +371,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                     {TARGETS.map((t) => (
                       <Td key={t.key} was={changed(prevUsers, state, u.userId, t.key)?.was}>
                         {numberInput(`${name} ${t.label}`, u.goal[t.key] || null, (n) => setState(setTarget(state, u.userId, t.key, n ?? 0)))}
+                        {isSat(t.key) && satCell(u, name, t.key, t.label)}
                       </Td>
                     ))}
                     {SCOPES.map((sc) => [
@@ -355,7 +386,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                         onRemove={(o) => setState(removeOwnItem(state, u.userId, o.scope, o.index))}
                         onMove={(o) => openForm({
                           mode: 'move', userId: u.userId, index: o.index, personName: name, itemId: 'id' in o.item ? o.item.id : undefined,
-                          from: { key: '', text: o.item.text, kind: o.item.kind, scope: o.scope, ...(o.item.kind === 'choice' ? { options: o.item.options ?? [] } : {}) },
+                          from: { key: '', text: o.item.text, kind: o.item.kind, scope: o.scope, days: o.item.days ?? null, ...(o.item.kind === 'choice' ? { options: o.item.options ?? [] } : {}) },
                         })}
                       />,
                     ])}
@@ -370,6 +401,13 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                   <td key={t.key} className={TD}>
                     <input type="number" min={0} aria-label={`Fill all ${t.label}`} className={NUM}
                       onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillTarget(state, t.key, n ?? 0)); }} />
+                    {isSat(t.key) && (
+                      <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted">
+                        Sat
+                        <input type="number" min={0} aria-label={`Fill all ${t.label} Saturday`} placeholder="even" className="input w-16 px-1.5 py-0.5 text-center text-xs"
+                          onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillSat(state, t.key as SatKey, n)); }} />
+                      </label>
+                    )}
                   </td>
                 ))}
                 {SCOPES.map((sc) => [

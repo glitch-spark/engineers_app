@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
-import type { Counts, PlanItemIn } from '../../api/endpoints';
+import type { Counts, PlanItemIn, SatGoal } from '../../api/endpoints';
+import { satSplit } from '../../lib/teamGrid';
 import { messageOf } from '../../lib/notify';
 import { parseDateParam, weekLabel } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
@@ -13,7 +14,15 @@ interface WeekForm {
   routines: PlanItemIn[];
   weeklyGoals: PlanItemIn[];
   recapNotes: string;
+  satGoal: SatGoal | null;
 }
+
+const SAT_FIELDS: { key: keyof SatGoal; label: string }[] = [
+  { key: 'bidsSelf', label: 'Self bids' },
+  { key: 'bidsBidder', label: 'Bidder bids' },
+];
+/** null when neither field is set (an even split). */
+const cleanSat = (s: SatGoal | null): SatGoal | null => (s && (s.bidsSelf != null || s.bidsBidder != null) ? s : null);
 
 /** Set the week's targets, routines and weekly goals at the start of the week. */
 export default function WeekPanel({
@@ -48,6 +57,7 @@ export default function WeekPanel({
       routines: data.routines,
       weeklyGoals: data.weeklyGoals,
       recapNotes: data.recapNotes,
+      satGoal: data.satGoal ?? null,
     };
     setForm(next);
     setInitial(JSON.stringify(next));
@@ -80,7 +90,7 @@ export default function WeekPanel({
         const removedIds = [...form.routines, ...form.weeklyGoals].flatMap((i) => (i.addedBy === 'self' && i.archived && i.id ? [i.id] : []));
         const { bidsSelf, bidsBidder, interviewsSelf } = form.goal;
         const res = await api.putTeamWeek(weekStart, [
-          { userId: userId!, plansOwnWeek: data.plansOwnWeek, goal: { bidsSelf, bidsBidder, interviewsSelf }, routines, weeklyGoals, exists: data.exists, removedIds },
+          { userId: userId!, plansOwnWeek: data.plansOwnWeek, goal: { bidsSelf, bidsBidder, interviewsSelf }, routines, weeklyGoals, exists: data.exists, removedIds, satGoal: cleanSat(form.satGoal) },
         ]);
         const failed = res.results.find((r) => !r.ok);
         if (failed) {
@@ -88,7 +98,7 @@ export default function WeekPanel({
           return;
         }
       } else {
-        await api.putWeekPlan(weekStart, { goal: form.goal, routines, weeklyGoals, recapNotes: form.recapNotes });
+        await api.putWeekPlan(weekStart, { goal: form.goal, routines, weeklyGoals, recapNotes: form.recapNotes, ...(planEditable ? { satGoal: cleanSat(form.satGoal) } : {}) });
       }
       await mutate();
       onSaved();
@@ -155,6 +165,36 @@ export default function WeekPanel({
               readOnly={!planEditable}
               adminEdit={mode === 'admin'}
             />
+            {(planEditable || form.satGoal) && (
+              <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <p className="form-label mb-1">Saturday</p>
+                <div className="flex flex-wrap gap-4">
+                  {SAT_FIELDS.map((f) => {
+                    const sat = form.satGoal?.[f.key] ?? null;
+                    const total = form.goal[f.key];
+                    const split = satSplit(total, sat);
+                    return (
+                      <label key={f.key} className="flex flex-col gap-1 text-xs text-muted">
+                        {f.label} on Saturday
+                        {planEditable ? (
+                          <input type="number" min={0} className="input w-28" placeholder="even split" value={sat ?? ''}
+                            onChange={(e) => {
+                              const n = e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value)));
+                              setForm({ ...form, satGoal: { bidsSelf: null, bidsBidder: null, ...form.satGoal, [f.key]: n } });
+                            }} />
+                        ) : (
+                          <span className="text-sm text-body">{sat ?? 'even split'}</span>
+                        )}
+                        <span>
+                          {sat != null && sat > total ? <span className="text-red-600 dark:text-red-400" role="alert">More than the week&apos;s {total}</span>
+                            : split ? `Mon–Fri ${split.weekday} a day · Sat ${split.sat}` : total > 0 ? `${Math.ceil(total / 6)} a day, Mon–Sat` : ''}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </section>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

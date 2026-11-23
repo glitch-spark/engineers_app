@@ -16,7 +16,7 @@ export function dayCell(d: RoutineDay): [string, string, string] {
         : [`${d.value ?? 0}`, `${d.value ?? 0}, short of the target`, 'font-semibold text-amber-600 dark:text-amber-400'];
     case 'today': return ['·', 'today, not done yet', 'text-muted'];
     case 'future': return ['', 'still to come', ''];
-    default: return ['', 'not planned', ''];
+    default: return ['—', 'not planned', 'text-zinc-300 dark:text-zinc-600'];
   }
 }
 

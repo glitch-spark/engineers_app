@@ -127,7 +127,7 @@ describe('WeekPanel', () => {
     expect(week).toBe('2026-11-16');
     expect(rows).toEqual([{
       userId: 'u1', plansOwnWeek: false, goal: { bidsSelf: 9, bidsBidder: 0, interviewsSelf: 3 },
-      routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }], weeklyGoals: [], exists: true, removedIds: [],
+      routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }], weeklyGoals: [], exists: true, removedIds: [], satGoal: null,
     }]);
   });
 

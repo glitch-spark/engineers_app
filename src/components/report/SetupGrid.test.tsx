@@ -433,7 +433,7 @@ describe('SetupGrid', () => {
       openAdd('Add routine for Ana');
       expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('routine');
       expect([...(screen.getByLabelText('Group') as HTMLSelectElement).options].map((o) => o.text))
-        .toEqual(['Daily to-do (every working day)', 'Weekly to-do (once this week)']);
+        .toEqual(['Daily to-do (on the days you pick)', 'Weekly to-do (once this week)']);
       expect(screen.getAllByRole('radio').map((r) => r.closest('label')!.textContent)).toEqual([
         'CheckboxTick when done.',
         'NumberEnter a count against a target, e.g. 40 / 50 emails.',
