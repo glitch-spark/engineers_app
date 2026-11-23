@@ -4,7 +4,7 @@ import * as api from '../../api/endpoints';
 import type { Counts, PlanItemIn, SatGoal } from '../../api/endpoints';
 import { bidsPlan, withBids, type BidKey } from '../../lib/teamGrid';
 import { messageOf } from '../../lib/notify';
-import { parseDateParam, weekLabel } from '../../lib/reportWeek';
+import { parseDateParam, REGION_FIELD, selfRegionsTotal, SELF_REGIONS, weekLabel } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import PlanItemsEditor, { cleanItems, hasOptionsError } from './PlanItemsEditor';
 
@@ -43,6 +43,7 @@ export default function WeekPanel({
     () => api.getWeekPlan(weekStart, userId),
     { revalidateOnFocus: false },
   );
+  const { data: days } = useSWR(open ? ['day-plans', weekStart, userId ?? 'me'] : null, () => api.getDayPlans(weekStart, userId), { revalidateOnFocus: false });
   const [form, setForm] = useState<WeekForm | null>(null);
   const [initial, setInitial] = useState('');
   const [saving, setSaving] = useState(false);
@@ -76,6 +77,11 @@ export default function WeekPanel({
   const ownItems = adminPlans && !!data?.exists; // the planned person edits only their own items, once the week is saved
   const recapEditable = mode === 'own' && (!adminPlans || !!data?.exists);
   const canSave = planEditable || ownItems || recapEditable;
+  // The person splits the week's self bids by the regions they have profiles in (the admin sets the total).
+  const splitEditable = mode === 'own' && (planEditable || !!data?.exists);
+  const profileRegions = new Set((days?.profiles ?? []).filter((p) => !p.archived && p.region).map((p) => REGION_FIELD[p.region!]));
+  const regions = SELF_REGIONS.filter((r) => profileRegions.has(r.field) || !!form?.goal[r.field]);
+  const splitOver = !!form && selfRegionsTotal(form.goal) > form.goal.bidsSelf;
 
   const save = async () => {
     if (!form || !data) return;
@@ -114,7 +120,7 @@ export default function WeekPanel({
   ) : (
     <>
       <button type="button" className="btn-outline text-sm" onClick={onClose}>Cancel</button>
-      <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form || hasOptionsError([...form.routines, ...form.weeklyGoals])} title={form && hasOptionsError([...form.routines, ...form.weeklyGoals]) ? 'Fix the choice options first' : undefined}>
+      <button type="button" className="btn text-sm" onClick={save} disabled={saving || !form || splitOver || hasOptionsError([...form.routines, ...form.weeklyGoals])} title={form && hasOptionsError([...form.routines, ...form.weeklyGoals]) ? 'Fix the choice options first' : undefined}>
         {saving ? 'Saving…' : 'Save week'}
       </button>
     </>
@@ -160,8 +166,8 @@ export default function WeekPanel({
                 const plan = bidsPlan(form, b.key);
                 const set = (patch: { daily?: number; sat?: number }) => {
                   const next = withBids(form, b.key, patch);
-                  // A new self total drops the per-region split (it no longer adds up).
-                  const goal = b.key === 'bidsSelf' && next.goal.bidsSelf !== data.goal.bidsSelf
+                  // A smaller self total drops a region split that no longer fits.
+                  const goal = b.key === 'bidsSelf' && selfRegionsTotal(next.goal) > next.goal.bidsSelf
                     ? { ...next.goal, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0 } : next.goal;
                   setForm({ ...next, goal });
                 };
@@ -201,6 +207,31 @@ export default function WeekPanel({
                 <span>done {data.done.interviewsSelf}</span>
               </div>
             </div>
+            {form.goal.bidsSelf > 0 && regions.length > 0 && (
+              <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <p className="form-label">Self bids by region</p>
+                <p className="mb-2 text-xs text-muted">
+                  {splitEditable ? 'Split your week\'s self bids across your profiles\' regions.' : 'Set by the person.'} Week total {form.goal.bidsSelf}.
+                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  {regions.map((r) => (
+                    <label key={r.field} className="flex flex-col gap-1 text-xs text-muted">
+                      {r.label}
+                      {splitEditable ? (
+                        <input type="number" min={0} className="input w-24" aria-label={`Self bids ${r.label} this week`} value={form.goal[r.field] || ''} placeholder="0"
+                          onChange={(e) => setForm({ ...form, goal: { ...form.goal, [r.field]: Math.max(0, Math.floor(Number(e.target.value) || 0)) } })} />
+                      ) : (
+                        <span className="text-sm text-body">{form.goal[r.field] ?? 0}</span>
+                      )}
+                    </label>
+                  ))}
+                  <span className="pb-2 text-xs text-muted">
+                    {splitOver ? <span className="text-red-600 dark:text-red-400" role="alert">{selfRegionsTotal(form.goal) - form.goal.bidsSelf} more than the total</span>
+                      : `Other / no region: ${form.goal.bidsSelf - selfRegionsTotal(form.goal)}`}
+                  </span>
+                </div>
+              </div>
+            )}
           </section>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

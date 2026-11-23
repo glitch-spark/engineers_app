@@ -119,6 +119,10 @@ export default function GoalDoneFields({
     0,
   );
 
+  // A region shows when the person has a live profile there, or the day already has a number for it.
+  const profileRegions = new Set((profiles ?? []).filter((p) => !p.archived && p.region).map((p) => REGION_FIELD[p.region!]));
+  const showRegion = (field: SelfRegionField) => !profiles || profileRegions.has(field) || !!goal[field] || !!done[field];
+
   const set = (c: Counts, field: NumberField, n: number): Counts =>
     SELF_REGIONS.some((r) => r.field === field) ? withSelfRegion(c, field as SelfRegionField, n) : { ...c, [field]: n };
 
@@ -231,7 +235,7 @@ export default function GoalDoneFields({
             <NumberInput value={goal.bidsSelf ?? 0} label="Bids self total goal" onChange={(n) => onGoal({ ...goal, bidsSelf: n })} />
           </div>
         )}
-        {SELF_REGIONS.map((r) => bidRow(r.field, `Self (${r.label})`))}
+        {SELF_REGIONS.filter((r) => showRegion(r.field)).map((r) => bidRow(r.field, `Self (${r.label})`))}
         {adminEdit && <p className="py-1 text-[11px] text-muted">Region split: Edited by the person</p>}
         {preSplitRow}
         {otherRow}

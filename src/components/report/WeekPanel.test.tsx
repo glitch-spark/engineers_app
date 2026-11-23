@@ -5,7 +5,7 @@ import { SWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
 import WeekPanel from './WeekPanel';
 
-vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getWeekPlan: vi.fn(), putWeekPlan: vi.fn(), putTeamWeek: vi.fn() }));
+vi.mock('../../api/endpoints', async (orig) => ({ ...(await orig<object>()), getWeekPlan: vi.fn(), putWeekPlan: vi.fn(), putTeamWeek: vi.fn(), getDayPlans: vi.fn() }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const counts = { bidsSelf: 0, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0, bidsBidder: 0, interviewsSelf: 0, interviewsCaller: 0 };
@@ -54,6 +54,26 @@ describe('WeekPanel', () => {
     expect(save.disabled).toBe(true);
     fireEvent.change(options, { target: { value: 'Yes, No' } });
     expect(save.disabled).toBe(false);
+  });
+
+  it('the person splits the self total by the regions they have profiles in; over the total blocks Save', async () => {
+    vi.mocked(api.getDayPlans).mockResolvedValue({ weekStart: '2026-11-16', days: [], profiles: [
+      { id: 'p1', name: 'A', region: 'US', archived: false }, { id: 'p2', name: 'B', region: 'EU', archived: false },
+    ] } as never);
+    vi.mocked(api.putWeekPlan).mockResolvedValue(plan as never);
+    renderPanel('own', { plansOwnWeek: false, goal: { ...counts, bidsSelf: 1000 } });
+    const us = await screen.findByLabelText('Self bids US this week');
+    expect(screen.queryByLabelText('Self bids LATAM this week')).toBeNull(); // no LATAM profile
+    fireEvent.change(us, { target: { value: '1200' } });
+    expect(screen.getByRole('alert').textContent).toContain('200 more than the total');
+    expect((screen.getByRole('button', { name: /save week/i }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(us, { target: { value: '600' } });
+    fireEvent.change(screen.getByLabelText('Self bids EU this week'), { target: { value: '300' } });
+    expect(screen.getByText('Other / no region: 100')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /save week/i }));
+    await waitFor(() => expect(api.putWeekPlan).toHaveBeenCalled());
+    const body = vi.mocked(api.putWeekPlan).mock.calls[0][1] as unknown as { goal: Record<string, number> };
+    expect(body.goal).toMatchObject({ bidsSelf: 1000, bidsSelfUs: 600, bidsSelfEu: 300 });
   });
 
   it('own + plansOwnWeek false: read-only plan, note, recap editable, Save sends the recap', async () => {
