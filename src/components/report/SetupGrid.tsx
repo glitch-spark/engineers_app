@@ -343,7 +343,10 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
         <span className="text-xs text-muted">
           {status === 'published' ? 'Live. Edits apply from the next unsubmitted day.' : status === 'draft' ? 'People see it once published.' : ''}
         </span>
-        <button type="button" className="btn ml-auto text-sm" disabled={saving || toSave.length === 0 || formOptionsBad} onClick={publish}
+        <button type="button" className="btn-outline ml-auto text-sm" disabled={saving} onClick={() => openForm({ mode: 'add', userId: null })}>
+          + Add item
+        </button>
+        <button type="button" className="btn text-sm" disabled={saving || toSave.length === 0 || formOptionsBad} onClick={publish}
           title={formOptionsBad ? 'Fix the Choice options in the form first.' : undefined}>
           {saving ? 'Publishing…' : 'Publish week'}
         </button>
@@ -368,11 +371,6 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                     {sc === 'routine' ? 'Daily to-dos' : 'Weekly to-dos'}
                   </th>
                 ))}
-                <th scope="col" rowSpan={2} className={TH}>
-                  <button type="button" className="btn-outline whitespace-nowrap text-xs" onClick={() => openForm({ mode: 'add', userId: null })}>
-                    + item
-                  </button>
-                </th>
               </tr>
               <tr>
                 {SCOPES.map((sc) => [
@@ -404,7 +402,6 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                   )),
                   <td key={`own-${sc}`} className={TD} />,
                 ])}
-                <td className={TD} />
               </tr>
               {state.users.map((u) => {
                 const name = nameOf(u);
@@ -440,7 +437,6 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                         })}
                       />,
                     ])}
-                    <td className={TD} />
                   </tr>
                 );
               })}

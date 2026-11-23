@@ -107,7 +107,7 @@ describe('SetupGrid', () => {
   it('Add item for everyone adds a column; for one person adds a chip under "Only this person"', async () => {
     show();
     await ready();
-    fireEvent.click(screen.getByRole('button', { name: '+ item' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add item' }));
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Calls' } });
     fireEvent.click(screen.getByRole('radio', { name: /^Number/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -128,7 +128,7 @@ describe('SetupGrid', () => {
   it('rejects an empty name and a name that is already an item of that type', async () => {
     show();
     await ready();
-    fireEvent.click(screen.getByRole('button', { name: '+ item' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add item' }));
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(screen.getByRole('alert').textContent).toMatch(/Enter a name/);
@@ -139,7 +139,7 @@ describe('SetupGrid', () => {
 
   it('adding a name only one person has: for everyone it becomes a column with their cell ticked; for another person too; for that person it is refused', async () => {
     const add = (who: string | null, name: string) => {
-      fireEvent.click(screen.getByRole('button', { name: who ? `Add weekly to-do for ${who}` : '+ item' }));
+      fireEvent.click(screen.getByRole('button', { name: who ? `Add weekly to-do for ${who}` : '+ Add item' }));
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: name } });
       if (!who) fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'goal' } });
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -341,7 +341,7 @@ describe('SetupGrid', () => {
     await waitFor(() => expect(off(input('Ben Bids / day'))).toBe(true));
     expect(off(input('Ana Email'))).toBe(true);
     expect(off(input('Fill all Proposals'))).toBe(true);
-    expect(off(screen.getByRole('button', { name: '+ item' }))).toBe(true);
+    expect(off(screen.getByRole('button', { name: '+ Add item' }))).toBe(true);
   });
 
   it('a thrown publish error shows "Could not publish the week."', async () => {
@@ -475,7 +475,7 @@ describe('SetupGrid', () => {
       await ready();
       type('Ana Bids / day', '650');
       expect(publishBtn().disabled).toBe(false);
-      openAdd('+ item');
+      openAdd('+ Add item');
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Mood' } });
       fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
       type('Choice options', 'Only one');
@@ -568,7 +568,7 @@ describe('SetupGrid', () => {
     it('Target with its hint: for one person and in Change type / Move; for everyone only the hint', async () => {
       show();
       await ready();
-      openAdd('+ item');
+      openAdd('+ Add item');
       fireEvent.click(screen.getByRole('radio', { name: /^Number/ }));
       expect(screen.queryByLabelText('Target')).toBeNull();
       expect(screen.getByText('Set targets in the cells or with Fill all')).toBeTruthy();
