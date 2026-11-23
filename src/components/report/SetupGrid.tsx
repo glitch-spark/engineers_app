@@ -6,7 +6,7 @@ import type { PlanItemKind, TeamWeekUser } from '../../api/endpoints';
 import { addDays, dateParam, parseDateParam } from '../../lib/reportWeek';
 import {
   addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, movable, moveBlocked, moveToColumn, ownItems,
-  removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, setCell, setColumnOptions, setOwnWeek, setTarget,
+  removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, setCell, setColumnOptions, setColumnTarget, setOwnWeek, setTarget,
   weekStatus, type Column, type GridState, type Scope, type TargetKey,
 } from '../../lib/teamGrid';
 import ActionMenu from '../ActionMenu';
@@ -140,11 +140,13 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
         : state.users.some((u) => !u.exists && !isEmptyRow(u)) ? ['badge-warning', 'Draft · copied from last week']
           : ['badge-warning', 'Draft · unsaved edits'];
 
-  const retype = (c: Column, kind: PlanItemKind, scope: Scope, options = c.options): string | null => {
+  /** `target`: count / hours target for every member (null = none on a new type, unchanged on the same type). */
+  const retype = (c: Column, kind: PlanItemKind, scope: Scope, options = c.options, target: number | null = null): string | null => {
     const key = columnKey(c.text, kind, scope);
     if (key === c.key) {
-      // Only the options changed: a plain edit, ids kept.
-      if (kind === 'choice' && options && options.join('\n') !== (c.options ?? []).join('\n')) setState(setColumnOptions(state, c, options));
+      // Same type: a plain edit, ids kept. Saving a Choice column aligns every member to its options.
+      if (kind === 'choice' && options) setState(setColumnOptions(state, c, options));
+      else if (target !== null) setState(setColumnTarget(state, c, target));
       return null;
     }
     if (keyTaken(state, key)) return TAKEN;
@@ -152,7 +154,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     if (blocked.length) {
       return `${blocked.map(nameOf).join(', ')} already ${blocked.length === 1 ? 'has' : 'have'} ${MAX_ITEMS} ${listName(scope)}.`;
     }
-    setState(retypeColumn(state, c, kind, scope, options));
+    setState(retypeColumn(state, c, kind, scope, options, target));
     return null;
   };
 
@@ -172,7 +174,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
       }
     } else if (form.mode === 'move') {
       if (text.length > 200) return 'Name is too long (200 characters max).';
-      const to = { text, kind: v.kind, scope: v.scope, options: v.options };
+      const to = { text, kind: v.kind, scope: v.scope, options: v.options, target: v.target };
       const exp = { id: form.itemId, text: form.from.text, kind: form.from.kind };
       const err = moveBlocked(state, form.userId, form.from.scope, form.index, to, exp);
       if (err) return err;
@@ -182,7 +184,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
       if (key !== form.col.key && keyTaken(state, key)) return TAKEN;
       setState(renameColumn(state, form.col, text));
     } else {
-      const err = retype(form.col, v.kind, form.col.scope, v.options);
+      const err = retype(form.col, v.kind, form.col.scope, v.options, v.target);
       if (err) return err;
     }
     setForm(null);

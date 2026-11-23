@@ -111,7 +111,10 @@ export function addColumn(s: GridState, text: string, kind: PlanItemKind, scope:
 }
 
 /** An item joining an existing column takes the column's options; otherwise the given ones. */
-const optionsFor = (s: GridState, key: string, options?: string[]) => columns(s).find((c) => c.key === key)?.options ?? options;
+const optionsFor = (s: GridState, key: string, options?: string[]) => {
+  const own = columns(s).find((c) => c.key === key)?.options;
+  return own?.length ? own : options;
+};
 
 export const addOwnItem = (
   s: GridState, userId: string, text: string, kind: PlanItemKind, scope: Scope, target: number | null, options?: string[],
@@ -130,7 +133,8 @@ export const removeOwnItem = (s: GridState, userId: string, scope: Scope, index:
   return mapUser(s, userId, (u) => ({ ...u, [k]: u[k].filter((_, i) => i !== index) }));
 };
 
-type Dest = { text: string; kind: PlanItemKind; scope: Scope; options?: string[] };
+/** `target`: null / absent keeps the item's target where both kinds have one. */
+type Dest = { text: string; kind: PlanItemKind; scope: Scope; options?: string[]; target?: number | null };
 
 /** What the caller believes sits at `index`: its id when it has one, else text + kind. */
 export type Expect = { id?: string; text: string; kind: PlanItemKind };
@@ -163,9 +167,9 @@ export function moveToColumn(s: GridState, userId: string, scope: Scope, index: 
   const o = opts(to.kind, optionsFor(s, key, to.options));
   const pin = columns(s).some((c) => c.key === key) ? s : addColumn(s, text, to.kind, to.scope, o.options);
   if (to.kind === it.kind && to.scope === scope) {
-    return mapUser(pin, userId, (x) => ({ ...x, [listKey(scope)]: x[listKey(scope)].map((i, n) => (n === index ? { ...i, text, ...o } : i)) }));
+    return mapUser(pin, userId, (x) => ({ ...x, [listKey(scope)]: x[listKey(scope)].map((i, n) => (n === index ? { ...i, text, ...o, ...(to.target != null && hasTarget(to.kind) ? { target: to.target } : {}) } : i)) }));
   }
-  const moved: PlanItemIn = { text, kind: to.kind, target: hasTarget(it.kind) && hasTarget(to.kind) ? it.target : null, archived: false, ...o };
+  const moved: PlanItemIn = { text, kind: to.kind, target: hasTarget(to.kind) ? to.target ?? (hasTarget(it.kind) ? it.target : null) : null, archived: false, ...o };
   const from = listKey(scope);
   const dest = listKey(to.scope);
   return mapUser(pin, userId, (x) => {
@@ -191,7 +195,10 @@ export function renameColumn(s: GridState, c: Column, text: string): GridState {
 export const retypeBlocked = (s: GridState, c: Column, scope: Scope): TeamWeekUser[] =>
   c.scope === scope ? [] : s.users.filter((u) => findItem(u, c) && u[listKey(scope)].length >= MAX_ITEMS);
 
-export function retypeColumn(s: GridState, c: Column, kind: PlanItemKind, scope: Scope, options?: string[]): GridState {
+/** New items get `options` (choice) and `target` (count / hours; null = none). */
+export function retypeColumn(
+  s: GridState, c: Column, kind: PlanItemKind, scope: Scope, options?: string[], target: number | null = null,
+): GridState {
   const o = opts(kind, options);
   const next: Column = { key: columnKey(c.text, kind, scope), text: c.text, kind, scope, ...o };
   const from = listKey(c.scope);
@@ -202,7 +209,7 @@ export function retypeColumn(s: GridState, c: Column, kind: PlanItemKind, scope:
     const kept = { ...u, [from]: u[from].filter((i) => itemKey(i, c.scope) !== c.key) };
     if (kept[to].length >= MAX_ITEMS) return kept;
     // no id: the server archives the old item and creates this one
-    return { ...kept, [to]: [...kept[to], { text: c.text, kind, target: null, archived: false, ...o }] };
+    return { ...kept, [to]: [...kept[to], { text: c.text, kind, target: hasTarget(kind) ? target : null, archived: false, ...o }] };
   });
   return { users, pinned: rewritePinned(s, c, next) };
 }
@@ -213,6 +220,10 @@ export function setColumnOptions(s: GridState, c: Column, options: string[]): Gr
   const users = s.users.map((u) => (findItem(u, c) ? { ...u, [k]: u[k].map((i) => (itemKey(i, c.scope) === c.key ? { ...i, options } : i)) } : u));
   return { users, pinned: rewritePinned(s, c, { ...c, options }) };
 }
+
+/** A count / hours column's target for every member (ids kept). */
+export const setColumnTarget = (s: GridState, c: Column, target: number): GridState =>
+  hasTarget(c.kind) ? mapUsers(s, (u) => (findItem(u, c) ? applyCell(u, c, { has: true, target }) : u)) : s;
 
 export const removeColumn = (s: GridState, c: Column): GridState => ({
   users: s.users.map((u) => applyCell(u, c, { has: false, target: null })),

@@ -141,7 +141,7 @@ describe('SetupGrid', () => {
     const add = (who: string | null, name: string) => {
       fireEvent.click(screen.getByRole('button', { name: who ? `Add goal for ${who}` : '+ item' }));
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: name } });
-      fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'goal' } });
+      if (!who) fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'goal' } });
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     };
     show();
@@ -561,8 +561,97 @@ describe('SetupGrid', () => {
       expect(screen.getByRole('button', { name: /^Company work.*Text/ })).toBeTruthy();
       expect(input('Ana Company work').type).toBe('checkbox');
       fireEvent.click(input('Fill all Company work'));
+      expect(input('Ben Company work').checked).toBe(true);
       fireEvent.click(input('Fill all Company work'));
       expect(input('Ben Company work').checked).toBe(false);
+    });
+    it('Target with its hint: for one person and in Change type / Move; for everyone only the hint', async () => {
+      show();
+      await ready();
+      openAdd('+ item');
+      fireEvent.click(screen.getByRole('radio', { name: /^Number/ }));
+      expect(screen.queryByLabelText('Target')).toBeNull();
+      expect(screen.getByText('Set targets in the cells or with Fill all')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('For'), { target: { value: 'Ana' } });
+      expect(screen.getByLabelText('Target')).toBeTruthy();
+      expect(screen.getByText('per day')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'goal' } });
+      expect(screen.getByText('this week')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // Change type to Number: the target goes to every member
+      fireEvent.click(screen.getByRole('button', { name: /^Email/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Change type' }));
+      fireEvent.click(screen.getByRole('radio', { name: /^Number/ }));
+      expect(screen.getByText('per day')).toBeTruthy();
+      type('Target', '30');
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect([input('Ana Email').value, input('Ben Email').value]).toEqual(['30', '30']);
+
+      // Same type, new target: every member, ids kept; blank changes nothing
+      fireEvent.click(screen.getByRole('button', { name: /^Proposals/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Change type' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect([input('Ana Proposals').value, input('Ben Proposals').value]).toEqual(['250', '100']);
+      fireEvent.click(screen.getByRole('button', { name: /^Proposals/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Change type' }));
+      expect(screen.getByText('this week')).toBeTruthy();
+      type('Target', '80');
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect([input('Ana Proposals').value, input('Ben Proposals').value]).toEqual(['80', '80']);
+
+      // Move: the target goes to the moved item
+      fireEvent.click(screen.getByRole('button', { name: 'Actions for Solo of Ben' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
+      fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Calls' } });
+      fireEvent.click(screen.getByRole('radio', { name: /^Number/ }));
+      type('Target', '12');
+      fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+      expect(input('Ben Calls').value).toBe('12');
+
+      fireEvent.click(publishBtn());
+      await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(1));
+      expect(putTeamWeek.mock.calls[0][1].map((r) => r.weeklyGoals.find((g) => g.text === 'Proposals'))).toMatchObject([
+        { id: 'g1', target: 80 }, { id: 'g2', target: 80 },
+      ]);
+    });
+
+    it('a Move with a blank target keeps a same-type item\'s target', async () => {
+      const t = team();
+      t[1].weeklyGoals.push(item('g5', 'Mails', 'count', 9));
+      serve(t);
+      show();
+      await ready();
+      fireEvent.click(screen.getByRole('button', { name: 'Actions for Mails of Ben' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
+      fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Emails' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+      expect(input('Ben Emails').value).toBe('9');
+    });
+
+    it('saving Change type on a Choice column aligns every member to its options', async () => {
+      serve([person('Ana', { routines: [choice('r1', 'Client', ['Done', 'Blocked'])] }), person('Ben', { routines: [choice('r2', 'Client', ['Yes', 'No'])] })]);
+      show();
+      await ready();
+      fireEvent.click(screen.getByRole('button', { name: /^Client/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Change type' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(publishBtn());
+      await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(1));
+      expect(putTeamWeek.mock.calls[0][1].map((r) => [r.userId, r.routines[0]])).toMatchObject([['Ben', { id: 'r2', options: ['Done', 'Blocked'] }]]);
+    });
+
+    it('joining a Choice column without options shows the options field', async () => {
+      serve([...team(), person('Cy', { routines: [choice('r1', 'Client', [])] }), person('Dee', { routines: [choice('r2', 'Client', [])] })]);
+      show();
+      await ready();
+      fireEvent.click(screen.getByRole('button', { name: 'Actions for Solo of Ben' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
+      fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Client' } });
+      fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'routine' } });
+      fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
+      expect(screen.getByLabelText('Choice options')).toBeTruthy();
+      expect(screen.queryByText(/column's options/)).toBeNull();
     });
   });
 });

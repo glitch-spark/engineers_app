@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanItem, PlanItemKind, TeamWeekUser } from '../api/endpoints';
 import {
   addColumn, addOwnItem, cell, changed, columnKey, columns, fillColumn, isEmptyRow, ownItems, removeColumn,
-  removeOwnItem, moveToColumn, moveBlocked, setColumnOptions, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
+  removeOwnItem, moveToColumn, moveBlocked, setColumnOptions, setColumnTarget, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
   type GridState,
 } from './teamGrid';
 
@@ -427,6 +427,37 @@ describe('teamGrid', () => {
       expect(rowsToSave(s0.users, t).map((r) => r.routines[0])).toMatchObject([
         { id: s0.users[0].routines[0].id, options: ['A', 'B'] }, { id: s0.users[1].routines[0].id, options: ['A', 'B'] },
       ]);
+    });
+    it('a column with empty options does not hand them to a joining item', () => {
+      const s = addColumn(st([user('A')]), 'Client', 'choice', 'routine', []);
+      expect(addOwnItem(s, 'A', 'Client', 'choice', 'routine', null, ['Yes', 'No']).users[0].routines[0].options).toEqual(['Yes', 'No']);
+    });
+  });
+
+  describe('targets from the item form', () => {
+    it('retyping to Number/Hours gives every member the target (none when blank)', () => {
+      const s = st([user('A', [item('Calls')]), user('B', [item('Calls')])]);
+      const t = retypeColumn(s, columns(s)[0], 'count', 'routine', undefined, 40);
+      expect(t.users.map((u) => u.routines[0].target)).toEqual([40, 40]);
+      expect(retypeColumn(s, columns(s)[0], 'count', 'routine').users[0].routines[0].target).toBeNull();
+      expect(retypeColumn(s, columns(s)[0], 'text', 'routine', undefined, 40).users[0].routines[0].target).toBeNull();
+    });
+
+    it("setColumnTarget sets every member's target and keeps ids; others untouched", () => {
+      const a = item('Calls', 'count', 5);
+      const s = st([user('A', [a]), user('B', [item('Calls', 'count', 7)]), user('C')]);
+      const t = setColumnTarget(s, columns(s)[0], 9);
+      expect(t.users[0].routines[0]).toMatchObject({ id: a.id, target: 9 });
+      expect(t.users[1].routines[0].target).toBe(9);
+      expect(t.users[2]).toBe(s.users[2]);
+    });
+
+    it('a move applies the entered target; blank keeps the existing one', () => {
+      const s = st([user('A', [item('Calls', 'count', 5), item('Hrs', 'hours', 2)])]);
+      const e = (i: number) => ({ id: s.users[0].routines[i].id, text: s.users[0].routines[i].text, kind: s.users[0].routines[i].kind });
+      expect(moveToColumn(s, 'A', 'routine', 0, { text: 'Outreach', kind: 'count', scope: 'routine', target: 8 }, e(0)).users[0].routines[0]).toMatchObject({ id: s.users[0].routines[0].id, target: 8 });
+      expect(moveToColumn(s, 'A', 'routine', 0, { text: 'Outreach', kind: 'count', scope: 'routine', target: null }, e(0)).users[0].routines[0].target).toBe(5);
+      expect(moveToColumn(s, 'A', 'routine', 1, { text: 'Hrs', kind: 'count', scope: 'goal', target: 3 }, e(1)).users[0].weeklyGoals[0].target).toBe(3);
     });
   });
 });

@@ -57,7 +57,10 @@ export default function SetupItemForm({
   const joins = form.mode === 'move' || (form.mode === 'add' && v.userId)
     ? columns.find((c) => c.key === columnKey(v.text, v.kind, v.scope))
     : undefined;
-  const showOptions = form.mode !== 'rename' && v.kind === 'choice' && !joins;
+  // A joined column without options (bad data) falls back to the field.
+  const joinsOptions = joins?.options?.length ? joins.options : null;
+  const showOptions = form.mode !== 'rename' && v.kind === 'choice' && !joinsOptions;
+  const showTarget = hasTarget(v.kind) && (form.mode === 'type' || form.mode === 'move' || (form.mode === 'add' && !!v.userId));
   const optionsBad = showOptions && optionsError(v.options) !== null;
   useEffect(() => {
     onOptionsInvalid?.(optionsBad);
@@ -136,25 +139,31 @@ export default function SetupItemForm({
           </div>
         </fieldset>
       )}
-      {form.mode === 'add' && v.userId && hasTarget(v.kind) && (
-        <label className="form-label flex flex-col gap-1">
-          Target
-          <input
-            type="number"
-            min={0}
-            step={v.kind === 'hours' ? 'any' : 1}
-            className="input w-24"
-            value={v.target ?? ''}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              set({ target: e.target.value === '' || !(n >= 0) ? null : n });
-            }}
-          />
-        </label>
+      {form.mode === 'add' && !v.userId && hasTarget(v.kind) && (
+        <p className="basis-full text-xs text-muted">Set targets in the cells or with Fill all</p>
+      )}
+      {showTarget && (
+        <div className="flex items-end gap-2">
+          <label className="form-label flex flex-col gap-1">
+            Target
+            <input
+              type="number"
+              min={0}
+              step={v.kind === 'hours' ? 'any' : 1}
+              className="input w-24"
+              value={v.target ?? ''}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                set({ target: e.target.value === '' || !(n >= 0) ? null : n });
+              }}
+            />
+          </label>
+          <span className="pb-2 text-xs text-muted">{v.scope === 'routine' ? 'per day' : 'this week'}</span>
+        </div>
       )}
       {showOptions && <OptionsField options={v.options} label="Choice" onChange={(options) => set({ options })} />}
-      {form.mode !== 'rename' && v.kind === 'choice' && joins && (
-        <p className="basis-full text-xs text-muted">Uses the column&apos;s options: {joins.options?.join(' / ')}</p>
+      {form.mode !== 'rename' && v.kind === 'choice' && joinsOptions && (
+        <p className="basis-full text-xs text-muted">Uses the column&apos;s options: {joinsOptions.join(' / ')}</p>
       )}
       <div className="flex gap-2">
         <button type="submit" className="btn text-sm" disabled={optionsBad}>{form.mode === 'add' ? 'Add' : form.mode === 'move' ? 'Move' : 'Save'}</button>
