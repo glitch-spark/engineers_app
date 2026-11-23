@@ -34,10 +34,12 @@ const parseNum = (raw: string): number | null | undefined => {
 
 const TH = 'border-b border-zinc-200 px-2 py-1.5 text-xs font-medium dark:border-zinc-800';
 const TD = 'border-b border-zinc-100 px-1.5 py-1 text-center align-middle dark:border-zinc-800';
-const STICKY = 'sticky left-0 z-10 w-40 min-w-[10rem] max-w-[10rem] bg-white text-left dark:bg-zinc-950';
+const STICKY = 'sticky left-0 z-10 w-36 min-w-[9rem] max-w-[9rem] bg-white !text-left dark:bg-zinc-950';
+/** No spinner arrows: they hide digits in a narrow box. */
+const NO_SPIN = '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 const NUM =
-  'h-8 w-16 rounded-md border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/30 dark:border-zinc-700 dark:bg-zinc-900';
-const SAT_NUM = 'h-6 w-12 rounded border border-zinc-300 bg-white px-1 text-center text-xs tabular-nums focus:border-accent-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900';
+  `h-8 w-[4.5rem] rounded-md border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums placeholder:text-zinc-400 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/30 dark:border-zinc-700 dark:bg-zinc-900 ${NO_SPIN}`;
+const SAT_NUM = `h-6 w-14 rounded border border-zinc-300 bg-white px-1 text-center text-xs tabular-nums placeholder:text-zinc-400 focus:border-accent-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 ${NO_SPIN}`;
 const SCOPES: Scope[] = ['routine', 'goal'];
 /** A coloured stripe per group on its headers (the body stays plain). */
 const HEAD_TINT: Record<Scope, string> = { routine: 'border-t-2 border-t-violet-400', goal: 'border-t-2 border-t-cyan-400' };
@@ -285,7 +287,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     const other: Scope = c.scope === 'routine' ? 'goal' : 'routine';
     const isNew = !!prevUsers && !prevKeys.has(c.key);
     return (
-      <th key={c.key} scope="col" data-group={c.scope} className={`${TH} ${isNew ? 'bg-accent-50 dark:bg-accent-900/20' : HEAD_TINT[c.scope]}`}>
+      <th key={c.key} scope="col" data-group={c.scope} className={`${TH} ${HEAD_TINT[c.scope]} min-w-[7.5rem] align-bottom`}>
         <ActionMenu
           label={`${c.text} column`}
           className="w-full rounded px-1 text-center hover:bg-zinc-100 focus-ring dark:hover:bg-zinc-800"
@@ -300,8 +302,8 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
             { label: 'Remove from this week', danger: true, onSelect: () => { setMenuError(null); setState(removeColumn(state, c)); } },
           ]}
         >
-          <span className="block max-w-[8rem] truncate text-strong" title={c.text}>{c.text} ▾</span>
-          <small className="block max-w-[9rem] truncate font-normal text-muted" title={c.options?.join(' / ')}>
+          <span className="line-clamp-2 block max-w-[10rem] break-words text-strong" title={c.text}>{c.text} ▾</span>
+          <small className="block max-w-[10rem] truncate font-normal text-muted" title={c.options?.join(' / ')}>
             {typeName(c.kind)}{c.options?.length ? ` · ${c.options.join(' / ')}` : ''}
             {c.scope === 'routine' && c.days && (
               <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-semibold text-violet-800 dark:bg-violet-900/40 dark:text-violet-200">{daysLabel(c.days)}</span>
@@ -442,8 +444,8 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
         </div>
       </fieldset>
       <p className="text-xs text-muted">
-        Highlighted: new or changed since last week. Plans own week on = that person edits their own week; off = view-only for them.
-        Click a column header to rename, re-type or remove it for this week.
+        Amber cells changed since last week (was …). Own plan on = that person plans their own week; off = you plan it, view-only for them.
+        Sat blank = bids split evenly Mon–Sat. Click a column header to rename, re-type, set its days or remove it.
       </p>
     </section>
   );
