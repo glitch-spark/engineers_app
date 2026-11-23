@@ -114,7 +114,7 @@ describe('SetupGrid', () => {
     expect(screen.getByRole('button', { name: /^Calls/ })).toBeTruthy();
     expect(input('Ana Calls').value).toBe('');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add goal for Ben' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add weekly to-do for Ben' }));
     expect((screen.getByLabelText('For') as HTMLSelectElement).value).toBe('Ben');
     expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('goal');
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Mine' } });
@@ -139,7 +139,7 @@ describe('SetupGrid', () => {
 
   it('adding a name only one person has: for everyone it becomes a column with their cell ticked; for another person too; for that person it is refused', async () => {
     const add = (who: string | null, name: string) => {
-      fireEvent.click(screen.getByRole('button', { name: who ? `Add goal for ${who}` : '+ item' }));
+      fireEvent.click(screen.getByRole('button', { name: who ? `Add weekly to-do for ${who}` : '+ item' }));
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: name } });
       if (!who) fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'goal' } });
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -413,8 +413,8 @@ describe('SetupGrid', () => {
       expect(own.map(cellGroup)).toEqual(['routine', 'goal']);
       expect(cellGroup(screen.getByRole('button', { name: 'Remove Inbox from Ana' }))).toBe('routine');
       expect(cellGroup(screen.getByRole('button', { name: 'Remove Launch from Ana' }))).toBe('goal');
-      expect(cellGroup(screen.getByRole('button', { name: 'Add routine for Ana' }))).toBe('routine');
-      expect(cellGroup(screen.getByRole('button', { name: 'Add goal for Ana' }))).toBe('goal');
+      expect(cellGroup(screen.getByRole('button', { name: 'Add daily to-do for Ana' }))).toBe('routine');
+      expect(cellGroup(screen.getByRole('button', { name: 'Add weekly to-do for Ana' }))).toBe('goal');
     });
 
     it('chips keep their target ("2h", "50") and drop the daily / week suffix', async () => {
@@ -430,7 +430,7 @@ describe('SetupGrid', () => {
     it('the picker offers the six types with their copy; Number/Hours show a target, Choice the options with presets', async () => {
       show();
       await ready();
-      openAdd('Add routine for Ana');
+      openAdd('Add daily to-do for Ana');
       expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('routine');
       expect([...(screen.getByLabelText('Group') as HTMLSelectElement).options].map((o) => o.text))
         .toEqual(['Daily to-do (on the days you pick)', 'Weekly to-do (once this week)']);
@@ -459,7 +459,7 @@ describe('SetupGrid', () => {
     it('a Choice item for one person is added with its options and published with them', async () => {
       show();
       await ready();
-      openAdd('Add goal for Ana');
+      openAdd('Add weekly to-do for Ana');
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Client check' } });
       fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Yes, No' }));

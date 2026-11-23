@@ -32,20 +32,26 @@ const parseNum = (raw: string): number | null | undefined => {
   return Number.isFinite(n) && n >= 0 ? n : undefined;
 };
 
-const TH = 'border border-zinc-200 px-2 py-1.5 text-xs font-medium dark:border-zinc-800';
-const TD = 'border border-zinc-200 p-1 text-center align-middle dark:border-zinc-800';
-const STICKY = 'sticky left-0 z-10 bg-white text-left dark:bg-zinc-950';
-const NUM = 'input w-20 px-2 py-1 text-center';
+const TH = 'border-b border-zinc-200 px-2 py-1.5 text-xs font-medium dark:border-zinc-800';
+const TD = 'border-b border-zinc-100 px-1.5 py-1 text-center align-middle dark:border-zinc-800';
+const STICKY = 'sticky left-0 z-10 w-40 min-w-[10rem] max-w-[10rem] bg-white text-left dark:bg-zinc-950';
+const NUM =
+  'h-8 w-16 rounded-md border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/30 dark:border-zinc-700 dark:bg-zinc-900';
+const SAT_NUM = 'h-6 w-12 rounded border border-zinc-300 bg-white px-1 text-center text-xs tabular-nums focus:border-accent-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900';
 const SCOPES: Scope[] = ['routine', 'goal'];
-/** A light tint per group: header and body cells. */
-const HEAD_TINT: Record<Scope, string> = { routine: 'bg-violet-50 dark:bg-violet-900/20', goal: 'bg-cyan-50 dark:bg-cyan-900/20' };
-const TINT: Record<Scope, string> = { routine: 'bg-violet-50/40 dark:bg-violet-900/10', goal: 'bg-cyan-50/40 dark:bg-cyan-900/10' };
+/** A coloured stripe per group on its headers (the body stays plain). */
+const HEAD_TINT: Record<Scope, string> = { routine: 'border-t-2 border-t-violet-400', goal: 'border-t-2 border-t-cyan-400' };
+const TINT: Record<Scope, string> = { routine: '', goal: '' };
+const TOGGLE =
+  "relative h-4 w-7 cursor-pointer appearance-none rounded-full bg-zinc-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-3 before:w-3 before:rounded-full before:bg-white before:transition-transform before:content-[''] checked:bg-accent-500 checked:before:translate-x-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 dark:bg-zinc-600";
 
+/** `was`: last week's value when it changed ('—' = new this week: no note, nothing new to compare). */
 function Td({ was, scope, children }: { was?: string | null; scope?: Scope; children: ReactNode }) {
+  const note = was && was !== '—' ? was : null;
   return (
-    <td data-group={scope} className={`${TD} ${was ? 'bg-accent-50 dark:bg-accent-900/20' : scope ? TINT[scope] : ''}`}>
+    <td data-group={scope} className={`${TD} ${note ? 'bg-amber-50/70 dark:bg-amber-900/10' : ''}`} title={note ? `Last week: ${note}` : undefined}>
       {children}
-      {was && <span className="block text-[10px] text-accent-700 dark:text-accent-300">was {was}</span>}
+      {note && <span className="block text-[10px] leading-tight text-amber-700 dark:text-amber-300">was {note}</span>}
     </td>
   );
 }
@@ -243,16 +249,16 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     const over = sat != null && sat > u.goal[k];
     return (
       <>
-        <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted">
+        <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted" title="Saturday's bids. Blank = even split over Mon–Sat.">
           Sat
-          <input type="number" min={0} aria-label={`${name} ${label} Saturday`} placeholder="even" value={sat ?? ''}
-            className={`input w-16 px-1.5 py-0.5 text-center text-xs ${over ? 'border-red-500' : ''}`}
+          <input type="number" min={0} aria-label={`${name} ${label} Saturday`} placeholder="—" value={sat ?? ''}
+            className={`${SAT_NUM} ${over ? 'border-red-500' : ''}`}
             onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(setSat(state, u.userId, k as SatKey, n)); }} />
         </label>
         {over ? (
           <p className="text-[11px] text-red-600 dark:text-red-400" role="alert">More than the week</p>
         ) : split && u.goal[k] > 0 && (
-          <p className="whitespace-nowrap text-[11px] text-muted">Mon–Fri {split.weekday} · {split.sat ? `Sat ${split.sat}` : 'no Sat'}</p>
+          <p className="whitespace-nowrap text-[10px] leading-tight text-muted">Mon–Fri {split.weekday} · {split.sat ? `Sat ${split.sat}` : 'no Sat'}</p>
         )}
       </>
     );
@@ -294,11 +300,13 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
             { label: 'Remove from this week', danger: true, onSelect: () => { setMenuError(null); setState(removeColumn(state, c)); } },
           ]}
         >
-          <span className="text-strong">{c.text} ▾</span>
-          <small className="block font-normal text-muted">{typeName(c.kind)}{c.options?.length ? ` · ${c.options.join(' / ')}` : ''}</small>
-          {c.scope === 'routine' && c.days && (
-            <small className="mt-0.5 inline-block rounded bg-violet-100 px-1 text-[10px] font-semibold text-violet-800 dark:bg-violet-900/40 dark:text-violet-200">{daysLabel(c.days)}</small>
-          )}
+          <span className="block max-w-[8rem] truncate text-strong" title={c.text}>{c.text} ▾</span>
+          <small className="block max-w-[9rem] truncate font-normal text-muted" title={c.options?.join(' / ')}>
+            {typeName(c.kind)}{c.options?.length ? ` · ${c.options.join(' / ')}` : ''}
+            {c.scope === 'routine' && c.days && (
+              <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-semibold text-violet-800 dark:bg-violet-900/40 dark:text-violet-200">{daysLabel(c.days)}</span>
+            )}
+          </small>
           {isNew && <span className="sr-only"> (new this week)</span>}
         </ActionMenu>
       </th>
@@ -331,10 +339,10 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
             <thead className="bg-zinc-50 text-muted dark:bg-zinc-900">
               <tr>
                 <th scope="col" rowSpan={2} className={`${TH} ${STICKY}`}>Person</th>
-                <th scope="col" rowSpan={2} className={TH}>Plans own week</th>
-                <th scope="colgroup" colSpan={TARGETS.length} className={`${TH} uppercase tracking-wide`}>Week targets</th>
+                <th scope="col" rowSpan={2} className={`${TH} w-14`} title="On: the person plans their own week. Off: you plan it and they see it view-only.">Own plan</th>
+                <th scope="colgroup" colSpan={TARGETS.length} className={`${TH} border-t-2 border-t-zinc-400 text-[11px] uppercase tracking-wide`}>Week targets</th>
                 {SCOPES.map((sc) => (
-                  <th key={sc} scope="colgroup" colSpan={byScope(sc).length + 1} data-group={sc} className={`${TH} ${HEAD_TINT[sc]} uppercase tracking-wide`}>
+                  <th key={sc} scope="colgroup" colSpan={byScope(sc).length + 1} data-group={sc} className={`${TH} ${HEAD_TINT[sc]} text-[11px] uppercase tracking-wide`}>
                     {sc === 'routine' ? 'Daily to-dos' : 'Weekly to-dos'}
                   </th>
                 ))}
@@ -345,27 +353,62 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                 </th>
               </tr>
               <tr>
-                {TARGETS.map((t) => <th key={t.key} scope="col" className={`${TH} text-strong`}>{t.label}</th>)}
+                {TARGETS.map((t) => <th key={t.key} scope="col" className={`${TH} whitespace-nowrap text-strong`}>{t.label}</th>)}
                 {SCOPES.map((sc) => [
                   ...byScope(sc).map(header),
-                  <th key={`own-${sc}`} scope="col" data-group={sc} className={`${TH} ${HEAD_TINT[sc]}`}>Only this person</th>,
+                  <th key={`own-${sc}`} scope="col" data-group={sc} className={`${TH} ${HEAD_TINT[sc]} whitespace-nowrap`}>Only this person</th>,
                 ])}
               </tr>
             </thead>
             <tbody>
+              <tr className="border-b-2 border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60">
+                <th scope="row" className={`${TD} ${STICKY} px-3 text-xs font-medium text-muted`}>Fill all ↓</th>
+                <td className={TD} />
+                {TARGETS.map((t) => (
+                  <td key={t.key} className={TD}>
+                    <input type="number" min={0} aria-label={`Fill all ${t.label}`} className={NUM}
+                      onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillTarget(state, t.key, n ?? 0)); }} />
+                    {isSat(t.key) && (
+                      <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted">
+                        Sat
+                        <input type="number" min={0} aria-label={`Fill all ${t.label} Saturday`} placeholder="—" className={SAT_NUM}
+                          onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillSat(state, t.key as SatKey, n)); }} />
+                      </label>
+                    )}
+                  </td>
+                ))}
+                {SCOPES.map((sc) => [
+                  ...byScope(sc).map((c) => (
+                    <td key={c.key} className={TD}>
+                      {isBox(c.kind) ? (
+                        <input type="checkbox" aria-label={`Fill all ${c.text}`}
+                          onChange={(e) => setState(fillColumn(state, c, { has: e.target.checked, target: null }))} />
+                      ) : (
+                        <input type="number" min={0} step={c.kind === 'hours' ? 'any' : 1} aria-label={`Fill all ${c.text}`} className={NUM}
+                          onChange={(e) => {
+                            const n = parseNum(e.target.value);
+                            if (n !== undefined) setState(fillColumn(state, c, { has: n !== null, target: n }));
+                          }} />
+                      )}
+                    </td>
+                  )),
+                  <td key={`own-${sc}`} className={TD} />,
+                ])}
+                <td className={TD} />
+              </tr>
               {state.users.map((u) => {
                 const name = nameOf(u);
                 const own = ownItems(state, u.userId);
                 return (
-                  <tr key={u.userId}>
-                    <th scope="row" className={`${TD} ${STICKY} whitespace-nowrap px-3 font-medium text-strong`}>
-                      {name}
+                  <tr key={u.userId} className="group hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40">
+                    <th scope="row" className={`${TD} ${STICKY} px-3 font-medium text-strong`}>
+                      <span className="block truncate" title={name}>{name}</span>
                       {errors[u.userId] && (
                         <p className="whitespace-normal text-xs font-normal text-red-600 dark:text-red-400" role="alert">{errors[u.userId]}</p>
                       )}
                     </th>
                     <td className={TD}>
-                      <input type="checkbox" aria-label={`${name} plans own week`} checked={u.plansOwnWeek}
+                      <input type="checkbox" role="switch" className={TOGGLE} aria-label={`${name} plans own week`} checked={u.plansOwnWeek}
                         onChange={(e) => setState(setOwnWeek(state, u.userId, e.target.checked))} />
                     </td>
                     {TARGETS.map((t) => (
@@ -394,41 +437,6 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                   </tr>
                 );
               })}
-              <tr className="bg-amber-50/60 dark:bg-amber-900/10">
-                <th scope="row" className={`${TD} ${STICKY} px-3 font-medium text-amber-800 dark:text-amber-300`}>Fill all ↓</th>
-                <td className={TD} />
-                {TARGETS.map((t) => (
-                  <td key={t.key} className={TD}>
-                    <input type="number" min={0} aria-label={`Fill all ${t.label}`} className={NUM}
-                      onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillTarget(state, t.key, n ?? 0)); }} />
-                    {isSat(t.key) && (
-                      <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted">
-                        Sat
-                        <input type="number" min={0} aria-label={`Fill all ${t.label} Saturday`} placeholder="even" className="input w-16 px-1.5 py-0.5 text-center text-xs"
-                          onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillSat(state, t.key as SatKey, n)); }} />
-                      </label>
-                    )}
-                  </td>
-                ))}
-                {SCOPES.map((sc) => [
-                  ...byScope(sc).map((c) => (
-                    <td key={c.key} className={TD}>
-                      {isBox(c.kind) ? (
-                        <input type="checkbox" aria-label={`Fill all ${c.text}`}
-                          onChange={(e) => setState(fillColumn(state, c, { has: e.target.checked, target: null }))} />
-                      ) : (
-                        <input type="number" min={0} step={c.kind === 'hours' ? 'any' : 1} aria-label={`Fill all ${c.text}`} className={NUM}
-                          onChange={(e) => {
-                            const n = parseNum(e.target.value);
-                            if (n !== undefined) setState(fillColumn(state, c, { has: n !== null, target: n }));
-                          }} />
-                      )}
-                    </td>
-                  )),
-                  <td key={`own-${sc}`} className={TD} />,
-                ])}
-                <td className={TD} />
-              </tr>
             </tbody>
           </table>
         </div>
