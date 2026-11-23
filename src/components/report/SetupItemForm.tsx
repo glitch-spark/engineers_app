@@ -2,12 +2,15 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { hasTarget } from '../../api/endpoints';
 import type { PlanItemKind } from '../../api/endpoints';
 import { columnKey, type Column, type Scope } from '../../lib/teamGrid';
+import type { Days } from '../../lib/planDays';
+import DaysPicker from './DaysPicker';
 import { OptionsField, optionsError } from './PlanItemsEditor';
 
 export type ItemFormMode =
   | { mode: 'add'; userId: string | null; scope?: Scope }
   | { mode: 'rename'; col: Column }
   | { mode: 'type'; col: Column }
+  | { mode: 'days'; col: Column }
   | { mode: 'move'; userId: string; index: number; from: Column; itemId?: string; personName: string };
 
 export interface ItemFormValues {
@@ -19,6 +22,8 @@ export interface ItemFormValues {
   target: number | null;
   /** Choice only. */
   options: string[];
+  /** Daily to-dos only: null = Mon–Sat. */
+  days: Days;
 }
 
 export const TYPES: { kind: PlanItemKind; name: string; hint: string }[] = [
@@ -48,7 +53,7 @@ export default function SetupItemForm({
   const col = form.mode === 'add' ? null : form.mode === 'move' ? form.from : form.col;
   const [v, setV] = useState<ItemFormValues>({
     text: col?.text ?? '', kind: col?.kind ?? 'check', scope: col?.scope ?? (form.mode === 'add' ? form.scope : undefined) ?? 'routine',
-    userId: form.mode === 'add' ? form.userId ?? '' : '', target: null, options: col?.options ?? [],
+    userId: form.mode === 'add' ? form.userId ?? '' : '', target: null, options: col?.options ?? [], days: col?.days ?? null,
   });
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<ItemFormValues>) => setV({ ...v, ...patch });
@@ -59,8 +64,11 @@ export default function SetupItemForm({
     : undefined;
   // A joined column without options (bad data) falls back to the field.
   const joinsOptions = joins?.options?.length ? joins.options : null;
-  const showOptions = form.mode !== 'rename' && v.kind === 'choice' && !joinsOptions;
-  const showTarget = hasTarget(v.kind) && (form.mode === 'type' || form.mode === 'move' || (form.mode === 'add' && !!v.userId));
+  const daysOnly = form.mode === 'days';
+  const showOptions = form.mode !== 'rename' && !daysOnly && v.kind === 'choice' && !joinsOptions;
+  // Joining an existing column takes its days.
+  const showDays = v.scope === 'routine' && (daysOnly || ((form.mode === 'add' || form.mode === 'move') && !joins));
+  const showTarget = !daysOnly && hasTarget(v.kind) && (form.mode === 'type' || form.mode === 'move' || (form.mode === 'add' && !!v.userId));
   const optionsBad = showOptions && optionsError(v.options) !== null;
   useEffect(() => {
     onOptionsInvalid?.(optionsBad);
@@ -72,7 +80,7 @@ export default function SetupItemForm({
     if (!optionsBad) setError(onSubmit(v));
   };
 
-  const title = form.mode === 'add' ? 'Add item' : form.mode === 'move' ? `Move ${col?.text} for ${form.personName}` : form.mode === 'rename' ? `Rename ${col?.text}` : `Change type of ${col?.text}`;
+  const title = form.mode === 'add' ? 'Add item' : form.mode === 'move' ? `Move ${col?.text} for ${form.personName}` : form.mode === 'rename' ? `Rename ${col?.text}` : daysOnly ? `Days for ${col?.text}` : `Change type of ${col?.text}`;
   const names = [...new Set([...columns].sort((a, b) => Number(b.scope === v.scope) - Number(a.scope === v.scope)).map((c) => c.text))];
 
   return (
@@ -82,7 +90,7 @@ export default function SetupItemForm({
       aria-label={title}
       className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900"
     >
-      {form.mode !== 'type' && (
+      {form.mode !== 'type' && !daysOnly && (
         <label className="form-label flex flex-col gap-1">
           Item name
           <input
@@ -103,8 +111,8 @@ export default function SetupItemForm({
         <label className="form-label flex flex-col gap-1">
           Group
           <select className="input w-64" value={v.scope} onChange={(e) => set({ scope: e.target.value as Scope })}>
-            <option value="routine">Daily routine (every working day)</option>
-            <option value="goal">Weekly goal (once this week)</option>
+            <option value="routine">Daily to-do (on the days you pick)</option>
+            <option value="goal">Weekly to-do (once this week)</option>
           </select>
         </label>
       )}
@@ -117,7 +125,7 @@ export default function SetupItemForm({
           </select>
         </label>
       )}
-      {form.mode !== 'rename' && (
+      {form.mode !== 'rename' && !daysOnly && (
         <fieldset className="m-0 basis-full border-0 p-0">
           <legend className="form-label mb-1">Type</legend>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -161,8 +169,9 @@ export default function SetupItemForm({
           <span className="pb-2 text-xs text-muted">{v.scope === 'routine' ? 'per day' : 'this week'}</span>
         </div>
       )}
+      {showDays && <DaysPicker value={v.days} onChange={(days) => set({ days })} />}
       {showOptions && <OptionsField options={v.options} label="Choice" onChange={(options) => set({ options })} />}
-      {form.mode !== 'rename' && v.kind === 'choice' && joinsOptions && (
+      {form.mode !== 'rename' && !daysOnly && v.kind === 'choice' && joinsOptions && (
         <p className="basis-full text-xs text-muted">Uses the column&apos;s options: {joinsOptions.join(' / ')}</p>
       )}
       <div className="flex gap-2">

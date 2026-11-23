@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanItem, PlanItemKind, TeamWeekUser } from '../api/endpoints';
 import {
   addColumn, addOwnItem, cell, changed, columnKey, columns, fillColumn, isEmptyRow, ownItems, removeColumn,
-  removeOwnItem, moveToColumn, moveBlocked, setColumnOptions, setColumnTarget, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
+  removeOwnItem, moveToColumn, moveBlocked, setColumnOptions, setColumnTarget, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus, bidsPlan, withBids, setBids, fillBids, setColumnDays,
   type GridState,
 } from './teamGrid';
 
@@ -155,7 +155,7 @@ describe('teamGrid', () => {
     const saved = [user('A')];
     const s = setTarget(st(saved), 'A', 'bidsSelf', 1);
     const [row] = rowsToSave(saved, s);
-    expect(Object.keys(row).sort()).toEqual(['exists', 'goal', 'plansOwnWeek', 'removedIds', 'routines', 'userId', 'weeklyGoals']);
+    expect(Object.keys(row).sort()).toEqual(['exists', 'goal', 'plansOwnWeek', 'removedIds', 'routines', 'satGoal', 'userId', 'weeklyGoals']);
     expect(Object.keys(row.goal).sort()).toEqual(['bidsBidder', 'bidsSelf', 'interviewsSelf']);
   });
 
@@ -356,7 +356,7 @@ describe('teamGrid', () => {
 
     it("a column carries its first member's options; a member with other options still joins it", () => {
       const s = st([user('A', [choice('Client', ['Done', 'Blocked'])]), user('B', [choice('client', ['Yes', 'No'])])]);
-      expect(columns(s)).toEqual([{ key: columnKey('Client', 'choice', 'routine'), text: 'Client', kind: 'choice', scope: 'routine', options: ['Done', 'Blocked'] }]);
+      expect(columns(s)).toEqual([{ key: columnKey('Client', 'choice', 'routine'), text: 'Client', kind: 'choice', scope: 'routine', options: ['Done', 'Blocked'], days: null }]);
       expect(ownItems(s, 'B')).toEqual([]);
       expect(columns(st([user('A', [item('E')]), user('B', [item('E')])]))[0]).not.toHaveProperty('options');
     });
@@ -458,6 +458,51 @@ describe('teamGrid', () => {
       expect(moveToColumn(s, 'A', 'routine', 0, { text: 'Outreach', kind: 'count', scope: 'routine', target: 8 }, e(0)).users[0].routines[0]).toMatchObject({ id: s.users[0].routines[0].id, target: 8 });
       expect(moveToColumn(s, 'A', 'routine', 0, { text: 'Outreach', kind: 'count', scope: 'routine', target: null }, e(0)).users[0].routines[0].target).toBe(5);
       expect(moveToColumn(s, 'A', 'routine', 1, { text: 'Hrs', kind: 'count', scope: 'goal', target: 3 }, e(1)).users[0].weeklyGoals[0].target).toBe(3);
+    });
+  });
+
+  describe('Saturday and run days', () => {
+    it('bidsPlan: per day + Saturday from the stored total; an older plan (no Saturday) is an even Mon–Sat split', () => {
+      const u = (bidsSelf: number, bidsBidder: number, satGoal: { bidsSelf: number | null; bidsBidder: number | null } | null = null) =>
+        ({ ...user('A'), goal: { bidsSelf, bidsBidder, interviewsSelf: 0 }, satGoal });
+      expect(bidsPlan(u(1100, 0, { bidsSelf: 100, bidsBidder: 0 }), 'bidsSelf')).toEqual({ daily: 200, sat: 100, even: false, total: 1100 });
+      expect(bidsPlan(u(600, 0), 'bidsSelf')).toEqual({ daily: 100, sat: 100, even: true, total: 600 });
+      expect(bidsPlan(u(0, 0), 'bidsSelf')).toEqual({ daily: 0, sat: 0, even: false, total: 0 });
+      expect(bidsPlan(u(0, 1000, { bidsSelf: null, bidsBidder: 300 }), 'bidsBidder')).toEqual({ daily: 200, sat: 0, even: false, total: 1000 }); // Mon–Fri only
+    });
+
+    it('withBids stores daily × 5 + Saturday; bidder bids never get a Saturday; the other number stays as shown', () => {
+      const a = { ...user('A'), goal: { bidsSelf: 600, bidsBidder: 600, interviewsSelf: 0 }, satGoal: null as { bidsSelf: number | null; bidsBidder: number | null } | null };
+      const self = withBids(a, 'bidsSelf', { daily: 200 });
+      expect([self.goal.bidsSelf, self.satGoal]).toEqual([1100, { bidsSelf: 100, bidsBidder: null }]); // the even 100 kept
+      expect(withBids(self, 'bidsSelf', { sat: 0 }).goal.bidsSelf).toBe(1000);
+      const bidder = withBids(a, 'bidsBidder', { daily: 150 });
+      expect([bidder.goal.bidsBidder, bidder.satGoal?.bidsBidder]).toEqual([750, 0]);
+    });
+
+    it('setBids / fillBids go into the saved rows with their Saturday', () => {
+      const saved = [user('A'), user('B')];
+      const one = setBids(st(saved), 'A', 'bidsSelf', { daily: 200, sat: 50 });
+      expect(rowsToSave(saved, one).map((r) => [r.userId, r.goal.bidsSelf, r.satGoal])).toEqual([['A', 1050, { bidsSelf: 50, bidsBidder: null }]]);
+      const all = fillBids(st(saved), 'bidsBidder', { daily: 100 });
+      expect(rowsToSave(saved, all).map((r) => [r.goal.bidsBidder, r.satGoal])).toEqual([[500, { bidsSelf: null, bidsBidder: 0 }], [500, { bidsSelf: null, bidsBidder: 0 }]]);
+    });
+
+    it('setColumnDays sets every member; a new member joins with the column days; all six days is null', () => {
+      const s = st([user('A', [item('Email')]), user('B', [item('Email')]), user('C')]);
+      const [c] = columns(s);
+      const next = setColumnDays(s, c, [0, 1, 2, 3, 4]);
+      expect(next.users.map((u) => u.routines.map((i) => i.days))).toEqual([[[0, 1, 2, 3, 4]], [[0, 1, 2, 3, 4]], []]);
+      const [c2] = columns(next);
+      expect(c2.days).toEqual([0, 1, 2, 3, 4]);
+      expect(setCell(next, 'C', c2, { has: true, target: null }).users[2].routines[0].days).toEqual([0, 1, 2, 3, 4]);
+      expect(columns(setColumnDays(next, c2, [0, 1, 2, 3, 4, 5]))[0].days).toBeNull();
+    });
+
+    it('addColumn keeps its days; weekly columns have none', () => {
+      const s = addColumn(st([user('A')]), 'Cleanup', 'check', 'routine', undefined, [5]);
+      expect(s.pinned[0].days).toEqual([5]);
+      expect(addColumn(st([user('A')]), 'Goal', 'check', 'goal', undefined, [5]).pinned[0].days).toBeUndefined();
     });
   });
 });

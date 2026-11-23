@@ -27,10 +27,10 @@ describe('PlanItemsEditor', () => {
     ];
     render(<PlanItemsEditor items={items} scope="routine" onChange={() => {}} lockedFor={(i) => i.addedBy !== 'self'} />);
     expect(screen.getByText('Admin one')).toBeTruthy();
-    expect(screen.getAllByLabelText(/^routine item \d+$/i)).toHaveLength(1);
+    expect(screen.getAllByLabelText(/^daily to-do item \d+$/i)).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /archive/i })).toHaveLength(1);
     expect(screen.getByRole('img', { name: 'Set by your admin' })).toBeTruthy();
-    expect(screen.getByLabelText('Routine item 1')).toBeTruthy();
+    expect(screen.getByLabelText('Daily to-do item 1')).toBeTruthy();
     const spy = vi.fn();
     cleanup();
     render(<PlanItemsEditor items={items} scope="routine" onChange={spy} lockedFor={(i) => i.addedBy !== 'self'} />);
@@ -87,18 +87,18 @@ describe('PlanItemsEditor', () => {
 
   describe('choice options', () => {
     const choice = (options: string[]): PlanItemIn => ({ text: 'Status', kind: 'choice', target: null, options, archived: false });
-    const opts = () => screen.getByLabelText('Routine item 1 options') as HTMLInputElement;
+    const opts = () => screen.getByLabelText('Daily to-do item 1 options') as HTMLInputElement;
 
     it('the kind select offers Text and Choice; picking Choice shows the options input, leaving it clears them', () => {
       const spy = vi.fn();
       render(<Harness initial={[{ text: 'x', kind: 'check', target: null, archived: false }]} scope="routine" spy={spy} />);
-      expect(screen.queryByLabelText('Routine item 1 options')).toBeNull();
-      fireEvent.change(screen.getByLabelText('Routine item 1 kind'), { target: { value: 'choice' } });
+      expect(screen.queryByLabelText('Daily to-do item 1 options')).toBeNull();
+      fireEvent.change(screen.getByLabelText('Daily to-do item 1 kind'), { target: { value: 'choice' } });
       expect(opts()).toBeTruthy();
-      fireEvent.change(screen.getByLabelText('Routine item 1 options'), { target: { value: 'A, B' } });
-      fireEvent.change(screen.getByLabelText('Routine item 1 kind'), { target: { value: 'text' } });
+      fireEvent.change(screen.getByLabelText('Daily to-do item 1 options'), { target: { value: 'A, B' } });
+      fireEvent.change(screen.getByLabelText('Daily to-do item 1 kind'), { target: { value: 'text' } });
       expect(spy.mock.lastCall![0][0]).toMatchObject({ kind: 'text', options: [] });
-      expect(screen.queryByLabelText('Routine item 1 options')).toBeNull();
+      expect(screen.queryByLabelText('Daily to-do item 1 options')).toBeNull();
     });
 
     it('typing parses comma separated options; a preset fills them', () => {

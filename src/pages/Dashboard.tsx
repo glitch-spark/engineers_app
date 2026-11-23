@@ -8,16 +8,13 @@ import { useAuth } from '../auth/useAuth';
 import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../lib/week';
 import { teamMembersAZ, useTeamLookup } from '../lib/useFirstTeamMember';
 
-/** A weekend day counts as the Friday before it: the page shows working weeks. */
-const workday = (iso: string) => {
-  const dow = dayDate(iso).getDay();
-  return dow === 6 ? addDays(iso, -1) : dow === 0 ? addDays(iso, -2) : iso;
-};
+/** Sunday counts as the Saturday before it: the page shows working weeks (Mon–Sat). */
+const workday = (iso: string) => (dayDate(iso).getDay() === 0 ? addDays(iso, -1) : iso);
 
 /**
  * The day the page shows, kept in the URL as `?day=YYYY-MM-DD` (absent = today; `yesterday` from old links still
  * works; a day in the future or one that is no date falls back to today). `home` is where "Back to today" returns:
- * today, or on a weekend the Friday of the week just ended.
+ * today, or on a Sunday the Saturday of the week just ended.
  */
 function usePickedDay() {
   const [params, setParams] = useSearchParams();
@@ -42,7 +39,7 @@ const ARROW = 'flex items-center px-2.5 text-body hover:bg-zinc-50 disabled:text
 
 /**
  * The Week and Day filters and Back to today: step back any number of weeks (never past the current one), then one
- * of the week's five days; a day still to come cannot be picked. Picking a week picks its Friday, or today in the
+ * of the week's six days (Mon–Sat); a day still to come cannot be picked. Picking a week picks its Saturday, or today in the
  * current week.
  */
 function WeekAndDay({ today, home, day, pickDay }: { today: string; home: string; day: string; pickDay: (day: string) => void }) {
@@ -55,11 +52,11 @@ function WeekAndDay({ today, home, day, pickDay }: { today: string; home: string
       <div role="group" aria-labelledby={`${id}w`}>
         <span id={`${id}w`} className={FIELD_LABEL}>Week</span>
         <div data-control className="inline-flex h-[38px] items-stretch overflow-hidden rounded-xl border border-field bg-white text-sm shadow-sm dark:bg-zinc-900">
-          <button type="button" aria-label="Previous week" className={`border-r border-zinc-200 dark:border-zinc-700 ${ARROW}`} onClick={() => pickDay(addDays(monday, -3))}>‹</button>
-          <span className="flex items-center whitespace-nowrap px-3 font-medium text-body" aria-live="polite">{monthDay(monday)} – {monthDay(addDays(monday, 4))}</span>
+          <button type="button" aria-label="Previous week" className={`border-r border-zinc-200 dark:border-zinc-700 ${ARROW}`} onClick={() => pickDay(addDays(monday, -2))}>‹</button>
+          <span className="flex items-center whitespace-nowrap px-3 font-medium text-body" aria-live="polite">{monthDay(monday)} – {monthDay(addDays(monday, 5))}</span>
           <button
             type="button" aria-label="Next week" disabled={current} className={`border-l border-zinc-200 dark:border-zinc-700 ${ARROW}`}
-            onClick={() => pickDay(nextMonday === mondayOf(home) ? home : addDays(nextMonday, 4))}
+            onClick={() => pickDay(nextMonday === mondayOf(home) ? home : addDays(nextMonday, 5))}
           >
             ›
           </button>
@@ -68,7 +65,7 @@ function WeekAndDay({ today, home, day, pickDay }: { today: string; home: string
       <div role="radiogroup" aria-labelledby={`${id}d`}>
         <span id={`${id}d`} className={FIELD_LABEL}>Day</span>
         <div className="flex gap-1.5">
-          {[0, 1, 2, 3, 4].map((i) => {
+          {[0, 1, 2, 3, 4, 5].map((i) => {
             const date = addDays(monday, i);
             return (
               <label key={date} className="relative">

@@ -1,10 +1,12 @@
 import { hasTarget } from '../api/endpoints';
-import type { PlanItem, PlanItemIn, PlanItemKind, TeamWeekRowIn, TeamWeekUser } from '../api/endpoints';
+import type { PlanItem, PlanItemIn, PlanItemKind, SatGoal, TeamWeekRowIn, TeamWeekUser } from '../api/endpoints';
+import { normDays, type Days } from './planDays';
 
 export type Scope = 'routine' | 'goal';
 export type TargetKey = 'bidsSelf' | 'bidsBidder' | 'interviewsSelf';
-/** `options`: a Choice column's options (its first member's); absent for other kinds. */
-export interface Column { key: string; text: string; kind: PlanItemKind; scope: Scope; options?: string[] }
+/** `options`: a Choice column's options (its first member's); absent for other kinds. `days`: a daily column's days
+ * (its first member's; null / absent = Mon–Sat). */
+export interface Column { key: string; text: string; kind: PlanItemKind; scope: Scope; options?: string[]; days?: Days }
 /** pinned = columns added in this session (kept even if fewer than two people have them). */
 export interface GridState { users: TeamWeekUser[]; pinned: Column[] }
 
@@ -17,6 +19,8 @@ const norm = (t: string) => t.trim().replace(/\s+/g, ' ');
 const tidy = (t: string) => norm(t);
 /** `{ options }` for a choice, nothing for other kinds (spread into items and columns). */
 const opts = (kind: PlanItemKind, options?: string[]) => (kind === 'choice' ? { options: options ?? [] } : {});
+/** `{ days }` for a daily to-do, nothing for a weekly one. */
+const dayz = (scope: Scope, days?: Days) => (scope === 'routine' ? { days: normDays(days) } : {});
 
 export const columnKey = (text: string, kind: PlanItemKind, scope: Scope): string =>
   `${scope}|${kind}|${norm(text).toLowerCase()}`;
@@ -33,7 +37,7 @@ export function columns(s: GridState): Column[] {
       for (const i of u[listKey(scope)]) {
         if (i.addedBy === 'self') continue;
         const key = itemKey(i, scope);
-        const e = seen.get(key) ?? { col: { key, text: tidy(i.text), kind: i.kind, scope, ...opts(i.kind, i.options) }, users: new Set() };
+        const e = seen.get(key) ?? { col: { key, text: tidy(i.text), kind: i.kind, scope, ...opts(i.kind, i.options), ...dayz(scope, i.days) }, users: new Set() };
         e.users.add(u.userId);
         seen.set(key, e);
       }
@@ -90,7 +94,7 @@ const applyCell = (u: TeamWeekUser, c: Column, v: Cell): TeamWeekUser => {
     return { ...u, [k]: list.map((i) => (itemKey(i, c.scope) === c.key ? { ...i, target } : i)) };
   }
   if (list.length >= MAX_ITEMS) return u;
-  return { ...u, [k]: [...list, { text: c.text, kind: c.kind, target, archived: false, ...opts(c.kind, c.options) }] };
+  return { ...u, [k]: [...list, { text: c.text, kind: c.kind, target, archived: false, ...opts(c.kind, c.options), ...dayz(c.scope, c.days) }] };
 };
 
 export const setCell = (s: GridState, userId: string, c: Column, v: Cell): GridState =>
@@ -104,10 +108,51 @@ export const setTarget = (s: GridState, userId: string, k: TargetKey, n: number)
 export const fillTarget = (s: GridState, k: TargetKey, n: number): GridState =>
   mapUsers(s, (u) => ({ ...u, goal: { ...u.goal, [k]: n } }));
 
-export function addColumn(s: GridState, text: string, kind: PlanItemKind, scope: Scope, options?: string[]): GridState {
+export function addColumn(s: GridState, text: string, kind: PlanItemKind, scope: Scope, options?: string[], days?: Days): GridState {
   const key = columnKey(text, kind, scope);
   if (s.pinned.some((p) => p.key === key)) return s;
-  return { ...s, pinned: [...s.pinned, { key, text: tidy(text), kind, scope, ...opts(kind, options) }] };
+  return { ...s, pinned: [...s.pinned, { key, text: tidy(text), kind, scope, ...opts(kind, options), ...dayz(scope, days) }] };
+}
+
+export type BidKey = 'bidsSelf' | 'bidsBidder';
+type HasBids = { goal: { bidsSelf: number; bidsBidder: number }; satGoal?: SatGoal | null };
+
+/**
+ * A bid target as typed: per Mon–Fri day plus Saturday's extra (bidder bids: Mon–Fri only). Stored as the week's total
+ * (daily × 5 + Saturday) with Saturday's number in `satGoal`. `even`: an older self-bids plan with no Saturday number, split
+ * evenly over Mon–Sat (Saturday gets a daily share). Bidder bids: total / 5, never a Saturday.
+ */
+export function bidsPlan(p: HasBids, k: BidKey): { daily: number; sat: number; even: boolean; total: number } {
+  const total = p.goal[k];
+  if (k === 'bidsBidder') return { daily: Math.ceil(total / 5), sat: 0, even: false, total }; // Mon–Fri only
+  const sat = p.satGoal?.[k];
+  if (sat == null) {
+    const d = Math.ceil(total / 6);
+    return { daily: d, sat: total ? d : 0, even: total > 0, total };
+  }
+  return { daily: Math.ceil(Math.max(total - sat, 0) / 5), sat, even: false, total };
+}
+
+/** Set the daily number and / or Saturday's extra; the rest stays as shown. Bidder bids never get a Saturday. */
+export function withBids<T extends HasBids>(p: T, k: BidKey, patch: { daily?: number; sat?: number }): T {
+  const cur = bidsPlan(p, k);
+  const daily = patch.daily ?? cur.daily;
+  const sat = k === 'bidsBidder' ? 0 : patch.sat ?? cur.sat;
+  return { ...p, goal: { ...p.goal, [k]: daily * 5 + sat }, satGoal: { bidsSelf: null, bidsBidder: null, ...p.satGoal, [k]: sat } };
+}
+
+export const setBids = (s: GridState, userId: string, k: BidKey, patch: { daily?: number; sat?: number }): GridState =>
+  mapUser(s, userId, (u) => withBids(u, k, patch));
+
+export const fillBids = (s: GridState, k: BidKey, patch: { daily?: number; sat?: number }): GridState =>
+  mapUsers(s, (u) => withBids(u, k, patch));
+
+/** A daily column's days for every member (ids kept). */
+export function setColumnDays(s: GridState, c: Column, days: Days): GridState {
+  const k = listKey(c.scope);
+  const d = normDays(days);
+  const users = s.users.map((u) => (findItem(u, c) ? { ...u, [k]: u[k].map((i) => (itemKey(i, c.scope) === c.key ? { ...i, days: d } : i)) } : u));
+  return { users, pinned: rewritePinned(s, c, { ...c, days: d }) };
 }
 
 /** An item joining an existing column takes the column's options; otherwise the given ones. */
@@ -117,13 +162,14 @@ const optionsFor = (s: GridState, key: string, options?: string[]) => {
 };
 
 export const addOwnItem = (
-  s: GridState, userId: string, text: string, kind: PlanItemKind, scope: Scope, target: number | null, options?: string[],
+  s: GridState, userId: string, text: string, kind: PlanItemKind, scope: Scope, target: number | null, options?: string[], days?: Days,
 ): GridState => {
   const k = listKey(scope);
   const u = s.users.find((x) => x.userId === userId);
   if (!u || u[k].length >= MAX_ITEMS) return s;
   const o = opts(kind, optionsFor(s, columnKey(text, kind, scope), options));
-  const item: PlanItemIn = { text: tidy(text), kind, target: hasTarget(kind) ? target : null, archived: false, ...o };
+  const joined = columns(s).find((c) => c.key === columnKey(text, kind, scope));
+  const item: PlanItemIn = { text: tidy(text), kind, target: hasTarget(kind) ? target : null, archived: false, ...o, ...dayz(scope, joined ? joined.days : days) };
   return mapUser(s, userId, (x) => ({ ...x, [k]: [...x[k], item] }));
 };
 
@@ -134,7 +180,7 @@ export const removeOwnItem = (s: GridState, userId: string, scope: Scope, index:
 };
 
 /** `target`: null / absent keeps the item's target where both kinds have one. */
-type Dest = { text: string; kind: PlanItemKind; scope: Scope; options?: string[]; target?: number | null };
+type Dest = { text: string; kind: PlanItemKind; scope: Scope; options?: string[]; target?: number | null; days?: Days };
 
 /** What the caller believes sits at `index`: its id when it has one, else text + kind. */
 export type Expect = { id?: string; text: string; kind: PlanItemKind };
@@ -169,7 +215,7 @@ export function moveToColumn(s: GridState, userId: string, scope: Scope, index: 
   if (to.kind === it.kind && to.scope === scope) {
     return mapUser(pin, userId, (x) => ({ ...x, [listKey(scope)]: x[listKey(scope)].map((i, n) => (n === index ? { ...i, text, ...o, ...(to.target != null && hasTarget(to.kind) ? { target: to.target } : {}) } : i)) }));
   }
-  const moved: PlanItemIn = { text, kind: to.kind, target: hasTarget(to.kind) ? to.target ?? (hasTarget(it.kind) ? it.target : null) : null, archived: false, ...o };
+  const moved: PlanItemIn = { text, kind: to.kind, target: hasTarget(to.kind) ? to.target ?? (hasTarget(it.kind) ? it.target : null) : null, archived: false, ...o, ...dayz(to.scope, columns(s).find((c) => c.key === key)?.days ?? (to.days !== undefined ? to.days : it.days)) };
   const from = listKey(scope);
   const dest = listKey(to.scope);
   return mapUser(pin, userId, (x) => {
@@ -200,7 +246,8 @@ export function retypeColumn(
   s: GridState, c: Column, kind: PlanItemKind, scope: Scope, options?: string[], target: number | null = null,
 ): GridState {
   const o = opts(kind, options);
-  const next: Column = { key: columnKey(c.text, kind, scope), text: c.text, kind, scope, ...o };
+  const d = dayz(scope, c.days);
+  const next: Column = { key: columnKey(c.text, kind, scope), text: c.text, kind, scope, ...o, ...d };
   const from = listKey(c.scope);
   const to = listKey(scope);
   const users = s.users.map((u) => {
@@ -209,7 +256,7 @@ export function retypeColumn(
     const kept = { ...u, [from]: u[from].filter((i) => itemKey(i, c.scope) !== c.key) };
     if (kept[to].length >= MAX_ITEMS) return kept;
     // no id: the server archives the old item and creates this one
-    return { ...kept, [to]: [...kept[to], { text: c.text, kind, target: hasTarget(kind) ? target : null, archived: false, ...o }] };
+    return { ...kept, [to]: [...kept[to], { text: c.text, kind, target: hasTarget(kind) ? target : null, archived: false, ...o, ...d }] };
   });
   return { users, pinned: rewritePinned(s, c, next) };
 }
@@ -238,7 +285,7 @@ export const isEmptyRow = (u: TeamWeekUser): boolean =>
   u.routines.length === 0 && u.weeklyGoals.length === 0;
 
 const toItems = (l: (PlanItem | PlanItemIn)[]): PlanItemIn[] =>
-  l.map((i) => ({ ...('id' in i && i.id ? { id: i.id } : {}), text: i.text, kind: i.kind, target: i.target, archived: i.archived, ...opts(i.kind, i.options) }));
+  l.map((i) => ({ ...('id' in i && i.id ? { id: i.id } : {}), text: i.text, kind: i.kind, target: i.target, archived: i.archived, ...opts(i.kind, i.options), days: normDays(i.days) }));
 
 /** Saved live own items that are gone from `u`: the server keeps any own item it is not told was removed. */
 const removedOwn = (u: TeamWeekUser, was?: TeamWeekUser): string[] => {
@@ -254,6 +301,7 @@ const toRow = (u: TeamWeekUser, was?: TeamWeekUser): TeamWeekRowIn => ({
   weeklyGoals: toItems(u.weeklyGoals),
   exists: u.exists,
   removedIds: removedOwn(u, was),
+  satGoal: u.satGoal?.bidsSelf == null && u.satGoal?.bidsBidder == null ? null : { bidsSelf: u.satGoal?.bidsSelf ?? null, bidsBidder: u.satGoal?.bidsBidder ?? null },
 });
 
 export function rowsToSave(saved: TeamWeekUser[], s: GridState): TeamWeekRowIn[] {

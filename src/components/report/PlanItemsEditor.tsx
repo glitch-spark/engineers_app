@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { daysLabel, normDays, PRESETS as DAY_PRESETS, sameDays, type Days } from '../../lib/planDays';
 import { Archive, Plus } from 'lucide-react';
 import { hasTarget } from '../../api/endpoints';
 import type { PlanItemIn, PlanItemKind } from '../../api/endpoints';
@@ -54,7 +55,7 @@ export default function PlanItemsEditor({
   onChange,
   readOnly = false,
   lockedFor,
-  label = scope === 'routine' ? 'Routine' : 'Weekly goal',
+  label = scope === 'routine' ? 'Daily to-do' : 'Weekly to-do',
 }: {
   items: PlanItemIn[];
   scope: 'routine' | 'goal';
@@ -84,6 +85,7 @@ export default function PlanItemsEditor({
       {hasTarget(item.kind) && item.target != null && (
         <span className="text-xs text-muted"> · {item.target}{item.kind === 'hours' ? 'h' : ''} {scope === 'routine' ? 'per day' : 'this week'}</span>
       )}
+      {scope === 'routine' && item.days && <span className="text-xs text-muted"> · {daysLabel(item.days)}</span>}
     </li>
   );
 
@@ -145,6 +147,17 @@ export default function PlanItemsEditor({
               />
               <span className="text-xs text-muted">{scope === 'routine' ? 'per day' : 'this week'}</span>
             </>
+          )}
+          {scope === 'routine' && (
+            <select
+              className="input !w-28 shrink-0"
+              aria-label={`${label} item ${editable.findIndex((x) => x.index === index) + 1} days`}
+              value={JSON.stringify(normDays(item.days))}
+              onChange={(e) => update(index, { days: JSON.parse(e.target.value) as Days })}
+            >
+              {DAY_PRESETS.map((p) => <option key={p.label} value={JSON.stringify(p.days)}>{p.label}</option>)}
+              {!DAY_PRESETS.some((p) => sameDays(p.days, item.days)) && <option value={JSON.stringify(normDays(item.days))}>{daysLabel(item.days)}</option>}
+            </select>
           )}
           {item.kind === 'choice' && (
             <OptionsField options={item.options ?? []} label={`${label} item ${editable.findIndex((x) => x.index === index) + 1}`} onChange={(options) => update(index, { options })} />

@@ -105,8 +105,16 @@ describe('DayPanel', () => {
     expect(body.results.l1).toEqual({ done: true, entries: [{ profileId: 'p1', note: 'New title' }] });
   });
 
+  it('shows only the regions the person has profiles in (or numbers for)', async () => {
+    setup(plan({ profiles: [{ id: 'p1', name: 'Anna', region: 'US', archived: false }] }));
+    await screen.findByText('Check inbox');
+    expect(screen.getByText('Self (US)')).toBeTruthy();
+    expect(screen.queryByText('Self (EU)')).toBeNull();
+    expect(screen.queryByText('Self (LATAM)')).toBeNull();
+  });
+
   it('sends targetOverride only after "change for today"', async () => {
-    setup(plan());
+    setup(plan({ profiles: [{ id: 'p1', name: 'Anna', region: 'US', archived: false }] }));
     await screen.findByText('Check inbox');
     fireEvent.click(screen.getByRole('button', { name: /change for today/i }));
     fireEvent.change(screen.getByLabelText(/bids self \(us\) goal/i), { target: { value: '4' } });

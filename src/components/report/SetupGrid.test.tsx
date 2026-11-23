@@ -17,7 +17,7 @@ const item = (id: string, text: string, kind: PlanItemKind = 'check', target: nu
 });
 const person = (userId: string, over: Partial<TeamWeekUser> = {}): TeamWeekUser => ({
   userId, name: userId, plansOwnWeek: false, exists: true, goal: { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0 },
-  routines: [], weeklyGoals: [], ...over,
+  satGoal: { bidsSelf: 0, bidsBidder: 0 }, routines: [], weeklyGoals: [], ...over,
 });
 const team = (): TeamWeekUser[] => [
   person('Ana', { goal: { bidsSelf: 600, bidsBidder: 0, interviewsSelf: 2 }, routines: [item('r1', 'Email')], weeklyGoals: [item('g1', 'Proposals', 'count', 250)] }),
@@ -55,7 +55,7 @@ describe('SetupGrid', () => {
     expect(screen.getByRole('rowheader', { name: /Ben/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Email/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Proposals/ })).toBeTruthy();
-    expect(input('Ana Bids self').value).toBe('600');
+    expect(input('Ana Bids / day').value).toBe('120');
     expect(input('Ben Proposals').value).toBe('100');
     expect((input('Ana Email') as HTMLInputElement).checked).toBe(true);
     // Solo is Ben's alone: a chip, not a column
@@ -81,13 +81,13 @@ describe('SetupGrid', () => {
     expect(screen.getByText('Not planned yet')).toBeTruthy();
   });
 
-  it('typing a target marks the cell changed with "was 600"', async () => {
+  it('typing a target marks the cell changed with "was 120"', async () => {
     show();
     await ready();
-    expect(screen.queryByText('was 600')).toBeNull();
-    type('Ana Bids self', '650');
-    expect(input('Ana Bids self').value).toBe('650');
-    expect(screen.getByText('was 600')).toBeTruthy();
+    expect(screen.queryByText('was 120')).toBeNull();
+    type('Ana Bids / day', '650');
+    expect(input('Ana Bids / day').value).toBe('650');
+    expect(screen.getByText('was 120')).toBeTruthy();
   });
 
   it('the Fill all row sets the column for everyone', async () => {
@@ -107,14 +107,14 @@ describe('SetupGrid', () => {
   it('Add item for everyone adds a column; for one person adds a chip under "Only this person"', async () => {
     show();
     await ready();
-    fireEvent.click(screen.getByRole('button', { name: '+ item' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add item' }));
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Calls' } });
     fireEvent.click(screen.getByRole('radio', { name: /^Number/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(screen.getByRole('button', { name: /^Calls/ })).toBeTruthy();
     expect(input('Ana Calls').value).toBe('');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add goal for Ben' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add weekly to-do for Ben' }));
     expect((screen.getByLabelText('For') as HTMLSelectElement).value).toBe('Ben');
     expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('goal');
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Mine' } });
@@ -128,7 +128,7 @@ describe('SetupGrid', () => {
   it('rejects an empty name and a name that is already an item of that type', async () => {
     show();
     await ready();
-    fireEvent.click(screen.getByRole('button', { name: '+ item' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add item' }));
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(screen.getByRole('alert').textContent).toMatch(/Enter a name/);
@@ -139,7 +139,7 @@ describe('SetupGrid', () => {
 
   it('adding a name only one person has: for everyone it becomes a column with their cell ticked; for another person too; for that person it is refused', async () => {
     const add = (who: string | null, name: string) => {
-      fireEvent.click(screen.getByRole('button', { name: who ? `Add goal for ${who}` : '+ item' }));
+      fireEvent.click(screen.getByRole('button', { name: who ? `Add weekly to-do for ${who}` : '+ Add item' }));
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: name } });
       if (!who) fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'goal' } });
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -171,7 +171,7 @@ describe('SetupGrid', () => {
     );
     await ready();
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 
@@ -194,7 +194,7 @@ describe('SetupGrid', () => {
     expect(screen.getByRole('button', { name: /^Inbox.*Hours/ })).toBeTruthy();
     expect(input('Ana Inbox').type).toBe('number');
 
-    await menu(/^Inbox/, 'Make weekly goal');
+    await menu(/^Inbox/, 'Make weekly to-do');
     expect(cellGroup(input('Ana Inbox'))).toBe('goal');
 
     await menu(/^Inbox/, 'Remove from this week');
@@ -208,8 +208,8 @@ describe('SetupGrid', () => {
     show();
     await ready();
     fireEvent.click(screen.getByRole('button', { name: /^Email/ }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Make weekly goal' }));
-    expect(screen.getByRole('alert').textContent).toMatch(/Ana already has 20 weekly goals/);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Make weekly to-do' }));
+    expect(screen.getByRole('alert').textContent).toMatch(/Ana already has 20 weekly to-dos/);
     expect(cellGroup(input('Ana Email'))).toBe('routine');
   });
 
@@ -271,31 +271,31 @@ describe('SetupGrid', () => {
     serve([...team(), person('Cy', { exists: false, routines: [item('r9', 'Email')] })]);
     show();
     await ready();
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     fireEvent.click(publishBtn());
     await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(1));
     const [w, rows] = putTeamWeek.mock.calls[0];
     expect(w).toBe(WEEK);
     expect(rows.map((r) => r.userId)).toEqual(['Ana', 'Cy']);
-    expect(rows[0].goal.bidsSelf).toBe(650);
+    expect(rows[0].goal.bidsSelf).toBe(3250);
     await waitFor(() => expect(getTeamWeek.mock.calls.filter(([x]) => x === WEEK).length).toBe(2));
   });
 
   it('a failed row shows its error beside the person and stays edited; saved rows are not re-sent on the next Publish', async () => {
     show();
     await ready();
-    type('Ana Bids self', '650');
-    type('Ben Bids self', '70');
+    type('Ana Bids / day', '650');
+    type('Ben Bids / day', '70');
     putTeamWeek.mockResolvedValueOnce({ results: [{ userId: 'Ana', ok: true, error: null }, { userId: 'Ben', ok: false, error: 'Too many items' }] });
     const after = team();
-    after[0].goal.bidsSelf = 650;
+    after[0].goal.bidsSelf = 3250;
     serve(after);
     fireEvent.click(publishBtn());
     const ben = screen.getByRole('rowheader', { name: /Ben/ });
     expect((await within(ben).findByRole('alert')).textContent).toBe('Too many items');
     await waitFor(() => expect(getTeamWeek.mock.calls.filter(([x]) => x === WEEK).length).toBe(2));
-    expect(input('Ben Bids self').value).toBe('70');
-    expect(input('Ana Bids self').value).toBe('650');
+    expect(input('Ben Bids / day').value).toBe('70');
+    expect(input('Ana Bids / day').value).toBe('650');
 
     fireEvent.click(publishBtn());
     await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(2));
@@ -306,26 +306,26 @@ describe('SetupGrid', () => {
     it(`a failed row is kept only for the re-read after Publish, not on a later reload (Ana ${anaSaves ? 'saved' : 'untouched'})`, async () => {
       show();
       await ready();
-      if (anaSaves) type('Ana Bids self', '650');
-      type('Ben Bids self', '70');
+      if (anaSaves) type('Ana Bids / day', '650');
+      type('Ben Bids / day', '70');
       putTeamWeek.mockResolvedValueOnce({ results: [
         ...(anaSaves ? [{ userId: 'Ana', ok: true, error: null }] : []), { userId: 'Ben', ok: false, error: 'Too many items' },
       ] });
       const after = team();
-      if (anaSaves) after[0].goal.bidsSelf = 650;
+      if (anaSaves) after[0].goal.bidsSelf = 3250;
       serve(after);
       fireEvent.click(publishBtn());
       await within(screen.getByRole('rowheader', { name: /Ben/ })).findByRole('alert');
       await waitFor(() => expect(getTeamWeek.mock.calls.filter(([x]) => x === WEEK).length).toBe(2));
-      expect(input('Ben Bids self').value).toBe('70');
+      expect(input('Ben Bids / day').value).toBe('70');
       // The admin puts Ben back; Ben then edits his own week; the grid reloads on focus.
-      type('Ben Bids self', '');
+      type('Ben Bids / day', '');
       const later = team();
-      if (anaSaves) later[0].goal.bidsSelf = 650;
-      later[1].goal.bidsSelf = 55;
+      if (anaSaves) later[0].goal.bidsSelf = 3250;
+      later[1].goal.bidsSelf = 275;
       serve(later);
       window.dispatchEvent(new Event('focus'));
-      await waitFor(() => expect(input('Ben Bids self').value).toBe('55'));
+      await waitFor(() => expect(input('Ben Bids / day').value).toBe('55'));
       expect(publishBtn().disabled).toBe(true);
     });
   }
@@ -333,32 +333,32 @@ describe('SetupGrid', () => {
   it('the grid is disabled while Publish is in flight', async () => {
     show();
     await ready();
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     putTeamWeek.mockReturnValueOnce(new Promise(() => {}));
     fireEvent.click(publishBtn());
     // A disabled <fieldset> disables its controls (`:disabled`); their own `disabled` property stays false.
     const off = (el: Element) => el.matches(':disabled');
-    await waitFor(() => expect(off(input('Ben Bids self'))).toBe(true));
+    await waitFor(() => expect(off(input('Ben Bids / day'))).toBe(true));
     expect(off(input('Ana Email'))).toBe(true);
     expect(off(input('Fill all Proposals'))).toBe(true);
-    expect(off(screen.getByRole('button', { name: '+ item' }))).toBe(true);
+    expect(off(screen.getByRole('button', { name: '+ Add item' }))).toBe(true);
   });
 
   it('a thrown publish error shows "Could not publish the week."', async () => {
     show();
     await ready();
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     putTeamWeek.mockRejectedValueOnce(new Error('boom'));
     fireEvent.click(publishBtn());
     expect((await screen.findByText('Could not publish the week.')).getAttribute('role')).toBe('alert');
-    expect(input('Ana Bids self').value).toBe('650');
+    expect(input('Ana Bids / day').value).toBe('650');
   });
 
   it('Publish is disabled while saving and when there is nothing to save', async () => {
     show();
     await ready();
     expect(publishBtn().disabled).toBe(true);
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     expect(publishBtn().disabled).toBe(false);
     putTeamWeek.mockReturnValueOnce(new Promise(() => {}));
     fireEvent.click(publishBtn());
@@ -374,7 +374,7 @@ describe('SetupGrid', () => {
       return e.defaultPrevented;
     };
     expect(leave()).toBe(false);
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     expect(leave()).toBe(true);
   });
 
@@ -399,7 +399,7 @@ describe('SetupGrid', () => {
     expect(screen.queryByRole('button', { name: 'Remove Notes from Ben' })).toBeNull();
     expect(screen.getAllByText(/added by Ben/)).toHaveLength(1);
   });
-  describe('daily routines / weekly goals split and the type picker', () => {
+  describe('daily / weekly to-dos split and the type picker', () => {
     const choice = (id: string, text: string, options: string[]): PlanItem => ({ ...item(id, text, 'choice'), options });
     const openAdd = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 
@@ -407,14 +407,14 @@ describe('SetupGrid', () => {
       serve([person('Ana', { routines: [item('r1', 'Inbox')], weeklyGoals: [item('g1', 'Launch')] }), person('Ben')]);
       show();
       await ready();
-      expect(screen.getByRole('columnheader', { name: 'Daily routines' })).toBeTruthy();
-      expect(screen.getByRole('columnheader', { name: 'Weekly goals' })).toBeTruthy();
+      expect(screen.getByRole('columnheader', { name: 'Daily to-dos' })).toBeTruthy();
+      expect(screen.getByRole('columnheader', { name: 'Weekly to-dos' })).toBeTruthy();
       const own = screen.getAllByRole('columnheader', { name: 'Only this person' });
       expect(own.map(cellGroup)).toEqual(['routine', 'goal']);
       expect(cellGroup(screen.getByRole('button', { name: 'Remove Inbox from Ana' }))).toBe('routine');
       expect(cellGroup(screen.getByRole('button', { name: 'Remove Launch from Ana' }))).toBe('goal');
-      expect(cellGroup(screen.getByRole('button', { name: 'Add routine for Ana' }))).toBe('routine');
-      expect(cellGroup(screen.getByRole('button', { name: 'Add goal for Ana' }))).toBe('goal');
+      expect(cellGroup(screen.getByRole('button', { name: 'Add daily to-do for Ana' }))).toBe('routine');
+      expect(cellGroup(screen.getByRole('button', { name: 'Add weekly to-do for Ana' }))).toBe('goal');
     });
 
     it('chips keep their target ("2h", "50") and drop the daily / week suffix', async () => {
@@ -430,10 +430,10 @@ describe('SetupGrid', () => {
     it('the picker offers the six types with their copy; Number/Hours show a target, Choice the options with presets', async () => {
       show();
       await ready();
-      openAdd('Add routine for Ana');
+      openAdd('Add daily to-do for Ana');
       expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('routine');
       expect([...(screen.getByLabelText('Group') as HTMLSelectElement).options].map((o) => o.text))
-        .toEqual(['Daily routine (every working day)', 'Weekly goal (once this week)']);
+        .toEqual(['Daily to-do (on the days you pick)', 'Weekly to-do (once this week)']);
       expect(screen.getAllByRole('radio').map((r) => r.closest('label')!.textContent)).toEqual([
         'CheckboxTick when done.',
         'NumberEnter a count against a target, e.g. 40 / 50 emails.',
@@ -459,7 +459,7 @@ describe('SetupGrid', () => {
     it('a Choice item for one person is added with its options and published with them', async () => {
       show();
       await ready();
-      openAdd('Add goal for Ana');
+      openAdd('Add weekly to-do for Ana');
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Client check' } });
       fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Yes, No' }));
@@ -473,9 +473,9 @@ describe('SetupGrid', () => {
     it('invalid Choice options block the form (inline message) and Publish (with a reason)', async () => {
       show();
       await ready();
-      type('Ana Bids self', '650');
+      type('Ana Bids / day', '650');
       expect(publishBtn().disabled).toBe(false);
-      openAdd('+ item');
+      openAdd('+ Add item');
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Mood' } });
       fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
       type('Choice options', 'Only one');
@@ -568,7 +568,7 @@ describe('SetupGrid', () => {
     it('Target with its hint: for one person and in Change type / Move; for everyone only the hint', async () => {
       show();
       await ready();
-      openAdd('+ item');
+      openAdd('+ Add item');
       fireEvent.click(screen.getByRole('radio', { name: /^Number/ }));
       expect(screen.queryByLabelText('Target')).toBeNull();
       expect(screen.getByText('Set targets in the cells or with Fill all')).toBeTruthy();

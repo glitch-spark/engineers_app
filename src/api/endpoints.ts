@@ -524,6 +524,14 @@ export interface PlanItem {
   archived: boolean;
   /** Who created it: the admin's items are locked for a person the admin plans. */
   addedBy: 'admin' | 'self';
+  /** A daily to-do's days (0 = Mon .. 5 = Sat); null = every working day. Missing from an older server. */
+  days?: number[] | null;
+}
+
+/** Saturday's bid targets: null = the week's even split over Mon–Sat; a number = Saturday gets it, Mon–Fri share the rest. */
+export interface SatGoal {
+  bidsSelf: number | null;
+  bidsBidder: number | null;
 }
 
 /** A plan item as sent: new items have no id (the server assigns one). */
@@ -680,6 +688,10 @@ export interface WeekPlan {
   days: WeekDaySummary[];
   /** False when an admin plans this week: the person cannot edit it. */
   plansOwnWeek: boolean;
+  /** Each routine's state per day of the week, as Home's grid. Missing from an older server. */
+  routineDays?: DashboardRoutineRow[];
+  /** Missing from an older server. */
+  satGoal?: SatGoal | null;
 }
 
 export interface WeekPlanInput {
@@ -687,6 +699,8 @@ export interface WeekPlanInput {
   routines: PlanItemIn[];
   weeklyGoals: PlanItemIn[];
   recapNotes: string;
+  /** Absent = keep the stored one. */
+  satGoal?: SatGoal | null;
 }
 
 export interface TeamRow {
@@ -720,8 +734,9 @@ export const putDayProgress = (date: string, body: DayProgressInput) =>
 
 export const deleteDayPlan = (date: string) => del<{ message: string }>(`/daily-plans/${date}`);
 
-export const getWeekPlan = (weekStart: string, userId?: string) =>
-  apiFetch<WeekPlan>(`/weekly-plans/${weekStart}${qs({ userId })}`);
+/** `today` (the viewer's date) judges `routineDays`' day states. */
+export const getWeekPlan = (weekStart: string, userId?: string, today?: string) =>
+  apiFetch<WeekPlan>(`/weekly-plans/${weekStart}${qs({ userId, today })}`);
 
 export const putWeekPlan = (weekStart: string, body: WeekPlanInput) =>
   putJSON<WeekPlan>(`/weekly-plans/${weekStart}`, body);
@@ -737,6 +752,8 @@ export interface TeamWeekUser {
   goal: TeamGoal;
   routines: PlanItem[];
   weeklyGoals: PlanItem[];
+  /** Missing from an older server. */
+  satGoal?: SatGoal | null;
 }
 export interface TeamWeekRowIn {
   userId: string;
@@ -748,6 +765,7 @@ export interface TeamWeekRowIn {
   exists: boolean;
   /** Saved own (`self`) items the admin removed: any other own item missing from the lists stays live. */
   removedIds: string[];
+  satGoal: SatGoal | null;
 }
 
 export const getTeamWeek = (weekStart: string) =>
@@ -1297,9 +1315,9 @@ export interface DashboardWeek {
     target: number | null;
     pace: DashboardPace | null;
     percentile: DashboardPercentile | null;
-    /** Mon–Fri, each day's bids and daily target. Missing from an older server. */
+    /** Mon–Sat, each day's bids and daily target. Missing from an older server. */
     byDay?: { date: string; done: number; target: number | null; self?: number; bidder?: number }[];
-    /** Mon–Fri only (`total` above also counts the weekend); a target is the week's sum of the day targets, null when unset. Missing from an older server. */
+    /** Mon–Sat only (`total` above also counts Sunday); a target is the week's sum of the day targets, null when unset. Missing from an older server. */
     week?: { self: number; selfTarget: number | null; bidder: number; bidderTarget: number | null; total: number; target: number | null };
   };
   interviews: {
@@ -1315,11 +1333,11 @@ export interface DashboardWeek {
       held: number; passed: number; rejected: number; noAnswer: number; waiting: number; canceled: number; scheduled: number;
     };
     /**
-     * Mon–Fri. `scheduled` = not held yet: still to come on today or a later day, ended and never marked on a day
+     * Mon–Sat. `scheduled` = not held yet: still to come on today or a later day, ended and never marked on a day
      * before today. Missing from an older server.
      */
     byDay?: { date: string; held: number; canceled: number; scheduled: number }[];
-    /** Mon–Fri, each round in time order (`date` in the app timezone). Missing from an older server. */
+    /** Mon–Sat, each round in time order (`date` in the app timezone). Missing from an older server. */
     rounds?: {
       date: string; interviewId: string; companyName: string | null; stage: string; at: string;
       who: 'self' | 'caller'; callerName: string | null;
@@ -1329,7 +1347,7 @@ export interface DashboardWeek {
   stages: { key: string; label: string; count: number }[];
   streak: number;
   hasWeeklyPlan: boolean;
-  /** `rows`: one line per routine with its Mon–Fri days. Missing from an older server. */
+  /** `rows`: one line per routine with its Mon–Sat days. Missing from an older server. */
   routines: { done: number; expected: number; rows?: DashboardRoutineRow[] };
   weeklyGoals: {
     id: string;

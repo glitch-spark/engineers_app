@@ -6,7 +6,7 @@ import { dayDate, weekdayShort } from '../../lib/week';
 
 type RoutineDay = DashboardRoutineRow['days'][number];
 /** What a day's cell shows, what it is called for a screen reader, and its colour. */
-function dayCell(d: RoutineDay): [string, string, string] {
+export function dayCell(d: RoutineDay): [string, string, string] {
   switch (d.state) {
     case 'done': return ['✓', 'done', 'font-bold text-emerald-600 dark:text-emerald-400'];
     case 'missed': return ['✗', 'missed', 'font-bold text-red-600 dark:text-red-400'];
@@ -16,7 +16,7 @@ function dayCell(d: RoutineDay): [string, string, string] {
         : [`${d.value ?? 0}`, `${d.value ?? 0}, short of the target`, 'font-semibold text-amber-600 dark:text-amber-400'];
     case 'today': return ['·', 'today, not done yet', 'text-muted'];
     case 'future': return ['', 'still to come', ''];
-    default: return ['', 'not planned', ''];
+    default: return ['—', 'not planned', 'text-zinc-300 dark:text-zinc-600'];
   }
 }
 
@@ -44,7 +44,7 @@ const ROW = 'border-t border-zinc-100 dark:border-zinc-800';
 const num = (n: number | null | undefined) => (n == null ? '–' : n.toLocaleString('en-US'));
 
 /**
- * Home's This week as one read-only table, Mon–Fri with Week and Planned: bids (total, self, bidder), the
+ * Home's This week as one read-only table, Mon–Sat with Week and Planned: bids (total, self, bidder), the
  * interviews of each day as a small calendar coloured by status, and the daily to-dos. Nothing without days (an
  * older server); a row shows what the server sent.
  */
