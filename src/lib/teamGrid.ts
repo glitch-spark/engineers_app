@@ -3,7 +3,8 @@ import type { PlanItem, PlanItemIn, PlanItemKind, TeamWeekRowIn, TeamWeekUser } 
 
 export type Scope = 'routine' | 'goal';
 export type TargetKey = 'bidsSelf' | 'bidsBidder' | 'interviewsSelf';
-export interface Column { key: string; text: string; kind: PlanItemKind; scope: Scope }
+/** `options`: a Choice column's options (its first member's); absent for other kinds. */
+export interface Column { key: string; text: string; kind: PlanItemKind; scope: Scope; options?: string[] }
 /** pinned = columns added in this session (kept even if fewer than two people have them). */
 export interface GridState { users: TeamWeekUser[]; pinned: Column[] }
 
@@ -14,6 +15,8 @@ type ListKey = 'routines' | 'weeklyGoals';
 const listKey = (scope: Scope): ListKey => (scope === 'routine' ? 'routines' : 'weeklyGoals');
 const norm = (t: string) => t.trim().replace(/\s+/g, ' ');
 const tidy = (t: string) => norm(t);
+/** `{ options }` for a choice, nothing for other kinds (spread into items and columns). */
+const opts = (kind: PlanItemKind, options?: string[]) => (kind === 'choice' ? { options: options ?? [] } : {});
 
 export const columnKey = (text: string, kind: PlanItemKind, scope: Scope): string =>
   `${scope}|${kind}|${norm(text).toLowerCase()}`;
@@ -30,7 +33,7 @@ export function columns(s: GridState): Column[] {
       for (const i of u[listKey(scope)]) {
         if (i.addedBy === 'self') continue;
         const key = itemKey(i, scope);
-        const e = seen.get(key) ?? { col: { key, text: tidy(i.text), kind: i.kind, scope }, users: new Set() };
+        const e = seen.get(key) ?? { col: { key, text: tidy(i.text), kind: i.kind, scope, ...opts(i.kind, i.options) }, users: new Set() };
         e.users.add(u.userId);
         seen.set(key, e);
       }
@@ -87,7 +90,7 @@ const applyCell = (u: TeamWeekUser, c: Column, v: Cell): TeamWeekUser => {
     return { ...u, [k]: list.map((i) => (itemKey(i, c.scope) === c.key ? { ...i, target } : i)) };
   }
   if (list.length >= MAX_ITEMS) return u;
-  return { ...u, [k]: [...list, { text: c.text, kind: c.kind, target, archived: false }] };
+  return { ...u, [k]: [...list, { text: c.text, kind: c.kind, target, archived: false, ...opts(c.kind, c.options) }] };
 };
 
 export const setCell = (s: GridState, userId: string, c: Column, v: Cell): GridState =>
@@ -101,19 +104,23 @@ export const setTarget = (s: GridState, userId: string, k: TargetKey, n: number)
 export const fillTarget = (s: GridState, k: TargetKey, n: number): GridState =>
   mapUsers(s, (u) => ({ ...u, goal: { ...u.goal, [k]: n } }));
 
-export function addColumn(s: GridState, text: string, kind: PlanItemKind, scope: Scope): GridState {
+export function addColumn(s: GridState, text: string, kind: PlanItemKind, scope: Scope, options?: string[]): GridState {
   const key = columnKey(text, kind, scope);
   if (s.pinned.some((p) => p.key === key)) return s;
-  return { ...s, pinned: [...s.pinned, { key, text: tidy(text), kind, scope }] };
+  return { ...s, pinned: [...s.pinned, { key, text: tidy(text), kind, scope, ...opts(kind, options) }] };
 }
 
+/** An item joining an existing column takes the column's options; otherwise the given ones. */
+const optionsFor = (s: GridState, key: string, options?: string[]) => columns(s).find((c) => c.key === key)?.options ?? options;
+
 export const addOwnItem = (
-  s: GridState, userId: string, text: string, kind: PlanItemKind, scope: Scope, target: number | null,
+  s: GridState, userId: string, text: string, kind: PlanItemKind, scope: Scope, target: number | null, options?: string[],
 ): GridState => {
   const k = listKey(scope);
   const u = s.users.find((x) => x.userId === userId);
   if (!u || u[k].length >= MAX_ITEMS) return s;
-  const item: PlanItemIn = { text: tidy(text), kind, target: hasTarget(kind) ? target : null, archived: false };
+  const o = opts(kind, optionsFor(s, columnKey(text, kind, scope), options));
+  const item: PlanItemIn = { text: tidy(text), kind, target: hasTarget(kind) ? target : null, archived: false, ...o };
   return mapUser(s, userId, (x) => ({ ...x, [k]: [...x[k], item] }));
 };
 
@@ -123,7 +130,7 @@ export const removeOwnItem = (s: GridState, userId: string, scope: Scope, index:
   return mapUser(s, userId, (u) => ({ ...u, [k]: u[k].filter((_, i) => i !== index) }));
 };
 
-type Dest = { text: string; kind: PlanItemKind; scope: Scope };
+type Dest = { text: string; kind: PlanItemKind; scope: Scope; options?: string[] };
 
 /** What the caller believes sits at `index`: its id when it has one, else text + kind. */
 export type Expect = { id?: string; text: string; kind: PlanItemKind };
@@ -152,11 +159,13 @@ export function moveToColumn(s: GridState, userId: string, scope: Scope, index: 
   const it = movable(s, userId, scope, index, e);
   if (!it || it.addedBy === 'self' || moveBlocked(s, userId, scope, index, to, e)) return s;
   const text = tidy(to.text);
-  const pin = columns(s).some((c) => c.key === columnKey(text, to.kind, to.scope)) ? s : addColumn(s, text, to.kind, to.scope);
+  const key = columnKey(text, to.kind, to.scope);
+  const o = opts(to.kind, optionsFor(s, key, to.options));
+  const pin = columns(s).some((c) => c.key === key) ? s : addColumn(s, text, to.kind, to.scope, o.options);
   if (to.kind === it.kind && to.scope === scope) {
-    return mapUser(pin, userId, (x) => ({ ...x, [listKey(scope)]: x[listKey(scope)].map((i, n) => (n === index ? { ...i, text } : i)) }));
+    return mapUser(pin, userId, (x) => ({ ...x, [listKey(scope)]: x[listKey(scope)].map((i, n) => (n === index ? { ...i, text, ...o } : i)) }));
   }
-  const moved: PlanItemIn = { text, kind: to.kind, target: hasTarget(it.kind) && hasTarget(to.kind) ? it.target : null, archived: false };
+  const moved: PlanItemIn = { text, kind: to.kind, target: hasTarget(it.kind) && hasTarget(to.kind) ? it.target : null, archived: false, ...o };
   const from = listKey(scope);
   const dest = listKey(to.scope);
   return mapUser(pin, userId, (x) => {
@@ -182,8 +191,9 @@ export function renameColumn(s: GridState, c: Column, text: string): GridState {
 export const retypeBlocked = (s: GridState, c: Column, scope: Scope): TeamWeekUser[] =>
   c.scope === scope ? [] : s.users.filter((u) => findItem(u, c) && u[listKey(scope)].length >= MAX_ITEMS);
 
-export function retypeColumn(s: GridState, c: Column, kind: PlanItemKind, scope: Scope): GridState {
-  const next = { ...c, kind, scope, key: columnKey(c.text, kind, scope) };
+export function retypeColumn(s: GridState, c: Column, kind: PlanItemKind, scope: Scope, options?: string[]): GridState {
+  const o = opts(kind, options);
+  const next: Column = { key: columnKey(c.text, kind, scope), text: c.text, kind, scope, ...o };
   const from = listKey(c.scope);
   const to = listKey(scope);
   const users = s.users.map((u) => {
@@ -192,9 +202,16 @@ export function retypeColumn(s: GridState, c: Column, kind: PlanItemKind, scope:
     const kept = { ...u, [from]: u[from].filter((i) => itemKey(i, c.scope) !== c.key) };
     if (kept[to].length >= MAX_ITEMS) return kept;
     // no id: the server archives the old item and creates this one
-    return { ...kept, [to]: [...kept[to], { text: c.text, kind, target: null, archived: false }] };
+    return { ...kept, [to]: [...kept[to], { text: c.text, kind, target: null, archived: false, ...o }] };
   });
   return { users, pinned: rewritePinned(s, c, next) };
+}
+
+/** A choice column's options for every member (ids kept: a plain edit server-side). */
+export function setColumnOptions(s: GridState, c: Column, options: string[]): GridState {
+  const k = listKey(c.scope);
+  const users = s.users.map((u) => (findItem(u, c) ? { ...u, [k]: u[k].map((i) => (itemKey(i, c.scope) === c.key ? { ...i, options } : i)) } : u));
+  return { users, pinned: rewritePinned(s, c, { ...c, options }) };
 }
 
 export const removeColumn = (s: GridState, c: Column): GridState => ({
@@ -210,7 +227,7 @@ export const isEmptyRow = (u: TeamWeekUser): boolean =>
   u.routines.length === 0 && u.weeklyGoals.length === 0;
 
 const toItems = (l: (PlanItem | PlanItemIn)[]): PlanItemIn[] =>
-  l.map((i) => ({ ...('id' in i && i.id ? { id: i.id } : {}), text: i.text, kind: i.kind, target: i.target, archived: i.archived }));
+  l.map((i) => ({ ...('id' in i && i.id ? { id: i.id } : {}), text: i.text, kind: i.kind, target: i.target, archived: i.archived, ...opts(i.kind, i.options) }));
 
 /** Saved live own items that are gone from `u`: the server keeps any own item it is not told was removed. */
 const removedOwn = (u: TeamWeekUser, was?: TeamWeekUser): string[] => {

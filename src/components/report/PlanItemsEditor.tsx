@@ -22,7 +22,7 @@ export const hasOptionsError = (items: PlanItemIn[]) =>
   items.some((i) => !i.archived && i.kind === 'choice' && optionsError(i.options ?? []) !== null);
 
 /** Comma separated options; the box keeps what was typed (a trailing comma), the item gets the parsed list. */
-function OptionsField({ options, label, onChange }: { options: string[]; label: string; onChange: (o: string[]) => void }) {
+export function OptionsField({ options, label, onChange }: { options: string[]; label: string; onChange: (o: string[]) => void }) {
   const [raw, setRaw] = useState(options.join(', '));
   const set = (value: string) => { setRaw(value); onChange(parseOptions(value)); };
   const error = optionsError(options);

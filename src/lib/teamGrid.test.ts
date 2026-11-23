@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanItem, PlanItemKind, TeamWeekUser } from '../api/endpoints';
 import {
   addColumn, addOwnItem, cell, changed, columnKey, columns, fillColumn, isEmptyRow, ownItems, removeColumn,
-  removeOwnItem, moveToColumn, moveBlocked, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
+  removeOwnItem, moveToColumn, moveBlocked, setColumnOptions, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus,
   type GridState,
 } from './teamGrid';
 
@@ -345,6 +345,88 @@ describe('teamGrid', () => {
     it('never moves an item the person added', () => {
       const s = st([user('A', [own('Mine')])]);
       expect(moveToColumn(s, 'A', 'routine', 0, outreach('check'), ex(s, 'A', 'routine', 0))).toBe(s);
+    });
+  });
+  describe('choice columns', () => {
+    const choice = (text: string, options: string[], id?: string): PlanItem => ({ ...item(text, 'choice'), options, ...(id ? { id } : {}) });
+    const ex = (s: GridState, u: string, scope: 'routine' | 'goal', i: number) => {
+      const it = s.users.find((x) => x.userId === u)![scope === 'routine' ? 'routines' : 'weeklyGoals'][i];
+      return { id: it.id, text: it.text, kind: it.kind };
+    };
+
+    it("a column carries its first member's options; a member with other options still joins it", () => {
+      const s = st([user('A', [choice('Client', ['Done', 'Blocked'])]), user('B', [choice('client', ['Yes', 'No'])])]);
+      expect(columns(s)).toEqual([{ key: columnKey('Client', 'choice', 'routine'), text: 'Client', kind: 'choice', scope: 'routine', options: ['Done', 'Blocked'] }]);
+      expect(ownItems(s, 'B')).toEqual([]);
+      expect(columns(st([user('A', [item('E')]), user('B', [item('E')])]))[0]).not.toHaveProperty('options');
+    });
+
+    it("setting a column's options updates every member, keeps ids, and leaves others alone", () => {
+      const a = choice('Client', ['Done', 'Blocked']);
+      const b = choice('Client', ['Yes', 'No']);
+      const s = st([user('A', [a]), user('B', [b]), user('C', [item('Other')])]);
+      const t = setColumnOptions(s, columns(s)[0], ['Ok', 'Late']);
+      expect(t.users[0].routines[0]).toMatchObject({ id: a.id, options: ['Ok', 'Late'] });
+      expect(t.users[1].routines[0]).toMatchObject({ id: b.id, options: ['Ok', 'Late'] });
+      expect(t.users[2]).toBe(s.users[2]);
+      expect(columns(t)[0].options).toEqual(['Ok', 'Late']);
+    });
+
+    it('setting options on a pinned empty column updates the pin', () => {
+      const s = addColumn(st([user('A')]), 'Client', 'choice', 'goal', ['Yes', 'No']);
+      expect(columns(s)[0].options).toEqual(['Yes', 'No']);
+      expect(columns(setColumnOptions(s, columns(s)[0], ['A', 'B']))[0].options).toEqual(['A', 'B']);
+    });
+
+    it("ticking a cell or Fill all gives new items the column's options", () => {
+      let s = addColumn(st([user('A'), user('B')]), 'Client', 'choice', 'routine', ['Yes', 'No']);
+      s = setCell(s, 'A', columns(s)[0], { has: true, target: null });
+      expect(s.users[0].routines[0]).toMatchObject({ kind: 'choice', options: ['Yes', 'No'], target: null });
+      s = fillColumn(s, columns(s)[0], { has: true, target: null });
+      expect(s.users[1].routines[0].options).toEqual(['Yes', 'No']);
+    });
+
+    it("adding for one person takes the given options, or the column's when it joins one", () => {
+      const s = st([user('A', [choice('Client', ['Done', 'Blocked'])]), user('B', [choice('Client', ['Done', 'Blocked'])]), user('C')]);
+      const t = addOwnItem(s, 'C', 'Mood', 'choice', 'goal', 5, ['Good', 'Bad']);
+      expect(t.users[2].weeklyGoals[0]).toMatchObject({ kind: 'choice', options: ['Good', 'Bad'], target: null });
+      const u = addOwnItem(s, 'C', 'client', 'choice', 'routine', null, ['X', 'Y']);
+      expect(u.users[2].routines[0].options).toEqual(['Done', 'Blocked']);
+      expect(addOwnItem(s, 'C', 'Plain', 'check', 'routine', null, ['X', 'Y']).users[2].routines[0].options).toBeUndefined();
+    });
+
+    it('retyping to choice gives every member the options; switching group keeps them', () => {
+      const s = st([user('A', [item('Client')]), user('B', [item('Client')])]);
+      const t = retypeColumn(s, columns(s)[0], 'choice', 'routine', ['Yes', 'No']);
+      expect(t.users[0].routines[0]).toMatchObject({ kind: 'choice', options: ['Yes', 'No'] });
+      expect(t.users[0].routines[0]).not.toHaveProperty('id');
+      expect(columns(t)[0].options).toEqual(['Yes', 'No']);
+      const g = retypeColumn(t, columns(t)[0], 'choice', 'goal', columns(t)[0].options);
+      expect(g.users[1].weeklyGoals[0].options).toEqual(['Yes', 'No']);
+      expect(columns(retypeColumn(t, columns(t)[0], 'check', 'routine'))[0]).not.toHaveProperty('options');
+    });
+
+    it("moving into choice: a new column takes the given options; an existing one its own; a same-kind move keeps the id", () => {
+      const s = st([user('A', [choice('Client', ['Done', 'Blocked'])]), user('B', [choice('Client', ['Done', 'Blocked'])]), user('C', [item('Solo'), choice('Pick', ['P', 'Q'])])]);
+      const fresh = moveToColumn(s, 'C', 'routine', 0, { text: 'Mood', kind: 'choice', scope: 'routine', options: ['Good', 'Bad'] }, ex(s, 'C', 'routine', 0));
+      expect(fresh.users[2].routines.at(-1)).toMatchObject({ text: 'Mood', kind: 'choice', options: ['Good', 'Bad'] });
+      expect(columns(fresh).find((c) => c.text === 'Mood')?.options).toEqual(['Good', 'Bad']);
+      const joined = moveToColumn(s, 'C', 'routine', 0, { text: 'client', kind: 'choice', scope: 'routine', options: ['X', 'Y'] }, ex(s, 'C', 'routine', 0));
+      expect(joined.users[2].routines.at(-1)!.options).toEqual(['Done', 'Blocked']);
+      const renamed = moveToColumn(s, 'C', 'routine', 1, { text: 'Client', kind: 'choice', scope: 'routine', options: ['X', 'Y'] }, ex(s, 'C', 'routine', 1));
+      expect(renamed.users[2].routines[1]).toMatchObject({ id: s.users[2].routines[1].id, text: 'Client', options: ['Done', 'Blocked'] });
+    });
+
+    it('Publish sends choice options and no options for other kinds', () => {
+      const s = st([user('A', [choice('Client', ['Yes', 'No']), item('E')], [], false)]);
+      const [row] = rowsToSave([], s);
+      expect(row.routines[0].options).toEqual(['Yes', 'No']);
+      expect(row.routines[1]).not.toHaveProperty('options');
+      const s0 = st([user('A', [choice('C', ['Yes', 'No'])]), user('B', [choice('C', ['Yes', 'No'])])]);
+      const t = setColumnOptions(s0, columns(s0)[0], ['A', 'B']);
+      expect(rowsToSave(s0.users, t).map((r) => r.routines[0])).toMatchObject([
+        { id: s0.users[0].routines[0].id, options: ['A', 'B'] }, { id: s0.users[1].routines[0].id, options: ['A', 'B'] },
+      ]);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import { hasTarget } from '../../api/endpoints';
@@ -6,11 +6,12 @@ import type { PlanItemKind, TeamWeekUser } from '../../api/endpoints';
 import { addDays, dateParam, parseDateParam } from '../../lib/reportWeek';
 import {
   addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, movable, moveBlocked, moveToColumn, ownItems,
-  removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, setCell, setOwnWeek, setTarget,
+  removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, setCell, setColumnOptions, setOwnWeek, setTarget,
   weekStatus, type Column, type GridState, type Scope, type TargetKey,
 } from '../../lib/teamGrid';
 import ActionMenu from '../ActionMenu';
-import SetupItemForm, { type ItemFormMode, type ItemFormValues } from './SetupItemForm';
+import OwnItemsCell from './OwnItemsCell';
+import SetupItemForm, { typeName, type ItemFormMode, type ItemFormValues } from './SetupItemForm';
 
 const TARGETS: { key: TargetKey; label: string }[] = [
   { key: 'bidsSelf', label: 'Bids self' },
@@ -18,7 +19,7 @@ const TARGETS: { key: TargetKey; label: string }[] = [
   { key: 'interviewsSelf', label: 'Interviews' },
 ];
 const MAX_ITEMS = 20;
-const TAKEN = 'An item with that name, type and when already exists.';
+const TAKEN = 'An item with that name, type and group already exists.';
 const listName = (scope: Scope) => (scope === 'routine' ? 'daily routines' : 'weekly goals');
 const nameOf = (u: TeamWeekUser) => u.name || u.userId;
 const isBox = (kind: PlanItemKind) => !hasTarget(kind);
@@ -33,10 +34,14 @@ const TH = 'border border-zinc-200 px-2 py-1.5 text-xs font-medium dark:border-z
 const TD = 'border border-zinc-200 p-1 text-center align-middle dark:border-zinc-800';
 const STICKY = 'sticky left-0 z-10 bg-white text-left dark:bg-zinc-950';
 const NUM = 'input w-20 px-2 py-1 text-center';
+const SCOPES: Scope[] = ['routine', 'goal'];
+/** A light tint per group: header and body cells. */
+const HEAD_TINT: Record<Scope, string> = { routine: 'bg-violet-50 dark:bg-violet-900/20', goal: 'bg-cyan-50 dark:bg-cyan-900/20' };
+const TINT: Record<Scope, string> = { routine: 'bg-violet-50/40 dark:bg-violet-900/10', goal: 'bg-cyan-50/40 dark:bg-cyan-900/10' };
 
-function Td({ was, children }: { was?: string | null; children: ReactNode }) {
+function Td({ was, scope, children }: { was?: string | null; scope?: Scope; children: ReactNode }) {
   return (
-    <td className={`${TD} ${was ? 'bg-accent-50 dark:bg-accent-900/20' : ''}`}>
+    <td data-group={scope} className={`${TD} ${was ? 'bg-accent-50 dark:bg-accent-900/20' : scope ? TINT[scope] : ''}`}>
       {children}
       {was && <span className="block text-[10px] text-accent-700 dark:text-accent-300">was {was}</span>}
     </td>
@@ -53,6 +58,8 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
   const [menuError, setMenuError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ItemFormMode | null>(null);
+  const [formOptionsBad, setFormOptionsBad] = useState(false);
+  const onOptionsInvalid = useCallback((bad: boolean) => setFormOptionsBad(bad), []);
   // Rows whose save failed: kept as edited by the one re-read right after Publish, then forgotten.
   const keep = useRef<Set<string>>(new Set());
 
@@ -125,9 +132,6 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
   const status = weekStatus(saved, state);
   const cols = columns(state);
   const byScope = (scope: Scope) => cols.filter((c) => c.scope === scope);
-  const routineCols = byScope('routine');
-  const goalCols = byScope('goal');
-  const itemCols = [...routineCols, ...goalCols];
   const people = state.users.map((u) => ({ id: u.userId, name: nameOf(u) }));
 
   const chip =
@@ -136,15 +140,19 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
         : state.users.some((u) => !u.exists && !isEmptyRow(u)) ? ['badge-warning', 'Draft · copied from last week']
           : ['badge-warning', 'Draft · unsaved edits'];
 
-  const retype = (c: Column, kind: PlanItemKind, scope: Scope): string | null => {
+  const retype = (c: Column, kind: PlanItemKind, scope: Scope, options = c.options): string | null => {
     const key = columnKey(c.text, kind, scope);
-    if (key === c.key) return null;
+    if (key === c.key) {
+      // Only the options changed: a plain edit, ids kept.
+      if (kind === 'choice' && options && options.join('\n') !== (c.options ?? []).join('\n')) setState(setColumnOptions(state, c, options));
+      return null;
+    }
     if (keyTaken(state, key)) return TAKEN;
     const blocked = retypeBlocked(state, c, scope);
     if (blocked.length) {
       return `${blocked.map(nameOf).join(', ')} already ${blocked.length === 1 ? 'has' : 'have'} ${MAX_ITEMS} ${listName(scope)}.`;
     }
-    setState(retypeColumn(state, c, kind, scope));
+    setState(retypeColumn(state, c, kind, scope, options));
     return null;
   };
 
@@ -154,17 +162,17 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     if (form.mode !== 'type' && !text) return 'Enter a name.';
     if (form.mode === 'add') {
       if (addTaken(state, columnKey(text, v.kind, v.scope), v.userId || undefined)) return TAKEN;
-      if (!v.userId) setState(addColumn(state, text, v.kind, v.scope));
+      if (!v.userId) setState(addColumn(state, text, v.kind, v.scope, v.options));
       else {
         const u = state.users.find((x) => x.userId === v.userId);
         if (!u) return null;
         const list = v.scope === 'routine' ? u.routines : u.weeklyGoals;
         if (list.length >= MAX_ITEMS) return `${nameOf(u)} already has ${MAX_ITEMS} ${listName(v.scope)}.`;
-        setState(addOwnItem(state, v.userId, text, v.kind, v.scope, v.target));
+        setState(addOwnItem(state, v.userId, text, v.kind, v.scope, v.target, v.options));
       }
     } else if (form.mode === 'move') {
       if (text.length > 200) return 'Name is too long (200 characters max).';
-      const to = { text, kind: v.kind, scope: v.scope };
+      const to = { text, kind: v.kind, scope: v.scope, options: v.options };
       const exp = { id: form.itemId, text: form.from.text, kind: form.from.kind };
       const err = moveBlocked(state, form.userId, form.from.scope, form.index, to, exp);
       if (err) return err;
@@ -174,7 +182,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
       if (key !== form.col.key && keyTaken(state, key)) return TAKEN;
       setState(renameColumn(state, form.col, text));
     } else {
-      const err = retype(form.col, v.kind, form.col.scope);
+      const err = retype(form.col, v.kind, form.col.scope, v.options);
       if (err) return err;
     }
     setForm(null);
@@ -226,7 +234,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     const v = cell(state, u.userId, c);
     const label = `${nameOf(u)} ${c.text}`;
     return (
-      <Td key={c.key} was={changed(prevUsers, state, u.userId, c)?.was}>
+      <Td key={c.key} scope={c.scope} was={changed(prevUsers, state, u.userId, c)?.was}>
         {isBox(c.kind) ? (
           <input type="checkbox" aria-label={label} checked={v.has}
             onChange={(e) => setState(setCell(state, u.userId, c, { has: e.target.checked, target: null }))} />
@@ -243,7 +251,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     const other: Scope = c.scope === 'routine' ? 'goal' : 'routine';
     const isNew = !!prevUsers && !prevKeys.has(c.key);
     return (
-      <th key={c.key} scope="col" className={`${TH} ${isNew ? 'bg-accent-50 dark:bg-accent-900/20' : ''}`}>
+      <th key={c.key} scope="col" data-group={c.scope} className={`${TH} ${isNew ? 'bg-accent-50 dark:bg-accent-900/20' : HEAD_TINT[c.scope]}`}>
         <ActionMenu
           label={`${c.text} column`}
           className="w-full rounded px-1 text-center hover:bg-zinc-100 focus-ring dark:hover:bg-zinc-800"
@@ -258,7 +266,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
           ]}
         >
           <span className="text-strong">{c.text} ▾</span>
-          <small className="block font-normal text-muted">{c.kind} · {c.scope === 'routine' ? 'daily' : 'week'}</small>
+          <small className="block font-normal text-muted">{typeName(c.kind)}{c.options?.length ? ` · ${c.options.join(' / ')}` : ''}</small>
           {isNew && <span className="sr-only"> (new this week)</span>}
         </ActionMenu>
       </th>
@@ -272,7 +280,8 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
         <span className="text-xs text-muted">
           {status === 'published' ? 'Live. Edits apply from the next unsubmitted day.' : status === 'draft' ? 'People see it once published.' : ''}
         </span>
-        <button type="button" className="btn ml-auto text-sm" disabled={saving || toSave.length === 0} onClick={publish}>
+        <button type="button" className="btn ml-auto text-sm" disabled={saving || toSave.length === 0 || formOptionsBad} onClick={publish}
+          title={formOptionsBad ? 'Fix the Choice options in the form first.' : undefined}>
           {saving ? 'Publishing…' : 'Publish week'}
         </button>
       </div>
@@ -282,7 +291,7 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
       {/* Locked while publishing: the re-read replaces every saved row, so later typing would be lost. */}
       <fieldset disabled={saving} className="m-0 min-w-0 space-y-3 border-0 p-0">
         {form && (
-          <SetupItemForm key={JSON.stringify(form)} form={form} people={people} columnNames={[...new Set(cols.map((c) => c.text))]} onSubmit={submitForm} onCancel={() => setForm(null)} />
+          <SetupItemForm key={JSON.stringify(form)} form={form} people={people} columns={cols} onSubmit={submitForm} onCancel={() => setForm(null)} onOptionsInvalid={onOptionsInvalid} />
         )}
 
         <div className="overflow-x-auto">
@@ -292,13 +301,11 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                 <th scope="col" rowSpan={2} className={`${TH} ${STICKY}`}>Person</th>
                 <th scope="col" rowSpan={2} className={TH}>Plans own week</th>
                 <th scope="colgroup" colSpan={TARGETS.length} className={`${TH} uppercase tracking-wide`}>Week targets</th>
-                {routineCols.length > 0 && (
-                  <th scope="colgroup" colSpan={routineCols.length} className={`${TH} uppercase tracking-wide`}>Daily routines</th>
-                )}
-                {goalCols.length > 0 && (
-                  <th scope="colgroup" colSpan={goalCols.length} className={`${TH} uppercase tracking-wide`}>Weekly goals</th>
-                )}
-                <th scope="col" rowSpan={2} className={TH}>Only this person</th>
+                {SCOPES.map((sc) => (
+                  <th key={sc} scope="colgroup" colSpan={byScope(sc).length + 1} data-group={sc} className={`${TH} ${HEAD_TINT[sc]} uppercase tracking-wide`}>
+                    {sc === 'routine' ? 'Daily routines' : 'Weekly goals'}
+                  </th>
+                ))}
                 <th scope="col" rowSpan={2} className={TH}>
                   <button type="button" className="btn-outline whitespace-nowrap text-xs" onClick={() => openForm({ mode: 'add', userId: null })}>
                     + item
@@ -307,12 +314,16 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
               </tr>
               <tr>
                 {TARGETS.map((t) => <th key={t.key} scope="col" className={`${TH} text-strong`}>{t.label}</th>)}
-                {itemCols.map(header)}
+                {SCOPES.map((sc) => [
+                  ...byScope(sc).map(header),
+                  <th key={`own-${sc}`} scope="col" data-group={sc} className={`${TH} ${HEAD_TINT[sc]}`}>Only this person</th>,
+                ])}
               </tr>
             </thead>
             <tbody>
               {state.users.map((u) => {
                 const name = nameOf(u);
+                const own = ownItems(state, u.userId);
                 return (
                   <tr key={u.userId}>
                     <th scope="row" className={`${TD} ${STICKY} whitespace-nowrap px-3 font-medium text-strong`}>
@@ -330,37 +341,22 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                         {numberInput(`${name} ${t.label}`, u.goal[t.key] || null, (n) => setState(setTarget(state, u.userId, t.key, n ?? 0)))}
                       </Td>
                     ))}
-                    {itemCols.map((c) => itemCell(u, c))}
-                    <td className={`${TD} min-w-[14rem] text-left`}>
-                      <div className="flex flex-wrap items-center gap-1">
-                        {ownItems(state, u.userId).map((o) => (
-                          <span key={`${o.scope}${o.index}`} className={o.scope === 'routine' ? 'badge-info' : 'badge-neutral'}>
-                            {o.item.text}
-                            {o.item.target != null && ` · ${o.item.target}`}
-                            {o.item.addedBy === 'self' && <span className="text-muted"> · added by {name}</span>}
-                            <span className="text-muted"> · {o.scope === 'routine' ? 'daily' : 'week'}</span>
-                            {o.item.addedBy !== 'self' && (
-                              <ActionMenu
-                                label={`Actions for ${o.item.text} of ${name}`}
-                                className="ml-1 text-muted hover:text-zinc-900 dark:hover:text-zinc-100"
-                                items={[{
-                                  label: 'Move into column…',
-                                  onSelect: () => openForm({ mode: 'move', userId: u.userId, index: o.index, from: { key: '', text: o.item.text, kind: o.item.kind, scope: o.scope }, personName: name, itemId: 'id' in o.item ? o.item.id : undefined }),
-                                }]}
-                              />
-                            )}
-                            <button type="button" className="ml-1 text-muted hover:text-red-600" aria-label={`Remove ${o.item.text} from ${name}`}
-                              onClick={() => setState(removeOwnItem(state, u.userId, o.scope, o.index))}>
-                              ✕
-                            </button>
-                          </span>
-                        ))}
-                        <button type="button" className="text-xs underline" aria-label={`Add item for ${name}`}
-                          onClick={() => openForm({ mode: 'add', userId: u.userId })}>
-                          + add
-                        </button>
-                      </div>
-                    </td>
+                    {SCOPES.map((sc) => [
+                      ...byScope(sc).map((c) => itemCell(u, c)),
+                      <OwnItemsCell
+                        key={`own-${sc}`}
+                        scope={sc}
+                        className={`${TD} ${TINT[sc]}`}
+                        name={name}
+                        items={own.filter((o) => o.scope === sc)}
+                        onAdd={() => openForm({ mode: 'add', userId: u.userId, scope: sc })}
+                        onRemove={(o) => setState(removeOwnItem(state, u.userId, o.scope, o.index))}
+                        onMove={(o) => openForm({
+                          mode: 'move', userId: u.userId, index: o.index, personName: name, itemId: 'id' in o.item ? o.item.id : undefined,
+                          from: { key: '', text: o.item.text, kind: o.item.kind, scope: o.scope, ...(o.item.kind === 'choice' ? { options: o.item.options ?? [] } : {}) },
+                        })}
+                      />,
+                    ])}
                     <td className={TD} />
                   </tr>
                 );
@@ -374,21 +370,23 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                       onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillTarget(state, t.key, n ?? 0)); }} />
                   </td>
                 ))}
-                {itemCols.map((c) => (
-                  <td key={c.key} className={TD}>
-                    {isBox(c.kind) ? (
-                      <input type="checkbox" aria-label={`Fill all ${c.text}`}
-                        onChange={(e) => setState(fillColumn(state, c, { has: e.target.checked, target: null }))} />
-                    ) : (
-                      <input type="number" min={0} step={c.kind === 'hours' ? 'any' : 1} aria-label={`Fill all ${c.text}`} className={NUM}
-                        onChange={(e) => {
-                          const n = parseNum(e.target.value);
-                          if (n !== undefined) setState(fillColumn(state, c, { has: n !== null, target: n }));
-                        }} />
-                    )}
-                  </td>
-                ))}
-                <td className={TD} />
+                {SCOPES.map((sc) => [
+                  ...byScope(sc).map((c) => (
+                    <td key={c.key} className={TD}>
+                      {isBox(c.kind) ? (
+                        <input type="checkbox" aria-label={`Fill all ${c.text}`}
+                          onChange={(e) => setState(fillColumn(state, c, { has: e.target.checked, target: null }))} />
+                      ) : (
+                        <input type="number" min={0} step={c.kind === 'hours' ? 'any' : 1} aria-label={`Fill all ${c.text}`} className={NUM}
+                          onChange={(e) => {
+                            const n = parseNum(e.target.value);
+                            if (n !== undefined) setState(fillColumn(state, c, { has: n !== null, target: n }));
+                          }} />
+                      )}
+                    </td>
+                  )),
+                  <td key={`own-${sc}`} className={TD} />,
+                ])}
                 <td className={TD} />
               </tr>
             </tbody>

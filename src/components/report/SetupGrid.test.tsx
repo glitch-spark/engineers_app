@@ -35,6 +35,8 @@ const show = () =>
 const ready = () => screen.findByRole('rowheader', { name: /Ana/ });
 const input = (name: string) => screen.getByLabelText(name) as HTMLInputElement;
 const type = (name: string, value: string) => fireEvent.change(input(name), { target: { value } });
+/** Which group (data-group on the cell) a control sits in. */
+const cellGroup = (el: Element) => (el.closest('td, th') as HTMLElement | null)?.dataset.group;
 const publishBtn = () => screen.getByRole('button', { name: 'Publish week' }) as HTMLButtonElement;
 
 beforeEach(() => {
@@ -107,15 +109,15 @@ describe('SetupGrid', () => {
     await ready();
     fireEvent.click(screen.getByRole('button', { name: '+ item' }));
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Calls' } });
-    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'count' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Number/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(screen.getByRole('button', { name: /^Calls/ })).toBeTruthy();
     expect(input('Ana Calls').value).toBe('');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add item for Ben' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add goal for Ben' }));
     expect((screen.getByLabelText('For') as HTMLSelectElement).value).toBe('Ben');
+    expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('goal');
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Mine' } });
-    fireEvent.change(screen.getByLabelText('When'), { target: { value: 'goal' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(screen.getByRole('button', { name: 'Remove Mine from Ben' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Remove Mine from Ben' }));
@@ -137,9 +139,9 @@ describe('SetupGrid', () => {
 
   it('adding a name only one person has: for everyone it becomes a column with their cell ticked; for another person too; for that person it is refused', async () => {
     const add = (who: string | null, name: string) => {
-      fireEvent.click(screen.getByRole('button', { name: who ? `Add item for ${who}` : '+ item' }));
+      fireEvent.click(screen.getByRole('button', { name: who ? `Add goal for ${who}` : '+ item' }));
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: name } });
-      fireEvent.change(screen.getByLabelText('When'), { target: { value: 'goal' } });
+      fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'goal' } });
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     };
     show();
@@ -187,13 +189,13 @@ describe('SetupGrid', () => {
     expect(screen.queryByRole('button', { name: /^Email/ })).toBeNull();
 
     await menu(/^Inbox/, 'Change type');
-    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'hours' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Hours/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(screen.getByRole('button', { name: /^Inbox.*hours/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Inbox.*Hours/ })).toBeTruthy();
     expect(input('Ana Inbox').type).toBe('number');
 
     await menu(/^Inbox/, 'Make weekly goal');
-    expect(screen.getByRole('button', { name: /^Inbox.*week/ })).toBeTruthy();
+    expect(cellGroup(input('Ana Inbox'))).toBe('goal');
 
     await menu(/^Inbox/, 'Remove from this week');
     expect(screen.queryByRole('button', { name: /^Inbox/ })).toBeNull();
@@ -208,7 +210,7 @@ describe('SetupGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Email/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Make weekly goal' }));
     expect(screen.getByRole('alert').textContent).toMatch(/Ana already has 20 weekly goals/);
-    expect(screen.getByRole('button', { name: /^Email.*daily/ })).toBeTruthy();
+    expect(cellGroup(input('Ana Email'))).toBe('routine');
   });
 
   it('chip menu "Move into column…" moves the chip into an existing column or a new name', async () => {
@@ -217,7 +219,7 @@ describe('SetupGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Solo of Ben' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
     expect((screen.getByLabelText('Item name') as HTMLInputElement).value).toBe('Solo');
-    expect([...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))).toEqual(['Email', 'Proposals']);
+    expect([...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))).toEqual(['Proposals', 'Email']);
     fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Brand new' } });
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
     expect(screen.getByRole('button', { name: /^Brand new/ })).toBeTruthy();
@@ -396,5 +398,171 @@ describe('SetupGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove Notes from Ben' }));
     expect(screen.queryByRole('button', { name: 'Remove Notes from Ben' })).toBeNull();
     expect(screen.getAllByText(/added by Ben/)).toHaveLength(1);
+  });
+  describe('daily routines / weekly goals split and the type picker', () => {
+    const choice = (id: string, text: string, options: string[]): PlanItem => ({ ...item(id, text, 'choice'), options });
+    const openAdd = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
+
+    it('shows both group headers with no columns, and an "Only this person" cell per group', async () => {
+      serve([person('Ana', { routines: [item('r1', 'Inbox')], weeklyGoals: [item('g1', 'Launch')] }), person('Ben')]);
+      show();
+      await ready();
+      expect(screen.getByRole('columnheader', { name: 'Daily routines' })).toBeTruthy();
+      expect(screen.getByRole('columnheader', { name: 'Weekly goals' })).toBeTruthy();
+      const own = screen.getAllByRole('columnheader', { name: 'Only this person' });
+      expect(own.map(cellGroup)).toEqual(['routine', 'goal']);
+      expect(cellGroup(screen.getByRole('button', { name: 'Remove Inbox from Ana' }))).toBe('routine');
+      expect(cellGroup(screen.getByRole('button', { name: 'Remove Launch from Ana' }))).toBe('goal');
+      expect(cellGroup(screen.getByRole('button', { name: 'Add routine for Ana' }))).toBe('routine');
+      expect(cellGroup(screen.getByRole('button', { name: 'Add goal for Ana' }))).toBe('goal');
+    });
+
+    it('chips keep their target ("2h", "50") and drop the daily / week suffix', async () => {
+      serve([person('Ana', { routines: [item('r1', 'Interview prep', 'hours', 2)], weeklyGoals: [item('g1', 'Emails', 'count', 50), item('g2', 'Launch')] }), person('Ben')]);
+      show();
+      await ready();
+      const chip = (name: string) => screen.getByRole('button', { name: `Remove ${name} from Ana` }).parentElement!.textContent;
+      expect(chip('Interview prep')).toMatch(/^Interview prep · 2h/);
+      expect(chip('Emails')).toMatch(/^Emails · 50/);
+      for (const n of ['Interview prep', 'Emails', 'Launch']) expect(chip(n)).not.toMatch(/daily|week/);
+    });
+
+    it('the picker offers the six types with their copy; Number/Hours show a target, Choice the options with presets', async () => {
+      show();
+      await ready();
+      openAdd('Add routine for Ana');
+      expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('routine');
+      expect([...(screen.getByLabelText('Group') as HTMLSelectElement).options].map((o) => o.text))
+        .toEqual(['Daily routine (every working day)', 'Weekly goal (once this week)']);
+      expect(screen.getAllByRole('radio').map((r) => r.closest('label')!.textContent)).toEqual([
+        'CheckboxTick when done.',
+        'NumberEnter a count against a target, e.g. 40 / 50 emails.',
+        'HoursEnter time spent against a target, e.g. 1.5 / 2h.',
+        'Profile logPick a profile and write what changed; one row per profile.',
+        'TextWrite a short answer with details (up to 500 characters).',
+        'ChoicePick one option you list, plus an optional note.',
+      ]);
+      expect((screen.getByRole('radio', { name: /^Checkbox/ }) as HTMLInputElement).checked).toBe(true);
+      expect(screen.queryByLabelText('Target')).toBeNull();
+      fireEvent.click(screen.getByRole('radio', { name: /^Hours/ }));
+      expect(screen.getByLabelText('Target')).toBeTruthy();
+      fireEvent.click(screen.getByRole('radio', { name: /^Text/ }));
+      expect(screen.queryByLabelText('Target')).toBeNull();
+      expect(screen.queryByLabelText('Choice options')).toBeNull();
+      fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, No' }));
+      expect(input('Choice options').value).toBe('Yes, No');
+      fireEvent.click(screen.getByRole('button', { name: 'Done, Blocked, N/A' }));
+      expect(input('Choice options').value).toBe('Done, Blocked, N/A');
+    });
+
+    it('a Choice item for one person is added with its options and published with them', async () => {
+      show();
+      await ready();
+      openAdd('Add goal for Ana');
+      fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Client check' } });
+      fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, No' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      expect(cellGroup(screen.getByRole('button', { name: 'Remove Client check from Ana' }))).toBe('goal');
+      fireEvent.click(publishBtn());
+      await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(1));
+      expect(putTeamWeek.mock.calls[0][1][0].weeklyGoals.at(-1)).toMatchObject({ text: 'Client check', kind: 'choice', options: ['Yes', 'No'] });
+    });
+
+    it('invalid Choice options block the form (inline message) and Publish (with a reason)', async () => {
+      show();
+      await ready();
+      type('Ana Bids self', '650');
+      expect(publishBtn().disabled).toBe(false);
+      openAdd('+ item');
+      fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Mood' } });
+      fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
+      type('Choice options', 'Only one');
+      expect(screen.getByRole('alert').textContent).toMatch(/2 to 6 options/);
+      expect((screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(publishBtn().disabled).toBe(true);
+      expect(publishBtn().title).toMatch(/Choice options/);
+      type('Choice options', 'Good, Bad');
+      expect(publishBtn().disabled).toBe(false);
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      expect(screen.getByRole('button', { name: /^Mood.*Good \/ Bad/ })).toBeTruthy();
+      expect(input('Ana Mood').type).toBe('checkbox');
+    });
+
+    it('Change type to Choice sets every cell\'s options; changing only the options keeps the ids', async () => {
+      serve([person('Ana', { routines: [choice('r1', 'Client', ['Done', 'Blocked'])] }), person('Ben', { routines: [choice('r2', 'Client', ['Yes', 'No'])] })]);
+      show();
+      await ready();
+      expect(screen.getByRole('button', { name: /^Client.*Done \/ Blocked/ })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: /^Client/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Change type' }));
+      expect(input('Choice options').value).toBe('Done, Blocked');
+      type('Choice options', 'Ok, Late, N/A');
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(publishBtn());
+      await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(1));
+      expect(putTeamWeek.mock.calls[0][1].map((r) => r.routines[0])).toMatchObject([
+        { id: 'r1', options: ['Ok', 'Late', 'N/A'] }, { id: 'r2', options: ['Ok', 'Late', 'N/A'] },
+      ]);
+    });
+
+    it('Change type from Checkbox to Choice gives the new items the options', async () => {
+      show();
+      await ready();
+      fireEvent.click(screen.getByRole('button', { name: /^Email/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Change type' }));
+      fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, No' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(publishBtn());
+      await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(1));
+      const r = putTeamWeek.mock.calls[0][1][0].routines[0];
+      expect(r).toMatchObject({ text: 'Email', kind: 'choice', options: ['Yes', 'No'] });
+      expect(r).not.toHaveProperty('id');
+    });
+
+    it('Move into a new Choice column takes the typed options; into an existing one shows and uses its options', async () => {
+      const t = team();
+      t[0].routines.push(choice('r5', 'Client', ['Done', 'Blocked']));
+      t[1].routines.push(item('r7', 'Spare'));
+      serve([...t, person('Cy', { routines: [choice('r6', 'Client', ['Done', 'Blocked'])] })]);
+      show();
+      await ready();
+      const move = async (what: string) => {
+        fireEvent.click(screen.getByRole('button', { name: `Actions for ${what} of Ben` }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Move into column…' }));
+      };
+      await move('Solo');
+      fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Mood' } });
+      fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
+      type('Choice options', 'Good, Bad');
+      fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+      expect(screen.getByRole('button', { name: /^Mood.*Good \/ Bad/ })).toBeTruthy();
+
+      await move('Spare');
+      fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'client' } });
+      fireEvent.click(screen.getByRole('radio', { name: /^Choice/ }));
+      expect(screen.queryByLabelText('Choice options')).toBeNull();
+      expect(screen.getByText(/column's options: Done \/ Blocked/)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+      expect(screen.queryByRole('button', { name: 'Remove Spare from Ben' })).toBeNull();
+      fireEvent.click(publishBtn());
+      await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(1));
+      const ben = putTeamWeek.mock.calls[0][1].find((r) => r.userId === 'Ben')!;
+      expect(ben.routines.filter((i) => i.kind === 'choice')).toMatchObject([{ text: 'client', options: ['Done', 'Blocked'] }]);
+      expect(ben.weeklyGoals.filter((i) => i.kind === 'choice')).toMatchObject([{ text: 'Mood', options: ['Good', 'Bad'] }]);
+    });
+
+    it('Text columns use the "has item" checkbox, in cells and Fill all', async () => {
+      serve([person('Ana', { weeklyGoals: [item('g1', 'Company work', 'text')] }), person('Ben', { weeklyGoals: [item('g2', 'Company work', 'text')] })]);
+      show();
+      await ready();
+      expect(screen.getByRole('button', { name: /^Company work.*Text/ })).toBeTruthy();
+      expect(input('Ana Company work').type).toBe('checkbox');
+      fireEvent.click(input('Fill all Company work'));
+      fireEvent.click(input('Fill all Company work'));
+      expect(input('Ben Company work').checked).toBe(false);
+    });
   });
 });
