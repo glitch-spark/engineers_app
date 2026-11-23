@@ -17,7 +17,7 @@ const item = (id: string, text: string, kind: PlanItemKind = 'check', target: nu
 });
 const person = (userId: string, over: Partial<TeamWeekUser> = {}): TeamWeekUser => ({
   userId, name: userId, plansOwnWeek: false, exists: true, goal: { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0 },
-  routines: [], weeklyGoals: [], ...over,
+  satGoal: { bidsSelf: 0, bidsBidder: 0 }, routines: [], weeklyGoals: [], ...over,
 });
 const team = (): TeamWeekUser[] => [
   person('Ana', { goal: { bidsSelf: 600, bidsBidder: 0, interviewsSelf: 2 }, routines: [item('r1', 'Email')], weeklyGoals: [item('g1', 'Proposals', 'count', 250)] }),
@@ -55,7 +55,7 @@ describe('SetupGrid', () => {
     expect(screen.getByRole('rowheader', { name: /Ben/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Email/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Proposals/ })).toBeTruthy();
-    expect(input('Ana Bids self').value).toBe('600');
+    expect(input('Ana Bids / day').value).toBe('120');
     expect(input('Ben Proposals').value).toBe('100');
     expect((input('Ana Email') as HTMLInputElement).checked).toBe(true);
     // Solo is Ben's alone: a chip, not a column
@@ -81,13 +81,13 @@ describe('SetupGrid', () => {
     expect(screen.getByText('Not planned yet')).toBeTruthy();
   });
 
-  it('typing a target marks the cell changed with "was 600"', async () => {
+  it('typing a target marks the cell changed with "was 120"', async () => {
     show();
     await ready();
-    expect(screen.queryByText('was 600')).toBeNull();
-    type('Ana Bids self', '650');
-    expect(input('Ana Bids self').value).toBe('650');
-    expect(screen.getByText('was 600')).toBeTruthy();
+    expect(screen.queryByText('was 120')).toBeNull();
+    type('Ana Bids / day', '650');
+    expect(input('Ana Bids / day').value).toBe('650');
+    expect(screen.getByText('was 120')).toBeTruthy();
   });
 
   it('the Fill all row sets the column for everyone', async () => {
@@ -171,7 +171,7 @@ describe('SetupGrid', () => {
     );
     await ready();
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 
@@ -271,31 +271,31 @@ describe('SetupGrid', () => {
     serve([...team(), person('Cy', { exists: false, routines: [item('r9', 'Email')] })]);
     show();
     await ready();
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     fireEvent.click(publishBtn());
     await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(1));
     const [w, rows] = putTeamWeek.mock.calls[0];
     expect(w).toBe(WEEK);
     expect(rows.map((r) => r.userId)).toEqual(['Ana', 'Cy']);
-    expect(rows[0].goal.bidsSelf).toBe(650);
+    expect(rows[0].goal.bidsSelf).toBe(3250);
     await waitFor(() => expect(getTeamWeek.mock.calls.filter(([x]) => x === WEEK).length).toBe(2));
   });
 
   it('a failed row shows its error beside the person and stays edited; saved rows are not re-sent on the next Publish', async () => {
     show();
     await ready();
-    type('Ana Bids self', '650');
-    type('Ben Bids self', '70');
+    type('Ana Bids / day', '650');
+    type('Ben Bids / day', '70');
     putTeamWeek.mockResolvedValueOnce({ results: [{ userId: 'Ana', ok: true, error: null }, { userId: 'Ben', ok: false, error: 'Too many items' }] });
     const after = team();
-    after[0].goal.bidsSelf = 650;
+    after[0].goal.bidsSelf = 3250;
     serve(after);
     fireEvent.click(publishBtn());
     const ben = screen.getByRole('rowheader', { name: /Ben/ });
     expect((await within(ben).findByRole('alert')).textContent).toBe('Too many items');
     await waitFor(() => expect(getTeamWeek.mock.calls.filter(([x]) => x === WEEK).length).toBe(2));
-    expect(input('Ben Bids self').value).toBe('70');
-    expect(input('Ana Bids self').value).toBe('650');
+    expect(input('Ben Bids / day').value).toBe('70');
+    expect(input('Ana Bids / day').value).toBe('650');
 
     fireEvent.click(publishBtn());
     await waitFor(() => expect(putTeamWeek).toHaveBeenCalledTimes(2));
@@ -306,26 +306,26 @@ describe('SetupGrid', () => {
     it(`a failed row is kept only for the re-read after Publish, not on a later reload (Ana ${anaSaves ? 'saved' : 'untouched'})`, async () => {
       show();
       await ready();
-      if (anaSaves) type('Ana Bids self', '650');
-      type('Ben Bids self', '70');
+      if (anaSaves) type('Ana Bids / day', '650');
+      type('Ben Bids / day', '70');
       putTeamWeek.mockResolvedValueOnce({ results: [
         ...(anaSaves ? [{ userId: 'Ana', ok: true, error: null }] : []), { userId: 'Ben', ok: false, error: 'Too many items' },
       ] });
       const after = team();
-      if (anaSaves) after[0].goal.bidsSelf = 650;
+      if (anaSaves) after[0].goal.bidsSelf = 3250;
       serve(after);
       fireEvent.click(publishBtn());
       await within(screen.getByRole('rowheader', { name: /Ben/ })).findByRole('alert');
       await waitFor(() => expect(getTeamWeek.mock.calls.filter(([x]) => x === WEEK).length).toBe(2));
-      expect(input('Ben Bids self').value).toBe('70');
+      expect(input('Ben Bids / day').value).toBe('70');
       // The admin puts Ben back; Ben then edits his own week; the grid reloads on focus.
-      type('Ben Bids self', '');
+      type('Ben Bids / day', '');
       const later = team();
-      if (anaSaves) later[0].goal.bidsSelf = 650;
-      later[1].goal.bidsSelf = 55;
+      if (anaSaves) later[0].goal.bidsSelf = 3250;
+      later[1].goal.bidsSelf = 275;
       serve(later);
       window.dispatchEvent(new Event('focus'));
-      await waitFor(() => expect(input('Ben Bids self').value).toBe('55'));
+      await waitFor(() => expect(input('Ben Bids / day').value).toBe('55'));
       expect(publishBtn().disabled).toBe(true);
     });
   }
@@ -333,12 +333,12 @@ describe('SetupGrid', () => {
   it('the grid is disabled while Publish is in flight', async () => {
     show();
     await ready();
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     putTeamWeek.mockReturnValueOnce(new Promise(() => {}));
     fireEvent.click(publishBtn());
     // A disabled <fieldset> disables its controls (`:disabled`); their own `disabled` property stays false.
     const off = (el: Element) => el.matches(':disabled');
-    await waitFor(() => expect(off(input('Ben Bids self'))).toBe(true));
+    await waitFor(() => expect(off(input('Ben Bids / day'))).toBe(true));
     expect(off(input('Ana Email'))).toBe(true);
     expect(off(input('Fill all Proposals'))).toBe(true);
     expect(off(screen.getByRole('button', { name: '+ item' }))).toBe(true);
@@ -347,18 +347,18 @@ describe('SetupGrid', () => {
   it('a thrown publish error shows "Could not publish the week."', async () => {
     show();
     await ready();
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     putTeamWeek.mockRejectedValueOnce(new Error('boom'));
     fireEvent.click(publishBtn());
     expect((await screen.findByText('Could not publish the week.')).getAttribute('role')).toBe('alert');
-    expect(input('Ana Bids self').value).toBe('650');
+    expect(input('Ana Bids / day').value).toBe('650');
   });
 
   it('Publish is disabled while saving and when there is nothing to save', async () => {
     show();
     await ready();
     expect(publishBtn().disabled).toBe(true);
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     expect(publishBtn().disabled).toBe(false);
     putTeamWeek.mockReturnValueOnce(new Promise(() => {}));
     fireEvent.click(publishBtn());
@@ -374,7 +374,7 @@ describe('SetupGrid', () => {
       return e.defaultPrevented;
     };
     expect(leave()).toBe(false);
-    type('Ana Bids self', '650');
+    type('Ana Bids / day', '650');
     expect(leave()).toBe(true);
   });
 
@@ -473,7 +473,7 @@ describe('SetupGrid', () => {
     it('invalid Choice options block the form (inline message) and Publish (with a reason)', async () => {
       show();
       await ready();
-      type('Ana Bids self', '650');
+      type('Ana Bids / day', '650');
       expect(publishBtn().disabled).toBe(false);
       openAdd('+ item');
       fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Mood' } });

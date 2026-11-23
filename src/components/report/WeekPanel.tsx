@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import * as api from '../../api/endpoints';
 import type { Counts, PlanItemIn, SatGoal } from '../../api/endpoints';
-import { satSplit } from '../../lib/teamGrid';
+import { bidsPlan, withBids, type BidKey } from '../../lib/teamGrid';
 import { messageOf } from '../../lib/notify';
 import { parseDateParam, weekLabel } from '../../lib/reportWeek';
 import SidePanel from '../SidePanel';
 import PlanItemsEditor, { cleanItems, hasOptionsError } from './PlanItemsEditor';
-import GoalDoneFields from './GoalDoneFields';
 
 interface WeekForm {
   goal: Counts;
@@ -17,11 +16,10 @@ interface WeekForm {
   satGoal: SatGoal | null;
 }
 
-const SAT_FIELDS: { key: keyof SatGoal; label: string }[] = [
-  { key: 'bidsSelf', label: 'Self bids' },
-  { key: 'bidsBidder', label: 'Bidder bids' },
+const BIDS: { key: BidKey; label: string; hint: string }[] = [
+  { key: 'bidsSelf', label: 'Bids / day', hint: 'Mon–Fri, plus a Saturday extra' },
+  { key: 'bidsBidder', label: 'Bidder bids / day', hint: 'Mon–Fri' },
 ];
-/** null when neither field is set (an even split). */
 const cleanSat = (s: SatGoal | null): SatGoal | null => (s && (s.bidsSelf != null || s.bidsBidder != null) ? s : null);
 
 /** Set the week's targets, routines and weekly goals at the start of the week. */
@@ -155,46 +153,54 @@ export default function WeekPanel({
             <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-body dark:bg-zinc-800" role="status">Planned by your admin</p>
           )}
           <section className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800" aria-labelledby="week-targets-title">
-            <h3 id="week-targets-title" className="card-title mb-2">Targets</h3>
-            <GoalDoneFields
-              goal={form.goal}
-              onGoal={!planEditable ? undefined : (goal) => setForm({ ...form, goal })}
-              done={data.done}
-              stages={data.stages}
-              showInterviewGoal
-              readOnly={!planEditable}
-              adminEdit={mode === 'admin'}
-            />
-            {(planEditable || form.satGoal) && (
-              <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                <p className="form-label mb-1">Saturday</p>
-                <div className="flex flex-wrap gap-4">
-                  {SAT_FIELDS.map((f) => {
-                    const sat = form.satGoal?.[f.key] ?? null;
-                    const total = form.goal[f.key];
-                    const split = satSplit(total, sat);
-                    return (
-                      <label key={f.key} className="flex flex-col gap-1 text-xs text-muted">
-                        {f.label} on Saturday
-                        {planEditable ? (
-                          <input type="number" min={0} className="input w-28" placeholder="even split" value={sat ?? ''}
-                            onChange={(e) => {
-                              const n = e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value)));
-                              setForm({ ...form, satGoal: { bidsSelf: null, bidsBidder: null, ...form.satGoal, [f.key]: n } });
-                            }} />
-                        ) : (
-                          <span className="text-sm text-body">{sat ?? 'even split'}</span>
+            <h3 id="week-targets-title" className="card-title">Bids and interviews</h3>
+            <p className="mb-2 text-xs text-muted">Counted automatically from bids and the Interviews page.</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
+              {BIDS.map((b) => {
+                const plan = bidsPlan(form, b.key);
+                const set = (patch: { daily?: number; sat?: number }) => {
+                  const next = withBids(form, b.key, patch);
+                  // A new self total drops the per-region split (it no longer adds up).
+                  const goal = b.key === 'bidsSelf' && next.goal.bidsSelf !== data.goal.bidsSelf
+                    ? { ...next.goal, bidsSelfUs: 0, bidsSelfEu: 0, bidsSelfLatam: 0 } : next.goal;
+                  setForm({ ...next, goal });
+                };
+                const num = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
+                return (
+                  <div key={b.key} className="flex flex-col gap-1 text-xs text-muted">
+                    <span className="form-label">{b.label}</span>
+                    {planEditable ? (
+                      <div className="flex items-center gap-2">
+                        <input type="number" min={0} className="input w-24" aria-label={b.label} value={plan.total ? plan.daily : ''} placeholder="0"
+                          onChange={(e) => set({ daily: num(e.target.value) })} />
+                        {b.key === 'bidsSelf' && (
+                          <label className="flex items-center gap-1">
+                            Sat +
+                            <input type="number" min={0} className="input w-20" aria-label="Saturday extra bids" value={plan.total ? plan.sat : ''} placeholder="0"
+                              onChange={(e) => set({ sat: num(e.target.value) })} />
+                          </label>
                         )}
-                        <span>
-                          {sat != null && sat > total ? <span className="text-red-600 dark:text-red-400" role="alert">More than the week&apos;s {total}</span>
-                            : split ? `Mon–Fri ${split.weekday} a day · Sat ${split.sat}` : total > 0 ? `${Math.ceil(total / 6)} a day, Mon–Sat` : ''}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-body">{plan.daily}{b.key === 'bidsSelf' && plan.sat ? ` + ${plan.sat} Sat` : ''}</span>
+                    )}
+                    <span>
+                      {b.hint}{plan.total ? ` · = ${plan.total} / week` : ''}{plan.even ? ' · even split until edited' : ''} · done {data.done[b.key]}
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="flex flex-col gap-1 text-xs text-muted">
+                <span className="form-label">Interviews this week</span>
+                {planEditable ? (
+                  <input type="number" min={0} className="input w-24" aria-label="Interviews this week" value={form.goal.interviewsSelf || ''} placeholder="0"
+                    onChange={(e) => setForm({ ...form, goal: { ...form.goal, interviewsSelf: Math.max(0, Math.floor(Number(e.target.value) || 0)) } })} />
+                ) : (
+                  <span className="text-sm text-body">{form.goal.interviewsSelf}</span>
+                )}
+                <span>done {data.done.interviewsSelf}</span>
               </div>
-            )}
+            </div>
           </section>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

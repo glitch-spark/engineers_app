@@ -9,6 +9,24 @@ import { dayCell } from '../home/WeekTable';
 const MINE = <span className="ml-1.5 rounded bg-accent-50 px-1 text-[10px] font-bold text-accent-700 dark:bg-accent-900/30 dark:text-accent-300">MINE</span>;
 const unit = (i: PlanItem) => (i.kind === 'hours' ? 'h' : '');
 
+const AUTO_BIDS: { key: 'bidsSelf' | 'bidsBidder'; text: string }[] = [
+  { key: 'bidsSelf', text: 'Bids' },
+  { key: 'bidsBidder', text: 'Bidder bids' },
+];
+type GridRow = DashboardRoutineRow;
+/** A bid to-do's week from each day's target and done: `off` on a day with no target (e.g. bidder bids on Saturday). */
+function bidRow(week: WeekPlan, k: 'bidsSelf' | 'bidsBidder', text: string, today: string): GridRow {
+  const days = week.days.map((d) => {
+    const target = d.goal[k];
+    const value = d.done[k];
+    const state: GridRow['days'][number]['state'] =
+      !target && !value ? 'off' : d.date > today ? 'future' : target && value >= target ? 'done' : value > 0 ? 'short' : d.date < today ? 'missed' : 'today';
+    return { date: d.date, state, value, target };
+  });
+  const counted = days.filter((d) => d.state !== 'off' && d.state !== 'future');
+  return { id: `auto-${k}`, text, days, doneDays: counted.filter((d) => d.state === 'done').length, totalDays: counted.length };
+}
+
 /** A target against its pace: where it should be by the end of `elapsed` of `total` days (null: not this week). */
 function TargetRow({ label, done, goal, pace }: { label: string; done: number; goal: number; pace: number | null }) {
   const met = done >= goal;
@@ -111,14 +129,16 @@ export default function WeekGoalCard({
   const day = week.days.find((d) => d.date === today);
   const current = !!day;
   const pace = current ? week.days.filter((d) => d.date <= today).length / week.days.length : null;
-  const targets = [
-    { label: 'Bids · self', done: done.bidsSelf, goal: goal.bidsSelf },
-    { label: 'Bids · bidder', done: done.bidsBidder, goal: goal.bidsBidder },
-    { label: 'Interviews · self', done: done.interviewsSelf, goal: goal.interviewsSelf },
+  // Bids are built-in daily to-dos (each day's target and done come with the week); interviews a weekly one.
+  const bidRows = AUTO_BIDS.filter((b) => goal[b.key] > 0).map((b) => bidRow(week, b.key, b.text, today));
+  const interviews = [
+    { label: 'Interviews', done: done.interviewsSelf, goal: goal.interviewsSelf },
     { label: 'Interviews · caller', done: done.interviewsCaller, goal: goal.interviewsCaller },
   ].filter((t) => t.goal > 0);
+  const rows = [...bidRows, ...grid];
   const bySelfRegion = selfRegionsTotal(goal) + selfRegionsTotal(done) > 0;
-  const hasGoal = targets.length > 0 || routines.length > 0 || goals.length > 0;
+  const regionNote = bySelfRegion ? `By region: ${SELF_REGIONS.map((r) => `${r.label} ${done[r.field] ?? 0}`).join(' · ')}${preSplitSelf(done) > 0 ? ` · other ${preSplitSelf(done)}` : ''}` : undefined;
+  const hasGoal = bidRows.length > 0 || interviews.length > 0 || routines.length > 0 || goals.length > 0;
   const adminPlanned = !week.plansOwnWeek;
   const addOwn = ownerEdit && adminPlanned && week.exists;
 
@@ -187,11 +207,28 @@ export default function WeekGoalCard({
 
           <div className="grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-5">
             <div className="space-y-4 lg:col-span-3">
-              {routines.length > 0 && (
+              {(routines.length > 0 || bidRows.length > 0) && (
                 <div>
                   <h3 className="form-label mb-1">{current ? "Today's to-dos" : 'Daily to-dos'}</h3>
                   {current || !grid.length ? (
                     <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {bidRows.map((r) => {
+                        const c = r.days.find((d) => d.date === today);
+                        if (current && (!c || c.state === 'off')) return null;
+                        const ok = c?.state === 'done';
+                        return (
+                          <li key={r.id}>
+                            <button type="button" className="flex w-full items-center gap-2 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900" onClick={() => onOpenDay(today)}
+                              title={r.id === 'auto-bidsSelf' ? regionNote : undefined}>
+                              {ok ? <CheckCircle2 size={16} className="shrink-0 text-success-600" aria-hidden /> : <Circle size={16} className="shrink-0 text-zinc-300 dark:text-zinc-600" aria-hidden />}
+                              <span className={ok ? 'text-muted' : 'text-body'}>{r.text}</span>
+                              <span className="rounded bg-zinc-100 px-1 text-[10px] font-semibold text-muted dark:bg-zinc-800">AUTO</span>
+                              <span className="sr-only">{ok ? '(done)' : '(not done)'}</span>
+                              <span className="ml-auto text-xs tabular-nums text-muted">{c?.value ?? 0} / {c?.target ?? 0} today</span>
+                            </button>
+                          </li>
+                        );
+                      })}
                       {routines.filter((item) => !current || todayCells.get(item.id)?.state !== 'off').map((item) => {
                         const cell = todayCells.get(item.id);
                         const ok = cell?.state === 'done';
@@ -227,14 +264,14 @@ export default function WeekGoalCard({
                       })}
                     </ul>
                   ) : (
-                    <RoutineGrid rows={grid} mine={mine} today={today} />
+                    <RoutineGrid rows={rows} mine={mine} today={today} />
                   )}
                   {current && grid.length > 0 && (
                     <>
                       <button type="button" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent-700 dark:text-accent-300" aria-expanded={gridOpen} onClick={() => setGridOpen(!gridOpen)}>
                         {gridOpen ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />} Show week by day
                       </button>
-                      {gridOpen && <div className="mt-2"><RoutineGrid rows={grid} mine={mine} today={today} /></div>}
+                      {gridOpen && <div className="mt-2"><RoutineGrid rows={rows} mine={mine} today={today} /></div>}
                     </>
                   )}
                 </div>
@@ -243,9 +280,15 @@ export default function WeekGoalCard({
                 <button type="button" className="text-sm font-medium text-accent-700 dark:text-accent-300" onClick={onOpen}>+ Add my own item</button>
               )}
 
-              {goals.length > 0 && (
+              {(goals.length > 0 || interviews.length > 0) && (
                 <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
                   <h3 className="form-label mb-1">Weekly to-dos</h3>
+                  {interviews.map((t) => <TargetRow key={t.label} {...t} pace={pace} />)}
+                  {interviews.length > 0 && (
+                    <p className="text-[11px] text-muted">
+                      Counted from the Interviews page{pace != null ? '; the tick is where you should be by the end of today' : ''}.
+                    </p>
+                  )}
                   <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                     {goals.map((item) => {
                       const p = week.progress[item.id];
@@ -284,18 +327,6 @@ export default function WeekGoalCard({
             </div>
 
             <div className="space-y-4 lg:col-span-2">
-              {targets.length > 0 && (
-                <div>
-                  <h3 className="form-label mb-1">Targets</h3>
-                  {targets.map((t) => <TargetRow key={t.label} {...t} pace={pace} />)}
-                  <p className="mt-1 text-[11px] text-muted">
-                    {pace != null && 'The tick is where you should be by the end of today. '}
-                    {bySelfRegion && goal.bidsSelf > 0 && `Self bids by region: ${SELF_REGIONS.map((r) => `${r.label} ${done[r.field] ?? 0}`).join(' · ')}. `}
-                    {bySelfRegion && preSplitSelf(done) > 0 && `Plus ${preSplitSelf(done)} outside US / EU / LATAM. `}
-                    Interviews are counted from the Interviews page.
-                  </p>
-                </div>
-              )}
               {week.recapNotes && (
                 <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
                   <h3 className="form-label mb-1">Recap</h3>

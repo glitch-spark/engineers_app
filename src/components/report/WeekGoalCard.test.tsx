@@ -18,7 +18,6 @@ const week = (over: Partial<WeekPlan> = {}): WeekPlan => ({
 describe('WeekGoalCard', () => {
   it('shows the three blocks and goal progress 180 / 250', () => {
     render(<WeekGoalCard today="2026-11-18" onOpenDay={() => {}} week={week()} canEdit onOpen={() => {}} />);
-    expect(screen.getByText('Targets')).toBeTruthy();
     expect(screen.getByText('Daily to-dos')).toBeTruthy();
     expect(screen.getByText('Weekly to-dos')).toBeTruthy();
     expect(screen.getByText('Check inbox')).toBeTruthy();
@@ -85,13 +84,14 @@ describe('WeekGoalCard', () => {
     expect(screen.getByRole('table', { name: 'Daily to-dos by day' })).toBeTruthy();
   });
 
-  it('targets: only set ones, against the pace of the week', () => {
+  it('bids are an auto daily to-do (today against its target); interviews a weekly one against the pace', () => {
     const goal = { ...counts, bidsSelf: 600, interviewsSelf: 6 };
     const done = { ...counts, bidsSelf: 100, interviewsSelf: 3 };
-    render(<WeekGoalCard today="2026-11-18" onOpenDay={() => {}} week={week({ days, goal, done })} canEdit onOpen={() => {}} />);
-    expect(screen.queryByText('Bids · bidder')).toBeNull();
-    expect(screen.getByText('200 behind')).toBeTruthy(); // 600 × 3/6 = 300 expected by tonight
-    expect(screen.getByText('on pace')).toBeTruthy(); // 3 of 6, 3 expected
+    const byDay = days.map((d) => ({ ...d, goal: { ...counts, bidsSelf: 100 }, done: { ...counts, bidsSelf: d.date === '2026-11-18' ? 30 : 0 } }));
+    render(<WeekGoalCard today="2026-11-18" onOpenDay={() => {}} week={week({ days: byDay, goal, done, routines })} canEdit onOpen={() => {}} />);
+    expect(screen.getByText('30 / 100 today')).toBeTruthy();
+    expect(screen.queryByText('Bidder bids')).toBeNull(); // no bidder target
+    expect(screen.getByText('on pace')).toBeTruthy(); // interviews 3 of 6, 3 expected by tonight
   });
 
   it('an admin viewing gets "Open today" and no add button; an older server has no grid toggle', () => {

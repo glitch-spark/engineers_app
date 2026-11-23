@@ -7,7 +7,6 @@ export type TargetKey = 'bidsSelf' | 'bidsBidder' | 'interviewsSelf';
 /** `options`: a Choice column's options (its first member's); absent for other kinds. `days`: a daily column's days
  * (its first member's; null / absent = Mon–Sat). */
 export interface Column { key: string; text: string; kind: PlanItemKind; scope: Scope; options?: string[]; days?: Days }
-export type SatKey = keyof SatGoal;
 /** pinned = columns added in this session (kept even if fewer than two people have them). */
 export interface GridState { users: TeamWeekUser[]; pinned: Column[] }
 
@@ -115,17 +114,38 @@ export function addColumn(s: GridState, text: string, kind: PlanItemKind, scope:
   return { ...s, pinned: [...s.pinned, { key, text: tidy(text), kind, scope, ...opts(kind, options), ...dayz(scope, days) }] };
 }
 
-export const setSat = (s: GridState, userId: string, k: SatKey, n: number | null): GridState =>
-  mapUser(s, userId, (u) => ({ ...u, satGoal: { bidsSelf: null, bidsBidder: null, ...u.satGoal, [k]: n } }));
+export type BidKey = 'bidsSelf' | 'bidsBidder';
+type HasBids = { goal: { bidsSelf: number; bidsBidder: number }; satGoal?: SatGoal | null };
 
-export const fillSat = (s: GridState, k: SatKey, n: number | null): GridState =>
-  mapUsers(s, (u) => ({ ...u, satGoal: { bidsSelf: null, bidsBidder: null, ...u.satGoal, [k]: n } }));
-
-/** How a bid target splits: Saturday's number and each Mon–Fri day's, or null for an even split (no Saturday number). */
-export function satSplit(total: number, sat: number | null | undefined): { weekday: number; sat: number } | null {
-  if (sat == null) return null;
-  return { weekday: Math.ceil(Math.max(total - sat, 0) / 5), sat };
+/**
+ * A bid target as typed: per Mon–Fri day plus Saturday's extra (bidder bids: Mon–Fri only). Stored as the week's total
+ * (daily × 5 + Saturday) with Saturday's number in `satGoal`. `even`: an older self-bids plan with no Saturday number, split
+ * evenly over Mon–Sat (Saturday gets a daily share). Bidder bids: total / 5, never a Saturday.
+ */
+export function bidsPlan(p: HasBids, k: BidKey): { daily: number; sat: number; even: boolean; total: number } {
+  const total = p.goal[k];
+  if (k === 'bidsBidder') return { daily: Math.ceil(total / 5), sat: 0, even: false, total }; // Mon–Fri only
+  const sat = p.satGoal?.[k];
+  if (sat == null) {
+    const d = Math.ceil(total / 6);
+    return { daily: d, sat: total ? d : 0, even: total > 0, total };
+  }
+  return { daily: Math.ceil(Math.max(total - sat, 0) / 5), sat, even: false, total };
 }
+
+/** Set the daily number and / or Saturday's extra; the rest stays as shown. Bidder bids never get a Saturday. */
+export function withBids<T extends HasBids>(p: T, k: BidKey, patch: { daily?: number; sat?: number }): T {
+  const cur = bidsPlan(p, k);
+  const daily = patch.daily ?? cur.daily;
+  const sat = k === 'bidsBidder' ? 0 : patch.sat ?? cur.sat;
+  return { ...p, goal: { ...p.goal, [k]: daily * 5 + sat }, satGoal: { bidsSelf: null, bidsBidder: null, ...p.satGoal, [k]: sat } };
+}
+
+export const setBids = (s: GridState, userId: string, k: BidKey, patch: { daily?: number; sat?: number }): GridState =>
+  mapUser(s, userId, (u) => withBids(u, k, patch));
+
+export const fillBids = (s: GridState, k: BidKey, patch: { daily?: number; sat?: number }): GridState =>
+  mapUsers(s, (u) => withBids(u, k, patch));
 
 /** A daily column's days for every member (ids kept). */
 export function setColumnDays(s: GridState, c: Column, days: Days): GridState {

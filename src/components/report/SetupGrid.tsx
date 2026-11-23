@@ -6,21 +6,25 @@ import type { PlanItemKind, TeamWeekUser } from '../../api/endpoints';
 import { addDays, dateParam, parseDateParam } from '../../lib/reportWeek';
 import {
   addColumn, addOwnItem, addTaken, cell, changed, columnKey, columns, fillColumn, fillTarget, isEmptyRow, keyTaken, movable, moveBlocked, moveToColumn, ownItems,
-  removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, satSplit, setCell, setColumnDays, setColumnOptions, setColumnTarget,
-  setOwnWeek, setSat, fillSat, setTarget, weekStatus, type Column, type GridState, type SatKey, type Scope, type TargetKey,
+  removeColumn, removeOwnItem, renameColumn, retypeBlocked, retypeColumn, rowsToSave, bidsPlan, fillBids, setBids, setCell, setColumnDays, setColumnOptions, setColumnTarget,
+  setOwnWeek, setTarget, weekStatus, type BidKey, type Column, type GridState, type Scope,
 } from '../../lib/teamGrid';
 import ActionMenu from '../ActionMenu';
 import OwnItemsCell from './OwnItemsCell';
 import { daysLabel } from '../../lib/planDays';
 import SetupItemForm, { typeName, type ItemFormMode, type ItemFormValues } from './SetupItemForm';
 
-const TARGETS: { key: TargetKey; label: string }[] = [
-  { key: 'bidsSelf', label: 'Bids self' },
-  { key: 'bidsBidder', label: 'Bidder bids' },
-  { key: 'interviewsSelf', label: 'Interviews' },
-];
+/** Built-in to-dos, counted automatically: bids per day lead the daily group, interviews the weekly one. */
+type Builtin = { key: BidKey | 'satSelf' | 'interviewsSelf'; label: string; hint: string };
+const BUILTIN: Record<Scope, Builtin[]> = {
+  routine: [
+    { key: 'bidsSelf', label: 'Bids / day', hint: 'Auto · Mon–Fri' },
+    { key: 'satSelf', label: 'Sat extra', hint: 'Auto · bids' },
+    { key: 'bidsBidder', label: 'Bidder bids / day', hint: 'Auto · Mon–Fri' },
+  ],
+  goal: [{ key: 'interviewsSelf', label: 'Interviews', hint: 'Auto · this week' }],
+};
 const MAX_ITEMS = 20;
-const isSat = (k: TargetKey) => k === 'bidsSelf' || k === 'bidsBidder';
 const TAKEN = 'An item with that name, type and group already exists.';
 const listName = (scope: Scope) => (scope === 'routine' ? 'daily to-dos' : 'weekly to-dos');
 const nameOf = (u: TeamWeekUser) => u.name || u.userId;
@@ -39,7 +43,6 @@ const STICKY = 'sticky left-0 z-10 w-36 min-w-[9rem] max-w-[9rem] bg-white !text
 const NO_SPIN = '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 const NUM =
   `h-8 w-[4.5rem] rounded-md border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums placeholder:text-zinc-400 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/30 dark:border-zinc-700 dark:bg-zinc-900 ${NO_SPIN}`;
-const SAT_NUM = `h-6 w-14 rounded border border-zinc-300 bg-white px-1 text-center text-xs tabular-nums placeholder:text-zinc-400 focus:border-accent-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 ${NO_SPIN}`;
 const SCOPES: Scope[] = ['routine', 'goal'];
 /** A coloured stripe per group on its headers (the body stays plain). */
 const HEAD_TINT: Record<Scope, string> = { routine: 'border-t-2 border-t-violet-400', goal: 'border-t-2 border-t-cyan-400' };
@@ -246,27 +249,43 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
     />
   );
 
-  /** Saturday's share of a bid target: blank = even over Mon–Sat; a number = Saturday's, Mon–Fri split the rest. */
-  const satCell = (u: TeamWeekUser, name: string, k: TargetKey, label: string) => {
-    const sat = u.satGoal?.[k as SatKey] ?? null;
-    const split = satSplit(u.goal[k], sat);
-    const over = sat != null && sat > u.goal[k];
+  /** A built-in to-do's typed number: bids per Mon–Fri day, Saturday's extra self bids, or the week's interviews. */
+  const builtinValue = (u: TeamWeekUser, key: Builtin['key']) =>
+    key === 'interviewsSelf' ? u.goal.interviewsSelf : key === 'satSelf' ? bidsPlan(u, 'bidsSelf').sat : bidsPlan(u, key).daily;
+  const builtinSet = (s: GridState, key: Builtin['key'], n: number, userId?: string) => {
+    if (key === 'interviewsSelf') return userId ? setTarget(s, userId, key, n) : fillTarget(s, key, n);
+    const [k, patch] = key === 'satSelf' ? (['bidsSelf', { sat: n }] as const) : ([key, { daily: n }] as const);
+    return userId ? setBids(s, userId, k, patch) : fillBids(s, k, patch);
+  };
+  const builtinCell = (u: TeamWeekUser, name: string, b: Builtin) => {
+    const now = builtinValue(u, b.key);
+    const p = prevUsers?.find((x) => x.userId === u.userId);
+    const was = p && builtinValue(p, b.key) !== now ? String(builtinValue(p, b.key) || '—') : null;
+    const k = b.key === 'bidsBidder' ? 'bidsBidder' : 'bidsSelf';
+    const plan = bidsPlan(u, k);
+    const title = b.key === 'interviewsSelf' || !plan.total ? undefined
+      : `= ${plan.total} ${k === 'bidsSelf' ? 'self' : 'bidder'} bids this week${plan.even ? ' (an older plan: split evenly Mon–Sat until edited)' : ''}`;
+    const hasPlan = b.key === 'interviewsSelf' ? u.goal.interviewsSelf > 0 : plan.total > 0;
     return (
-      <>
-        <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted" title="Saturday's bids. Blank = even split over Mon–Sat.">
-          Sat
-          <input type="number" min={0} aria-label={`${name} ${label} Saturday`} placeholder="—" value={sat ?? ''}
-            className={`${SAT_NUM} ${over ? 'border-red-500' : ''}`}
-            onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(setSat(state, u.userId, k as SatKey, n)); }} />
-        </label>
-        {over ? (
-          <p className="text-[11px] text-red-600 dark:text-red-400" role="alert">More than the week</p>
-        ) : split && u.goal[k] > 0 && (
-          <p className="whitespace-nowrap text-[10px] leading-tight text-muted">Mon–Fri {split.weekday} · {split.sat ? `Sat ${split.sat}` : 'no Sat'}</p>
-        )}
-      </>
+      <Td key={b.key} was={was}>
+        <span title={title} className="inline-block">
+          {numberInput(`${name} ${b.label}`, hasPlan ? now : null, (n) => setState(builtinSet(state, b.key, n ?? 0, u.userId)), false, b.key === 'satSelf' ? '0' : undefined)}
+        </span>
+      </Td>
     );
   };
+  const builtinFill = (b: Builtin) => (
+    <td key={b.key} className={TD}>
+      <input type="number" min={0} aria-label={`Fill all ${b.label}`} className={NUM}
+        onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(builtinSet(state, b.key, n ?? 0)); }} />
+    </td>
+  );
+  const builtinHead = (sc: Scope, b: Builtin) => (
+    <th key={b.key} scope="col" data-group={sc} className={`${TH} ${HEAD_TINT[sc]} align-bottom`}>
+      <span className="block whitespace-nowrap text-strong">{b.label}</span>
+      <small className="block whitespace-nowrap font-normal text-muted">{b.hint}</small>
+    </th>
+  );
 
   const itemCell = (u: TeamWeekUser, c: Column) => {
     const v = cell(state, u.userId, c);
@@ -344,9 +363,8 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
               <tr>
                 <th scope="col" rowSpan={2} className={`${TH} ${STICKY}`}>Person</th>
                 {SHOW_OWN_PLAN && <th scope="col" rowSpan={2} className={`${TH} w-14`} title="On: the person plans their own week. Off: you plan it and they see it view-only.">Own plan</th>}
-                <th scope="colgroup" colSpan={TARGETS.length} className={`${TH} border-t-2 border-t-zinc-400 text-[11px] uppercase tracking-wide`}>Week targets</th>
                 {SCOPES.map((sc) => (
-                  <th key={sc} scope="colgroup" colSpan={byScope(sc).length + 1} data-group={sc} className={`${TH} ${HEAD_TINT[sc]} text-[11px] uppercase tracking-wide`}>
+                  <th key={sc} scope="colgroup" colSpan={BUILTIN[sc].length + byScope(sc).length + 1} data-group={sc} className={`${TH} ${HEAD_TINT[sc]} text-[11px] uppercase tracking-wide`}>
                     {sc === 'routine' ? 'Daily to-dos' : 'Weekly to-dos'}
                   </th>
                 ))}
@@ -357,8 +375,8 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                 </th>
               </tr>
               <tr>
-                {TARGETS.map((t) => <th key={t.key} scope="col" className={`${TH} whitespace-nowrap text-strong`}>{t.label}</th>)}
                 {SCOPES.map((sc) => [
+                  ...BUILTIN[sc].map((b) => builtinHead(sc, b)),
                   ...byScope(sc).map(header),
                   <th key={`own-${sc}`} scope="col" data-group={sc} className={`${TH} ${HEAD_TINT[sc]} whitespace-nowrap`}>Only this person</th>,
                 ])}
@@ -368,20 +386,8 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
               <tr className="border-b-2 border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60">
                 <th scope="row" className={`${TD} ${STICKY} px-3 text-xs font-medium text-muted`}>Fill all ↓</th>
                 {SHOW_OWN_PLAN && <td className={TD} />}
-                {TARGETS.map((t) => (
-                  <td key={t.key} className={TD}>
-                    <input type="number" min={0} aria-label={`Fill all ${t.label}`} className={NUM}
-                      onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillTarget(state, t.key, n ?? 0)); }} />
-                    {isSat(t.key) && (
-                      <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted">
-                        Sat
-                        <input type="number" min={0} aria-label={`Fill all ${t.label} Saturday`} placeholder="—" className={SAT_NUM}
-                          onChange={(e) => { const n = parseNum(e.target.value); if (n !== undefined) setState(fillSat(state, t.key as SatKey, n)); }} />
-                      </label>
-                    )}
-                  </td>
-                ))}
                 {SCOPES.map((sc) => [
+                  ...BUILTIN[sc].map(builtinFill),
                   ...byScope(sc).map((c) => (
                     <td key={c.key} className={TD}>
                       {isBox(c.kind) ? (
@@ -417,13 +423,8 @@ export default function SetupGrid({ week, onDirtyChange }: { week: string; onDir
                           onChange={(e) => setState(setOwnWeek(state, u.userId, e.target.checked))} />
                       </td>
                     )}
-                    {TARGETS.map((t) => (
-                      <Td key={t.key} was={changed(prevUsers, state, u.userId, t.key)?.was}>
-                        {numberInput(`${name} ${t.label}`, u.goal[t.key] || null, (n) => setState(setTarget(state, u.userId, t.key, n ?? 0)))}
-                        {isSat(t.key) && satCell(u, name, t.key, t.label)}
-                      </Td>
-                    ))}
                     {SCOPES.map((sc) => [
+                      ...BUILTIN[sc].map((b) => builtinCell(u, name, b)),
                       ...byScope(sc).map((c) => itemCell(u, c)),
                       <OwnItemsCell
                         key={`own-${sc}`}

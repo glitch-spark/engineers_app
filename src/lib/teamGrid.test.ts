@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanItem, PlanItemKind, TeamWeekUser } from '../api/endpoints';
 import {
   addColumn, addOwnItem, cell, changed, columnKey, columns, fillColumn, isEmptyRow, ownItems, removeColumn,
-  removeOwnItem, moveToColumn, moveBlocked, setColumnOptions, setColumnTarget, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus, satSplit, setSat, fillSat, setColumnDays,
+  removeOwnItem, moveToColumn, moveBlocked, setColumnOptions, setColumnTarget, renameColumn, retypeColumn, retypeBlocked, keyTaken, addTaken, rowsToSave, setCell, setOwnWeek, setTarget, fillTarget, weekStatus, bidsPlan, withBids, setBids, fillBids, setColumnDays,
   type GridState,
 } from './teamGrid';
 
@@ -462,19 +462,30 @@ describe('teamGrid', () => {
   });
 
   describe('Saturday and run days', () => {
-    it('satSplit: blank is an even split, a number gives Saturday that and Mon–Fri the rest', () => {
-      expect(satSplit(1000, null)).toBeNull();
-      expect(satSplit(1000, 100)).toEqual({ weekday: 180, sat: 100 });
-      expect(satSplit(600, 0)).toEqual({ weekday: 120, sat: 0 });
+    it('bidsPlan: per day + Saturday from the stored total; an older plan (no Saturday) is an even Mon–Sat split', () => {
+      const u = (bidsSelf: number, bidsBidder: number, satGoal: { bidsSelf: number | null; bidsBidder: number | null } | null = null) =>
+        ({ ...user('A'), goal: { bidsSelf, bidsBidder, interviewsSelf: 0 }, satGoal });
+      expect(bidsPlan(u(1100, 0, { bidsSelf: 100, bidsBidder: 0 }), 'bidsSelf')).toEqual({ daily: 200, sat: 100, even: false, total: 1100 });
+      expect(bidsPlan(u(600, 0), 'bidsSelf')).toEqual({ daily: 100, sat: 100, even: true, total: 600 });
+      expect(bidsPlan(u(0, 0), 'bidsSelf')).toEqual({ daily: 0, sat: 0, even: false, total: 0 });
+      expect(bidsPlan(u(0, 1000, { bidsSelf: null, bidsBidder: 300 }), 'bidsBidder')).toEqual({ daily: 200, sat: 0, even: false, total: 1000 }); // Mon–Fri only
     });
 
-    it('setSat / fillSat go into the saved row; an unset Saturday sends null', () => {
+    it('withBids stores daily × 5 + Saturday; bidder bids never get a Saturday; the other number stays as shown', () => {
+      const a = { ...user('A'), goal: { bidsSelf: 600, bidsBidder: 600, interviewsSelf: 0 }, satGoal: null as { bidsSelf: number | null; bidsBidder: number | null } | null };
+      const self = withBids(a, 'bidsSelf', { daily: 200 });
+      expect([self.goal.bidsSelf, self.satGoal]).toEqual([1100, { bidsSelf: 100, bidsBidder: null }]); // the even 100 kept
+      expect(withBids(self, 'bidsSelf', { sat: 0 }).goal.bidsSelf).toBe(1000);
+      const bidder = withBids(a, 'bidsBidder', { daily: 150 });
+      expect([bidder.goal.bidsBidder, bidder.satGoal?.bidsBidder]).toEqual([750, 0]);
+    });
+
+    it('setBids / fillBids go into the saved rows with their Saturday', () => {
       const saved = [user('A'), user('B')];
-      const s = setSat(st(saved), 'A', 'bidsSelf', 100);
-      expect(rowsToSave(saved, s).map((r) => [r.userId, r.satGoal])).toEqual([['A', { bidsSelf: 100, bidsBidder: null }]]);
-      const all = fillSat(st(saved), 'bidsBidder', 0);
-      expect(rowsToSave(saved, all).map((r) => r.satGoal)).toEqual([{ bidsSelf: null, bidsBidder: 0 }, { bidsSelf: null, bidsBidder: 0 }]);
-      expect(rowsToSave(saved, setSat(st(saved), 'A', 'bidsSelf', null))).toEqual([]);
+      const one = setBids(st(saved), 'A', 'bidsSelf', { daily: 200, sat: 50 });
+      expect(rowsToSave(saved, one).map((r) => [r.userId, r.goal.bidsSelf, r.satGoal])).toEqual([['A', 1050, { bidsSelf: 50, bidsBidder: null }]]);
+      const all = fillBids(st(saved), 'bidsBidder', { daily: 100 });
+      expect(rowsToSave(saved, all).map((r) => [r.goal.bidsBidder, r.satGoal])).toEqual([[500, { bidsSelf: null, bidsBidder: 0 }], [500, { bidsSelf: null, bidsBidder: 0 }]]);
     });
 
     it('setColumnDays sets every member; a new member joins with the column days; all six days is null', () => {

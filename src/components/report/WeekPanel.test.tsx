@@ -108,7 +108,7 @@ describe('WeekPanel', () => {
   it('own + plansOwnWeek true: Save week calls putWeekPlan', async () => {
     vi.mocked(api.putWeekPlan).mockResolvedValue(plan as never);
     renderPanel('own', { plansOwnWeek: true });
-    await screen.findByLabelText('Bids bidder goal');
+    await screen.findByLabelText('Bidder bids / day');
     expect(screen.queryByText('Planned by your admin')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     await waitFor(() => expect(api.putWeekPlan).toHaveBeenCalled());
@@ -118,16 +118,17 @@ describe('WeekPanel', () => {
     vi.mocked(api.putTeamWeek).mockResolvedValue({ results: [{ userId: 'u1', ok: true, error: null }] });
     renderPanel('admin', { plansOwnWeek: false });
     expect(screen.queryByLabelText('Recap notes')).toBeNull();
-    fireEvent.change(await screen.findByLabelText('Bids self total goal'), { target: { value: '9' } });
-    fireEvent.change(screen.getByLabelText('Interviews self goal'), { target: { value: '3' } });
-    expect(screen.getAllByText('Edited by the person').length).toBeGreaterThan(0);
+    fireEvent.change(await screen.findByLabelText('Bids / day'), { target: { value: '9' } });
+    fireEvent.change(screen.getByLabelText('Interviews this week'), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     await waitFor(() => expect(api.putTeamWeek).toHaveBeenCalled());
     const [week, rows] = vi.mocked(api.putTeamWeek).mock.calls[0];
     expect(week).toBe('2026-11-16');
     expect(rows).toEqual([{
-      userId: 'u1', plansOwnWeek: false, goal: { bidsSelf: 9, bidsBidder: 0, interviewsSelf: 3 },
-      routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }], weeklyGoals: [], exists: true, removedIds: [], satGoal: null,
+      // 9 a day Mon–Fri + the older plan's even Saturday share (ceil(5 / 6) = 1), kept as shown
+      userId: 'u1', plansOwnWeek: false, goal: { bidsSelf: 46, bidsBidder: 0, interviewsSelf: 3 },
+      routines: [{ id: 'r1', text: 'Check inbox', kind: 'check', target: null, archived: false }], weeklyGoals: [], exists: true, removedIds: [],
+      satGoal: { bidsSelf: 1, bidsBidder: null },
     }]);
   });
 
@@ -149,7 +150,7 @@ describe('WeekPanel', () => {
     const onClose = vi.fn();
     vi.mocked(api.putTeamWeek).mockResolvedValue({ results: [{ userId: 'u1', ok: false, error: 'Too many items' }] });
     renderPanel('admin', {}, onClose);
-    await screen.findByLabelText('Bids self total goal');
+    await screen.findByLabelText('Bids / day');
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     expect((await screen.findByRole('alert')).textContent).toContain('Too many items');
     expect(onClose).not.toHaveBeenCalled();
@@ -160,6 +161,6 @@ describe('WeekPanel', () => {
     await screen.findByText('Check inbox');
     expect(screen.queryByRole('button', { name: /save week/i })).toBeNull();
     expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
-    expect(screen.queryByLabelText('Bids bidder goal')).toBeNull();
+    expect(screen.queryByLabelText('Bidder bids / day')).toBeNull();
   });
 });
