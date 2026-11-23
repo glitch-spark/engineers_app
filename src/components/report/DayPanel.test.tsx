@@ -158,4 +158,40 @@ describe('DayPanel', () => {
     await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
     expect(vi.mocked(api.putDayPlan).mock.calls[0][1]).not.toHaveProperty('followUps');
   });
+
+  describe('text and choice', () => {
+    const tc = (result: object | null = null, rc: object | null = null) => plan({ items: [
+      item({ id: 't1', text: 'Blockers', kind: 'text', options: [], result }),
+      item({ id: 'c1', text: 'Status', kind: 'choice', options: ['Done', 'Blocked'], result: rc }),
+    ] });
+    const sent = () => (vi.mocked(api.putDayPlan).mock.calls[0][1] as { results: Record<string, object> }).results;
+
+    it('sends the text trimmed, and never a choice the person did not change', async () => {
+      setup(tc({ done: true, value: null, text: ' hi ' }, { done: true, value: null, choice: 'Gone', text: null }));
+      await screen.findByText('Blockers');
+      fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+      await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+      expect(sent()).toEqual({ t1: { done: true, text: 'hi' }, c1: { done: true } });
+    });
+
+    it('sends an emptied text as "" and a changed pick and note', async () => {
+      setup(tc({ done: true, value: null, text: 'old' }, null));
+      await screen.findByText('Blockers');
+      fireEvent.change(screen.getByLabelText('Blockers answer'), { target: { value: '' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Blocked' }));
+      fireEvent.change(screen.getByLabelText('Status note'), { target: { value: ' why ' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+      await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+      expect(sent()).toEqual({ t1: { done: false, text: '' }, c1: { done: true, choice: 'Blocked', text: 'why' } });
+    });
+
+    it('clearing the pick sends choice null', async () => {
+      setup(tc(null, { done: true, value: null, choice: 'Done' }));
+      await screen.findByText('Status');
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+      await waitFor(() => expect(api.putDayPlan).toHaveBeenCalled());
+      expect(sent().c1).toEqual({ done: false, choice: null });
+    });
+  });
 });

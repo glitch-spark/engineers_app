@@ -288,6 +288,31 @@ describe('MyHome', () => {
     });
   });
 
+  const textChoice = (progress: object = {}) => {
+    const p = goals() as ReturnType<typeof goals> & { progress: Record<string, unknown>; items: unknown[] };
+    p.items[3] = item({ id: 'g1', text: 'Mood', scope: 'goal', kind: 'choice', options: ['Good', 'Bad'] }) as never;
+    p.items.push(item({ id: 'r9', text: 'Blockers', kind: 'text', options: [] }));
+    p.progress.g1 = progress;
+    return p;
+  };
+
+  it('a half-typed text answer is saved by the debounce, trimmed', async () => {
+    setup(textChoice({ value: 0, done: false, target: null, doneOn: null }));
+    await screen.findByText('Blockers');
+    fireEvent.change(screen.getByLabelText('Blockers answer'), { target: { value: ' waiting ' } });
+    await act(async () => { vi.advanceTimersByTime(800); });
+    expect(api.putDayProgress).toHaveBeenCalledWith('2026-11-18', { results: { r9: { done: true, value: null, text: 'waiting' } } });
+  });
+
+  it('a choice goal done on an earlier day saves today and never un-ticks', async () => {
+    setup(textChoice({ value: 1, done: true, target: null, doneOn: '2026-11-16' }));
+    await screen.findByText('Mood');
+    fireEvent.click(screen.getByRole('button', { name: 'Bad' }));
+    await act(async () => { vi.advanceTimersByTime(800); });
+    expect(api.putDayProgress).toHaveBeenCalledTimes(1);
+    expect(api.putDayProgress).toHaveBeenCalledWith('2026-11-18', { results: { g1: { done: true, value: null, choice: 'Bad' } } });
+  });
+
   it('a log goal met by the week keeps the typed entries', async () => {
     setup(logGoal({ value: 0, done: true, target: null, doneOn: null }));
     await screen.findByText('Profile review');

@@ -13,7 +13,7 @@ const putTeamWeek = vi.mocked(api.putTeamWeek);
 const WEEK = '2026-11-23';
 const PREV = '2026-11-16';
 const item = (id: string, text: string, kind: PlanItemKind = 'check', target: number | null = null): PlanItem => ({
-  id, text, kind, target, archived: false, addedBy: 'admin',
+  id, text, kind, target, archived: false, options: [], addedBy: 'admin',
 });
 const person = (userId: string, over: Partial<TeamWeekUser> = {}): TeamWeekUser => ({
   userId, name: userId, plansOwnWeek: false, exists: true, goal: { bidsSelf: 0, bidsBidder: 0, interviewsSelf: 0 },

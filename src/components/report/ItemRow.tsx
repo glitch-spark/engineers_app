@@ -1,6 +1,29 @@
 import { hasTarget } from '../../api/endpoints';
-import type { DayItem, LogEntry, PlanProfile } from '../../api/endpoints';
-import LogEntries from './LogEntries';
+import type { DayItem, ItemResultIn, LogEntry, PlanProfile } from '../../api/endpoints';
+import LogEntries, { cleanEntries } from './LogEntries';
+
+const MAX_TEXT = 500;
+
+/** A row's result as the form holds it. `textChanged` / `choiceChanged` say the person edited them this session,
+ *  so a save sends only those (a stored choice that is no longer an option would be a 422 if sent back). */
+export interface RowResult {
+  done: boolean;
+  value: number | null;
+  entries?: LogEntry[];
+  text?: string | null;
+  choice?: string | null;
+  textChanged?: boolean;
+  choiceChanged?: boolean;
+}
+
+/** What goes to the server for one row: text items always send their answer (trimmed), a choice item only what changed. */
+export function resultBody(kind: DayItem['kind'], r: RowResult): ItemResultIn {
+  const text = (r.text ?? '').trim();
+  if (kind === 'log') return { done: r.done, entries: cleanEntries(r.entries ?? []) };
+  if (kind === 'text') return { done: r.done, text };
+  if (kind === 'choice') return { done: r.done, ...(r.choiceChanged ? { choice: r.choice ?? null } : {}), ...(r.textChanged ? { text } : {}) };
+  return hasTarget(kind) ? { done: r.done, value: r.value } : { done: r.done };
+}
 
 /** Archived items stay on days that have a result for them (the server rebuilds results from the body). */
 export const kept = (i: DayItem) => !i.archived || i.result !== null;
@@ -9,7 +32,7 @@ export default function ItemRow({
   item, result, profiles, week, disabled, valueLocked, doneLocked, note, compact, onChange,
 }: {
   item: DayItem;
-  result: { done: boolean; value: number | null; entries?: LogEntry[] };
+  result: RowResult;
   /** The person's profiles, for a log item's rows. */
   profiles?: PlanProfile[];
   /** A weekly goal's progress so far this week. */
@@ -23,7 +46,7 @@ export default function ItemRow({
   note?: string;
   /** A number box as low as the small buttons beside it (Home). */
   compact?: boolean;
-  onChange: (r: { done: boolean; value: number | null; entries?: LogEntry[] }) => void;
+  onChange: (r: RowResult) => void;
 }) {
   const target = item.result?.target ?? item.target; // a saved day keeps the target it was frozen with
   const cls = result.done ? 'line-through text-muted' : '';
@@ -35,6 +58,70 @@ export default function ItemRow({
   );
   const showTarget = !!target && !week;
   const reached = showTarget && (result.value ?? 0) >= target!;
+  if (item.kind === 'text' || item.kind === 'choice') {
+    const answer = result.text ?? '';
+    const pick = result.choice ?? null;
+    const stale = pick !== null && !item.options.includes(pick);
+    const choose = (c: string | null) => onChange({ ...result, done: c !== null, choice: c, choiceChanged: true });
+    return (
+      <li className="rounded-lg px-1 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
+        <label className="flex items-center gap-2 text-sm text-body">
+          {/* done follows the answer; the box only mirrors it */}
+          <input type="checkbox" className="h-4 w-4" disabled checked={result.done} readOnly />
+          <span className={cls}>{item.text}</span>{removed}
+          {progress}
+          {note && <span className="ml-auto text-xs text-muted">{note}</span>}
+        </label>
+        {disabled ? (
+          <p className="ml-6 whitespace-pre-wrap text-sm text-body">
+            {item.kind === 'text' ? answer : [pick, answer].filter(Boolean).join(' — ')}
+            {!(item.kind === 'text' ? answer : pick || answer) && <span className="text-muted">No answer</span>}
+          </p>
+        ) : item.kind === 'text' ? (
+          <div className="ml-6 mt-1">
+            <textarea
+              aria-label={`${item.text} answer`}
+              className="input min-h-[3.5rem] w-full"
+              maxLength={MAX_TEXT}
+              value={answer}
+              onChange={(e) => onChange({ ...result, done: e.target.value.trim() !== '', text: e.target.value, textChanged: true })}
+            />
+            <span className="block text-right text-xs tabular-nums text-muted">{answer.length} / {MAX_TEXT}</span>
+          </div>
+        ) : (
+          <div className="ml-6 mt-1 space-y-1.5">
+            <div role="group" aria-label={item.text} className="flex flex-wrap gap-1.5">
+              {stale && (
+                <button type="button" disabled aria-pressed className="btn-outline text-xs opacity-70 ring-1 ring-accent-500">
+                  {pick} (no longer an option)
+                </button>
+              )}
+              {item.options.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  aria-pressed={pick === o}
+                  className={`text-xs ${pick === o ? 'btn' : 'btn-outline'}`}
+                  onClick={() => choose(pick === o ? null : o)}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              aria-label={`${item.text} note`}
+              className="input w-full"
+              maxLength={MAX_TEXT}
+              placeholder="Add a note (optional)"
+              value={answer}
+              onChange={(e) => onChange({ ...result, text: e.target.value, textChanged: true })}
+            />
+          </div>
+        )}
+      </li>
+    );
+  }
   if (item.kind === 'log') {
     const entries = result.entries ?? [];
     return (

@@ -502,9 +502,9 @@ export interface Counts extends Bids {
   interviewsCaller: number;
 }
 
-export type PlanItemKind = 'check' | 'count' | 'hours' | 'log';
+export type PlanItemKind = 'check' | 'count' | 'hours' | 'log' | 'text' | 'choice';
 
-/** Counts and hours carry a target; checks and logs don't. */
+/** Counts and hours carry a target; checks, logs, text and choice don't. */
 export const hasTarget = (kind: PlanItemKind): boolean => kind === 'count' || kind === 'hours';
 
 /** A log item's line for one profile on one day. `profileId` null = the person's own work. */
@@ -519,13 +519,15 @@ export interface PlanItem {
   text: string;
   kind: PlanItemKind;
   target: number | null;
+  /** A choice item's options (2-6, each up to 40 characters); empty for the other kinds. */
+  options: string[];
   archived: boolean;
   /** Who created it: the admin's items are locked for a person the admin plans. */
   addedBy: 'admin' | 'self';
 }
 
 /** A plan item as sent: new items have no id (the server assigns one). */
-export type PlanItemIn = Omit<PlanItem, 'id' | 'addedBy'> & { id?: string; addedBy?: 'admin' | 'self' };
+export type PlanItemIn = Omit<PlanItem, 'id' | 'addedBy' | 'options'> & { id?: string; addedBy?: 'admin' | 'self'; options?: string[] };
 
 /** One day's result for an item; `target` is frozen when saved. */
 export interface ItemResult {
@@ -533,6 +535,18 @@ export interface ItemResult {
   value: number | null;
   target?: number | null;
   entries?: LogEntry[];
+  /** A text item's answer, or a choice item's note. */
+  text?: string | null;
+  choice?: string | null;
+}
+
+/** One item's result as sent. `text` / `choice` not sent = keep stored; null or "" = clear. */
+export interface ItemResultIn {
+  done?: boolean;
+  value?: number | null;
+  entries?: LogEntry[];
+  text?: string | null;
+  choice?: string | null;
 }
 
 export interface ItemProgress {
@@ -630,7 +644,7 @@ export interface TodayInterview {
 /** A day's follow-up: results per item, bids done, notes (posts to Slack). */
 export interface DayPlanInput {
   /** Checks send `done`; counts / hours send `value` (the server decides their done). */
-  results: Record<string, { done?: boolean; value?: number | null; entries?: LogEntry[] }>;
+  results: Record<string, ItemResultIn>;
   focus: string[];
   /** Bidder bids are counted by the server, never sent. */
   done: Omit<Bids, 'bidsBidder'>;
@@ -698,7 +712,7 @@ export const putDayPlan = (date: string, body: DayPlanInput) =>
 
 /** Draft save from Home: ticks, counts and focus only; never submits or posts. */
 export interface DayProgressInput {
-  results?: Record<string, { done?: boolean; value?: number | null; entries?: LogEntry[] }>;
+  results?: Record<string, ItemResultIn>;
   focus?: string[];
 }
 export const putDayProgress = (date: string, body: DayProgressInput) =>

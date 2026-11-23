@@ -2,21 +2,28 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import * as api from '../../api/endpoints';
-import type { DayItem, LogEntry } from '../../api/endpoints';
+import type { DayItem } from '../../api/endpoints';
 import { stageLabel } from '../../lib/stageBadge';
 import { useInterviewTimezone } from '../../lib/useInterviewTimezone';
 import { addDays, dayDate, dayLabel, mondayOf, monthDay, todayInputValue } from '../../lib/week';
 import { daysWithoutResult, needsInputKey, useNeedsInputActions } from '../interview/useNeedsInputActions';
 import ItemRow, { kept } from '../report/ItemRow';
+import type { RowResult } from '../report/ItemRow';
 import { cleanEntries } from '../report/LogEntries';
 import PendingItems, { usePending } from './PendingItems';
 import PipelineTable, { PIPELINE_GROUPS } from './PipelineTable';
 import TodayRound, { asNeedsInput, roundKey, roundState, useNow } from './TodayRound';
 import WeekTable from './WeekTable';
 
-type Result = { done: boolean; value: number | null; entries?: LogEntry[] };
-/** A log result goes out with its blank-note rows dropped. */
-const body = (r: Result) => (r.entries ? { ...r, entries: cleanEntries(r.entries) } : r);
+type Result = RowResult;
+/** A log result goes out with its blank-note rows dropped; text / choice go only when the person changed them (a stale choice is a 422). */
+const body = (r: Result) => ({
+  done: r.done,
+  value: r.value,
+  ...(r.entries ? { entries: cleanEntries(r.entries) } : {}),
+  ...(r.textChanged ? { text: (r.text ?? '').trim() } : {}),
+  ...(r.choiceChanged ? { choice: r.choice ?? null } : {}),
+});
 const DEBOUNCE_MS = 800;
 
 const num = (n: number) => n.toLocaleString('en-US');
@@ -160,7 +167,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
     return i.scope === 'goal' && on && on !== day ? on : null;
   };
   const resultOf = (i: DayItem) => {
-    const saved: Result = { done: i.result?.done ?? false, value: i.result?.value ?? null, ...(i.kind === 'log' ? { entries: i.result?.entries ?? [] } : {}) };
+    const saved: Result = { done: i.result?.done ?? false, value: i.result?.value ?? null, ...(i.kind === 'log' ? { entries: i.result?.entries ?? [] } : {}), ...(i.kind === 'text' || i.kind === 'choice' ? { text: i.result?.text ?? '', choice: i.result?.choice ?? null } : {}) };
     const r = local[i.id] ?? (i.scope === 'goal' ? { ...saved, done: plan.progress[i.id]?.done ?? saved.done } : saved);
     return weekMet(i) ? { ...r, done: true } : r;
   };
@@ -175,8 +182,8 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
 
   const row = (item: DayItem) => {
     const doneOn = doneEarlier(item);
-    // A log goal is edited today whatever day it was first done: an edit must never un-tick that day.
-    const earlier = item.kind === 'log' ? null : doneOn;
+    // A log, text or choice goal is edited today whatever day it was first done: an edit must never un-tick that day.
+    const earlier = ['log', 'text', 'choice'].includes(item.kind) ? null : doneOn;
     const met = weekMet(item);
     const busy = !!unticking[item.id];
     return (
@@ -191,7 +198,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
           valueLocked={!!earlier}
           doneLocked={met}
           note={busy ? undefined : doneOn ? `done ${dayDate(doneOn).toLocaleDateString('en-US', { weekday: 'short' })}` : met ? 'week target met' : undefined}
-          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, met ? { done: item.result?.done ?? false, value: r.value, ...(r.entries ? { entries: r.entries } : {}) } : r))}
+          onChange={(r) => (earlier ? untick(item.id, earlier) : change(item.id, met ? { ...r, done: item.result?.done ?? false } : r))}
         />
         {(failedUntick[item.id] || (failed[item.id] && !local[item.id])) && (
           <li className="text-xs text-red-600">

@@ -1,9 +1,46 @@
+import { useState } from 'react';
 import { Archive, Plus } from 'lucide-react';
 import { hasTarget } from '../../api/endpoints';
 import type { PlanItemIn, PlanItemKind } from '../../api/endpoints';
 
 const MAX_ITEMS = 20;
 const MAX_LENGTH = 200;
+const PRESETS = ['Done, Blocked, N/A', 'Yes, No'];
+
+const parseOptions = (raw: string) => raw.split(',').map((o) => o.trim()).filter(Boolean);
+
+/** An inline message when a choice item's options would be refused (2-6, each up to 40 characters, no duplicates). */
+export function optionsError(options: string[]): string | null {
+  if (options.length < 2 || options.length > 6) return 'Add 2 to 6 options, separated by commas.';
+  if (options.some((o) => o.length > 40)) return 'Each option can be up to 40 characters.';
+  if (new Set(options.map((o) => o.toLowerCase())).size < options.length) return 'Options must be different from each other.';
+  return null;
+}
+
+/** Comma separated options; the box keeps what was typed (a trailing comma), the item gets the parsed list. */
+function OptionsField({ options, label, onChange }: { options: string[]; label: string; onChange: (o: string[]) => void }) {
+  const [raw, setRaw] = useState(options.join(', '));
+  const set = (value: string) => { setRaw(value); onChange(parseOptions(value)); };
+  const error = optionsError(options);
+  return (
+    <div className="basis-full space-y-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          className="input min-w-[10rem] flex-1"
+          value={raw}
+          placeholder="Options, separated by commas"
+          aria-label={`${label} options`}
+          onChange={(e) => set(e.target.value)}
+        />
+        {PRESETS.map((p) => (
+          <button key={p} type="button" className="btn-outline text-xs" onClick={() => set(p)}>{p}</button>
+        ))}
+      </div>
+      {error && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+    </div>
+  );
+}
 
 /** Routines (`scope="routine"`, target per day) or weekly goals (`scope="goal"`, target per week):
  *  edit text, kind and target, add rows, archive. Archived saved items stay in the list (hidden) so the save keeps their id. */
@@ -39,6 +76,7 @@ export default function PlanItemsEditor({
     <li key={item.id ?? index} className="text-sm text-body">
       {locked && <span role="img" aria-label="Set by your admin" title="Set by your admin" className="mr-1">🔒</span>}
       {item.text}
+      {item.kind === 'choice' && !!item.options?.length && <span className="text-xs text-muted"> · {item.options.join(' / ')}</span>}
       {hasTarget(item.kind) && item.target != null && (
         <span className="text-xs text-muted"> · {item.target}{item.kind === 'hours' ? 'h' : ''} {scope === 'routine' ? 'per day' : 'this week'}</span>
       )}
@@ -80,13 +118,15 @@ export default function PlanItemsEditor({
             aria-label={`${label} item ${editable.findIndex((x) => x.index === index) + 1} kind`}
             onChange={(e) => {
               const kind = e.target.value as PlanItemKind;
-              update(index, { kind, target: hasTarget(kind) ? item.target : null });
+              update(index, { kind, target: hasTarget(kind) ? item.target : null, ...(kind !== 'choice' && item.options?.length ? { options: [] } : {}) });
             }}
           >
             <option value="check">Check</option>
             <option value="count">Count</option>
             <option value="hours">Hours</option>
             <option value="log">Log</option>
+            <option value="text">Text</option>
+            <option value="choice">Choice</option>
           </select>
           {hasTarget(item.kind) && (
             <>
@@ -102,6 +142,9 @@ export default function PlanItemsEditor({
               <span className="text-xs text-muted">{scope === 'routine' ? 'per day' : 'this week'}</span>
             </>
           )}
+          {item.kind === 'choice' && (
+            <OptionsField options={item.options ?? []} label={`${label} item ${editable.findIndex((x) => x.index === index) + 1}`} onChange={(options) => update(index, { options })} />
+          )}
           <button type="button" className="btn-icon" aria-label={`Archive ${label} item ${editable.findIndex((x) => x.index === index) + 1}`} onClick={() => archive(index)}>
             <Archive size={14} aria-hidden />
           </button>
@@ -116,10 +159,10 @@ export default function PlanItemsEditor({
   );
 }
 
-/** Archived and empty rows are dropped (the server archives saved ids that are omitted); a check item has no target. */
+/** Archived and empty rows are dropped (the server archives saved ids that are omitted); only counts and hours have a target, only choices options. */
 export function cleanItems(items: PlanItemIn[]): PlanItemIn[] {
   return items
     .filter((i) => !i.archived)
-    .map((i) => ({ ...i, text: i.text.trim(), target: hasTarget(i.kind) ? i.target : null }))
+    .map((i) => ({ ...i, text: i.text.trim(), target: hasTarget(i.kind) ? i.target : null, ...(i.kind === 'choice' ? { options: i.options ?? [] } : {}) }))
     .filter((i) => i.text);
 }
