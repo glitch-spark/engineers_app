@@ -108,6 +108,7 @@ export default function CallerTeamsPanel({ onChanged }: { onChanged?: () => void
         <CallerTeamPanel
           key={editing === 'new' ? 'new' : editing._id}
           team={editing === 'new' ? null : editing}
+          teams={teams ?? []}
           callers={external}
           byId={byId}
           onClose={() => setEditing(null)}

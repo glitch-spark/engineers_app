@@ -59,8 +59,10 @@ describe('CallerTeamsPanel', () => {
 
   it('creates a team, then assigns the checked members', async () => {
     m.createCallerTeam.mockResolvedValue({ ...team, _id: 't2' });
+    m.listCallerTeams.mockResolvedValue([team, { ...team, _id: 't9', name: 'Other team', memberIds: ['c4'] }]);
     renderIt();
     fireEvent.click(await screen.findByRole('button', { name: 'New team' }));
+    await screen.findByText('Other team');
     const p = await panel();
     await waitFor(() => expect(p.getByRole('option', { name: 'Sam' })).toBeTruthy());
     fireEvent.change(p.getByLabelText('Team name'), { target: { value: 'Sam group' } });
@@ -121,5 +123,42 @@ describe('CallerTeamsPanel', () => {
     expect(await screen.findByText('✓ works')).toBeTruthy();
     expect(screen.getByText('✕ channel_not_found')).toBeTruthy();
     expect(screen.getByText(/^Tested /)).toBeTruthy();
+  });
+
+  it('asks before discarding edits, and not when nothing changed', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderIt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit team' }));
+    let p = await panel();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(confirm).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit team' }));
+    p = await panel();
+    fireEvent.click(p.getByRole('checkbox', { name: /Sam/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+    confirm.mockRestore();
+  });
+
+  it('ignores Escape while saving', async () => {
+    m.updateCallerTeam.mockReturnValue(new Promise(() => {}));
+    renderIt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit team' }));
+    const p = await panel();
+    fireEvent.click(p.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(m.updateCallerTeam).toHaveBeenCalled());
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+  });
+
+  it('does not label a caller on an archived team as being in it', async () => {
+    m.listCallerTeams.mockResolvedValue([team, { ...team, _id: 't9', name: 'Other team', archived: true }]);
+    renderIt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit team' }));
+    const p = await panel();
+    expect(p.queryByText('in Other team')).toBeNull();
+    expect(p.getAllByText('no Slack ID')).toHaveLength(3);
   });
 });

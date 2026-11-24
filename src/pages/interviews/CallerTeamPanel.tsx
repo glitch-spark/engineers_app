@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { Caller, CallerTeam } from '../../api/endpoints';
@@ -10,9 +10,11 @@ import { notify } from '../../lib/notify';
  * Saving writes the team first, then moves each caller whose membership changed (a caller's team lives on the caller).
  */
 export default function CallerTeamPanel({
-  team, callers, byId, onClose, onSaved,
+  team, teams, callers, byId, onClose, onSaved,
 }: {
   team: CallerTeam | null;
+  /** All teams: a caller on an archived team counts as individual. */
+  teams: CallerTeam[];
   /** Non-archived external callers. */
   callers: Caller[];
   byId: Map<string, Caller>;
@@ -24,14 +26,22 @@ export default function CallerTeamPanel({
   const [channelId, setChannel] = useState(team?.channelId ?? '');
   const [reminderChannelId, setReminder] = useState(team?.reminderChannelId ?? '');
   const [dailyTime, setTime] = useState(team?.dailyTime ?? '06:00');
-  const [members, setMembers] = useState<Set<string>>(
+  const initialMembers = useMemo(
     () => new Set(team ? callers.filter((c) => c.teamId === team._id).map((c) => c._id) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
+  const [members, setMembers] = useState<Set<string>>(initialMembers);
   const [busy, setBusy] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const teamName = (c: Caller) => c.teamName || 'another team';
   const savedManager = team && !callers.some((c) => c._id === team.managerCallerId) ? byId.get(team.managerCallerId) : undefined;
   const valid = !!name.trim();
+  const activeTeamIds = new Set(teams.filter((t) => !t.archived).map((t) => t._id));
+  const dirty = name !== (team?.name ?? '') || managerCallerId !== (team?.managerCallerId ?? '')
+    || channelId !== (team?.channelId ?? '') || reminderChannelId !== (team?.reminderChannelId ?? '')
+    || dailyTime !== (team?.dailyTime ?? '06:00')
+    || members.size !== initialMembers.size || [...members].some((id) => !initialMembers.has(id));
 
   const toggle = (id: string) => setMembers((prev) => {
     const next = new Set(prev);
@@ -89,7 +99,9 @@ export default function CallerTeamPanel({
     <SidePanel
       open
       title={team ? `Edit ${team.name}` : 'New caller team'}
-      onClose={onClose}
+      // Closing mid-save would drop the result; the panel closes itself when done.
+      onClose={() => { if (!busy) onClose(); }}
+      dirty={dirty && !busy}
       footer={confirmArchive ? (
         <>
           <span className="mr-auto text-sm text-strong" role="alert">Archive {team?.name}? Its callers become individual callers.</span>
@@ -127,7 +139,7 @@ export default function CallerTeamPanel({
           <div className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
             {callers.length === 0 && <p className="px-3 py-2 text-sm text-muted">No external callers yet.</p>}
             {callers.map((c) => {
-              const other = c.teamId && c.teamId !== team?._id;
+              const other = c.teamId && c.teamId !== team?._id && activeTeamIds.has(c.teamId);
               return (
                 <label key={c._id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm">
                   <input type="checkbox" checked={members.has(c._id)} onChange={() => toggle(c._id)} />
