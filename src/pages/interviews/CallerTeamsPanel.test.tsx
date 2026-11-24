@@ -74,7 +74,7 @@ describe('CallerTeamsPanel', () => {
     fireEvent.click(p.getByRole('checkbox', { name: /Kim/ }));
     fireEvent.click(p.getByRole('button', { name: 'Create team' }));
     await waitFor(() => expect(m.updateCaller).toHaveBeenCalledTimes(2));
-    expect(m.createCallerTeam).toHaveBeenCalledWith({ name: 'Sam group', managerCallerId: 'c3', channelId: 'C111', reminderChannelId: 'C222', dailyTime: '06:00' });
+    expect(m.createCallerTeam).toHaveBeenCalledWith({ name: 'Sam group', managerCallerId: 'c3', channelId: 'C111', reminderChannelId: 'C222', dailyTime: '06:00', timezone: 'America/Chicago' });
     expect(m.updateCaller).toHaveBeenNthCalledWith(1, 'c3', { teamId: 't2' });
     expect(m.updateCaller).toHaveBeenNthCalledWith(2, 'c4', { teamId: 't2' });
     expect(m.createCallerTeam.mock.invocationCallOrder[0]).toBeLessThan(m.updateCaller.mock.invocationCallOrder[0]);
