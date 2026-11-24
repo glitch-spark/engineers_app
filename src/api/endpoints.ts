@@ -1219,7 +1219,7 @@ export interface CallerTeam {
   memberIds: string[];
   archived: boolean;
 }
-export type CallerTeamInput = Pick<CallerTeam, 'name' | 'managerCallerId' | 'channelId' | 'reminderChannelId' | 'dailyTime'>;
+export type CallerTeamInput = Pick<CallerTeam, 'name' | 'managerCallerId' | 'channelId' | 'reminderChannelId' | 'dailyTime' | 'timezone'>;
 export const listCallerTeams = () => apiFetch<{ teams: CallerTeam[] }>('/callers/teams').then((r) => r.teams);
 export const createCallerTeam = (body: CallerTeamInput) => postJSON<CallerTeam>('/callers/teams', body);
 export const updateCallerTeam = (id: string, body: Partial<CallerTeamInput> & { archived?: boolean }) =>

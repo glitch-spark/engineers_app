@@ -5,7 +5,7 @@ import * as api from '../../api/endpoints';
 import type { CallerTeam, TeamTestResult } from '../../api/endpoints';
 import { notify } from '../../lib/notify';
 import { useCallers } from '../../lib/useCallers';
-import CallerTeamPanel from './CallerTeamPanel';
+import CallerTeamPanel, { TEAM_TIMEZONES } from './CallerTeamPanel';
 
 export const TEAMS_KEY = ['caller-teams'];
 
@@ -54,7 +54,7 @@ export default function CallerTeamsPanel({ onChanged }: { onChanged?: () => void
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h3 className="font-semibold text-strong">{t.name}</h3>
-            <p className="text-xs text-muted">{members.length} {members.length === 1 ? 'caller' : 'callers'} · daily list {fmtTime(t.dailyTime)} CT</p>
+            <p className="text-xs text-muted">{members.length} {members.length === 1 ? 'caller' : 'callers'} · daily list {fmtTime(t.dailyTime)} {TEAM_TIMEZONES[t.timezone] ?? t.timezone}</p>
           </div>
           {missing > 0 ? <span className="badge badge-warning shrink-0">{missing} missing Slack ID</span> : <span className="badge badge-success shrink-0">All tagged</span>}
         </div>

@@ -2,6 +2,14 @@ import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { Caller, CallerTeam } from '../../api/endpoints';
+/** Timezones a caller team's Slack posts can use: IANA key → short label. */
+export const TEAM_TIMEZONES: Record<string, string> = {
+  'America/Los_Angeles': 'PT',
+  'America/Denver': 'MT',
+  'America/Chicago': 'CT',
+  'America/New_York': 'ET',
+  UTC: 'UTC',
+};
 import SidePanel from '../../components/SidePanel';
 import { notify } from '../../lib/notify';
 
@@ -26,6 +34,7 @@ export default function CallerTeamPanel({
   const [channelId, setChannel] = useState(team?.channelId ?? '');
   const [reminderChannelId, setReminder] = useState(team?.reminderChannelId ?? '');
   const [dailyTime, setTime] = useState(team?.dailyTime ?? '06:00');
+  const [timezone, setTimezone] = useState(team?.timezone ?? 'America/Chicago');
   const initialMembers = useMemo(
     () => new Set(team ? callers.filter((c) => c.teamId === team._id).map((c) => c._id) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -40,7 +49,7 @@ export default function CallerTeamPanel({
   const activeTeamIds = new Set(teams.filter((t) => !t.archived).map((t) => t._id));
   const dirty = name !== (team?.name ?? '') || managerCallerId !== (team?.managerCallerId ?? '')
     || channelId !== (team?.channelId ?? '') || reminderChannelId !== (team?.reminderChannelId ?? '')
-    || dailyTime !== (team?.dailyTime ?? '06:00')
+    || dailyTime !== (team?.dailyTime ?? '06:00') || timezone !== (team?.timezone ?? 'America/Chicago')
     || members.size !== initialMembers.size || [...members].some((id) => !initialMembers.has(id));
 
   const toggle = (id: string) => setMembers((prev) => {
@@ -55,7 +64,7 @@ export default function CallerTeamPanel({
     setBusy(true);
     let saved: CallerTeam;
     try {
-      const body = { name: name.trim(), managerCallerId, channelId: channelId.trim(), reminderChannelId: reminderChannelId.trim(), dailyTime };
+      const body = { name: name.trim(), managerCallerId, channelId: channelId.trim(), reminderChannelId: reminderChannelId.trim(), dailyTime, timezone };
       saved = team ? await api.updateCallerTeam(team._id, body) : await api.createCallerTeam(body);
     } catch (err) {
       notify.error(err, team ? 'Failed to save the team' : 'Failed to create the team');
@@ -166,10 +175,20 @@ export default function CallerTeamPanel({
           </div>
         </div>
         <p className="-mt-2 text-xs text-muted">In Slack: open the channel, then its name, About, Channel ID. Invite the bot to both.</p>
-        <div className="max-w-[12rem]">
-          <label htmlFor="team-time" className={label}>Daily list at (Chicago time)</label>
-          <input id="team-time" type="time" className="input w-full text-sm" value={dailyTime} onChange={(e) => setTime(e.target.value)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="team-tz" className={label}>Slack post timezone</label>
+            <select id="team-tz" className="input w-full text-sm" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+              {Object.entries(TEAM_TIMEZONES).map(([tz, short]) => <option key={tz} value={tz}>{short} · {tz}</option>)}
+              {!(timezone in TEAM_TIMEZONES) && <option value={timezone}>{timezone}</option>}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="team-time" className={label}>Daily list at ({TEAM_TIMEZONES[timezone] ?? timezone})</label>
+            <input id="team-time" type="time" className="input w-full text-sm" value={dailyTime} onChange={(e) => setTime(e.target.value)} />
+          </div>
         </div>
+        <p className="-mt-2 text-xs text-muted">Times in the team's posts, daily list and reminders use this timezone.</p>
       </form>
     </SidePanel>
   );
