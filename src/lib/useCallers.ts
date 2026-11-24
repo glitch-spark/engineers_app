@@ -47,7 +47,7 @@ export function callerPickerOptions({
   }
   if (external.length) {
     options.push({ value: '__group_external', label: 'External callers', disabled: true });
-    options.push(...external.map((c) => ({ value: c._id, label: c.name })));
+    options.push(...external.map((c) => ({ value: c._id, label: c.teamName ? `${c.name} · ${c.teamName}` : c.name })));
   }
   if (savedId && !offered.some((c) => c._id === savedId)) {
     options.push({ value: savedId, label: `${savedName || 'Caller'} (not on the list)` });

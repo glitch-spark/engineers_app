@@ -1190,6 +1190,10 @@ export interface Caller {
   name: string;
   color: CallerColor;
   archived: boolean;
+  /** External callers: Slack member ID ('' = none) and their team ('' = none). Always '' for users. */
+  slackUserId: string;
+  teamId: string;
+  teamName: string;
 }
 
 /** Everyone reads the list; `canManage` = Admin or interview manager (add, edit, delete). */
@@ -1197,9 +1201,34 @@ export const listCallers = (archived?: boolean) =>
   apiFetch<{ callers: Caller[]; canManage: boolean }>(`/callers${archived ? '?archived=1' : ''}`);
 export const createCaller = (body: { name: string; color?: CallerColor }) => postJSON<Caller>('/callers', body);
 /** Platform users (kind 'user') take a colour only. */
-export const updateCaller = (id: string, body: { name?: string; color?: CallerColor; archived?: boolean }) =>
-  putJSON<Caller>(`/callers/${id}`, body);
+export const updateCaller = (
+  id: string,
+  body: { name?: string; color?: CallerColor; archived?: boolean; slackUserId?: string; teamId?: string },
+) => putJSON<Caller>(`/callers/${id}`, body);
 export const deleteCaller = (id: string) => del<void>(`/callers/${id}`);
+
+// Caller teams (Admin / interview manager only).
+export interface CallerTeam {
+  _id: string;
+  name: string;
+  managerCallerId: string;
+  channelId: string;
+  reminderChannelId: string;
+  dailyTime: string;
+  timezone: string;
+  memberIds: string[];
+  archived: boolean;
+}
+export type CallerTeamInput = Pick<CallerTeam, 'name' | 'managerCallerId' | 'channelId' | 'reminderChannelId' | 'dailyTime'>;
+export const listCallerTeams = () => apiFetch<{ teams: CallerTeam[] }>('/callers/teams').then((r) => r.teams);
+export const createCallerTeam = (body: CallerTeamInput) => postJSON<CallerTeam>('/callers/teams', body);
+export const updateCallerTeam = (id: string, body: Partial<CallerTeamInput> & { archived?: boolean }) =>
+  apiFetch<CallerTeam>(`/callers/teams/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const getCallerTeamsConnection = () =>
+  apiFetch<{ connected: boolean; workspace: string | null }>('/callers/teams/connection');
+export interface TeamTestResult { ok: boolean; error: string | null }
+export const testCallerTeam = (id: string) =>
+  postJSON<{ channel: TeamTestResult; reminderChannel: TeamTestResult }>(`/callers/teams/${id}/test`, {});
 
 /** Per caller (platform users and external): rounds coming up, this week, pass rate (null = none decided), all rounds. A missing id = zeros. */
 export type CallerOverview = Record<string, { upcoming: number; thisWeek: number; passRate: number | null; rounds: number }>;
