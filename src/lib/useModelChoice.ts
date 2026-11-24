@@ -46,7 +46,9 @@ export interface ModelChoice {
  */
 export function useModelChoice(task: api.ModelTask, scope?: 'job_applies'): ModelChoice {
   const { user } = useAuth();
-  const storageKey = `resume-model:${user?.id ?? 'anon'}:${task}${scope ? `:${scope}` : ''}`;
+  // ':v2' on the Resume page's pick: a one-time reset so everyone starts on the server default (Haiku).
+  const version = task === 'resume' && !scope ? ':v2' : '';
+  const storageKey = `resume-model${version}:${user?.id ?? 'anon'}:${task}${scope ? `:${scope}` : ''}`;
   const { data, isLoading } = useSWR(
     scope ? ['resume-models', task, scope] : ['resume-models', task],
     () => (scope ? api.listJobAppliesResumeModels() : api.listResumeModels(task)),
