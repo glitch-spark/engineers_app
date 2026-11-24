@@ -64,7 +64,12 @@ export default function CallerEditPanel({
         await api.createCaller({ name: trimmed, color });
         notify.success('Caller added');
       } else {
-        await api.updateCaller(caller._id, isUser ? { color } : { name: trimmed, color, slackUserId: slack, teamId });
+        await api.updateCaller(caller._id, isUser ? { color } : {
+          name: trimmed, color,
+          // Only changed fields: an unchanged teamId that is now archived would fail "No such team."
+          ...(slack !== (caller.slackUserId ?? '') && { slackUserId: slack }),
+          ...(teamId !== (caller.teamId ?? '') && { teamId }),
+        });
         notify.success('Caller saved');
       }
       onSaved();

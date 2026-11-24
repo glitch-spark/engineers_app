@@ -35,7 +35,7 @@ export default function CallersDirectory() {
     void mutateCallers();
     void mutateOverview();
     // Names and colours show on interview rounds and the caller schedule.
-    void mutateAll((key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list'].includes(key[0]));
+    void mutateAll((key) => Array.isArray(key) && ['interviews-list', 'interview-rounds', 'caller-rounds-list', 'caller-teams'].includes(key[0]));
   };
 
   const setArchived = async (c: Caller, archived: boolean) => {

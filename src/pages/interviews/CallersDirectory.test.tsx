@@ -63,6 +63,32 @@ describe('CallersDirectory', () => {
     await waitFor(() => expect(m.updateCaller).toHaveBeenCalledWith('c1', expect.objectContaining({ slackUserId: 'U07Q3KD2M9A', teamId: 't1' })));
   });
 
+  it('does not resend an unchanged (possibly archived) team when saving other fields', async () => {
+    m.listCallers.mockResolvedValue({ callers: [lee], canManage: true });
+    m.listCallerTeams.mockResolvedValue([{ ...team, archived: true }]);
+    renderIt();
+    await screen.findByRole('link', { name: 'Lee' });
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Lee' }));
+    fireEvent.click(await screen.findByText('Edit'));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Lee B' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save' }).find((b) => b.getAttribute('form') === 'caller-edit-form')!);
+    await waitFor(() => expect(m.updateCaller).toHaveBeenCalled());
+    const body = m.updateCaller.mock.calls[0][1];
+    expect(body).not.toHaveProperty('teamId');
+    expect(body).not.toHaveProperty('slackUserId');
+  });
+
+  it('refetches teams after a caller is saved so member chips update', async () => {
+    renderIt();
+    await screen.findByRole('link', { name: 'Omar' });
+    const before = m.listCallerTeams.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Omar' }));
+    fireEvent.click(await screen.findByText('Edit'));
+    fireEvent.change(screen.getByLabelText('Slack member ID'), { target: { value: 'U07Q3KD2M9A' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save' }).find((b) => b.getAttribute('form') === 'caller-edit-form')!);
+    await waitFor(() => expect(m.listCallerTeams.mock.calls.length).toBeGreaterThan(before));
+  });
+
   it('hides team and Slack ID controls without canManage', async () => {
     m.listCallers.mockResolvedValue({ callers: [ana, omar, lee], canManage: false });
     renderIt();
