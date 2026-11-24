@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import useSWR from 'swr';
 import { Check, Loader2 } from 'lucide-react';
 import * as api from '../../api/endpoints';
 import type { Caller, CallerColor } from '../../api/endpoints';
@@ -41,9 +42,17 @@ export default function CallerEditPanel({
   const isUser = caller?.kind === 'user';
   const [name, setName] = useState(caller?.name ?? '');
   const [color, setColor] = useState<CallerColor>(caller?.color ?? CALLER_COLORS[0]);
+  const [slackUserId, setSlackUserId] = useState(caller?.slackUserId ?? '');
+  const [teamId, setTeamId] = useState(caller?.teamId ?? '');
   const [busy, setBusy] = useState(false);
+  const isExternalEdit = !!caller && !isUser;
+  const { data: teams } = useSWR(isExternalEdit ? ['caller-teams'] : null, api.listCallerTeams);
   const trimmed = name.trim();
-  const dirty = caller ? (!isUser && trimmed !== caller.name) || color !== caller.color : !!trimmed;
+  const slack = slackUserId.trim();
+  const dirty = caller
+    ? (!isUser && trimmed !== caller.name) || color !== caller.color
+      || (isExternalEdit && (slack !== (caller.slackUserId ?? '') || teamId !== (caller.teamId ?? '')))
+    : !!trimmed;
   const valid = isUser || !!trimmed;
 
   const save = async (e?: FormEvent) => {
@@ -55,7 +64,7 @@ export default function CallerEditPanel({
         await api.createCaller({ name: trimmed, color });
         notify.success('Caller added');
       } else {
-        await api.updateCaller(caller._id, isUser ? { color } : { name: trimmed, color });
+        await api.updateCaller(caller._id, isUser ? { color } : { name: trimmed, color, slackUserId: slack, teamId });
         notify.success('Caller saved');
       }
       onSaved();
@@ -99,6 +108,30 @@ export default function CallerEditPanel({
           <span className="mb-1 block text-xs text-muted">Colour</span>
           <ColorPicker value={color} onChange={setColor} />
         </div>
+        {isExternalEdit && (
+          <>
+            <div>
+              <label htmlFor="caller-edit-slack" className="mb-1 block text-xs text-muted">Slack member ID</label>
+              <input
+                id="caller-edit-slack"
+                className="input w-full text-sm"
+                value={slackUserId}
+                placeholder="U0123ABCD"
+                onChange={(e) => setSlackUserId(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted">Tags them in their team's post. Profile, then More, then Copy member ID.</p>
+            </div>
+            <div>
+              <label htmlFor="caller-edit-team" className="mb-1 block text-xs text-muted">Team</label>
+              <select id="caller-edit-team" className="input w-full text-sm" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+                <option value="">No team</option>
+                {(teams ?? []).filter((t) => !t.archived || t._id === teamId).map((t) => (
+                  <option key={t._id} value={t._id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
         {!isUser && <p className="text-xs text-muted">Renaming updates the rounds already assigned.</p>}
       </form>
     </SidePanel>

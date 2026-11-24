@@ -7,6 +7,7 @@ import type { Caller } from '../../api/endpoints';
 import ActionMenu, { type ActionItem } from '../../components/ActionMenu';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import CallerEditPanel from '../../components/interview/CallerEditPanel';
+import CallerTeamsPanel from './CallerTeamsPanel';
 import { CALLER_DOT } from '../../lib/callerColors';
 import { notify } from '../../lib/notify';
 import { useCallers } from '../../lib/useCallers';
@@ -14,7 +15,7 @@ import { useCallers } from '../../lib/useCallers';
 const OVERVIEW_KEY = ['caller-overview'];
 const ZERO = { upcoming: 0, thisWeek: 0, passRate: null, rounds: 0 };
 
-/** Manage callers tab: platform users (read-only names) and external callers with their load and pass rate. */
+/** Manage callers tab: external callers with their load, pass rate, Slack ID and team; managers also get the teams admin. */
 export default function CallersDirectory() {
   const navigate = useNavigate();
   const { mutate: mutateAll } = useSWRConfig();
@@ -27,7 +28,6 @@ export default function CallersDirectory() {
 
   // byId holds every caller including archived ones.
   const all = useMemo(() => [...byId.values()], [byId]);
-  const people = all.filter((c) => c.kind === 'user' && !c.archived);
   const external = all.filter((c) => c.kind === 'external' && (showArchived || !c.archived));
   const archivedCount = all.filter((c) => c.kind === 'external' && c.archived).length;
 
@@ -103,6 +103,16 @@ export default function CallersDirectory() {
           )}
         </td>
         {canManage && (
+          <td className="px-3 py-2.5 text-left text-xs">
+            {c.slackUserId ? <span className="font-mono">{c.slackUserId}</span>
+              : c.teamId ? <span className="badge badge-warning">No Slack ID: shown by name, not tagged</span>
+              : <span className="text-faint">—</span>}
+          </td>
+        )}
+        {canManage && (
+          <td className="px-3 py-2.5 text-left">{c.teamName || <span className="text-faint">—</span>}</td>
+        )}
+        {canManage && (
           <td className="w-12 px-3 py-1.5 text-right">
             <ActionMenu label={`Actions for ${c.name}`} items={menuItems(c)} />
           </td>
@@ -111,7 +121,7 @@ export default function CallersDirectory() {
     );
   };
 
-  const cols = canManage ? 6 : 5;
+  const cols = canManage ? 8 : 5;
   const section = (title: string, rows: Caller[], empty: string) => (
     <>
       <tr className="bg-zinc-50 dark:bg-zinc-900/60">
@@ -145,6 +155,8 @@ export default function CallersDirectory() {
                 <th scope="col" className="px-3 py-2.5 text-right">Upcoming</th>
                 <th scope="col" className="px-3 py-2.5 text-right">This week</th>
                 <th scope="col" className="px-3 py-2.5 text-right">Pass rate</th>
+                {canManage && <th scope="col" className="px-3 py-2.5 text-left">Slack ID</th>}
+                {canManage && <th scope="col" className="px-3 py-2.5 text-left">Team</th>}
                 {canManage && <th scope="col" className="w-12 px-3 py-2.5"><span className="sr-only">Actions</span></th>}
               </tr>
             </thead>
@@ -152,10 +164,7 @@ export default function CallersDirectory() {
               {isLoading && all.length === 0 ? (
                 <tr><td colSpan={cols} className="px-3 py-6 text-sm text-muted" role="status">Loading…</td></tr>
               ) : (
-                <>
-                  {section('People in the app', people, 'No one in the app takes calls yet.')}
-                  {section('External callers', external, 'No external callers yet.')}
-                </>
+                section('External callers', external, 'No external callers yet.')
               )}
             </tbody>
           </table>
@@ -182,6 +191,7 @@ export default function CallersDirectory() {
         onConfirm={remove}
         onCancel={() => setDeleteTarget(null)}
       />
+      {canManage && <CallerTeamsPanel onChanged={changed} />}
     </div>
   );
 }
