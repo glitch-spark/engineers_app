@@ -622,10 +622,16 @@ export interface DayPlan {
   /** How many of the day's rounds have an answer. Missing from an older server. */
   interviewsMarked?: { marked: number; total: number };
   /** The day's bids per region the person works in (self target null when unset). Missing from an older server. */
-  bidsByRegion?: { region: 'US' | 'EU' | 'Latam'; self: number; selfTarget: number | null; bidder: number; total: number }[];
+  bidsByRegion?: {
+    region: 'US' | 'EU' | 'Latam'; self: number; selfTarget: number | null; bidder: number; total: number;
+    /** `bidder` split by review status. Missing from an older server and on days before the release. */
+    bidderApproved?: number; bidderPending?: number;
+  }[];
   /** The day's bids over every region; a target is null when unset. Missing from an older server. */
   bidsTotals?: {
     self: number; selfTarget: number | null; bidder: number; bidderTarget: number | null; total: number; target: number | null;
+    /** `bidder` split by review status. Missing from an older server and on days before the release. */
+    bidderApproved?: number; bidderPending?: number;
   };
 }
 
