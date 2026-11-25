@@ -82,6 +82,10 @@ export default function WeekPanel({
   const profileRegions = new Set((days?.profiles ?? []).filter((p) => !p.archived && p.region).map((p) => REGION_FIELD[p.region!]));
   const regions = SELF_REGIONS.filter((r) => profileRegions.has(r.field) || !!form?.goal[r.field]);
   const splitOver = !!form && selfRegionsTotal(form.goal) > form.goal.bidsSelf;
+  const splitLeft = form ? form.goal.bidsSelf - selfRegionsTotal(form.goal) : 0;
+  // With every live profile in US / EU / LATAM, a part left out of the split belongs nowhere: the days' region
+  // targets then add up to less than the self total (e.g. US 182 / day against 200).
+  const onlySplitRegions = !(days?.profiles ?? []).some((p) => !p.archived && !(p.region && REGION_FIELD[p.region]));
 
   const save = async () => {
     if (!form || !data) return;
@@ -226,8 +230,13 @@ export default function WeekPanel({
                     </label>
                   ))}
                   <span className="pb-2 text-xs text-muted">
-                    {splitOver ? <span className="text-red-600 dark:text-red-400" role="alert">{selfRegionsTotal(form.goal) - form.goal.bidsSelf} more than the total</span>
-                      : `Other / no region: ${form.goal.bidsSelf - selfRegionsTotal(form.goal)}`}
+                    {splitOver ? <span className="text-red-600 dark:text-red-400" role="alert">{-splitLeft} more than the total</span>
+                      : splitLeft === 0 ? null
+                      : onlySplitRegions ? (
+                        <span className="text-amber-700 dark:text-amber-400" role="status">
+                          {splitLeft} not in any region: {regions.map((r) => r.label).join(' + ')} targets will add up to less than the total
+                        </span>
+                      ) : `Other / no region: ${splitLeft}`}
                   </span>
                 </div>
               </div>

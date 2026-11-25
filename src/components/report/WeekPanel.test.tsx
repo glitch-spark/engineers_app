@@ -69,11 +69,28 @@ describe('WeekPanel', () => {
     expect((screen.getByRole('button', { name: /save week/i }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(us, { target: { value: '600' } });
     fireEvent.change(screen.getByLabelText('Self bids EU this week'), { target: { value: '300' } });
-    expect(screen.getByText('Other / no region: 100')).toBeTruthy();
+    // every profile is in US / EU: bids left out of the split would make the day's region targets fall short
+    const warn = screen.getByText(/not in any region/);
+    expect(warn.textContent).toBe('100 not in any region: US + EU targets will add up to less than the total');
+    expect(warn.className).toContain('amber');
+    expect((screen.getByRole('button', { name: /save week/i }) as HTMLButtonElement).disabled).toBe(false); // a warning, not a block
+    fireEvent.change(us, { target: { value: '700' } });
+    expect(screen.queryByText(/not in any region|Other \/ no region/)).toBeNull(); // split adds up: nothing left over
+    fireEvent.change(us, { target: { value: '600' } });
     fireEvent.click(screen.getByRole('button', { name: /save week/i }));
     await waitFor(() => expect(api.putWeekPlan).toHaveBeenCalled());
     const body = vi.mocked(api.putWeekPlan).mock.calls[0][1] as unknown as { goal: Record<string, number> };
     expect(body.goal).toMatchObject({ bidsSelf: 1000, bidsSelfUs: 600, bidsSelfEu: 300 });
+  });
+
+  it('with a profile outside US / EU / LATAM the rest of the total is theirs: a plain note, no warning', async () => {
+    vi.mocked(api.getDayPlans).mockResolvedValue({ weekStart: '2026-11-16', days: [], profiles: [
+      { id: 'p1', name: 'A', region: 'US', archived: false }, { id: 'p2', name: 'C', region: 'Canada', archived: false },
+    ] } as never);
+    renderPanel('own', { plansOwnWeek: false, goal: { ...counts, bidsSelf: 1100 } });
+    fireEvent.change(await screen.findByLabelText('Self bids US this week'), { target: { value: '1000' } });
+    expect(screen.getByText('Other / no region: 100')).toBeTruthy();
+    expect(screen.queryByText(/not in any region/)).toBeNull();
   });
 
   it('own + plansOwnWeek false: read-only plan, note, recap editable, Save sends the recap', async () => {
