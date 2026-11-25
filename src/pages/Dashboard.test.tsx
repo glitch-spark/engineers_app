@@ -7,14 +7,17 @@ import * as api from '../api/endpoints';
 import DashboardPage from './Dashboard';
 
 let role = 'staff';
-vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'boss', role } }) }));
+let me = 'boss';
+vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: me, role } }) }));
 vi.mock('../api/endpoints', () => ({ getTeamToday: vi.fn(), lookupUsers: vi.fn() }));
 // own Home: no props; the admin's view of a person: who, and the picked day beside the real today
 vi.mock('../components/home/MyHome', async () => {
   const { todayInputValue } = await import('../lib/week');
   return {
-    default: (p: { userId?: string; name?: string; day?: string }) => (
-      p.userId ? <div data-testid="person">{`${p.userId}|${p.name}|${p.day}|${todayInputValue()}`}</div> : <div>my-home-stub</div>
+    default: (p: { userId?: string; name?: string; day?: string; readOnly?: boolean }) => (
+      p.userId
+        ? <div data-testid="person" data-readonly={p.readOnly ? 'yes' : 'no'}>{`${p.userId}|${p.name}|${p.day}|${todayInputValue()}`}</div>
+        : <div>my-home-stub</div>
     ),
   };
 });
@@ -37,6 +40,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-11-20T12:00:00-06:00')); // a Friday
   localStorage.clear();
   role = 'admin';
+  me = 'boss';
   vi.mocked(api.getTeamToday).mockResolvedValue({ day: '2026-11-20', people } as never);
   vi.mocked(api.lookupUsers).mockResolvedValue({ users } as never);
 });
@@ -56,16 +60,56 @@ const picker = () => screen.findByLabelText('User') as Promise<HTMLSelectElement
 const names = (el: HTMLSelectElement) => [...el.options].map((o) => o.text);
 
 describe('Home', () => {
-  it('staff see their own Home (pending, today, this week) only: no This month, no team, no Week / Day picker', () => {
+  it('staff land on their own Home with themselves picked in the User filter: no Week / Day picker, nothing to clear', async () => {
     role = 'staff';
+    me = 'u1';
     renderIt();
     expect(screen.getByText('my-home-stub')).toBeTruthy();
-    expect(screen.queryByRole('group', { name: 'Week' })).toBeNull();
+    const user = await picker();
+    await waitFor(() => expect(names(user)).toEqual(['Puma', 'Yuari'])); // no "Pick a person": someone is always picked
+    expect(user.value).toBe('u1');
+    expect(screen.queryByRole('group', { name: 'Week' })).toBeNull(); // their own Home is today's, as before
+    expect(screen.queryByRole('radio')).toBeNull();
     expect(screen.queryByText('metrics-stub')).toBeNull();
     expect(screen.queryByText('team-stub')).toBeNull();
-    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
     expect(api.getTeamToday).not.toHaveBeenCalled();
-    expect(api.lookupUsers).not.toHaveBeenCalled();
+  });
+
+  it("staff can pick anyone and read their Home, read-only, on any day; picking themselves goes back to their own", async () => {
+    role = 'staff';
+    me = 'u1';
+    renderIt();
+    const user = await picker();
+    await waitFor(() => expect(names(user)).toHaveLength(2));
+    fireEvent.change(user, { target: { value: 'u2' } });
+    const theirs = await person();
+    expect(theirs.textContent).toBe('u2|Puma|2026-11-20|2026-11-20');
+    expect(theirs.dataset.readonly).toBe('yes');
+    expect(screen.getByTestId('where').textContent).toBe('?user=u2');
+    expect(screen.getByRole('group', { name: 'Week' })).toBeTruthy();
+    fireEvent.change(user, { target: { value: 'u1' } });
+    expect(await screen.findByText('my-home-stub')).toBeTruthy();
+    expect(screen.getByTestId('where').textContent).toBe(''); // themselves: nothing in the URL
+  });
+
+  it('staff: Clear goes back to their own Home; a link to themselves is their own Home', async () => {
+    role = 'staff';
+    me = 'u1';
+    renderIt('/dashboard?user=u2&day=2026-11-18');
+    expect((await person()).textContent).toBe('u2|Puma|2026-11-18|2026-11-20');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(await screen.findByText('my-home-stub')).toBeTruthy();
+    expect(screen.getByTestId('where').textContent).toBe('');
+    cleanup();
+    renderIt('/dashboard?user=u1');
+    expect(await screen.findByText('my-home-stub')).toBeTruthy();
+    expect(screen.queryByTestId('person')).toBeNull();
+  });
+
+  it("an admin's view of a person is not read-only (the result buttons stay theirs)", async () => {
+    renderIt('/dashboard?user=u2');
+    expect((await person()).dataset.readonly).toBe('no');
   });
 
   it("an admin sees the picked person's own Home on the picked day: one view, no switch", async () => {

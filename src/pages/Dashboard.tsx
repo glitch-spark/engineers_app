@@ -91,32 +91,38 @@ function WeekAndDay({ today, home, day, pickDay }: { today: string; home: string
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
   return (
     <div className="space-y-6">
       <PageHeader title="Home" />
-      {user?.role === 'admin' ? <AdminHome /> : <MyHome />}
+      <PeopleHome />
     </div>
   );
 }
 
 /**
- * An admin's Home is the team, one person at a time, picked with a User filter at the top like the other pages
- * (user, 2026-11-21: no Me / Team switch, no list down the side, no Team totals table for now). The names come from
- * the shared team lookup, so the filter is there at once; nobody is picked on arrival and a person's page is read
- * only when they are picked. The person (`?user=`) and the day (`?day=`) sit in the URL.
+ * Home is the team, one person at a time, picked with a User filter at the top like the other pages (user,
+ * 2026-11-21: no Me / Team switch, no list down the side, no Team totals table for now). The person (`?user=`) and
+ * the day (`?day=`) sit in the URL; the names come from the shared team lookup.
+ *
+ * An admin has no Home of their own: nobody is picked on arrival, and a person's page is read only when they are
+ * picked. Anyone else (user, 2026-11-24) lands on their own Home, themselves picked, and can pick anyone to read
+ * their Home read-only on any day; picking themselves (or Clear) goes back to their own.
  */
-function AdminHome() {
+function PeopleHome() {
+  const { user } = useAuth();
+  const admin = user?.role === 'admin';
   const userId = useId();
   const { params, patch, today, home, day, pickDay } = usePickedDay();
   const lookup = useTeamLookup();
   const people = teamMembersAZ(lookup.data?.users).map((u) => ({ value: u._id, label: u.name?.trim() || u.email?.trim() || 'Unnamed' }));
-  const picked = params.get('user') || '';
+  const asked = params.get('user') || '';
+  const self = !admin && (!asked || asked === user?.id);
+  const picked = self ? user?.id ?? '' : asked;
   const pickedName = people.find((p) => p.value === picked)?.label ?? '';
 
   return (
     <>
-      <FilterBar canClear={!!picked || day !== home} onClear={() => patch({ user: null, day: null })}>
+      <FilterBar canClear={!self && (!!picked || day !== home)} onClear={() => patch({ user: null, day: null })}>
         <FilterField label="User" htmlFor={userId} width="w-52">
           {lookup.error && !lookup.data ? (
             <p className="text-sm text-muted">
@@ -126,21 +132,24 @@ function AdminHome() {
             <Select
               id={userId}
               value={picked}
-              onChange={(user) => patch({ user: user || null })}
+              // themselves: their own Home, nothing in the URL (its day too: their own Home is today's)
+              onChange={(next) => patch(!admin && next === user?.id ? { user: null, day: null } : { user: next || null })}
               disabled={!lookup.data}
               options={[
-                { value: '', label: 'Pick a person' },
+                ...(admin ? [{ value: '', label: 'Pick a person' }] : []),
                 ...people,
                 // a linked person the lookup doesn't list (yet) still shows as picked
-                ...(picked && !people.some((p) => p.value === picked) ? [{ value: picked, label: 'This person' }] : []),
+                ...(picked && !people.some((p) => p.value === picked) ? [{ value: picked, label: self ? 'Me' : 'This person' }] : []),
               ]}
             />
           )}
         </FilterField>
-        <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />
+        {!self && <WeekAndDay today={today} home={home} day={day} pickDay={pickDay} />}
       </FilterBar>
-      {/* the person's own Home, read for them, on the picked day (user, 2026-11-21: one view, no switch) */}
-      {picked ? <MyHome key={picked} userId={picked} name={pickedName} day={day} /> : (
+      {self ? <MyHome /> : picked ? (
+        // the person's own Home, read for them, on the picked day (user, 2026-11-21: one view, no switch)
+        <MyHome key={picked} userId={picked} name={pickedName} day={day} readOnly={!admin} />
+      ) : (
         <p className="panel p-6 text-sm text-muted">Pick a person to see their bids, interviews, to-dos, goals and pending items.</p>
       )}
     </>
