@@ -59,15 +59,15 @@ export default function BidderFormModal({
   }, [open, bidder]);
 
   const isAdmin = user?.role === 'admin';
+  // Required (backend 422s without one): a bidder's bids are credited to its profile.
   const profileOptions = [
-    { value: '', label: 'No profile' },
     ...(lookup?.accounts ?? [])
       .filter((a) => !a.archived && (a.createdBy === user?.id || isAdmin))
       .map((a) => ({ value: a._id, label: a.name })),
   ];
   // Keep the bidder's current profile selectable even when the filter (or a pending lookup) hides it.
   if (bidder?.profileId && !profileOptions.some((o) => o.value === bidder.profileId)) {
-    profileOptions.splice(1, 0, { value: bidder.profileId, label: bidder.profileName ?? 'Current profile' });
+    profileOptions.unshift({ value: bidder.profileId, label: bidder.profileName ?? 'Current profile' });
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -132,6 +132,8 @@ export default function BidderFormModal({
             value={profileId}
             onChange={setProfileId}
             options={profileOptions}
+            placeholder="Choose a profile"
+            required
           />
           {errorText(errors.profileId)}
         </div>
