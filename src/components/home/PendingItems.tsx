@@ -76,7 +76,7 @@ export function usePending(mode: 'owner' | 'admin', userId: string | undefined, 
  * `interviews-needs-input`). An older server without the pending read still gives the interviews.
  */
 export default function PendingItems({
-  mode, userId, name, today, apart, onSaved,
+  mode, userId, name, today, apart, onSaved, readOnly = false,
 }: {
   mode: 'owner' | 'admin';
   userId?: string;
@@ -85,6 +85,8 @@ export default function PendingItems({
   /** See `usePending`; default: the owner's Home. */
   apart?: boolean;
   onSaved: () => unknown;
+  /** A teammate reading the list: no answer buttons. */
+  readOnly?: boolean;
 }) {
   const id = useId();
   const { tz } = useInterviewTimezone();
@@ -115,7 +117,7 @@ export default function PendingItems({
     return `${round} · ${row.status === 'rejected' ? 'rejected' : 'canceled'} with no reason`;
   };
   const interviewButtons = (row: NeedsInputItem) => {
-    if (!row.roundId) return null; // an old round with no id of its own: the Interviews page handles it
+    if (readOnly || !row.roundId) return null; // an old round with no id of its own: the Interviews page handles it
     if (row.need === 'outcome') return outcomeButtons(row);
     if (row.need === 'reason') return [button(row, 'Add reason', () => ask(row, row.status))];
     return resultButtons(row);

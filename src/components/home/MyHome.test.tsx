@@ -468,6 +468,31 @@ describe('MyHome: Interview pipeline', () => {
   });
 });
 
+describe("MyHome read-only: a teammate reading someone's Home", () => {
+  it('shows their rounds and pending items with no buttons to answer, and their to-dos disabled', async () => {
+    auth.role = 'staff';
+    vi.mocked(api.getDashboardPending).mockResolvedValue({
+      interviews: [{ interviewId: 'iv-f', roundId: 'r-f', companyName: 'Acme', profileName: null, ownerId: 'u2', ownerName: 'Puma',
+        stage: 'intro', status: 'rejected', scheduledAt: '2026-11-09T16:00:00Z', endsAt: '2026-11-09T17:00:00Z', need: 'reason' }],
+      profiles: [], bidders: [], counts: {},
+    } as never);
+    vi.mocked(api.getDayPlan).mockResolvedValue(plan({
+      todayInterviews: [iv({ interviewId: 'iv-b', roundId: 'r-b', companyName: 'Globex', status: 'scheduled', state: 'unmarked',
+        scheduledAt: '2026-11-18T14:30:00Z', endsAt: '2026-11-18T14:55:00Z', steps: [{ stage: 'intro', state: 'today' }] })],
+      interviewsMarked: { marked: 0, total: 1 },
+    }) as never);
+    render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><MyHome userId="u2" name="Puma" readOnly /></MemoryRouter></SWRConfig>);
+    const [round] = within(await screen.findByRole('list', { name: "Today's interviews" })).getAllByRole('listitem');
+    expect(round.textContent).toContain('Globex');
+    expect(within(round).queryByRole('button')).toBeNull(); // the round is theirs to answer
+    const pending = await screen.findByRole('list', { name: 'Interviews' });
+    expect(pending.textContent).toContain('Acme');
+    expect(within(pending).queryByRole('button')).toBeNull();
+    expect(((await screen.findByLabelText('Bidder Management')) as HTMLInputElement).disabled).toBe(true);
+    expect(api.getDashboardPending).toHaveBeenCalledWith('u2');
+  });
+});
+
 describe("MyHome as the admin's view of a person", () => {
   const followUp = { interviewId: 'iv-f', roundId: 'r-f', companyName: 'Acme', profileName: null, ownerId: 'u2', ownerName: 'Puma', stage: 'intro',
     status: 'completed', scheduledAt: '2026-11-09T16:00:00Z', endsAt: '2026-11-09T17:00:00Z', need: 'follow_up' };

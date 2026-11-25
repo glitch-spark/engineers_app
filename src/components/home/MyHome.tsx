@@ -47,8 +47,11 @@ const WEEK = 'whitespace-nowrap text-xs text-muted';
  * open. Their to-dos, goals and follow-ups are theirs to tick, so those boxes are disabled. `day` (admin only;
  * default today) is the day the first block shows and whose week the table shows: a past day lists what was done,
  * with no follow-ups and no result buttons (those are about now, and stay in Pending items).
+ *
+ * `readOnly` (a teammate reading someone's Home, user 2026-11-24): the same view with no answer buttons at all,
+ * neither on today's rounds nor in Pending items.
  */
-export default function MyHome({ userId, name, day: picked }: { userId?: string; name?: string; day?: string }) {
+export default function MyHome({ userId, name, day: picked, readOnly = false }: { userId?: string; name?: string; day?: string; readOnly?: boolean }) {
   const who = userId ? [userId] : []; // own Home keeps its keys, so nothing it shares a cache with changes
   const today = todayInputValue();
   const day = picked ?? today;
@@ -230,7 +233,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
   return (
     <>
       {dialog}
-      <PendingItems mode={mode} userId={userId} name={name} today={nowRounds} apart={isToday} onSaved={refresh} />
+      <PendingItems mode={mode} userId={userId} name={name} today={nowRounds} apart={isToday} onSaved={refresh} readOnly={readOnly} />
       <section className="panel p-4">
         <header className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-base font-semibold text-heading">{isToday ? `Today · ${dayLabel(day)}` : dayLabel(day)}</h2>
@@ -318,7 +321,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
                 {rounds.map((iv) => (
                   <TodayRound key={roundKey(iv)} iv={iv} now={now} tz={tz}>
                     {/* an old round with no id of its own can't be answered from here: the Interviews page handles it */}
-                    {isToday && roundState(iv, now) === 'unmarked' && !!iv.roundId && (
+                    {!readOnly && isToday && roundState(iv, now) === 'unmarked' && !!iv.roundId && (
                       <div className="mt-1.5 flex flex-wrap gap-2">{outcomeButtons(asNeedsInput(iv))}</div>
                     )}
                   </TodayRound>
