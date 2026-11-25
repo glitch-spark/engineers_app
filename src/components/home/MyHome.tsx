@@ -27,6 +27,10 @@ const body = (r: Result) => ({
 const DEBOUNCE_MS = 800;
 
 const num = (n: number) => n.toLocaleString('en-US');
+/** ' (95 approved · 12 pending)' after a bidder count; pending left out at 0; '' with no split or no bids. */
+const bidderSplit = (approved: number | undefined, pending: number | undefined, label: 'approved' | '✓') =>
+  approved === undefined || pending === undefined || approved + pending === 0 ? ''
+    : ` (${num(approved)} ${label}${pending ? ` · ${num(pending)} pending` : ''})`;
 const UNDER = 'font-semibold text-amber-600 dark:text-amber-400';
 const REACHED = 'font-semibold text-emerald-600 dark:text-emerald-400';
 const LINE = 'flex flex-wrap items-center gap-2 px-1 py-2 text-sm text-body';
@@ -249,6 +253,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
               <span className="text-xs text-muted">
                 {' · '}self <b className="text-body">{num(bids.self)}</b>{bids.selfTarget ? ` / ${num(bids.selfTarget)}` : ''}
                 {' · '}bidder <b className="text-body">{num(bids.bidder)}</b>{bids.bidderTarget ? ` / ${num(bids.bidderTarget)}` : ''}
+                {bidderSplit(plan.bidsTotals?.bidderApproved, plan.bidsTotals?.bidderPending, 'approved')}
               </span>
               {!!bids.target && (
                 <div
@@ -282,7 +287,7 @@ export default function MyHome({ userId, name, day: picked }: { userId?: string;
                       <td className={`px-2 text-right ${r.selfTarget && r.self < r.selfTarget ? UNDER : ''}`}>
                         {num(r.self)}{r.selfTarget ? ` / ${num(r.selfTarget)}` : ''}
                       </td>
-                      <td className="px-2 text-right">{num(r.bidder)}</td>
+                      <td className="px-2 text-right">{num(r.bidder)}{bidderSplit(r.bidderApproved, r.bidderPending, '✓')}</td>
                       <td className="px-2 text-right">{num(r.total)}</td>
                     </tr>
                   ))}

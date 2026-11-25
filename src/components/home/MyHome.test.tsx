@@ -544,6 +544,28 @@ describe('MyHome: Bids and Interviews rows', () => {
   it("Bids use the day's totals when the server sends them", async () => {
     setup(plan({ bidsTotals: { self: 60, selfTarget: 50, bidder: 85, bidderTarget: null, total: 145, target: 150 } }));
     expect((await rowOf('Bids')).textContent).toContain('145 of 150 · self 60 / 50 · bidder 85');
+    expect((await rowOf('Bids')).textContent).not.toContain('approved'); // an older server: no split
+  });
+
+  it('Bids show the bidder split into approved and pending', async () => {
+    setup(plan({
+      bidsTotals: { self: 0, selfTarget: 200, bidder: 107, bidderApproved: 95, bidderPending: 12, bidderTarget: 200, total: 107, target: 400 },
+      bidsByRegion: [{ region: 'US', self: 0, selfTarget: null, bidder: 107, bidderApproved: 95, bidderPending: 12, total: 107 }],
+    }));
+    expect((await rowOf('Bids')).textContent).toContain('bidder 107 / 200 (95 approved · 12 pending)');
+    const table = within(await daily()).getByRole('table', { name: 'Bids by location' });
+    expect(within(table).getAllByRole('row')[1].children[2].textContent).toBe('107 (95 ✓ · 12 pending)');
+  });
+
+  it('Bids split: nothing pending shows approved only; all pending keeps both; no bids no split', async () => {
+    setup(plan({ bidsTotals: { self: 0, selfTarget: null, bidder: 9, bidderApproved: 9, bidderPending: 0, bidderTarget: null, total: 9, target: null } }));
+    expect((await rowOf('Bids')).textContent).toContain('bidder 9 (9 approved)');
+    cleanup();
+    setup(plan({ bidsTotals: { self: 0, selfTarget: null, bidder: 5, bidderApproved: 0, bidderPending: 5, bidderTarget: null, total: 5, target: null } }));
+    expect((await rowOf('Bids')).textContent).toContain('bidder 5 (0 approved · 5 pending)');
+    cleanup();
+    setup(plan({ bidsTotals: { self: 3, selfTarget: null, bidder: 0, bidderApproved: 0, bidderPending: 0, bidderTarget: null, total: 3, target: null } }));
+    expect((await rowOf('Bids')).textContent).not.toContain('approved');
   });
 
   it('the week numbers fall back to the whole-week count on an older server, and leave out a target that is not set', async () => {
